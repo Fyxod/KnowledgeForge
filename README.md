@@ -10,7 +10,7 @@ data/
         │   ├── original_doc1.pdf
         │   └── original_doc2.docx
         ├── parsed/
-        │   ├── doc1.json      # Includes parsed text + image metadata
+        │   ├── doc1.json
         │   └── doc2.json
         ├── images/
         │   └── doc1/
