@@ -101,10 +101,10 @@ def build_main_prompt(state: AgentState) -> ChatPromptTemplate:
     )
 
 
-def generate(state: AgentState) -> AgentState:
+async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
     structured_llm = llm.with_structured_output(LLMOutput)
-    result: LLMOutput = structured_llm.invoke(prompt)
+    result: LLMOutput = await structured_llm.ainvoke(prompt)
     state["messages"].append(AIMessage(content=result.answer))
     state["messages"].append(AIMessage("Action: " + result.action))
     state["answer"] = result.answer
@@ -112,32 +112,19 @@ def generate(state: AgentState) -> AgentState:
     state["documents_used"] = result.documents_used or []
     state["search_queries"] = result.web_search_queries or []
     state["attempts"] += 1
-
     return state
 
-
-def rephrase_question(state: AgentState) -> AgentState:
-    """
-    Rephrases the question based on the current state.
-    """
+async def rephrase_question(state: AgentState) -> AgentState:
+    rephrased = f"Refined: {state['question']}"
     state["messages"].append(
         HumanMessage(
             content=f"Rephrasing question: {state['question']}"
         )
     )
-    state["rephrases"] = state.get("rephrases", 0) + 1
-
-    return state
-
-
-def rephrase_question(state: AgentState) -> AgentState:
-
-    rephrased = f"Refined: {state['question']}"
     state["question"] = rephrased
     state["rephrases"] = state.get("rephrases", 0) + 1
-    state["messages"].append(HumanMessage(content=rephrased))
+    # state["messages"].append(HumanMessage(content=rephrased))
     return state
-
 
 async def web_search(state: AgentState) -> AgentState:
     queries = state.get("search_queries", [])
@@ -169,11 +156,14 @@ def failure(state: AgentState) -> AgentState:
     # state["action"] = "failure"
     return END
 
-# def router(state: AgentState) -> AgentState:
-#     """
-#     Routes the action based on the current state.
-#     """
-
+async def failure(state: AgentState) -> AgentState:
+    failure_message = (
+        "I am unable to answer your question at this time. "
+        "Please try rephrasing or asking a different question."
+    )
+    state["messages"].append(AIMessage(content=failure_message))
+    state["answer"] = failure_message
+    return state
 
 def router(state: AgentState) -> str:
     if state["action"] == "answer":
@@ -223,5 +213,6 @@ graph_builder.add_conditional_edges(
 
 graph_builder.add_edge(REPHRASE, RETRIEVER)
 graph_builder.add_edge(WEB_SEARCH, GENERATE)
+graph_builder.add_edge(FAILURE, END)
 
 agent = graph_builder.compile()
