@@ -2,6 +2,7 @@
 
 use python 3.10
 
+```
 data/
 └── users/
     └── user_123/
@@ -18,6 +19,6 @@ data/
         │       └── page_3_img1.png
         └── chroma/
             └── index/
-
+```
 
 Yet to add auth system and chat history
