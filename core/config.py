@@ -18,6 +18,6 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# MongoDB client and DB instance
-client = MongoClient(settings.DATABASE_URL)
-db = client[settings.DATABASE_NAME]
+# # MongoDB client and DB instance
+# client = MongoClient(settings.DATABASE_URL)
+# db = client[settings.DATABASE_NAME]

@@ -9,10 +9,10 @@ from core.vectorstore import save_documents_to_chroma
 import jwt
 import uuid
 import datetime
-router = APIRouter(prefix="", tags=["upload"])
+router = APIRouter(prefix="/upload", tags=["upload"])
 
 
-@router.post("/upload")
+@router.post("/")
 async def upload_file(
     request: Request,
     thread_name: str = None,
