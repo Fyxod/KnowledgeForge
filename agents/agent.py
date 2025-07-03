@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated, List, Literal, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -19,6 +20,7 @@ WEB_SEARCH = "web_search"
 REPHRASE = "rephrase"
 ANSWER = "answer"
 ROUTER = "router"
+FAILURE = "failure"
 
 main_prompt = ChatPromptTemplate.from_messages(
     [
@@ -33,7 +35,7 @@ main_prompt = ChatPromptTemplate.from_messages(
         ),
         MessagesPlaceholder(variable_name="messages"),
         HumanMessage(
-            content="Here are the retrieved documents according to the question: {documents}"
+            content="Here is the retrieved context according to the question: {documents}"
         ),
         HumanMessage(content="{question}"),
     ]
@@ -46,8 +48,8 @@ class AgentState(TypedDict):
     messages: List[BaseMessage]
     documents: List[str]
     question: str
-    rephrased_question: str
-    web_search: bool
+    original_question: str
+    web_search: bool = False
     search_queries: List[str]
     search_queries_results: List[str]
     answer: str
@@ -62,6 +64,11 @@ MAX_REPHRASE = 2
 MAX_WEB_SEARCH = 2
 
 
+async def parallel_search(queries, tool):
+    tasks = [tool.ainvoke(query) for query in queries]
+    results = await asyncio.gather(*tasks)
+    return results
+
 class LLMOutput(BaseModel):
     answer: str = Field(description="The answer to the user's question.")
     action: Literal["answer", "rephrase_question", "web_search"] = Field(
@@ -73,7 +80,7 @@ class LLMOutput(BaseModel):
     )
     web_search_queries: NotRequired[List[str]] = Field(
         default=None,
-        description="List of web search queries used to generate the answer, if applicable.",
+        description="List of 2-3 web search queries used to generate the answer, if applicable.",
     )
 
 
@@ -81,9 +88,15 @@ def build_main_prompt(state: AgentState) -> ChatPromptTemplate:
     """
     Builds the main prompt for the agent based on the current state.
     """
+
+    if state["web_search"]:
+        documents = state.get("search_queries_results", [])
+    else:
+        documents = state.get("documents", [])
+
     return main_prompt.format_messages(
         messages=MessagesPlaceholder(variable_name="messages"),
-        documents=state.get("documents", []),
+        documents=documents,
         question=state.get("question", ""),
     )
 
@@ -107,6 +120,12 @@ def rephrase_question(state: AgentState) -> AgentState:
     """
     Rephrases the question based on the current state.
     """
+    state["messages"].append(
+        HumanMessage(
+            content=f"Rephrasing question: {state['question']}"
+        )
+    )
+    state["rephrases"] = state.get("rephrases", 0) + 1
 
     return state
 
@@ -120,19 +139,16 @@ def rephrase_question(state: AgentState) -> AgentState:
     return state
 
 
-def web_search(state: AgentState) -> AgentState:
-    query = state["question"]
-    results = search_tool.invoke([query])
-    state["web_search_attempts"] = state.get("web_search_attempts", 0) + 1
-    state["search_queries"] = [query]
-    state["search_queries_results"] = results
-    state["messages"].append(HumanMessage(content=f"Web search results: {results}"))
-    return state
-
-
-def web_search(state: AgentState) -> AgentState:
+async def web_search(state: AgentState) -> AgentState:
     queries = state.get("search_queries", [])
-    results = search_tool.invoke(queries)
+    
+    results = await parallel_search(queries, search_tool)
+    
+    state["web_search"] = True
+    state["documents"] = []
+    state["messages"].append(
+        HumanMessage(content=f"Web search initiated for queries: {queries}")
+    )
     state["web_search_attempts"] = state.get("web_search_attempts", 0) + 1
     state["search_queries_results"] = results
 
@@ -140,6 +156,18 @@ def web_search(state: AgentState) -> AgentState:
 
     return state
 
+def failure(state: AgentState) -> AgentState:
+    """ 
+    Handles the failure case when no action can be taken.
+    """
+    failure_message = (
+        "I am unable to answer your question at this time. "
+        "Please try rephrasing or asking a different question."
+    )
+    state["messages"].append(AIMessage(content=failure_message))
+    state["answer"] = failure_message
+    # state["action"] = "failure"
+    return END
 
 # def router(state: AgentState) -> AgentState:
 #     """
@@ -149,7 +177,7 @@ def web_search(state: AgentState) -> AgentState:
 
 def router(state: AgentState) -> str:
     if state["action"] == "answer":
-        return END
+        return ANSWER
     elif state["action"] == "rephrase_question":
         if state.get("rephrases", 0) < MAX_REPHRASE:
             return REPHRASE
@@ -157,13 +185,13 @@ def router(state: AgentState) -> str:
             return (
                 WEB_SEARCH
                 if state.get("web_search_attempts", 0) < MAX_WEB_SEARCH
-                else END
+                else FAILURE
             )
     elif state["action"] == "web_search":
         return (
-            WEB_SEARCH if state.get("web_search_attempts", 0) < MAX_WEB_SEARCH else END
+            WEB_SEARCH if state.get("web_search_attempts", 0) < MAX_WEB_SEARCH else FAILURE
         )
-    return END
+    return ANSWER
 
 
 # Building the state graph
@@ -175,6 +203,8 @@ graph_builder.add_node(GENERATE, generate)
 graph_builder.add_node(ROUTER, router)
 graph_builder.add_node(REPHRASE, rephrase_question)
 graph_builder.add_node(WEB_SEARCH, web_search)
+graph_builder.add_node(ANSWER, lambda state: END)
+graph_builder.add_node(FAILURE, failure)
 
 graph_builder.set_entry_point(RETRIEVER)
 
@@ -183,8 +213,9 @@ graph_builder.add_edge(GENERATE, ROUTER)
 
 graph_builder.add_conditional_edges(
     ROUTER,
-    {
-        ANSWER: END,
+    {   
+        FAILURE: FAILURE,
+        ANSWER: ANSWER,
         REPHRASE: REPHRASE,
         WEB_SEARCH: WEB_SEARCH,
     },

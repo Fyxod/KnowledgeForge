@@ -29,11 +29,24 @@ class PyObjectId(ObjectId):
     def __modify_schema__(cls, field_schema):
         field_schema.update(type="string")
 
+class UserJwtPayload(BaseModel):
+    userId: str
+    name: str
+    email: EmailStr
+    is_active: bool = True
 
 class UserCreateModel(BaseModel):
     name: str
     email: EmailStr
     password: str
+    
+class ThreadDocument(BaseModel):
+    docId: str
+    title: str
+    type: str
+    time_uploaded: datetime
+    file_name: str
+
 class ChatMessage(BaseModel):
     type: Literal["agent", "user"]
     message: str
@@ -41,7 +54,7 @@ class ChatMessage(BaseModel):
     updatedAt: datetime
 
 class Thread(BaseModel):
-    documents: List[str]
+    documents: List[ThreadDocument]
     chats: List[ChatMessage]
     createdAt: datetime
     updatedAt: datetime

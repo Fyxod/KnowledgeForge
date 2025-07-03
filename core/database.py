@@ -6,6 +6,8 @@ MONGO_URI = Settings.DATABASE_URL
 client = MongoClient(MONGO_URI)
 db = client["bedrock"]
 
+
+# Remove the required fields from the schema as we'll go forward to make it more flexible - fyxod
 user_schema = {
     "$jsonSchema": {
         "bsonType": "object",
@@ -24,7 +26,17 @@ user_schema = {
                     "properties": {
                         "documents": {
                             "bsonType": "array",
-                            "items": {"bsonType": "string"}
+                            "items": {
+                                "bsonType": "object",
+                                "required": ["docId", "title", "type", "time_uploaded", "file_name"],
+                                "properties": {
+                                    "docId": {"bsonType": "string"},
+                                    "title": {"bsonType": "string"},
+                                    "type": {"bsonType": "string"},
+                                    "file_name": {"bsonType": "string"},
+                                    "time_uploaded": {"bsonType": "date"}
+                                }
+                            }
                         },
                         "chats": {
                             "bsonType": "array",
