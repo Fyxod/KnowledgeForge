@@ -48,4 +48,4 @@ data/
    ↓
 [Return Answer]
 
-Yet to initialize graph
+Yet to add auth system and chat history
