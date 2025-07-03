@@ -83,7 +83,7 @@ async def save_documents_to_chroma(docs: Documents, user_id: str, thread_id: str
         ids=all_ids
     )
 
-    print(f"✅ Saved {len(all_ids)} chunks to Chroma for user {user_id}")
+    print(f"Saved {len(all_ids)} chunks to Chroma for user {user_id}")
 
 def get_user_retriever(user_id: str, k: int = 5):
     vectorstore = get_chroma_vectorstore(user_id)
