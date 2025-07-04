@@ -24,6 +24,7 @@ user_schema = {
                     "bsonType": "object",
                     "required": ["documents", "chats", "createdAt", "updatedAt"],
                     "properties": {
+                        "thread_name": {"bsonType": "string"},
                         "documents": {
                             "bsonType": "array",
                             "items": {

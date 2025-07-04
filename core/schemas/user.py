@@ -54,6 +54,7 @@ class ChatMessage(BaseModel):
     updatedAt: datetime
 
 class Thread(BaseModel):
+    thread_name: str
     documents: List[ThreadDocument]
     chats: List[ChatMessage]
     createdAt: datetime

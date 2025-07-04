@@ -22,7 +22,5 @@ data/
 ```
 
 Next steps:
-Save chat history in query route and call agent there
-add auth middleware in the required routes
 add route to get chat hstory for a single thread (or maybe just preload it in the frontend)
 Whole frontend

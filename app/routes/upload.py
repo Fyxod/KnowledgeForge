@@ -51,6 +51,7 @@ async def upload_file(
         thread_id = str(uuid.uuid4())
         new_thread = {
             f"threads.{thread_id}": {
+                "thread_name": thread_name or "New Thread",
                 "documents": [],
                 "chats": [],
                 "createdAt": now,

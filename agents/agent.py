@@ -46,18 +46,18 @@ class AgentState(TypedDict):
     user_id: str
     thread_id: str
     messages: List[BaseMessage]
-    documents: List[str]
+    documents: List[str] = []
     question: str
     original_question: str
     web_search: bool = False
-    search_queries: List[str]
-    search_queries_results: List[str]
-    answer: str
-    action: Literal["answer", "rephrase_question", "web_search"]
-    documents_used: List[str]
-    attempts: int
-    rephrases: int
-    web_search_attempts: int
+    search_queries: List[str] = []
+    search_queries_results: List[str] = []
+    answer: str = ""
+    action: NotRequired[Literal["answer", "rephrase_question", "web_search"]]
+    documents_used: List[str] = []
+    attempts: int = 0
+    rephrases: int = 0
+    web_search_attempts: int = 0
 
 
 MAX_REPHRASE = 2
@@ -215,4 +215,4 @@ graph_builder.add_edge(REPHRASE, RETRIEVER)
 graph_builder.add_edge(WEB_SEARCH, GENERATE)
 graph_builder.add_edge(FAILURE, END)
 
-agent = graph_builder.compile()
+Agent = graph_builder.compile()
