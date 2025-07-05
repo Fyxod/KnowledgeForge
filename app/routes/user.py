@@ -31,11 +31,16 @@ def create_user(user_input: UserCreateModel):
 
     result = db.users.insert_one(user_dict)
     print("User created with ID:", result)
+    
     created_user = db.users.find_one(
         {"_id": result.inserted_id}, {"password": 0, "_id": 0}
     )
     print("Created user:", created_user)
-    return {"status": "success", "user": UserResponseModel(**created_user)}
+    return {
+        "status": "success",
+        "message": "User created successfully",
+        "user": UserResponseModel(**created_user),
+    }
 
 
 @router.get("/{user_id}")
@@ -51,7 +56,11 @@ def get_user(request: Request, user_id: str):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return {"status": "success", "user": user}
+    return {
+        "status": "success",
+        "message": "User retrieved successfully",
+        "user": user
+    }
 
 
 @router.post("/login")
@@ -78,4 +87,9 @@ def login_user(user_input: UserLoginModel):
     )
 
     user.pop("password", None)
-    return {"status": "success", "user": user, "token": token}
+    return {
+        "status": "success",
+        "message": "User logged in successfully",
+        "user": user,
+        "token": token,
+    }

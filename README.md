@@ -22,5 +22,8 @@ data/
 ```
 
 Next steps:
-add route to get chat hstory for a single thread (or maybe just preload it in the frontend)
+add route to get chat history for a single thread (or maybe just preload it in the frontend)
 Whole frontend
+
+customize error messages too like success messages
+yet to debug upload.py and query.py
