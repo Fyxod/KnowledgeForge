@@ -1,33 +1,18 @@
+from __future__ import annotations
 from pydantic import BaseModel, Field, EmailStr
-
-# class User(BaseModel):
-#     user_id: str
-#     name: str
-#     email: str
-#     password: str
-#     is_active: bool = True
-
-
-from typing import List, Dict, Literal, Optional
+from pydantic_core import core_schema
+from pydantic import GetCoreSchemaHandler
+from typing import List, Dict, Literal, Optional, Any
 from datetime import datetime
 from bson import ObjectId
 import uuid
 
-
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+class MongoModel(BaseModel):
+    model_config = {
+        "json_encoders": {ObjectId: str},
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True
+    }
 
 class UserJwtPayload(BaseModel):
     userId: str
@@ -37,6 +22,10 @@ class UserJwtPayload(BaseModel):
 
 class UserCreateModel(BaseModel):
     name: str
+    email: EmailStr
+    password: str
+    
+class UserLoginModel(BaseModel):
     email: EmailStr
     password: str
     
@@ -60,15 +49,45 @@ class Thread(BaseModel):
     createdAt: datetime
     updatedAt: datetime
 
-class UserModel(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id")
+
+from bson import ObjectId
+from pydantic_core import core_schema
+from pydantic import GetCoreSchemaHandler
+
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        def validate_from_mongodb_id(value: Any) -> ObjectId:
+            if isinstance(value, ObjectId):
+                return value
+            if isinstance(value, str):
+                if ObjectId.is_valid(value):
+                    return ObjectId(value)
+            raise ValueError("Invalid ObjectId or string representation of ObjectId")
+
+        return core_schema.no_info_after_validator_function(
+            validate_from_mongodb_id,
+            core_schema.union_schema([
+                core_schema.is_instance_schema(ObjectId),
+                core_schema.str_schema()
+            ]),
+            serialization=core_schema.to_string_ser_schema(),
+        )
+
+class UserModel(MongoModel):
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     userId: str
     name: str
     email: EmailStr
     password: str
     is_active: bool = True
-    threads: Dict[str, Thread] = {}
+    threads: Dict[str, Thread] = Field(default_factory=dict)
 
-    class Config:
-        json_encoders = {ObjectId: str}
-        allow_population_by_field_name = True
+class UserResponseModel(MongoModel):
+    userId: str
+    name: str
+    email: EmailStr
+    is_active: bool = True
+    threads: Dict[str, Thread] = Field(default_factory=dict)

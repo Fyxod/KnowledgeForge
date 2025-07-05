@@ -1,8 +1,8 @@
 from pymongo import MongoClient
 from pymongo.errors import CollectionInvalid
-from core.config import Settings
+from core.config import settings
 
-MONGO_URI = Settings.DATABASE_URL
+MONGO_URI = settings.DATABASE_URL
 client = MongoClient(MONGO_URI)
 db = client["bedrock"]
 

@@ -1,18 +1,24 @@
 import asyncio
-from typing import Annotated, List, Literal, TypedDict
-from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
-from langgraph.graph import END, StateGraph, START
-from core.llm import llm
-from pydantic import BaseModel, Field
-from types import NotRequired, Optional
-from core.search_tool import search_tool
-from langgraph.graph import add_messages, StateGraph, END
+from typing import List, Literal, Optional
+from typing_extensions import TypedDict
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from core.schemas.user import User
-
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
+
+from langgraph.graph import (
+    StateGraph,
+    add_messages,
+    END,
+    START
+)
+
+from pydantic import BaseModel, Field
+
+from core.llm import llm
+from core.search_tool import search_tool
+from core.schemas.user import UserModel
+from core.vectorstore import get_user_retriever
+
 
 RETRIEVER = "retriever"
 GENERATE = "generate"
@@ -22,6 +28,7 @@ ANSWER = "answer"
 ROUTER = "router"
 FAILURE = "failure"
 
+    
 main_prompt = ChatPromptTemplate.from_messages(
     [
         SystemMessage(
@@ -42,23 +49,23 @@ main_prompt = ChatPromptTemplate.from_messages(
 )
 
 
-class AgentState(TypedDict):
+
+class AgentState(TypedDict, total=False):
     user_id: str
     thread_id: str
-    messages: List[BaseMessage]
-    documents: List[str] = []
     question: str
     original_question: str
-    web_search: bool = False
-    search_queries: List[str] = []
-    search_queries_results: List[str] = []
-    answer: str = ""
-    action: NotRequired[Literal["answer", "rephrase_question", "web_search"]]
-    documents_used: List[str] = []
-    attempts: int = 0
-    rephrases: int = 0
-    web_search_attempts: int = 0
-
+    messages: List[BaseMessage]
+    documents: List[str]
+    web_search: bool
+    search_queries: List[str]
+    search_queries_results: List[str]
+    answer: str
+    documents_used: List[str]
+    attempts: int
+    rephrases: int
+    web_search_attempts: int
+    action: Literal["answer", "rephrase_question", "web_search"]
 
 MAX_REPHRASE = 2
 MAX_WEB_SEARCH = 2
@@ -74,11 +81,11 @@ class LLMOutput(BaseModel):
     action: Literal["answer", "rephrase_question", "web_search"] = Field(
         description="The action to take based on the answer."
     )
-    documents_used: NotRequired[List[str]] = Field(
+    documents_used: Optional[List[str]] = Field(
         default=None,
         description="List of document ids of documents used to generate the answer, if applicable.",
     )
-    web_search_queries: NotRequired[List[str]] = Field(
+    web_search_queries: Optional[List[str]] = Field(
         default=None,
         description="List of 2-3 web search queries used to generate the answer, if applicable.",
     )
@@ -165,6 +172,17 @@ async def failure(state: AgentState) -> AgentState:
     state["answer"] = failure_message
     return state
 
+async def retriever(state: AgentState) -> AgentState:
+    """ Retrieves documents based on the user's question.
+    This is a placeholder function that simulates document retrieval.
+    """
+
+    doc_retrievar = get_user_retriever();
+
+    retrieved_docs = await doc_retrievar.ainvoke(state["question"])
+    state["documents"] = retrieved_docs
+    return state
+
 def router(state: AgentState) -> str:
     if state["action"] == "answer":
         return ANSWER
@@ -204,10 +222,10 @@ graph_builder.add_edge(GENERATE, ROUTER)
 graph_builder.add_conditional_edges(
     ROUTER,
     {   
-        FAILURE: FAILURE,
-        ANSWER: ANSWER,
-        REPHRASE: REPHRASE,
-        WEB_SEARCH: WEB_SEARCH,
+        FAILURE: failure,
+        ANSWER: lambda state: END,
+        REPHRASE: rephrase_question,
+        WEB_SEARCH: web_search,
     },
 )
 

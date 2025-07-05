@@ -1,4 +1,5 @@
-from core.schemas import Documents
+from core.schemas.document import Documents
+from core.parsers.main_parser import extract_document
 
 async def process_files(
     file_paths: list[str],
@@ -15,7 +16,7 @@ async def process_files(
 
     for file_path in file_paths:
         # Call the main parser for each file and append the result to the documents array
-        parsed_data = await main_parser(file_path)
+        parsed_data = await extract_document(file_path)
         documents.documents.append(parsed_data)
 
     return documents

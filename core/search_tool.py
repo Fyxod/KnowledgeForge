@@ -1,9 +1,9 @@
-from langchain_community.tools import TavilySearchResults
+from langchain_tavily import TavilySearch
 from dotenv import load_dotenv
 
 load_dotenv()
 
-search_tool = TavilySearchResults(search_depth="basic")
+search_tool = TavilySearch(search_depth="basic")
 
 
 # or this maybe, we'll see

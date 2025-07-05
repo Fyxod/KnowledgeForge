@@ -1,3 +1,4 @@
+from httpcore import request
 import jwt
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -6,17 +7,32 @@ from core.schemas.user import UserJwtPayload
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from core.config import Settings
 
+
+def normalize_path(path: str) -> str:
+    if path != "/" and path.endswith("/"):
+        return path.rstrip("/")
+    return path
+
 class auth_middleware(BaseHTTPMiddleware):
-    def __init__(self, app, included_paths: list[str] = None):
+    def __init__(self, app, included_paths: list[str] = None, excluded_routes: list[tuple[str, str]] = None):
         super().__init__(app)
         self.included_paths = included_paths or []
+        self.excluded_routes = excluded_routes or []
 
     async def dispatch(self, request: Request, call_next):
-        path = request.url.path
-        # Check if the request path is in the included paths
-        if not any(path.startswith(included_path) for included_path in self.included_paths):
+        path = normalize_path(request.url.path)
+        method = request.method.upper()
+
+        print(f"Request path: {path}, method: {method}")
+        print((method, path) in self.excluded_routes)
+        # Skip auth if (method, path) is excluded
+        if (method, path) in self.excluded_routes:
             return await call_next(request)
-        
+
+        # Skip auth if not in included paths
+        if not any(path == p or path.startswith(p + "/") for p in self.included_paths):
+            return await call_next(request)
+
         auth_header = request.headers.get("authorization", "")
         jwt_token = auth_header.split(" ")[-1] if auth_header.startswith("Bearer ") else None
 
