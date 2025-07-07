@@ -3,8 +3,8 @@ from core.parsers.main_parser import extract_document
 
 async def process_files(
     file_paths: list[str],
+    user_id: str,
     thread_id: str,
-    user_id: str
 ) -> dict:
     """
     pass all the files to main parser and return the parsed data
