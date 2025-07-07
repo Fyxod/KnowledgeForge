@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 import asyncio
 import fitz
+
 from PIL import Image
 import io
 
@@ -14,12 +15,7 @@ from app.socket import sio
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
-UPLOAD_DIR = os.path.join(PROJECT_ROOT, "../worklets")
-image_dir = os.path.join(PROJECT_ROOT, "./resources/extracted_images")
-archive_dir = os.path.join(PROJECT_ROOT, "./resources/archived_images")
 
-os.makedirs(image_dir, exist_ok=True)
-os.makedirs(archive_dir, exist_ok=True)
 
 class Page(BaseModel):
     number: int
@@ -41,20 +37,25 @@ SUPPORTED_EXTENSIONS = {
     '.xls', '.xlsx', '.csv', '.html', '.xml', *IMAGE_EXTENSIONS
 }
 
-async def extract_document(name, sid, image_parser, doc_type="document", title="Untitled"):
-    file_path = os.path.join(UPLOAD_DIR, name)
-    ext = Path(name).suffix.lower()
+# async def extract_document(name, sid, image_parser, doc_type="document", title="Untitled"):
+async def extract_document(path, sid = "d", title="Untitled", file_name=None, user_id=None):
+    # file_path = os.path.join(UPLOAD_DIR, name)
+
+    file_path = path
+    ext = Path(path).suffix.lower()
+    name, _ = os.path.splitext(file_name)
 
     if ext not in SUPPORTED_EXTENSIONS:
         raise ValueError(f"Unsupported file type: {ext}")
 
     if ext in IMAGE_EXTENSIONS:
-        await sio.emit("progress", {"message": "Extracting data from image..."}, to=sid)
+        # await sio.emit("progress", {"message": "Extracting data from image..."}, to=sid)
 
         try:
-            text = await image_parser(file_path)
+            # text = await image_parser(file_path)
+            text = "DUMMY TEXT FOR IMAGE"
         except Exception as e:
-            await sio.emit("progress", {"message": f"Error processing image: {str(e)}"}, to=sid)
+            # await sio.emit("progress", {"message": f"Error processing image: {str(e)}"}, to=sid)
             await asyncio.sleep(3)
             return None
 
@@ -62,8 +63,8 @@ async def extract_document(name, sid, image_parser, doc_type="document", title="
 
         return Document(
             id=doc_id,
-            type=doc_type,
-            file_name=name,
+            type=ext[1:],  # Get the extension without the dot
+            file_name=file_name or os.path.basename(file_path),
             content=[Page(number=1, text=text, images=[text])],
             title=title,
             full_text=text
@@ -72,18 +73,12 @@ async def extract_document(name, sid, image_parser, doc_type="document", title="
     try:
         result: ExtractionResult = await extract_file(file_path)
     except Exception as e:
-        await sio.emit("progress", {"message": f"Error extracting file: Failed to load document (Corrupt file)"}, to=sid)
+        # await sio.emit("progress", {"message": f"Error extracting file: Failed to load document (Corrupt file)"}, to=sid)
         await asyncio.sleep(5)
         return None
 
     if result.content is None:
         result.content = ""
-
-    for filename in os.listdir(image_dir):
-        src = os.path.join(image_dir, filename)
-        dst = os.path.join(archive_dir, filename)
-        if os.path.isfile(src):
-            shutil.move(src, dst)
 
     doc = fitz.open(file_path)
 
@@ -99,9 +94,13 @@ async def extract_document(name, sid, image_parser, doc_type="document", title="
         image_list = page.get_images(full=True)
 
         if image_list:
-            await sio.emit("progress", {"message": f"Extracting data from images on page {page_number + 1}..."}, to=sid)
+            print("there are images on this page")
+            image_dir = f"data/{user_id}/images/{name}"
+            os.makedirs(image_dir, exist_ok=True)
+            # await sio.emit("progress", {"message": f"Extracting data from images on page {page_number + 1}..."}, to=sid)
 
         for img_index, img in enumerate(image_list):
+            
             xref = img[0]
             base_image = doc.extract_image(xref)
             image_bytes = base_image["image"]
@@ -113,7 +112,8 @@ async def extract_document(name, sid, image_parser, doc_type="document", title="
             )
             image.save(image_path)
 
-            image_text = await image_parser(image_path)
+            # image_text = await image_parser(image_path)
+            image_text = "DUMMY TEXT FOR IMAGE"
             image_texts.append(image_text)
             combined_texts.append(image_text)
 
@@ -123,8 +123,8 @@ async def extract_document(name, sid, image_parser, doc_type="document", title="
 
     return Document(
         id=doc_id,
-        type=doc_type,
-        file_name=name,
+        type=ext[1:],
+        file_name=file_name or os.path.basename(file_path),
         content=pages,
         title=title,
         full_text="\n".join(combined_texts),

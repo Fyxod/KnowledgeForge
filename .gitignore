@@ -3,10 +3,15 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+.kreuzberg
 # C extensions
 *.so
 # env folders
 parthenv310
+
+data
+.json
+.pdf
 
 # Distribution / packaging
 .Python

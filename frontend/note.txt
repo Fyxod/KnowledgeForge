@@ -1,1 +1,1 @@
-I hate css. Tailwind too
+(parthenv310) PS C:\Users\parth\Desktop\NotebookLM> pip install bcrypt chromadb fastapi google-ai-generativelanguage langchain langchain-community langsmith langgraph PyJWT PyMuPDF pytesseract python-socketio

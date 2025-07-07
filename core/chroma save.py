@@ -31,23 +31,33 @@ def get_embedding_function():
         },
     )
 
-embedding_function = get_embedding_function()
 # Get Chroma vector store instance
-def get_vectorstore(user_id: str) -> Chroma:
+def get_chroma_vectorstore(user_id: str) -> Chroma:
     persist_path = os.path.join("data", user_id, "chroma")
     # persist_path = os.path.join("data", "users", user_id, "chroma")
     os.makedirs(persist_path, exist_ok=True)
 
     collection_name = "user_docs"
+    embedding_function = get_embedding_function()
+
+    client = chromadb.PersistentClient(path=persist_path)
+    
+    existing_collections = [col.name for col in client.list_collections()]
+    if collection_name in existing_collections:
+        
+        print(f"Loading existing Chroma collection for user {user_id}")
+    else:
+        print(f"Creating new Chroma collection for user {user_id}")
+
     return Chroma(
         collection_name=collection_name,
         persist_directory=persist_path,
-        embedding_function=embedding_function
+        embedding_function=get_embedding_function()
     )
 
-async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
+async def save_documents_to_chroma(docs: Documents, user_id: str, thread_id: str):
     start_time = time.time()
-    vectorstore = await asyncio.to_thread(get_vectorstore, user_id)
+    vectorstore = await asyncio.to_thread(get_chroma_vectorstore, user_id)
     end_time = time.time()
     print(f"Initialized Chroma vector store in {end_time - start_time:.2f} seconds for user {user_id}")
     
@@ -55,7 +65,6 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
     all_texts = []
     all_metadatas = []
 
-    # Chunking
     start_time = time.time()
     for doc in docs.documents:
         for page in doc.content:
@@ -76,8 +85,6 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                 all_metadatas.append(metadata)
     end_time = time.time()
     print(f"Processed {len(all_ids)} chunks in {end_time - start_time:.2f} seconds for user {user_id}")
-
-    # Embedding
     start_time = time.time()
     embeddings = await asyncio.to_thread(vectorstore.embeddings.embed_documents, all_texts)
     end_time = time.time()
@@ -99,6 +106,6 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
     print(f"Saved {len(all_ids)} chunks to Chroma for user {user_id}")
 
 def get_user_retriever(user_id: str, k: int = 5):
-    vectorstore = get_vectorstore(user_id)
+    vectorstore = get_chroma_vectorstore(user_id)
     retriever = vectorstore.as_retriever(search_kwargs={"k": k})
     return retriever
