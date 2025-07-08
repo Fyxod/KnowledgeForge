@@ -4,13 +4,12 @@ from core.database import db
 from agents.agent import Agent, AgentState
 from core.schemas.user import UserModel
 from langchain.schema import HumanMessage, AIMessage
-
+import time
 router=APIRouter(
     prefix='/query',
     tags=['query']
 )
 
-# Define the request body model
 class QueryRequest(BaseModel):
     thread_id: str
     question: str
@@ -22,22 +21,25 @@ async def query(request: Request, body: QueryRequest):
     if not payload:
         return {"error": "User not authenticated"}
     
-    # Access thread_id and question from body
     thread_id = body.thread_id
     question = body.question
 
-    user_id = payload.id
 
-    user = await db.users.find_one({"_id": user_id})
+    print(f"Received query for thread_id: {thread_id} with question: {question}")
+
+    user_id = payload.userId
+    print(f"User ID from payload: {user_id}")
+    user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
         return {"error": "User not found"}
 
-    user = UserModel(**user)
+    print(user)
 
-    thread = user.threads.get(thread_id)
+    thread = user["threads"].get(thread_id)
     if not thread:
         return {"error": "Thread not found"}
-    
+
+    print(f"Thread found: {thread}")
     messages = []
 
     for message in thread.get("messages", []):
@@ -46,18 +48,26 @@ async def query(request: Request, body: QueryRequest):
         elif message.type == "agent":
             messages.append(AIMessage(content=message.content))
 
+    print(messages)
     state = AgentState(
         user_id=user_id,
         thread_id=thread_id,
         question=question,
         messages=messages,
         original_question=question,
+        web_search=False
     )
+    start_time = time.time()    
+    response = await Agent.ainvoke(state)
+    end_time = time.time()
     
-    response = Agent.ainvoke(state)
+    print("I actually reached here"*10)
+    print(f"Response from agent: {response}")
+    print(f"Agent response time: {end_time - start_time:.2f} seconds")
+    return
 
     if isinstance(response, AgentState):
-        # Update the thread with the new message
+        # Update the thread with the new messages
         new_messages = [
             HumanMessage(content=state.question),
             AIMessage(content=response.answer)

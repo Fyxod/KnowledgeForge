@@ -1,0 +1,46 @@
+SYSTEM:
+You are a helpful assistant that answers questions based on the provided documents. Use the retrieved context to give the best possible answer. If the question is answerable using the provided documents, provide a direct and specific answer using relevant details.
+
+----------------------------------------
+
+SYSTEM:
+Only if the question truly cannot be answered using the documents, then ask for clarification or suggest a web search. Do not default to asking for clarification if relevant information is available in the context.
+
+----------------------------------------
+
+HUMAN:
+Whats the current time in alwar
+
+----------------------------------------
+
+AI:
+I cannot provide real-time information, including the current time. To find the current time in Alwar, I recommend performing a web search.
+
+----------------------------------------
+
+AI:
+Action: web_search
+
+----------------------------------------
+
+HUMAN:
+Web search initiated for queries: ['current time in Alwar']
+
+----------------------------------------
+
+HUMAN:
+Web search results: [{'query': 'current time in Alwar', 'follow_up_questions': None, 'answer': None, 'images': [], 'results': [{'url': 'https://savvytime.com/local/india-alwar', 'title': 'Local Time in Alwar, India', 'content': 'Alwar Time. Current local time in Alwar, India. 8:10 :42 am. 8:10 :42. Monday, 30 June 2025 (IST). Convert Alwar Time. Want to convert Alwar time to different', 'score': 0.9302622, 'raw_content': None}, {'url': 'https://clock.zone/asia/alwar', 'title': 'Current Time & Time Zone For Alwar, India - Clock.Zone', 'content': 'In the moment when this page was generated, in Alwar, India it was Monday, July 7, 2025 5:30 AM Abbreviation for this time zone is IST .', 'score': 0.91362286, 'raw_content': None}, {'url': 'https://www.worldtimebuddy.com/india-alwar', 'title': 'Time in Alwar, India - World Time Buddy', 'content': '| Alwar Time Use the above converter to visually and very quickly convert time in Alwar, India to another timezone. Simply mouse over the colored hour-tiles and glance at the hours selected by the column.  Current time zone for Alwar, India is IST, whose offset is GMT+5.5. It currently does not observe Daylight Savings Time.      Related: Alwar to PST, PST to Alwar See also: Bilaspur, Ichalkaranji, Bijapur |  |  |  | Getting Started  1   Add locations (or remove, set home, order)  2   Mouse [...] # Alwar Time\n\nUse the above converter to visually and very quickly convert time in Alwar, India to another timezone. Simply mouse over the colored hour-tiles and glance at the hours selected by the column.\n\nCurrent time zone for Alwar, India is IST, whose offset is GMT+5.5. It currently does not observe Daylight Savings Time.\n\nRelated: Alwar to PST, PST to Alwar  \nSee also: Bilaspur, Ichalkaranji, Bijapur\n\n# Getting Started', 'score': 0.9051298, 'raw_content': None}, {'url': 'https://greenwichmeantime.com/time/india/alwar/', 'title': 'Time in Alwar - Rajasthan, India - GMT', 'content': 'Time now in Alwar, India · India flag. State: Rajasthan. Alwar. 10:55:56 PM 07/07/2025 GMT +05:30. Time zone: GMT+5:30 (GMT +05:30). Compare time in Alwar', 'score': 0.8965509, 'raw_content': None}, {'url': 'https://www.worldcitytime.com/alwar', 'title': 'Current Time in Alwar, Rajasthan, India - WorldCityTime', 'content': 'Current Time in Alwar, Rajasthan, India ; Sunrise / Sunset Time. Daylight Time: 13 hours 50 minutes 4 seconds. Sunrise Time: 5:32 AM Friday. Sunset Time: 7:23 PM', 'score': 0.89324445, 'raw_content': None}], 'response_time': 3.63}]
+
+----------------------------------------
+
+HUMAN:
+Here is the retrieved context according to the question:
+[{'query': 'current time in Alwar', 'follow_up_questions': None, 'answer': None, 'images': [], 'results': [{'url': 'https://savvytime.com/local/india-alwar', 'title': 'Local Time in Alwar, India', 'content': 'Alwar Time. Current local time in Alwar, India. 8:10 :42 am. 8:10 :42. Monday, 30 June 2025 (IST). Convert Alwar Time. Want to convert Alwar time to different', 'score': 0.9302622, 'raw_content': None}, {'url': 'https://clock.zone/asia/alwar', 'title': 'Current Time & Time Zone For Alwar, India - Clock.Zone', 'content': 'In the moment when this page was generated, in Alwar, India it was Monday, July 7, 2025 5:30 AM Abbreviation for this time zone is IST .', 'score': 0.91362286, 'raw_content': None}, {'url': 'https://www.worldtimebuddy.com/india-alwar', 'title': 'Time in Alwar, India - World Time Buddy', 'content': '| Alwar Time Use the above converter to visually and very quickly convert time in Alwar, India to another timezone. Simply mouse over the colored hour-tiles and glance at the hours selected by the column.  Current time zone for Alwar, India is IST, whose offset is GMT+5.5. It currently does not observe Daylight Savings Time.      Related: Alwar to PST, PST to Alwar See also: Bilaspur, Ichalkaranji, Bijapur |  |  |  | Getting Started  1   Add locations (or remove, set home, order)  2   Mouse [...] # Alwar Time\n\nUse the above converter to visually and very quickly convert time in Alwar, India to another timezone. Simply mouse over the colored hour-tiles and glance at the hours selected by the column.\n\nCurrent time zone for Alwar, India is IST, whose offset is GMT+5.5. It currently does not observe Daylight Savings Time.\n\nRelated: Alwar to PST, PST to Alwar  \nSee also: Bilaspur, Ichalkaranji, Bijapur\n\n# Getting Started', 'score': 0.9051298, 'raw_content': None}, {'url': 'https://greenwichmeantime.com/time/india/alwar/', 'title': 'Time in Alwar - Rajasthan, India - GMT', 'content': 'Time now in Alwar, India · India flag. State: Rajasthan. Alwar. 10:55:56 PM 07/07/2025 GMT +05:30. Time zone: GMT+5:30 (GMT +05:30). Compare time in Alwar', 'score': 0.8965509, 'raw_content': None}, {'url': 'https://www.worldcitytime.com/alwar', 'title': 'Current Time in Alwar, Rajasthan, India - WorldCityTime', 'content': 'Current Time in Alwar, Rajasthan, India ; Sunrise / Sunset Time. Daylight Time: 13 hours 50 minutes 4 seconds. Sunrise Time: 5:32 AM Friday. Sunset Time: 7:23 PM', 'score': 0.89324445, 'raw_content': None}], 'response_time': 3.63}]
+
+----------------------------------------
+
+HUMAN:
+Whats the current time in alwar
+
+----------------------------------------
+

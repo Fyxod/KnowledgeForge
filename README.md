@@ -26,7 +26,6 @@ add route to get chat history for a single thread (or maybe just preload it in t
 Whole frontend
 
 customize error messages too like success messages
-yet to debug query.py
 
 --index-url https://download.pytorch.org/whl/cu121
 torch
@@ -37,3 +36,7 @@ pip3 install -U xformers --index-url https://download.pytorch.org/whl/cu128
 
 
 pip install faiss-cpu not working on my laptop due to cuda version mismatch. Will see if there will be performance issues later, then might use faiss-gpu on gpu server
+
+maybe filter out the '\n' in the text chunks before chunking if you get time
+
+query.py almost fully debugged
