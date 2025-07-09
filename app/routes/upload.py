@@ -40,7 +40,7 @@ async def upload_file(
         return {"error": "User not found"}
     print(f"User found: {user}")
     
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(datetime.timezone.utc)
 
     # Create new thread if thread_id is not provided
     if not thread_id:

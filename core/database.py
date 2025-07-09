@@ -43,12 +43,11 @@ user_schema = {
                             "bsonType": "array",
                             "items": {
                                 "bsonType": "object",
-                                "required": ["type", "message", "createdAt", "updatedAt"],
+                                "required": ["type", "content", "timestamp"],
                                 "properties": {
                                     "type": {"enum": ["agent", "user"]},
-                                    "message": {"bsonType": "string"},
-                                    "createdAt": {"bsonType": "date"},
-                                    "updatedAt": {"bsonType": "date"}
+                                    "content": {"bsonType": "string"},
+                                    "timestamp": {"bsonType": "date"},
                                 }
                             }
                         },

@@ -40,3 +40,9 @@ pip install faiss-cpu not working on my laptop due to cuda version mismatch. Wil
 maybe filter out the '\n' in the text chunks before chunking if you get time
 
 query.py almost fully debugged
+
+def get_recent_history(full_history, turns=2):
+    # full_history = list of dicts with 'role' and 'content'
+    return full_history[-turns*2:]
+
+update chat history to only contains last n turns of conversation

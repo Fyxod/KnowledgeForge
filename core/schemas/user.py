@@ -38,9 +38,8 @@ class ThreadDocument(BaseModel):
 
 class ChatMessage(BaseModel):
     type: Literal["agent", "user"]
-    message: str
-    createdAt: datetime
-    updatedAt: datetime
+    content: str
+    timestamp: datetime
 
 class Thread(BaseModel):
     thread_name: str

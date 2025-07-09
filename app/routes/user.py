@@ -83,7 +83,7 @@ def login_user(user_input: UserLoginModel):
             is_active=user.get("is_active", True),
         ).model_dump(),
         key=settings.SECRET_KEY,
-        algorithm=["HS256"],
+        algorithm="HS256",
     )
 
     user.pop("password", None)
