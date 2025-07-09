@@ -8,8 +8,8 @@ from agent.state import AgentState
 from agent.tools.search import search_tool
 
 from core.constants import *
-from core.embeddings.vectorstore import get_user_retriever
-from core.llm import llm
+from core.embeddings.retriever import get_user_retriever
+from core.llm.client import llm
 from core.llm.outputs import MainLLMOutput, REWRITELLMOutput
 
 
