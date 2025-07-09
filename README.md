@@ -46,3 +46,6 @@ def get_recent_history(full_history, turns=2):
     return full_history[-turns*2:]
 
 update chat history to only contains last n turns of conversation
+
+update retrieval query prompt, check if it works otherwise remove question + retrieval query concatenation
+try generating summaries

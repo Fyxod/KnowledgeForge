@@ -17,13 +17,13 @@ from pydantic import BaseModel, Field
 
 from core.llm import llm
 from core.search_tool import search_tool
-from core.models.user import UserModel
+from core.schemas.user import UserModel
 from core.vectorstore import get_user_retriever
 import time
 
 from core.constants import *
 from core.state import AgentState
-from agent.nodes import *
+from agents.nodes import *
 # maybe add descriptions to each field
 
     

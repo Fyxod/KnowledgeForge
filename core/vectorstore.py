@@ -17,19 +17,7 @@ def chunk_page_text(page_text: str) -> List[str]:
     )
     return splitter.split_text(page_text)
 
-def get_embedding_function():
-    print("PRINTING CUDA")
-    print(torch.cuda)
-    print(torch.cuda.is_available())
-    return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2", # decide model, this just temp
-        # model_name="NovaSearch/stella_en_400M_v5",
-        model_kwargs={
-            "device": "cpu",
-            # "device": "cuda" if torch.cuda.is_available() else "cpu",
-            "trust_remote_code": True
-        },
-    )
+
 
 embedding_function = get_embedding_function()
 # Get Chroma vector store instance
@@ -98,7 +86,3 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
 
     print(f"Saved {len(all_ids)} chunks to Chroma for user {user_id}")
 
-def get_user_retriever(user_id: str, k: int = 5):
-    vectorstore = get_vectorstore(user_id)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": k})
-    return retriever
