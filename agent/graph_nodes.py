@@ -1,26 +1,18 @@
 import json
-from typing import List, Dict
-
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
-from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate, HumanMessagePromptTemplate
-
-from langgraph.graph import (
-    StateGraph,
-    add_messages,
-    END,
-    START
-)
-from core.state import AgentState
-from core.models.llm_outputs import MainLLMOutput, REWRITELLMOutput
-from pydantic import BaseModel, Field
-
-from core.llm import llm
-from core.search_tool import search_tool
-from core.models.user import UserModel
-from core.vectorstore import get_user_retriever
 import time
 
+from langchain_core.messages import AIMessage, HumanMessage
+
+from agent.graph_helpers import build_main_prompt, build_rewrite_prompt, parallel_search
+from agent.state import AgentState
+from agent.tools.search import search_tool
+
 from core.constants import *
+from core.embeddings.vectorstore import get_user_retriever
+from core.llm import llm
+from core.llm.outputs import MainLLMOutput, REWRITELLMOutput
+
+
 
 async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
@@ -28,7 +20,7 @@ async def generate(state: AgentState) -> AgentState:
         for msg in prompt:
             role = msg.__class__.__name__.replace("Message", "").upper()
             f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
-        
+
     structured_llm = llm.with_structured_output(MainLLMOutput)
     start_time = time.time()
     result: MainLLMOutput = await structured_llm.ainvoke(prompt)
@@ -37,7 +29,7 @@ async def generate(state: AgentState) -> AgentState:
     print(f"LLM response time: {end_time - start_time:.2f} seconds")
     with open("llm_result.json", "w", encoding="utf-8") as f:
         json.dump(result.model_dump(), f, indent=4)
-    state.messages.append(HumanMessage(content=state.question)) # controversial
+    state.messages.append(HumanMessage(content=state.question))  # controversial
     state.messages.append(AIMessage(content=result.answer))
     state.messages.append(AIMessage("Action: " + result.action))
     state.answer = result.answer
@@ -46,6 +38,7 @@ async def generate(state: AgentState) -> AgentState:
     state.search_queries = result.web_search_queries or []
     state.attempts += 1
     return state
+
 
 async def web_search(state: AgentState) -> AgentState:
     queries = state.search_queries
@@ -66,8 +59,9 @@ async def web_search(state: AgentState) -> AgentState:
 
     return state
 
+
 async def failure(state: AgentState) -> AgentState:
-    """ 
+    """
     Handles the failure case when no action can be taken.
     """
     failure_message = (
@@ -78,7 +72,6 @@ async def failure(state: AgentState) -> AgentState:
     state.answer = failure_message
     return state
     # return END if the above line ever throws error
-
 
 
 async def rewrite_query(state: AgentState) -> AgentState:
@@ -110,20 +103,27 @@ async def rewrite_query(state: AgentState) -> AgentState:
     state.retrieval_query = rewritten_query
     return state
 
+
 async def retriever(state: AgentState) -> AgentState:
-    """ Retrieves documents based on the user's question.
+    """Retrieves documents based on the user's question.
     This is a placeholder function that simulates document retrieval.
     """
-    print("SLEEPING "*8)
+    print("SLEEPING " * 8)
     start_time = time.time()
-    doc_retriever = get_user_retriever(state.user_id, k=10) # try different k values
+    doc_retriever = get_user_retriever(state.user_id, k=10)  # try different k values
     end_time = time.time()
-    print(f"Initialized retriever in {end_time - start_time:.2f} seconds for user {state.user_id}")
+    print(
+        f"Initialized retriever in {end_time - start_time:.2f} seconds for user {state.user_id}"
+    )
 
     start_time = time.time()
-    retrieved_docs = await doc_retriever.ainvoke(state.retrieval_query or state.question)
+    retrieved_docs = await doc_retriever.ainvoke(
+        state.retrieval_query or state.question
+    )
     end_time = time.time()
-    print(f"Retrieved {len(retrieved_docs)} documents in {end_time - start_time:.2f} seconds for user {state.user_id}")
+    print(
+        f"Retrieved {len(retrieved_docs)} documents in {end_time - start_time:.2f} seconds for user {state.user_id}"
+    )
     retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
     # print("docs retrieved: ", retrieved_docs)
     with open(f"retrieved_docs_{state.user_id}.json", "w") as f:
@@ -132,10 +132,10 @@ async def retriever(state: AgentState) -> AgentState:
     return state
 
 
-def router(state: AgentState) -> str: 
+def router(state: AgentState) -> str:
     if state.action == "answer":
         print("Answering the question")
-        return ANSWER 
+        return ANSWER
 
     elif state.action == "web_search":
         print("Initiating web search")

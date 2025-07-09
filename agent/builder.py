@@ -1,42 +1,21 @@
-import asyncio
-import json
-from typing import List, Literal, Optional, Dict, Any
+from langgraph.graph import END, StateGraph
 
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
-from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate, HumanMessagePromptTemplate
-class AbortGraphExecution(Exception):
-    pass
-from langgraph.graph import (
-    StateGraph,
-    add_messages,
-    END,
-    START
+from agent.graph_nodes import (
+    failure,
+    generate,
+    retriever,
+    rewrite_query,
+    router,
+    web_search,
 )
-
-from pydantic import BaseModel, Field
-
-from core.llm import llm
-from core.search_tool import search_tool
-from core.models.user import UserModel
-from core.vectorstore import get_user_retriever
-import time
-
+from agent.state import AgentState
 from core.constants import *
-from core.state import AgentState
-from agent.nodes import *
-# maybe add descriptions to each field
-
-    
-
-
-
-    
 
 
 # Building the state graph
-
 graph_builder = StateGraph(AgentState)
 
+# Add nodes
 graph_builder.add_node(REWRITE_QUERY, rewrite_query)
 graph_builder.add_node(RETRIEVER, retriever)
 graph_builder.add_node(GENERATE, generate)
@@ -45,21 +24,29 @@ graph_builder.add_node(WEB_SEARCH, web_search)
 graph_builder.add_node(ANSWER, lambda state: END)
 graph_builder.add_node(FAILURE, failure)
 
+# Set the entry point
 graph_builder.set_entry_point(REWRITE_QUERY)
 
+# Define edges
 graph_builder.add_edge(REWRITE_QUERY, RETRIEVER)
 graph_builder.add_edge(RETRIEVER, GENERATE)
 
+# Conditional edges from GENERATE via router
 graph_builder.add_conditional_edges(
     GENERATE,
     router,
     {
-        ANSWER: END,      
+        ANSWER: END,
         WEB_SEARCH: WEB_SEARCH,
         FAILURE: FAILURE,
-    }
+    },
 )
+
+# Web search loops back to GENERATE
 graph_builder.add_edge(WEB_SEARCH, GENERATE)
+
+# Failure goes to END
 graph_builder.add_edge(FAILURE, END)
 
+# Compile the agent
 Agent = graph_builder.compile()

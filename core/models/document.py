@@ -1,10 +1,12 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
+
 class Page(BaseModel):
     number: int
     text: str
     images: Optional[List[str]] = Field(default_factory=list)
+
 
 class Document(BaseModel):
     id: str
@@ -12,6 +14,7 @@ class Document(BaseModel):
     file_name: str
     content: List[Page] = Field(default_factory=list)
     title: str
+
 
 class Documents(BaseModel):
     documents: List[Document] = Field(default_factory=list)

@@ -49,3 +49,5 @@ update chat history to only contains last n turns of conversation
 
 update retrieval query prompt, check if it works otherwise remove question + retrieval query concatenation
 try generating summaries
+
+also add the chunk, page no, document etc used

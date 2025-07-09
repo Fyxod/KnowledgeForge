@@ -1,15 +1,17 @@
+import uuid
+import jwt
+
 from fastapi import APIRouter, HTTPException, Request
+
 from core.config import settings
 from core.database import db
-from core.utils.bcrypt import hash_password, verify_password
-import uuid
-from core.schemas.user import (
-    UserResponseModel,
-    UserLoginModel,
+from core.models.user import (
     UserCreateModel,
     UserJwtPayload,
+    UserLoginModel,
+    UserResponseModel,
 )
-import jwt
+from core.utils.bcrypt import hash_password, verify_password
 
 router = APIRouter(prefix="/user", tags=["user"])
 
@@ -30,8 +32,8 @@ def create_user(user_input: UserCreateModel):
     user_dict["threads"] = {}
 
     result = db.users.insert_one(user_dict)
-    print("User created with ID:", result)
-    
+    print("User created with ID:", result.inserted_id)
+
     created_user = db.users.find_one(
         {"_id": result.inserted_id}, {"password": 0, "_id": 0}
     )
@@ -59,20 +61,20 @@ def get_user(request: Request, user_id: str):
     return {
         "status": "success",
         "message": "User retrieved successfully",
-        "user": user
+        "user": user,
     }
 
 
 @router.post("/login")
 def login_user(user_input: UserLoginModel):
-    user_input = user_input.model_dump()
-    print("Login attempt with input:", user_input)
+    user_data = user_input.model_dump()
+    print("Login attempt with input:", user_data)
 
-    user = db.users.find_one({"email": user_input["email"]}, {"_id": 0})
+    user = db.users.find_one({"email": user_data["email"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if not verify_password(user_input["password"], user["password"]):
+    if not verify_password(user_data["password"], user["password"]):
         raise HTTPException(status_code=400, detail="Invalid password")
 
     token = jwt.encode(

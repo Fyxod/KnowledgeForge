@@ -3,7 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-search_tool = TavilySearch(search_depth="basic") # also have to try the below web search function
+search_tool = TavilySearch(
+    search_depth="basic"
+)  # also have to try the below web search function
 
 
 # or this maybe, we'll see

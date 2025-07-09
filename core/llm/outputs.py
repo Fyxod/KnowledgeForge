@@ -1,6 +1,5 @@
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
-from core.vectorstore import get_user_retriever
 
 
 class MainLLMOutput(BaseModel):

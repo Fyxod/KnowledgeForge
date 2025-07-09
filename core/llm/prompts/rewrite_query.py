@@ -1,3 +1,11 @@
+from langchain_core.messages import SystemMessage
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    SystemMessage,
+    HumanMessagePromptTemplate,
+    MessagesPlaceholder,
+)
+
 rewrite_query_prompt = ChatPromptTemplate.from_messages(
     [
         SystemMessage(

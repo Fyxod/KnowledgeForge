@@ -1,44 +1,42 @@
-import os
-import torch
 import asyncio
+import os
+import time
 from typing import List
-from pydantic import BaseModel, Field
-import chromadb
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
-import time
-from core.schemas.document import Documents
+
+from core.embeddings.embeddings import get_embedding_function
+from core.models.document import Documents
+
+embedding_function = get_embedding_function()
+
 
 def chunk_page_text(page_text: str) -> List[str]:
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50
-    )
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     return splitter.split_text(page_text)
 
 
-
-embedding_function = get_embedding_function()
 # Get Chroma vector store instance
 def get_vectorstore(user_id: str) -> Chroma:
     persist_path = os.path.join("data", user_id, "chroma")
-    # persist_path = os.path.join("data", "users", user_id, "chroma")
     os.makedirs(persist_path, exist_ok=True)
 
-    collection_name = "user_docs"
     return Chroma(
-        collection_name=collection_name,
+        collection_name="user_docs",
         persist_directory=persist_path,
-        embedding_function=embedding_function
+        embedding_function=embedding_function,
     )
+
 
 async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
     start_time = time.time()
     vectorstore = await asyncio.to_thread(get_vectorstore, user_id)
     end_time = time.time()
-    print(f"Initialized Chroma vector store in {end_time - start_time:.2f} seconds for user {user_id}")
-    
+    print(
+        f"Initialized Chroma vector store in {end_time - start_time:.2f} seconds for user {user_id}"
+    )
+
     all_ids = []
     all_texts = []
     all_metadatas = []
@@ -63,26 +61,33 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                 all_texts.append(chunk)
                 all_metadatas.append(metadata)
     end_time = time.time()
-    print(f"Processed {len(all_ids)} chunks in {end_time - start_time:.2f} seconds for user {user_id}")
+    print(
+        f"Processed {len(all_ids)} chunks in {end_time - start_time:.2f} seconds for user {user_id}"
+    )
 
     # Embedding
     start_time = time.time()
-    embeddings = await asyncio.to_thread(vectorstore.embeddings.embed_documents, all_texts)
+    embeddings = await asyncio.to_thread(
+        vectorstore.embeddings.embed_documents, all_texts
+    )
     end_time = time.time()
-    print(f"Generated embeddings for {len(all_texts)} chunks in {end_time - start_time:.2f} seconds for user {user_id}")
+    print(
+        f"Generated embeddings for {len(all_texts)} chunks in {end_time - start_time:.2f} seconds for user {user_id}"
+    )
 
-    # Upsert all chunks to Chroma
+    # Upsert to Chroma
     start_time = time.time()
     print(f"Upserting {len(all_ids)} chunks to Chroma for user {user_id}")
-    await asyncio.to_thread(vectorstore._collection.upsert,
+    await asyncio.to_thread(
+        vectorstore._collection.upsert,
         embeddings=embeddings,
         documents=all_texts,
         metadatas=all_metadatas,
-        ids=all_ids
+        ids=all_ids,
+    )
+    end_time = time.time()
+    print(
+        f"Upserted {len(all_ids)} chunks to Chroma in {end_time - start_time:.2f} seconds for user {user_id}"
     )
 
-    end_time = time.time()
-    print(f"Upserted {len(all_ids)} chunks to Chroma in {end_time - start_time:.2f} seconds for user {user_id}")
-
     print(f"Saved {len(all_ids)} chunks to Chroma for user {user_id}")
-

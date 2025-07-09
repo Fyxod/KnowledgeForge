@@ -1,18 +1,25 @@
 import asyncio
-from langchain_core.prompts import ChatPromptTemplate
-from core.state import AgentState
-from typing import List, Dict
+from typing import Dict, List
 
-def get_recent_history(full_history: List[Dict[str, str]], turns: int = 2) -> List[Dict[str, str]]:
+from langchain_core.prompts import ChatPromptTemplate
+
+from agent.state import AgentState
+from core.llm.prompts import main_query, rewrite_query
+
+def get_recent_history(
+    full_history: List[Dict[str, str]], turns: int = 2
+) -> List[Dict[str, str]]:
     """
     Returns the most recent conversation turns from the full history.
     Each turn consists of a user message and an assistant response.
     """
     if len(full_history) < turns * 2:
         return full_history
+    
     # Get the last 'turns' pairs of user and AI messages
-    recent_history = full_history[-(turns * 2):]
+    recent_history = full_history[-(turns * 2) :]
     return recent_history
+
 
 async def parallel_search(queries, tool):
     tasks = [tool.ainvoke(query) for query in queries]
@@ -29,11 +36,12 @@ def build_main_prompt(state: AgentState) -> ChatPromptTemplate:
         documents = state.search_queries_results
     else:
         documents = state.documents
+
     recent_chats = get_recent_history(
         state.messages, turns=5
     )  # fine tune the no of turns
 
-    return main_prompt.format_messages(
+    return main_query.format_messages(
         messages=recent_chats,
         documents=documents,
         question=state.question,
@@ -44,7 +52,7 @@ def build_main_prompt(state: AgentState) -> ChatPromptTemplate:
 def build_rewrite_prompt(state: AgentState) -> ChatPromptTemplate:
     """Builds the rewrite prompt for the agent based on the current state."""
     recent_history = get_recent_history(state.messages, turns=5)
-    prompt = rewrite_query_prompt.format_messages(
+    prompt = rewrite_query.format_messages(
         question=state.question,
         recent_history=recent_history,
     )

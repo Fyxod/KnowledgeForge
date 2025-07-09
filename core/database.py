@@ -62,6 +62,7 @@ user_schema = {
 
 try:
     db.create_collection("users", validator=user_schema)
+    db.users.create_index("userId", unique=True)
     print("Collection 'users' created with schema validation.")
 except CollectionInvalid:
     print("Collection 'users' already exists.")
