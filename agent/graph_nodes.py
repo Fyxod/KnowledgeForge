@@ -126,7 +126,7 @@ async def retriever(state: AgentState) -> AgentState:
     )
     retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
     # print("docs retrieved: ", retrieved_docs)
-    with open(f"retrieved_docs_{state.user_id}.json", "w") as f:
+    with open(f"retrieved_docs_{state.user_id}.json", "w", encoding="utf-8") as f:
         json.dump(retrieved_docs, f)
     state.documents = retrieved_docs
     return state

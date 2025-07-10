@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from typing import Annotated, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
 
@@ -16,10 +16,10 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 
 @router.post("/")
 async def upload_file(
-    request: Request,
-    files: Annotated[list[UploadFile], File()],
-    thread_name: Annotated[Optional[str], Form()] = None,
-    thread_id: Annotated[Optional[str], Form()] = None,
+    request: Request,  
+    files: List[UploadFile] = File(...),
+    thread_id: Optional[str] = Form(None),
+    thread_name: Optional[str] = Form(None),
 ):
     """Handle multiple file uploads."""
 
@@ -78,9 +78,11 @@ async def upload_file(
 
     parsed_data = await process_files(files_data, user_id, thread_id)
     json_data = parsed_data.model_dump_json()
-
+    print(f"Parsed data: {json_data}")
+    print(type(parsed_data))
+    print(f"json data type: {type(json_data)}")
     # Dump parsed data to a JSON file
-    with open(f"parsed_data_{thread_id}.json", "w") as f:
+    with open(f"parsed_data_{thread_id}.json", "w", encoding="utf-8") as f:
         f.write(json_data)
 
     # Build document objects for DB

@@ -34,20 +34,12 @@ torchaudio
 
 pip3 install -U xformers --index-url https://download.pytorch.org/whl/cu128
 
-
-pip install faiss-cpu not working on my laptop due to cuda version mismatch. Will see if there will be performance issues later, then might use faiss-gpu on gpu server
-
 maybe filter out the '\n' in the text chunks before chunking if you get time
-
-query.py almost fully debugged
-
-def get_recent_history(full_history, turns=2):
-    # full_history = list of dicts with 'role' and 'content'
-    return full_history[-turns*2:]
-
-update chat history to only contains last n turns of conversation
 
 update retrieval query prompt, check if it works otherwise remove question + retrieval query concatenation
 try generating summaries
 
-also add the chunk, page no, document etc used
+also return the chunk, page no, document etc used
+
+test with other documents
+Add image parser
