@@ -1,15 +1,13 @@
-# from transformers import DonutProcessor, VisionEncoderDecoderModel
-# from PIL import Image
-# import torch
-# print("running donut model")
-# image = Image.open("image.png").convert("RGB")
-# processor = DonutProcessor.from_pretrained("naver-clova-ix/donut-base")
-# model = VisionEncoderDecoderModel.from_pretrained("naver-clova-ix/donut-base")
+import asyncio
+from PIL import Image
+import pytesseract
 
-# pixel_values = processor(image, return_tensors="pt").pixel_values
-# outputs = model.generate(pixel_values)
-# result = processor.batch_decode(outputs, skip_special_tokens=True)[0]
-# print("Result from Donut model:")
-# print(result)
+async def image_parser(image_path: str) -> str:
+    def parse():
+        image = Image.open(image_path).convert("RGB")
+        return pytesseract.image_to_string(image)
 
-# it's shit, maybe a small vision model or will use ocr as before
+    return await asyncio.to_thread(parse)
+
+
+# also try gemma vision model or some other model maybe. See which is best and faster

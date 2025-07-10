@@ -26,7 +26,7 @@ async def upload_file(
     print(f"Thread name: {thread_name}")
     print(f"Thread ID: {thread_id}")
     print(f"Files: {files}")
-
+    
     if not files:
         return {"error": "No files uploaded"}
 

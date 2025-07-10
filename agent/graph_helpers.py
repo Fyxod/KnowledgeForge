@@ -45,8 +45,8 @@ def build_main_prompt(state: AgentState) -> ChatPromptTemplate:
     return main_prompt.format_messages(
         messages=recent_chats,
         documents=documents,
-        # question=state.question,
-        question=state.question + "\n" + (state.retrieval_query or ""),  # append retrieval query if exists,
+        question=state.question,
+        # question=state.question + "\n" + (state.retrieval_query or ""),  # append retrieval query if exists,
     )
 
 

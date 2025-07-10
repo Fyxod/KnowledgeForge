@@ -36,10 +36,11 @@ pip3 install -U xformers --index-url https://download.pytorch.org/whl/cu128
 
 maybe filter out the '\n' in the text chunks before chunking if you get time
 
-update retrieval query prompt, check if it works otherwise remove question + retrieval query concatenation
 try generating summaries
 
 also return the chunk, page no, document etc used
 
 test with other documents
 Add image parser
+
+link parser in input along with docs

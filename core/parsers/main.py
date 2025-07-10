@@ -12,6 +12,7 @@ import io
 
 from kreuzberg import extract_file, ExtractionResult
 from app.socket import sio
+from core.parsers.image import image_parser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
@@ -52,8 +53,8 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
         # await sio.emit("progress", {"message": "Extracting data from image..."}, to=sid)
 
         try:
-            # text = await image_parser(file_path)
-            text = "DUMMY TEXT FOR IMAGE"
+            text = await image_parser(file_path)
+            # text = "DUMMY TEXT FOR IMAGE"
         except Exception as e:
             # await sio.emit("progress", {"message": f"Error processing image: {str(e)}"}, to=sid)
             await asyncio.sleep(3)
@@ -65,7 +66,7 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
             id=doc_id,
             type=ext[1:],  # Get the extension without the dot
             file_name=file_name or os.path.basename(file_path),
-            content=[Page(number=1, text=text, images=[text])],
+            content=[Page(number=1, text=text)],
             title=title,
             full_text=text
         )
@@ -88,9 +89,8 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
     for page_number in range(len(doc)):
         page = doc.load_page(page_number)
         page_text = page.get_text()
-        combined_texts.append(page_text)
 
-        image_texts = []
+        image_names = []
         image_list = page.get_images(full=True)
 
         if image_list:
@@ -107,17 +107,21 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
             image_ext = base_image["ext"]
             image = Image.open(io.BytesIO(image_bytes))
 
+            image_name = f"page{page_number + 1}_img{img_index + 1}.{image_ext}"
             image_path = os.path.join(
-                image_dir, f"page{page_number + 1}_img{img_index + 1}.{image_ext}"
+                image_dir, image_name
             )
             image.save(image_path)
 
-            # image_text = await image_parser(image_path)
-            image_text = "DUMMY TEXT FOR IMAGE"
-            image_texts.append(image_text)
-            combined_texts.append(image_text)
+            image_text = await image_parser(image_path)
+            # image_text = "DUMMY TEXT FOR IMAGE"
+            page_text += f"\n\n[Image: {image_name}]\n{image_text}"  # Append image text to page text
 
-        pages.append(Page(number=page_number + 1, text=page_text, images=image_texts))
+            image_names.append(image_name)
+
+
+        combined_texts.append(page_text)
+        pages.append(Page(number=page_number + 1, text=page_text, images=image_names))
 
     doc_id = str(uuid.uuid4())
 

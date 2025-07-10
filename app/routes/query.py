@@ -68,7 +68,6 @@ async def query(request: Request, body: QueryRequest):
     print(f"Response from agent: {response}")
     print(f"Agent response time: {end_time - start_time:.2f} seconds")
 
-    # if isinstance(response, AgentState):
     # Update the thread with the new messages
     now = datetime.now(timezone.utc)
     new_messages = [
@@ -79,8 +78,5 @@ async def query(request: Request, body: QueryRequest):
     thread["chats"].extend(new_messages)
     thread["updatedAt"] = now
     db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
-    # else:
-    # # If the response is not an AgentState, it might be an error or a different type, still have to figure out errors
-    #     return {"error": "Unexpected response from agent"}
 
     return response.model_dump(exclude_none=True)

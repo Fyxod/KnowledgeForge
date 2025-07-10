@@ -12,6 +12,7 @@ main_prompt = ChatPromptTemplate.from_messages(
             content=(
                 "You are a helpful assistant that answers questions based on the provided documents. "
                 "Use the retrieved context to give the best possible answer. "
+                "Extract and use as much relevant information as possible from the documents. "
                 "If the question is answerable using the provided documents, provide a direct and specific answer using relevant details."
             )
         ),
