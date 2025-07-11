@@ -1,4 +1,37 @@
 import uuid
+"""
+This module defines the FastAPI routes for user management, including user creation, retrieval, and authentication.
+
+Routes:
+    - POST /user/ : Create a new user account.
+    - GET /user/{user_id} : Retrieve user details for the authenticated user.
+    - POST /user/login : Authenticate a user and return a JWT token.
+
+Dependencies:
+    - FastAPI for API routing and HTTP exception handling.
+    - PyJWT for JWT token encoding.
+    - uuid for generating unique user IDs.
+    - Custom modules for configuration, database access, user models, and password hashing utilities.
+
+Models:
+    - UserCreateModel: Input model for user creation.
+    - UserLoginModel: Input model for user login.
+    - UserResponseModel: Output model for user data.
+    - UserJwtPayload: Model for JWT payload structure.
+
+Utilities:
+    - hash_password: Hashes user passwords for secure storage.
+    - verify_password: Verifies user passwords during login.
+
+Database:
+    - Uses a MongoDB collection (db.users) for storing and retrieving user data.
+
+Security:
+    - Passwords are hashed before storage.
+    - JWT tokens are used for authentication.
+    - Endpoints enforce authentication and authorization checks.
+
+"""
 import jwt
 
 from fastapi import APIRouter, HTTPException, Request
