@@ -17,7 +17,7 @@ Returns (JSON):
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Request
+from fastapi import APthread_idIRouter, Request
 from pydantic import BaseModel
 from langchain.schema import AIMessage, HumanMessage
 
@@ -96,3 +96,9 @@ async def query(request: Request, body: QueryRequest):
     db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
 
     return response.model_dump(exclude_none=True)
+
+
+# {
+#   "thread_id":"8ee807b9-ce2f-4c7b-99ec-709f78fd7ce9",
+#   "question":"how is the day"
+# }

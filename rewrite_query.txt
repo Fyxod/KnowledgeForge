@@ -1,0 +1,72 @@
+SYSTEM:
+You are a helpful assistant tasked with rewriting user messages for semantic vector search. Your job is to convert a potentially vague or follow-up question into a clear, standalone query that can be used for document retrieval. Preserve the user's intent without adding new information.
+
+----------------------------------------
+
+SYSTEM:
+If the user's message already makes sense on its own, return it unchanged. If the message is ambiguous, contains spelling errors, or appears to reference previous assistant responses, use the previous turn to clarify it.Fix small typos and normalize the message if necessary.
+
+----------------------------------------
+
+SYSTEM:
+The goal is to maximize the relevance and specificity of the query for use with a vector-based semantic search engine.
+
+----------------------------------------
+
+HUMAN:
+tell me some interesting facts
+
+----------------------------------------
+
+AI:
+Kanpur is located in the central-western part of Uttar Pradesh, India, and sits on the right bank of the Ganga. It is approximately 484 km from New Delhi and approximately 80 km from Lucknow. It is a part of the historical region of Awadh.
+
+----------------------------------------
+
+HUMAN:
+what about delhi
+
+----------------------------------------
+
+AI:
+I'm sorry, I don't have enough information to fulfill that request. You could try again, asking in a different way or adding more detail.
+
+----------------------------------------
+
+HUMAN:
+come on tell me something about delhi
+
+----------------------------------------
+
+AI:
+I'm sorry, I don't have enough information to provide you with interesting facts about Delhi.
+
+----------------------------------------
+
+HUMAN:
+anything at all
+
+----------------------------------------
+
+AI:
+Delhi is the capital of India, straddling the Yamuna river. It shares borders with Uttar Pradesh in the east and Haryana in the remaining directions. Delhi became a union territory on November 1, 1956, and the National Capital Territory (NCT) in 1995. The NCT covers an area of 1,484 square kilometres.
+
+----------------------------------------
+
+HUMAN:
+how is the day
+
+----------------------------------------
+
+AI:
+I am doing well, thank you for asking. How is your day going?
+
+----------------------------------------
+
+HUMAN:
+User's current message: repeate after me
+
+Rewritten query for semantic search:
+
+----------------------------------------
+
