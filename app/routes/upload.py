@@ -1,3 +1,27 @@
+"""
+Routes for file upload functionality.
+Routes:
+-------
+POST /upload/
+    Handle multiple file uploads for a user, optionally associating them with a thread.
+    Input (from frontend):
+        - files: List of files to upload (multipart/form-data, required)
+        - thread_id: Optional string, existing thread ID to associate files with (form field)
+        - thread_name: Optional string, name for a new thread if thread_id is not provided (form field)
+        - User authentication must be present in request.state.user
+    Returns (JSON):
+        - On success:
+                "thread_id": <thread_id>,
+                "documents": [
+                        "docId": <document_id>,
+                        "title": <document_title>,
+                        "type": <document_type>,
+                        "time_uploaded": <datetime>,
+                        "file_name": <file_name>
+                    ...
+        - On error:
+                "error": <error_message>
+"""
 import datetime
 import uuid
 

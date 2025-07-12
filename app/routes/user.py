@@ -1,38 +1,64 @@
-import uuid
 """
-This module defines the FastAPI routes for user management, including user creation, retrieval, and authentication.
+Create a new user.
 
-Routes:
-    - POST /user/ : Create a new user account.
-    - GET /user/{user_id} : Retrieve user details for the authenticated user.
-    - POST /user/login : Authenticate a user and return a JWT token.
+**Input (from frontend):**
+    - JSON body matching `UserCreateModel`:
+        - name (str): The user's full name.
+        - email (str): The user's email address.
+        - password (str): The user's password.
 
-Dependencies:
-    - FastAPI for API routing and HTTP exception handling.
-    - PyJWT for JWT token encoding.
-    - uuid for generating unique user IDs.
-    - Custom modules for configuration, database access, user models, and password hashing utilities.
+**Returns:**
+    - JSON object:
+        - status (str): "success" if user is created.
+        - message (str): Success message.
+        - user (UserResponseModel): The created user's data (excluding password and internal IDs).
 
-Models:
-    - UserCreateModel: Input model for user creation.
-    - UserLoginModel: Input model for user login.
-    - UserResponseModel: Output model for user data.
-    - UserJwtPayload: Model for JWT payload structure.
-
-Utilities:
-    - hash_password: Hashes user passwords for secure storage.
-    - verify_password: Verifies user passwords during login.
-
-Database:
-    - Uses a MongoDB collection (db.users) for storing and retrieving user data.
-
-Security:
-    - Passwords are hashed before storage.
-    - JWT tokens are used for authentication.
-    - Endpoints enforce authentication and authorization checks.
+**Errors:**
+    - 400: If the email already exists.
+"""
 
 """
+Retrieve a user's information by user ID.
+
+**Input (from frontend):**
+    - Path parameter:
+        - user_id (str): The unique user ID.
+    - Authenticated request (JWT token in headers).
+
+**Returns:**
+    - JSON object:
+        - status (str): "success" if user is found.
+        - message (str): Success message.
+        - user (dict): The user's data (excluding password and internal IDs).
+
+**Errors:**
+    - 401: If the user is not authenticated.
+    - 403: If the authenticated user does not match the requested user_id.
+    - 404: If the user is not found.
+"""
+
+"""
+Authenticate a user and return a JWT token.
+
+**Input (from frontend):**
+    - JSON body matching `UserLoginModel`:
+        - email (str): The user's email address.
+        - password (str): The user's password.
+
+**Returns:**
+    - JSON object:
+        - status (str): "success" if login is successful.
+        - message (str): Success message.
+        - user (dict): The user's data (excluding password).
+        - token (str): JWT token for authentication.
+
+**Errors:**
+    - 404: If the user is not found.
+    - 400: If the password is invalid.
+"""
+
 import jwt
+import uuid
 
 from fastapi import APIRouter, HTTPException, Request
 
