@@ -1,23 +1,7 @@
-/**
- * API Service Module
- * 
- * Provides centralized HTTP client configuration and API functions
- * for communicating with the backend server. Handles authentication,
- * request/response interceptors, and provides typed API methods.
- * 
- * Features:
- * - Automatic JWT token attachment to authenticated requests
- * - Centralized error handling
- * - Consistent API endpoint management
- * - Support for both JSON and FormData requests
- */
-
 import axios from 'axios';
 
-// Backend server configuration
-const API_BASE_URL = 'http://127.0.0.1:8000'; // Match your backend URL
+const API_BASE_URL = 'http://127.0.0.1:8000';
 
-// Create axios instance with default configuration
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -25,10 +9,6 @@ const api = axios.create({
   },
 });
 
-/**
- * Request interceptor to add JWT token to authenticated requests
- * Automatically attaches Bearer token from localStorage if available
- */
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('jwt');
   if (token) {
@@ -37,19 +17,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// File upload service
 export const uploadFiles = async (files, threadId = null, threadName = null) => {
   try {
     console.log('Upload request:', { threadId, threadName, filesCount: files.length });
     
     const formData = new FormData();
     
-    // Add files to form data
     files.forEach((file) => {
       formData.append('files', file);
     });
     
-    // Add thread info if provided
     if (threadId) {
       formData.append('thread_id', threadId);
       console.log('Added thread_id to formData:', threadId);
@@ -72,7 +49,6 @@ export const uploadFiles = async (files, threadId = null, threadName = null) => 
   }
 };
 
-// Query service
 export const sendQuery = async (threadId, question) => {
   try {
     const response = await api.post('/query/', {
@@ -87,7 +63,6 @@ export const sendQuery = async (threadId, question) => {
   }
 };
 
-// Thread management services
 export const createThread = async (threadName = 'New Thread') => {
   try {
     const response = await api.post('/thread/', {
@@ -121,7 +96,6 @@ export const deleteThread = async (threadId) => {
   }
 };
 
-// Update thread name
 export const updateThreadName = async (threadId, threadName) => {
   try {
     const response = await api.put(`/thread/${threadId}`, {
@@ -135,7 +109,6 @@ export const updateThreadName = async (threadId, threadName) => {
   }
 };
 
-// User services
 export const login = async (credentials) => {
   try {
     const response = await api.post('/user/login', credentials);
@@ -166,7 +139,6 @@ export const getUser = async (userId) => {
   }
 };
 
-// Create an empty thread for chat
 export const createEmptyThread = async (threadName = 'New Chat') => {
   try {
     const response = await api.post('/thread/', {

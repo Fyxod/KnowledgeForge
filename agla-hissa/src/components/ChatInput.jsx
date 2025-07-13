@@ -1,18 +1,3 @@
-/**
- * ChatInput Component
- * 
- * Provides a comprehensive input interface for sending messages and uploading files.
- * Features include drag-and-drop file upload, message composition, and file management.
- * 
- * Props:
- * - onSend: Function to handle message sending
- * - onFileUpload: Function to handle file uploads
- * - isUploading: Boolean indicating upload in progress
- * - disabled: Boolean to disable input
- * - placeholder: Input placeholder text
- * - hideTextInput: Boolean to hide text input (file upload only mode)
- */
-
 import { useState, useRef, useEffect } from 'react';
 
 export default function ChatInput({ 
@@ -24,19 +9,13 @@ export default function ChatInput({
   hideTextInput = false,
   uploadingFiles = []
 }) {
-  // Component state
   const [input, setInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   
-  // Refs for DOM elements
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
-  /**
-   * Auto-resize textarea based on content
-   * Maintains maximum height of 120px to prevent excessive growth
-   */
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -45,20 +24,11 @@ export default function ChatInput({
     }
   }, [input]);
 
-  /**
-   * Handle message sending
-   * Validates input and calls onSend callback
-   */
   const handleSend = () => {
     if (!input.trim() || disabled) return;
     onSend(input);
     setInput('');
   };
-
-  /**
-   * Handle keyboard shortcuts for sending messages
-   * Enter sends message, Shift+Enter creates new line
-   */
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -107,7 +77,6 @@ export default function ChatInput({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Drag and drop handlers
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -127,7 +96,6 @@ export default function ChatInput({
 
   return (
     <div className="p-6">
-      {/* File Upload Area */}
       {selectedFiles.length > 0 && (
         <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
           <div className="flex justify-between items-center mb-3">
@@ -137,8 +105,7 @@ export default function ChatInput({
             <button
               onClick={handleFileUpload}
               disabled={isUploading}
-              className="px-4 py-2 text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 transition-all duration-200 shadow-md"
-            >
+              className="px-4 py-2 text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 transition-all duration-200 shadow-md">
               {isUploading ? (
                 <div className="flex items-center gap-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -161,8 +128,7 @@ export default function ChatInput({
                 </div>
                 <button
                   onClick={() => removeFile(index)}
-                  className="text-red-500 hover:text-red-700 ml-2 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors"
-                >
+                  className="text-red-500 hover:text-red-700 ml-2 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors">
                   ×
                 </button>
               </div>
@@ -171,7 +137,6 @@ export default function ChatInput({
         </div>
       )}
 
-      {/* Input Area */}
       <div 
         className={`relative bg-white border-2 rounded-2xl shadow-lg transition-all duration-200 ${
           isDragging 
@@ -180,9 +145,7 @@ export default function ChatInput({
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {/* Drag overlay */}
+        onDrop={handleDrop}>
         {isDragging && (
           <div className="absolute inset-0 bg-blue-100 border-2 border-dashed border-blue-400 rounded-2xl flex items-center justify-center z-10">
             <div className="text-center">
@@ -193,7 +156,6 @@ export default function ChatInput({
         )}
 
         <div className="flex items-end gap-3 p-4">
-          {/* File Upload Button */}
           <input
             type="file"
             ref={fileInputRef}
@@ -208,15 +170,13 @@ export default function ChatInput({
               ? 'p-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-lg' 
               : 'p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50'
             } rounded-lg transition-all duration-200 flex-shrink-0`}
-            title="Upload Files"
-          >
+            title="Upload Files">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
             {hideTextInput && <span className="ml-2 font-medium text-sm">Upload Files</span>}
           </button>
 
-          {/* Text Input */}
           {!hideTextInput && (
             <>
               <textarea
@@ -230,12 +190,10 @@ export default function ChatInput({
                 rows={1}
               />
 
-              {/* Send Button */}
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || disabled}
-                className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex-shrink-0 shadow-lg transform hover:scale-105"
-              >
+                className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex-shrink-0 shadow-lg transform hover:scale-105">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
@@ -243,7 +201,6 @@ export default function ChatInput({
             </>
           )}
           
-          {/* When hideTextInput is true, show upload prompt */}
           {hideTextInput && (
             <div className="flex-1 text-center py-4">
               <p className="text-gray-500">
@@ -254,7 +211,6 @@ export default function ChatInput({
         </div>
       </div>
 
-      {/* File type info */}
       <div className="mt-3 text-center">
         <p className="text-xs text-gray-500">
           💡 Supports PDF, Word, text files, and images. Drag and drop or click to upload.

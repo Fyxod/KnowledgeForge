@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 export default function MessageBubble({ message }) {
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // Safety checks
   if (!message || typeof message !== 'object') {
     console.warn('MessageBubble received invalid message:', message);
     return null;
@@ -14,7 +13,6 @@ export default function MessageBubble({ message }) {
   
   const formatTimestamp = (timestamp) => {
     try {
-      // Handle both ISO string and MongoDB date object
       const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp.$date);
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
@@ -30,7 +28,6 @@ export default function MessageBubble({ message }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} group`}>
       <div className={`max-w-3xl ${isUser ? 'order-2' : 'order-1'}`}>
-        {/* Avatar */}
         <div className={`flex items-end gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${
             isUser 
@@ -40,20 +37,17 @@ export default function MessageBubble({ message }) {
             {isUser ? 'U' : 'AI'}
           </div>
           
-          {/* Message Bubble - Rectangular Design */}
           <div className={`px-4 py-3 rounded-lg shadow-sm max-w-2xl ${
             isUser 
               ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' 
               : 'bg-gray-100 border border-gray-200 text-gray-800'
           }`}>
-            {/* Message Content */}
             <div className={`whitespace-pre-wrap leading-relaxed ${
               isUser ? 'text-white' : 'text-gray-800'
             }`}>
               {displayContent}
             </div>
             
-            {/* Expand/Collapse Button */}
             {isLongMessage && (
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
@@ -65,7 +59,6 @@ export default function MessageBubble({ message }) {
               </button>
             )}
             
-            {/* Timestamp */}
             {message.timestamp && (
               <div className={`text-xs mt-2 ${
                 isUser ? 'text-blue-100' : 'text-gray-500'
@@ -76,7 +69,6 @@ export default function MessageBubble({ message }) {
           </div>
         </div>
         
-        {/* Message Actions (hidden by default, shown on hover) */}
         <div className={`mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
           isUser ? 'text-right' : 'text-left'
         }`}>

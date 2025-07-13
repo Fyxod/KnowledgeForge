@@ -12,7 +12,6 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
   const [error, setError] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState([]);
 
-  // Load user data and threads on component mount
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -20,7 +19,6 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
           const response = await getUser(userData.userId);
           setUserData(response.user);
           
-          // Convert threads object to array
           const threadsArray = Object.entries(response.user.threads || {}).map(([id, data]) => ({
             id,
             ...data,
@@ -44,7 +42,6 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
         const response = await getUser(userData.userId);
         setUserData(response.user);
         
-        // Update threads
         const threadsArray = Object.entries(response.user.threads || {}).map(([id, data]) => ({
           id,
           ...data,
@@ -59,14 +56,12 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
   const handleSendMessage = async (text) => {
     if (!selectedThreadId || isSending) return;
 
-    // Immediately add user message to the current thread in local state
     const userMessage = {
       type: 'user',
       content: text,
       timestamp: new Date().toISOString()
     };
 
-    // Update local state to show user message immediately
     setThreads(prevThreads => 
       prevThreads.map(thread => {
         if (thread.id === selectedThreadId) {
@@ -84,7 +79,6 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
     try {
       const response = await sendQuery(selectedThreadId, text);
       
-      // Refresh user data to get the complete updated thread with AI response
       await refreshUserData();
       
       console.log('Query response:', response);
@@ -92,7 +86,6 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
       console.error('Failed to send message:', error);
       setError('Failed to send message. Please try again.');
       
-      // On error, refresh to get the accurate state from server
       await refreshUserData();
     } finally {
       setIsSending(false);
@@ -107,21 +100,18 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
     });
     
     setIsUploading(true);
-    setUploadingFiles(files); // Track which files are being uploaded
+    setUploadingFiles(files);
     setError(null);
     
     try {
-      // If we have a selected thread, add files to it
-      // If no thread is selected, create a new one
       const response = await uploadFiles(
         files, 
-        selectedThreadId, // Pass the current thread ID (or null for new thread)
-        selectedThreadId ? null : 'Document Chat' // Only set thread name for new threads
+        selectedThreadId,
+        selectedThreadId ? null : 'Document Chat'
       );
       
       console.log('Upload response:', response);
       
-      // If a new thread was created and no thread was previously selected, select it
       if (response.thread_id && !selectedThreadId) {
         console.log('Selecting new thread:', response.thread_id);
         setSelectedThreadId(response.thread_id);
@@ -129,16 +119,15 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
         console.log('Files added to existing thread:', selectedThreadId);
       }
       
-      // Refresh user data to show updated threads and documents
       await refreshUserData();
       
     } catch (error) {
       console.error('File upload failed:', error);
       setError('File upload failed. Please try again.');
-      throw error; // Re-throw to let ChatInput handle the error display
+      throw error;
     } finally {
       setIsUploading(false);
-      setUploadingFiles([]); // Clear uploading files list
+      setUploadingFiles([]);
     }
   };
 
@@ -148,13 +137,11 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
       const response = await createEmptyThread(`Chat ${new Date().toLocaleTimeString()}`);
       console.log('New thread created:', response);
       
-      // Select the new thread
       if (response.thread_id) {
         console.log('Selecting new thread:', response.thread_id);
         setSelectedThreadId(response.thread_id);
       }
       
-      // Refresh user data to show the new thread
       await refreshUserData();
       
     } catch (error) {
@@ -170,7 +157,6 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
       const response = await updateThreadName(threadId, newName);
       console.log('Thread name updated:', response);
       
-      // Refresh user data to show the updated thread name
       await refreshUserData();
       
     } catch (error) {
@@ -194,8 +180,7 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] bg-gray-50 flex">{/* Subtract navbar height */}
-      {/* Error Toast */}
+    <div className="h-[calc(100vh-4rem)] bg-gray-50 flex">
       {error && (
         <div className="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
           <div className="flex items-center justify-between">

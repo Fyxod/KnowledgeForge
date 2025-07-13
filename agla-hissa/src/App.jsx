@@ -1,17 +1,3 @@
-/**
- * Main Application Component
- * 
- * Handles authentication state, routing, and user session management.
- * Provides a protected route system where unauthenticated users are
- * redirected to login, and authenticated users can access the chat interface.
- * 
- * Features:
- * - JWT-based authentication
- * - Persistent user sessions via localStorage
- * - Protected routing
- * - Global user state management
- */
-
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './routes/Login';
@@ -21,22 +7,15 @@ import NavBar from './components/NavBar';
 import './App.css';
 
 function App() {
-  // Authentication and user state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userData, setUserData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  /**
-   * Check authentication status on app initialization
-   * Validates stored JWT token and user data from localStorage
-   * Sets authentication state accordingly
-   */
   useEffect(() => {
     const checkAuth = () => {
       const token = localStorage.getItem('jwt');
       const storedUserData = localStorage.getItem('userData');
       
-      // Validate both token and user data exist
       if (token && storedUserData) {
         try {
           const parsedUserData = JSON.parse(storedUserData);
@@ -44,7 +23,6 @@ function App() {
           setUserData(parsedUserData);
         } catch (error) {
           console.error('Error parsing stored user data:', error);
-          // Clear invalid data
           localStorage.removeItem('jwt');
           localStorage.removeItem('userData');
         }
@@ -55,11 +33,6 @@ function App() {
     checkAuth();
   }, []);
 
-  /**
-   * Handle successful user login
-   * Stores JWT token and user data in localStorage
-   * Updates authentication state
-   */
   const handleLogin = (token, user) => {
     localStorage.setItem('jwt', token);
     localStorage.setItem('userData', JSON.stringify(user));
@@ -67,10 +40,6 @@ function App() {
     setUserData(user);
   };
 
-  /**
-   * Handle user logout
-   * Clears stored authentication data and resets state
-   */
   const handleLogout = () => {
     localStorage.removeItem('jwt');
     localStorage.removeItem('userData');
@@ -78,7 +47,6 @@ function App() {
     setUserData(null);
   };
 
-  // Show loading spinner while checking authentication
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -90,7 +58,6 @@ function App() {
   return (
     <Router>
       <div className="App min-h-screen bg-gray-50">
-        {/* Navigation Bar */}
         <NavBar 
           isAuthenticated={isAuthenticated}
           userData={userData}
@@ -98,7 +65,6 @@ function App() {
         />
         
         <Routes>
-          {/* Public routes */}
           <Route 
             path="/login" 
             element={
@@ -116,7 +82,6 @@ function App() {
             } 
           />
           
-          {/* Protected routes */}
           <Route 
             path="/chat" 
             element={
@@ -130,7 +95,6 @@ function App() {
             } 
           />
           
-          {/* Default redirect */}
           <Route 
             path="/" 
             element={
@@ -138,7 +102,6 @@ function App() {
             } 
           />
           
-          {/* Catch all route */}
           <Route 
             path="*" 
             element={

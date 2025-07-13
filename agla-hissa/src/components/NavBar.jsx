@@ -4,7 +4,6 @@ import { Link, useLocation } from 'react-router-dom';
 export default function NavBar({ isAuthenticated, userData, onLogout }) {
   const location = useLocation();
 
-  // Don't show navbar on login/signup pages
   if (location.pathname === '/login' || location.pathname === '/signup') {
     return null;
   }
@@ -13,7 +12,6 @@ export default function NavBar({ isAuthenticated, userData, onLogout }) {
     <nav className="bg-white shadow-lg border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          {/* Left side - Logo and brand */}
           <div className="flex items-center">
             <div className="flex-shrink-0 flex items-center">
               <div className="w-6 h-6 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mr-3">
@@ -27,10 +25,8 @@ export default function NavBar({ isAuthenticated, userData, onLogout }) {
             </div>
           </div>
 
-          {/* Right side - User info and logout */}
           {isAuthenticated && userData && (
             <div className="flex items-center space-x-4">
-              {/* User info */}
               <div className="flex items-center space-x-3">
                 <div className="w-7 h-7 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
                   {userData?.name?.charAt(0)?.toUpperCase() || 'U'}
@@ -45,7 +41,6 @@ export default function NavBar({ isAuthenticated, userData, onLogout }) {
                 </div>
               </div>
 
-              {/* Logout button */}
               <button
                 onClick={onLogout}
                 className="inline-flex items-center px-2 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"

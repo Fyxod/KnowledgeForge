@@ -13,6 +13,21 @@ data
 .json
 .pdf
 
+# Project specific files
+formatted_prompt.txt
+llm_result.json
+parsed_data_*.json
+retrieved_docs_*.json
+rewrite_query.txt
+rewrite_result.json
+
+# Frontend build artifacts
+agla-hissa/dist/
+agla-hissa/node_modules/
+agla-hissa/.env
+agla-hissa/.env.local
+agla-hissa/.env.production
+
 # Distribution / packaging
 .Python
 build/

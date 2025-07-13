@@ -15,7 +15,6 @@ export default function Login({ onLogin }) {
       ...formData,
       [e.target.name]: e.target.value
     });
-    // Clear error when user starts typing
     if (error) setError('');
   };
 
@@ -28,7 +27,6 @@ export default function Login({ onLogin }) {
       const response = await login(formData);
       
       if (response.status === "success" && response.token && response.user) {
-        // Call the onLogin prop to update App state
         onLogin(response.token, response.user);
       } else {
         setError(response.message || 'Login failed. Please try again.');
@@ -53,7 +51,7 @@ export default function Login({ onLogin }) {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Access your knowledge synthesis platform
+            Access Samsung Prism
           </p>
         </div>
         

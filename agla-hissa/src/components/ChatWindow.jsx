@@ -6,7 +6,6 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
   if (!thread) {
     return (
       <div className="flex-1 flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
-        {/* Welcome Message */}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md mx-auto p-8">
             <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -15,7 +14,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
               </svg>
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              Welcome to Enterprise Knowledge Chat
+              Welcome to Samsung Prism
             </h2>
             <p className="text-gray-600 text-lg mb-6">
               Click "New Chat" in the sidebar to start a conversation, or upload files below to create a document-based thread.
@@ -31,14 +30,13 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
           </div>
         </div>
         
-        {/* File Upload Area at Bottom */}
         <div className="border-t bg-white">
           <div className="p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4 text-center">
               Or Upload Files to Create a New Thread
             </h3>
             <ChatInput 
-              onSend={() => {}} // Disabled for welcome screen
+              onSend={() => {}}
               onFileUpload={onFileUpload}
               isUploading={isUploading}
               disabled={true}
@@ -68,7 +66,6 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white">
-      {/* Thread Header */}
       <div className="p-6 border-b bg-gradient-to-r from-white to-gray-50 shadow-sm">
         <div className="flex justify-between items-center">
           <div>
@@ -93,7 +90,6 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
             </div>
           </div>
           
-          {/* Documents Quick View */}
           {thread.documents && thread.documents.length > 0 && (
             <div className="hidden md:flex items-center gap-2">
               <span className="text-xs text-gray-500">Documents:</span>
@@ -119,19 +115,16 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
         </div>
       </div>
 
-      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white">
         <div className="max-w-4xl mx-auto p-6">
           {thread.chats && thread.chats.length > 0 ? (
             <div className="space-y-6">
               {thread.chats.map((msg, i) => {
-                // Safety check to ensure message has required properties
                 if (!msg || typeof msg !== 'object') {
                   console.warn('Invalid message object:', msg);
                   return null;
                 }
                 
-                // Ensure message has the required structure
                 const safeMessage = {
                   type: msg.type || 'user',
                   content: msg.content || msg.query || msg.result || 'No content',
@@ -152,36 +145,9 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
                   ? "Your documents are loaded. Ask me anything about them!"
                   : "Upload some documents or start asking questions."}
               </p>
-              
-              {/* Sample questions */}
-              <div className="max-w-md mx-auto">
-                <p className="text-sm text-gray-400 mb-3">Try asking:</p>
-                <div className="space-y-2">
-                  {thread.documents?.length > 0 ? (
-                    <>
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                        "Summarize the key points from these documents"
-                      </div>
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-                        "What are the main insights I should know?"
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-800">
-                        "Hello! How can you help me?"
-                      </div>
-                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-800">
-                        "What can you do with documents?"
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
           )}
           
-          {/* Upload progress indicator in chat */}
           {isUploading && uploadingFiles.length > 0 && (
             <div className="flex justify-start mb-4">
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 max-w-md">
@@ -210,7 +176,6 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
             </div>
           )}
           
-          {/* Typing indicator */}
           {isSending && (
             <div className="flex justify-start mb-4">
               <div className="bg-gray-200 rounded-lg px-4 py-3 max-w-xs">
@@ -225,7 +190,6 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
         </div>
       </div>
 
-      {/* Input Area */}
       <div className="border-t bg-white">
         <ChatInput 
           onSend={onSend} 
