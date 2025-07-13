@@ -21,6 +21,34 @@ data/
             └── index/
 ```
 
+to use it 
+ 
+ install py 3.10
+ create env
+
+
+ run backend - uvicorn app.main:app
+ run frontend - npm i && npm run dev 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Next steps:
 add route to get chat history for a single thread (or maybe just preload it in the frontend)
 Whole frontend
