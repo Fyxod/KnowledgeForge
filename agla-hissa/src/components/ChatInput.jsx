@@ -6,8 +6,7 @@ export default function ChatInput({
   isUploading = false, 
   disabled = false, 
   placeholder = "Ask me anything about your documents...",
-  hideTextInput = false,
-  uploadingFiles = []
+  hideTextInput = false
 }) {
   const [input, setInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);

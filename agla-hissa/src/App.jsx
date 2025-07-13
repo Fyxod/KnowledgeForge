@@ -78,7 +78,7 @@ function App() {
             element={
               isAuthenticated ? 
                 <Navigate to="/chat" replace /> : 
-                <SignUp onLogin={handleLogin} />
+                <SignUp />
             } 
           />
           
@@ -89,7 +89,6 @@ function App() {
                 <ChatPage 
                   userData={userData} 
                   setUserData={setUserData}
-                  onLogout={handleLogout}
                 /> : 
                 <Navigate to="/login" replace />
             } 

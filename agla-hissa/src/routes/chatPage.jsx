@@ -3,7 +3,7 @@ import Sidebar from '../components/Sidebar';
 import ChatWindow from '../components/ChatWindow';
 import { uploadFiles, sendQuery, getUser, createEmptyThread, updateThreadName } from '../services/api';
 
-export default function ChatPage({ userData, setUserData, onLogout }) {
+export default function ChatPage({ userData, setUserData }) {
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -200,7 +200,6 @@ export default function ChatPage({ userData, setUserData, onLogout }) {
         selectedId={selectedThreadId}
         onSelect={setSelectedThreadId}
         userData={userData}
-        onRefresh={refreshUserData}
         onCreateThread={handleCreateThread}
         onUpdateThreadName={handleUpdateThreadName}
       />

@@ -42,7 +42,6 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
               disabled={true}
               placeholder="Upload files to get started..."
               hideTextInput={true}
-              uploadingFiles={uploadingFiles}
             />
           </div>
         </div>
@@ -196,7 +195,6 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
           onFileUpload={onFileUpload}
           isUploading={isUploading}
           disabled={isSending}
-          uploadingFiles={uploadingFiles}
         />
       </div>
     </div>
