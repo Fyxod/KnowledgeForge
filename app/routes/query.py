@@ -17,7 +17,7 @@ Returns (JSON):
 import time
 from datetime import datetime, timezone
 
-from fastapi import APthread_idIRouter, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from langchain.schema import AIMessage, HumanMessage
 

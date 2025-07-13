@@ -11,7 +11,7 @@ from PIL import Image
 import io
 
 from kreuzberg import extract_file, ExtractionResult
-from app.socket import sio
+from app.socket_handler import sio
 from core.parsers.image import image_parser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -56,6 +56,7 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
             text = await image_parser(file_path)
             # text = "DUMMY TEXT FOR IMAGE"
         except Exception as e:
+            print(f"Error processing image {file_name}: {str(e)}")
             # await sio.emit("progress", {"message": f"Error processing image: {str(e)}"}, to=sid)
             await asyncio.sleep(3)
             return None
@@ -74,6 +75,7 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
     try:
         result: ExtractionResult = await extract_file(file_path)
     except Exception as e:
+        print(f"Error extracting file {file_name}: {str(e)}")
         # await sio.emit("progress", {"message": f"Error extracting file: Failed to load document (Corrupt file)"}, to=sid)
         await asyncio.sleep(5)
         return None

@@ -35,6 +35,11 @@ async def process_files(
             user_id=user_id,
         )
 
+        # Skip this file if parsing failed
+        if parsed_data is None:
+            print(f"Warning: Failed to parse file {file_data['file_name']}, skipping...")
+            continue
+
         # Prepare JSON-serializable data
         parsed_dict = parsed_data.model_dump()
         parsed_dict["thread_id"] = thread_id

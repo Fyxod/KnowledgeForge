@@ -85,7 +85,11 @@ async def upload_file(
         db.users.update_one({"userId": user_id}, {"$set": new_thread})
     else:
         print(f"Updating existing thread with ID: {thread_id}")
-        if thread_id not in user.get("threads", {}).keys():
+        # Check if thread exists for this user
+        user_threads = user.get("threads", {})
+        if thread_id not in user_threads:
+            print(f"Thread {thread_id} not found for user {user_id}")
+            print(f"Available threads: {list(user_threads.keys())}")
             return {"error": "Thread not found for the user"}
 
         db.users.update_one(
@@ -101,6 +105,11 @@ async def upload_file(
     print(f"Raw file paths: {files_data}")
 
     parsed_data = await process_files(files_data, user_id, thread_id)
+    
+    # Check if any documents were successfully parsed
+    if not parsed_data.documents:
+        return {"error": "No documents could be processed successfully"}
+    
     json_data = parsed_data.model_dump_json()
     print(f"Parsed data: {json_data}")
     print(type(parsed_data))

@@ -14,57 +14,27 @@ The goal is to maximize the relevance and specificity of the query for use with 
 ----------------------------------------
 
 HUMAN:
-tell me some interesting facts
+what is this summerise it 
 
 ----------------------------------------
 
 AI:
-Kanpur is located in the central-western part of Uttar Pradesh, India, and sits on the right bank of the Ganga. It is approximately 484 km from New Delhi and approximately 80 km from Lucknow. It is a part of the historical region of Awadh.
+The documents provided are related to Devansh Vashishat, including his resume, work experiences, projects, and some screenshots of online activity. Devansh is a student at Thapar Institute of Engineering and Technology, currently working as a Samsung Prism Research Intern and has experience as a Backend Developer at Autonomous Robotics Lab, TIET. He has also worked as a Technical Team Member at BackSlash Computing Society. His skills include building AI-powered worklet generation systems, developing web interfaces, backend services, and implementing security measures. He also won Smart India Hackathon (SIH 2024).
 
 ----------------------------------------
 
 HUMAN:
-what about delhi
+what dive summery
 
 ----------------------------------------
 
 AI:
-I'm sorry, I don't have enough information to fulfill that request. You could try again, asking in a different way or adding more detail.
+Devansh Vashishat is a student at Thapar Institute of Engineering and Technology, pursuing a Bachelor of Technology in Computer Science and Engineering from August 2023 to June 2027. He is currently a Samsung Prism Research Intern since January 2025, building an AI-powered worklet generation system. He has experience as a Backend Developer at Autonomous Robotics Lab, TIET, where he designed and deployed a robust backend architecture. He was also a Technical Team Member at BackSlash Computing Society, where he developed the home page for the BCS team using React. He has also worked as a Backend Developer at Shubh Gadhi Pvt. Ltd. His technical skills include Java, Python, C/C++, JavaScript, Typescript, Go, React.js, Django, FastAPI, Express.js, TensorFlow, PyTorch, LangChain, Docker, Kubernetes, Amazon Web Services, Digital Ocean, MySQL, PostgreSQL, MongoDB, and Redis. He won the Smart India Hackathon (SIH 2024).
 
 ----------------------------------------
 
 HUMAN:
-come on tell me something about delhi
-
-----------------------------------------
-
-AI:
-I'm sorry, I don't have enough information to provide you with interesting facts about Delhi.
-
-----------------------------------------
-
-HUMAN:
-anything at all
-
-----------------------------------------
-
-AI:
-Delhi is the capital of India, straddling the Yamuna river. It shares borders with Uttar Pradesh in the east and Haryana in the remaining directions. Delhi became a union territory on November 1, 1956, and the National Capital Territory (NCT) in 1995. The NCT covers an area of 1,484 square kilometres.
-
-----------------------------------------
-
-HUMAN:
-how is the day
-
-----------------------------------------
-
-AI:
-I am doing well, thank you for asking. How is your day going?
-
-----------------------------------------
-
-HUMAN:
-User's current message: repeate after me
+User's current message: yo
 
 Rewritten query for semantic search:
 
