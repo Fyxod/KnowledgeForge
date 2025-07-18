@@ -1,5 +1,26 @@
 # Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
 
+#  use docker 
+
+```bash
+docker build -t what-ever-u-name-it .
+```
+
+```bash
+
+docker run -it \
+           --env-file .env \
+           --dns=8.8.8.8 \
+           -p 3000:8080 \
+         -p 8000:8000\
+       -v $(pwd)d/data:/data \
+           what-ever-u-name-it
+```
+
+pass .env and attach a volume to store data from chromadb
+
+
+
 use python 3.10
 
 ```
@@ -29,17 +50,6 @@ to use it
 
  run backend - uvicorn app.main:app
  run frontend - npm i && npm run dev 
-
-
-
-
-
-
-
-
-
-
-
 
 
 
