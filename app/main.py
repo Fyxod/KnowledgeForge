@@ -29,6 +29,7 @@ fastapi_app.add_middleware(
 
 fastapi_app.mount("/static", StaticFiles(directory="app/public"), name="static")
 
+
 fastapi_app.include_router(query.router)
 fastapi_app.include_router(user.router)
 fastapi_app.include_router(upload.router)
