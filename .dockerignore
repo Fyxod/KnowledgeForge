@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.env
+venv
+node_modules
+agla-hissa/node_modules
+data  
+.vite
+.kreuzberg
+data
+usr/
+**/usr/
