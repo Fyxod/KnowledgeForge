@@ -18,14 +18,12 @@ RUN pip install --no-cache-dir -r req.txt
 # Copy FastAPI app
 COPY app/ ./app
 
-# Copy built frontend
-COPY --from=frontend-builder /frontend/dist /usr/share/nginx/html
 
-# Copy nginx config
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-
-# Install nginx
 RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
+COPY --from=frontend-builder /frontend/dist /usr/share/nginx/html
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY agent ./agent
+COPY core ./core
 COPY . .
 # Copy entrypoint
 COPY docker-entrypoint.sh .
