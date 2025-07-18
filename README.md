@@ -10,7 +10,7 @@ docker build -t what-ever-u-name-it .
 
 docker run -it \
            --env-file .env \
-           --dns=8.8.8.8 \ 
+           --dns=8.8.8.8 \ # u only need this id ur mongo Key is  in srv format 
            -p 3000:8080 \
          -p 8000:8000\
        -v $(pwd)d/data:/data \
