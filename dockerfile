@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
 
 
 COPY . .
+RUN pip install --no-cache-dir "uvicorn[standard]" gunicorn
 
 COPY --from=frontend-builder /frontend/dist /usr/share/nginx/html
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
