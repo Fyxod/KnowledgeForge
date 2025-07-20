@@ -50,7 +50,13 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd root/home/kerito/
+            cd /home/kerito/
             docker pull bugslayer01/samsung:latest
-
-            docker run -d --name your-container-name  --env-file .env  --dns=8.8.8.8 -p 8080:8080  -p 8000:8000  -v $(pwd)/data:/data  bugslayer01/samsung:latest
+            docker stop your-container-name || true
+            docker rm your-container-name || true
+            docker run -d --name your-container-name \
+              --env-file .env \
+              --dns=8.8.8.8 \
+              -p 8080:8080 -p 8000:8000 \
+              -v $(pwd)/data:/data \
+              bugslayer01/samsung:latest
