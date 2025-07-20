@@ -47,6 +47,5 @@ jobs:
             --env-file .env \
             --dns=8.8.8.8 \
             -p 8080:8080 -p 8000:8000 \
-            -v $(pwd)/data:/data \
+            -v $(pwd)/data:/backend/data \
             samsung:latest
-            
