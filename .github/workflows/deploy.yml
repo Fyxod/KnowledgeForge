@@ -1,4 +1,4 @@
-name: CI/CD with Docker and SSH Deploy
+name: CI/CD with Local Docker and SSH Deploy
 
 on:
   push:
@@ -9,9 +9,9 @@ on:
       - main
 
 jobs:
-  build-and-push:
-    name: Build and Push Docker Image
-    runs-on: ubuntu-latest
+  build:
+    name: Build Docker Image Locally
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -20,41 +20,32 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Extract short SHA
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Build and Push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: bugslayer01/samsung:latest, bugslayer01/samsung:${{ steps.vars.outputs.sha_short }}
+      - name: Build Docker image (locally cached)
+        run: |
+          docker build -t samsung:latest -t samsung:${{ steps.vars.outputs.sha_short }} .
 
   deploy:
-    name: Deploy to Server
-    runs-on: ubuntu-latest
-    needs: build-and-push
+    name: Deploy Locally Built Image
+    runs-on: self-hosted
+    needs: build
 
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            cd /home/kerito/
-            docker pull bugslayer01/samsung:latest
-            docker run -d --name your-container-name \
-              --env-file .env \
-              --dns=8.8.8.8 \
-              -p 8080:8080 -p 8000:8000 \
-              -v $(pwd)/data:/data \
-              bugslayer01/samsung:latest
+      - name: Stop and Remove old container if exists
+        run: |
+          docker stop samsung || true
+          docker rm samsung || true
+
+      - name: Run updated container
+        run: |
+          cd /home/kerito/
+          docker run -d \
+            --name samsung \
+            --env-file .env \
+            --dns=8.8.8.8 \
+            -p 8080:8080 -p 8000:8000 \
+            -v $(pwd)/data:/data \
+            samsung:latest
