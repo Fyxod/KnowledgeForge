@@ -78,6 +78,7 @@ router = APIRouter(prefix="/user", tags=["user"])
 
 @router.post("/")
 def create_user(user_input: UserCreateModel):
+    print("Creating user with input:", user_input.model_dump())
     if db.users.find_one({"email": user_input.email}):
         raise HTTPException(status_code=400, detail="Email already exists")
 
