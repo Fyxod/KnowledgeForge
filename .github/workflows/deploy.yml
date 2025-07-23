@@ -20,13 +20,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract short SHA
+      - name: Generate timestamp
         id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: echo "tag=$(date +'%Y-%m-%d-%H-%M')" >> $GITHUB_OUTPUT
 
       - name: Build Docker image (locally cached)
         run: |
-          docker build -t samsung:latest -t samsung:${{ steps.vars.outputs.sha_short }} .
+          docker build -t samsung:latest -t samsung:${{ steps.vars.outputs.tag }} .
 
   deploy:
     name: Deploy Locally Built Image
@@ -49,3 +49,14 @@ jobs:
             -p 8080:8080 -p 8000:8000 \
             -v $(pwd)/data:/backend/data \
             samsung:latest
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin  
+      - name: Tag image for Docker Hub
+        run: |
+          docker tag samsung:latest ${{ secrets.DOCKER_USERNAME }}/samsung:latest
+          docker tag samsung:${{ needs.build.outputs.tag }} ${{ secrets.DOCKER_USERNAME }}/samsung:${{ needs.build.outputs.tag }} 
+      - name: Push image to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/samsung:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/samsung:${{ needs.build.outputs.tag }}
