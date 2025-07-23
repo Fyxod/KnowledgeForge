@@ -42,3 +42,4 @@ async def disconnect(sid):
 def is_client_connected(sid):
     """Check if a client is connected."""
     return sid in active_connections
+ 
