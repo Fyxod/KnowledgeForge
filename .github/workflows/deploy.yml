@@ -13,6 +13,9 @@ jobs:
     name: Build Docker Image Locally
     runs-on: self-hosted
 
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -50,12 +53,20 @@ jobs:
             -v $(pwd)/data:/backend/data \
             samsung:latest
 
+  push:
+    name: Push Image to Docker Hub
+    runs-on: self-hosted
+    needs: build
+
+    steps:
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin  
+
       - name: Tag image for Docker Hub
         run: |
           docker tag samsung:latest ${{ secrets.DOCKER_USERNAME }}/samsung:latest
-          docker tag samsung:${{ needs.build.outputs.tag }} ${{ secrets.DOCKER_USERNAME }}/samsung:${{ needs.build.outputs.tag }} 
+          docker tag samsung:${{ needs.build.outputs.tag }} ${{ secrets.DOCKER_USERNAME }}/samsung:${{ needs.build.outputs.tag }}
+
       - name: Push image to Docker Hub
         run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/samsung:latest
