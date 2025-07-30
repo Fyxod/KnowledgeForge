@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     DATABASE_NAME: str = "bedrock"
     GOOGLE_API_KEY: str
+    LLM_URL: str
 
     class Config:
         env_file = ".env"

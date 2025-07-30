@@ -44,7 +44,6 @@ async def web_search(state: AgentState) -> AgentState:
     queries = state.search_queries
 
     results = await parallel_search(queries, search_tool)
-    print("Web search results: ", results)
     with open("web_search_results.json", "w", encoding="utf-8") as f:
         json.dump(results, f, indent=4)
     state.web_search = True
@@ -89,7 +88,6 @@ async def rewrite_query(state: AgentState) -> AgentState:
     start_time = time.time()
     result: REWRITELLMOutput = await structured_llm.ainvoke(prompt)
     end_time = time.time()
-    print("Rewrite result: ", result)
     print(f"Rewrite response time: {end_time - start_time:.2f} seconds")
     rewritten_query = result.rewritten_query
     with open("rewrite_result.json", "w", encoding="utf-8") as f:

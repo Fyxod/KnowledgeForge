@@ -29,6 +29,8 @@ def get_vectorstore(user_id: str) -> Chroma:
     )
 
 
+import math
+
 async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
     start_time = time.time()
     vectorstore = await asyncio.to_thread(get_vectorstore, user_id)
@@ -37,9 +39,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
         f"Initialized Chroma vector store in {end_time - start_time:.2f} seconds for user {user_id}"
     )
 
-    all_ids = []
-    all_texts = []
-    all_metadatas = []
+    chunk_data = []
 
     # Chunking
     start_time = time.time()
@@ -57,37 +57,43 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     "file_name": doc.file_name,
                     "doc_title": doc.title,
                 }
-                all_ids.append(chunk_id)
-                all_texts.append(chunk)
-                all_metadatas.append(metadata)
+                chunk_data.append((chunk_id, chunk, metadata))
     end_time = time.time()
     print(
-        f"Processed {len(all_ids)} chunks in {end_time - start_time:.2f} seconds for user {user_id}"
+        f"Processed {len(chunk_data)} chunks in {end_time - start_time:.2f} seconds for user {user_id}"
     )
 
-    # Embedding
-    start_time = time.time()
-    embeddings = await asyncio.to_thread(
-        vectorstore.embeddings.embed_documents, all_texts
-    )
-    end_time = time.time()
-    print(
-        f"Generated embeddings for {len(all_texts)} chunks in {end_time - start_time:.2f} seconds for user {user_id}"
-    )
+    # Batch embedding and upsert
+    batch_size = 5000  # Don't change this in any case
+    total_batches = math.ceil(len(chunk_data) / batch_size)
 
-    # Upsert to Chroma
-    start_time = time.time()
-    print(f"Upserting {len(all_ids)} chunks to Chroma for user {user_id}")
-    await asyncio.to_thread(
-        vectorstore._collection.upsert,
-        embeddings=embeddings,
-        documents=all_texts,
-        metadatas=all_metadatas,
-        ids=all_ids,
-    )
-    end_time = time.time()
-    print(
-        f"Upserted {len(all_ids)} chunks to Chroma in {end_time - start_time:.2f} seconds for user {user_id}"
-    )
+    for batch_idx in range(total_batches):
+        batch = chunk_data[batch_idx * batch_size: (batch_idx + 1) * batch_size]
+        batch_ids, batch_texts, batch_metadatas = zip(*batch)
 
-    print(f"Saved {len(all_ids)} chunks to Chroma for user {user_id}")
+        print(f"Embedding batch {batch_idx + 1}/{total_batches} with {len(batch_ids)} chunks")
+        start_time = time.time()
+        embeddings = await asyncio.to_thread(
+            vectorstore.embeddings.embed_documents, list(batch_texts)
+        )
+        end_time = time.time()
+        print(
+            f"Generated embeddings for batch {batch_idx + 1} in {end_time - start_time:.2f} seconds"
+        )
+
+        # Upsert to Chroma
+        print(f"Upserting batch {batch_idx + 1} to Chroma")
+        start_time = time.time()
+        await asyncio.to_thread(
+            vectorstore._collection.upsert,
+            embeddings=embeddings,
+            documents=list(batch_texts),
+            metadatas=list(batch_metadatas),
+            ids=list(batch_ids),
+        )
+        end_time = time.time()
+        print(
+            f"Upserted batch {batch_idx + 1} in {end_time - start_time:.2f} seconds"
+        )
+
+    print(f"Saved {len(chunk_data)} chunks to Chroma for user {user_id}")

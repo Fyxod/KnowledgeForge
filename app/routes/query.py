@@ -65,7 +65,6 @@ async def query(request: Request, body: QueryRequest):
         elif message["type"] == "agent":
             messages.append(AIMessage(content=message["content"]))
 
-    print(messages)
     state = AgentState(
         user_id=user_id,
         thread_id=thread_id,
@@ -77,11 +76,9 @@ async def query(request: Request, body: QueryRequest):
     start_time = time.time()
     response = await Agent.ainvoke(state)
     response = AgentState(**response)
-    print(type(response))
     end_time = time.time()
 
     print("I actually reached here" * 10)
-    print(f"Response from agent: {response}")
     print(f"Agent response time: {end_time - start_time:.2f} seconds")
 
     # Update the thread with the new messages

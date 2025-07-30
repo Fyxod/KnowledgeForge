@@ -32,7 +32,6 @@ def build_main_prompt(state: AgentState) -> ChatPromptTemplate:
     """
     Builds the main prompt for the agent based on the current state.
     """
-    print(state)
     if state.web_search:
         documents = state.search_queries_results
     else:
@@ -57,5 +56,4 @@ def build_rewrite_prompt(state: AgentState) -> ChatPromptTemplate:
         question=state.question,
         recent_history=recent_history,
     )
-    print("Rewrite prompt: ", prompt)
     return prompt

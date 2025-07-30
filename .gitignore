@@ -12,6 +12,7 @@ __pycache__/
 *.so
 # env folders
 parthenv310
+parthenv
 .md
 data
 .json

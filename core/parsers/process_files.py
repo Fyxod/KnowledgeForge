@@ -3,10 +3,11 @@ import os
 from typing import List
 
 import aiofiles
+import asyncio
 
 from core.models.document import Documents
 from core.parsers.main import extract_document
-
+import time
 
 async def process_files(
     files_data: List[dict],
@@ -26,8 +27,10 @@ async def process_files(
     os.makedirs(parsed_dir, exist_ok=True)
 
     documents = Documents(documents=[], thread_id=thread_id, user_id=user_id)
+    start_time = time.time()
 
-    for file_data in files_data:
+    # Helper to process one file
+    async def process_file(file_data):
         parsed_data = await extract_document(
             path=file_data["path"],
             title=file_data["title"],
@@ -35,24 +38,31 @@ async def process_files(
             user_id=user_id,
         )
 
-        # Skip this file if parsing failed
         if parsed_data is None:
             print(f"Warning: Failed to parse file {file_data['file_name']}, skipping...")
-            continue
+            return None
 
-        # Prepare JSON-serializable data
         parsed_dict = parsed_data.model_dump()
         parsed_dict["thread_id"] = thread_id
         parsed_dict["user_id"] = user_id
         parsed_json = json.dumps(parsed_dict)
 
-        # Save parsed output as json file
         name, _ = os.path.splitext(file_data["file_name"])
         json_file_path = os.path.join(parsed_dir, f"{name}.json")
 
         async with aiofiles.open(json_file_path, "w") as f:
             await f.write(parsed_json)
 
-        documents.documents.append(parsed_data)
+        return parsed_data
+    batch_size = 20
+    # Process in batches
+    for i in range(0, len(files_data), batch_size):
+        batch = files_data[i:i + batch_size]
+        results = await asyncio.gather(*(process_file(file_data) for file_data in batch))
+        for result in results:
+            if result:
+                documents.documents.append(result)
 
+    end_time = time.time()
+    print(f"Processed {len(files_data)} files in {end_time - start_time:.2f} seconds")
     return documents

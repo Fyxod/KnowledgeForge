@@ -65,7 +65,7 @@ async def upload_file(
     if not user:
         return {"error": "User not found"}
 
-    print(f"User found: {user}")
+    print(f"User found: {user.get('name', 'Unknown')}")
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -111,9 +111,6 @@ async def upload_file(
         return {"error": "No documents could be processed successfully"}
     
     json_data = parsed_data.model_dump_json()
-    print(f"Parsed data: {json_data}")
-    print(type(parsed_data))
-    print(f"json data type: {type(json_data)}")
     # Dump parsed data to a JSON file
     with open(f"parsed_data_{thread_id}.json", "w", encoding="utf-8") as f:
         f.write(json_data)
