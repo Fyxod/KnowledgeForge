@@ -13,7 +13,6 @@ from core.llm.client import llm
 from core.llm.outputs import MainLLMOutput, REWRITELLMOutput
 
 
-
 async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
     with open("formatted_prompt.txt", "w", encoding="utf-8") as f:
@@ -108,7 +107,7 @@ async def retriever(state: AgentState) -> AgentState:
     """
     print("SLEEPING " * 8)
     start_time = time.time()
-    doc_retriever = get_user_retriever(state.user_id, k=25)  # try different k values
+    doc_retriever = get_user_retriever(state.user_id, state.thread_id, k=75)  # try different k values
     end_time = time.time()
     print(
         f"Initialized retriever in {end_time - start_time:.2f} seconds for user {state.user_id}"

@@ -51,7 +51,7 @@ export default function Login({ onLogin }) {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Access Samsung Prism
+            Access Platform
           </p>
         </div>
         

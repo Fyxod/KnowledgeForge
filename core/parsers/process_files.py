@@ -17,13 +17,13 @@ async def process_files(
     """
     Process a list of uploaded files:
     - Pass each file to the document parser.
-    - Store the parsed result as JSON in `data/{user_id}/parsed/`.
+    - Store the parsed result as JSON in `data/{user_id}/{thread_id}/parsed/`.
     - Accumulate all parsed documents into a Documents object.
 
     Returns:
         Documents: A structured object containing parsed documents.
     """
-    parsed_dir = f"data/{user_id}/parsed"
+    parsed_dir = f"data/{user_id}/{thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
 
     documents = Documents(documents=[], thread_id=thread_id, user_id=user_id)
@@ -36,6 +36,7 @@ async def process_files(
             title=file_data["title"],
             file_name=file_data["file_name"],
             user_id=user_id,
+            thread_id=thread_id,
         )
 
         if parsed_data is None:
@@ -54,6 +55,7 @@ async def process_files(
             await f.write(parsed_json)
 
         return parsed_data
+    
     batch_size = 20
     # Process in batches
     for i in range(0, len(files_data), batch_size):

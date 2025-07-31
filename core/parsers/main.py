@@ -13,23 +13,11 @@ import io
 from kreuzberg import extract_file, ExtractionResult
 from app.socket_handler import sio
 from core.parsers.image import image_parser
+from core.models.document import Document, Page
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
-
-class Page(BaseModel):
-    number: int
-    text: str
-    images: Optional[List[str]] = Field(default_factory=list)
-
-class Document(BaseModel):
-    id: str
-    type: str
-    file_name: str
-    content: List[Page] = Field(default_factory=list)
-    title: str
-    full_text: str
 
 # Extensions
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'}
@@ -39,7 +27,7 @@ SUPPORTED_EXTENSIONS = {
 }
 
 # async def extract_document(name, sid, image_parser, doc_type="document", title="Untitled"):
-async def extract_document(path, sid = "d", title="Untitled", file_name=None, user_id=None):
+async def extract_document(path, sid = "d", title="Untitled", file_name=None, user_id=None, thread_id=None):
     # file_path = os.path.join(UPLOAD_DIR, name)
 
     file_path = path
@@ -97,7 +85,7 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
 
         if image_list:
             print("there are images on this page")
-            image_dir = f"data/{user_id}/images/{name}"
+            image_dir = f"data/{user_id}/{thread_id}/images/{name}"
             os.makedirs(image_dir, exist_ok=True)
             # await sio.emit("progress", {"message": f"Extracting data from images on page {page_number + 1}..."}, to=sid)
 

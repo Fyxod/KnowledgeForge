@@ -2,22 +2,54 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
+class DocumentsUsed(BaseModel):
+    document_id: str = Field(description="The ID of the document used.")
+    # title: str = Field(description="The title of the document used.")
+    page_no: int = Field(description="The page_no of the document used.")
+    chunk_index: int = Field(
+        description="The chunk_index used from the document."
+    )
+
+
 class MainLLMOutput(BaseModel):
     answer: str = Field(description="The answer to the user's question.")
-    action: Literal["answer", "web_search"] = Field(
+    action: Literal["answer",
+                    "web_search",
+                    "document_summarizer", # requires document id of the document to summarize
+                    "global_summarizer"] = Field(
         description="The action to take based on the answer."
     )
-    documents_used: Optional[List[str]] = Field(
+    documents_used: Optional[List[DocumentsUsed]] = Field(
         default=None,
-        description="List of document ids of documents used to generate the answer, if applicable.",
+        description="List of documents used to generate the answer, if applicable.",
     )
     web_search_queries: Optional[List[str]] = Field(
         default=None,
         description="List of 2-3 web search queries used to generate the answer, if applicable.",
+    )
+    document_id: Optional[str] = Field(
+        description="The ID of the document to summarize if using document_summarizer, if applicable."
     )
 
 
 class REWRITELLMOutput(BaseModel):
     rewritten_query: str = Field(
         description="The rewritten query for semantic vector search based on the user's message."
+    )
+
+
+class SummarizerLLMOutputSingle(BaseModel):
+    document_id: str = Field(description="The ID of the document that was summarized.")
+    summary: str = Field(description="The summary of the document.")
+
+
+class SummarizerLLMOutput(BaseModel):
+    summaries: List[SummarizerLLMOutputSingle] = Field(
+        description="List of summaries for each document."
+    )
+
+
+class GlobalSummarizerLLMOutput(BaseModel):
+    summary: str = Field(
+        description="The global summary of all provided document summaries."
     )

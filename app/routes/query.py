@@ -14,6 +14,7 @@ Returns (JSON):
     - On success: The agent's response as a dictionary, containing the answer and relevant state fields, with all None values excluded.
     - On error: A dictionary with an "error" key and a descriptive message, e.g., {"error": "User not authenticated"}, {"error": "User not found"}, or {"error": "Thread not found"}.
 """
+import json
 import time
 from datetime import datetime, timezone
 
@@ -91,8 +92,22 @@ async def query(request: Request, body: QueryRequest):
     thread["chats"].extend(new_messages)
     thread["updatedAt"] = now
     db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
+    documents_used = []
+    if response.documents_used:
+        print("here 1")
+        for doc_i in response.documents_used:
+            for doc_j in response.documents:
+                print(doc_j)
+                if doc_i.document_id == doc_j["metadata"]["document_id"] and doc_i.page_no == doc_j["metadata"]["page_no"] and doc_i.chunk_index == doc_j["metadata"]["chunk_index"]:
+                    documents_used.append(doc_j)
+                    break
+    #dump documents used to json file
+    with open(f"documents_used_{user_id}.json", "w", encoding="utf-8") as f:
+        json.dump(documents_used, f, indent=4)
 
-    return response.model_dump(exclude_none=True)
+    response = response.model_dump(exclude_none=True)
+    response["documents_used"] = documents_used
+    return response
 
 
 # {

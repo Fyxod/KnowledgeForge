@@ -59,7 +59,7 @@ export default function SignUp() {
             Create your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Join Samsung Prism
+            Join Knowledge Synthesis Platform
           </p>
         </div>
         

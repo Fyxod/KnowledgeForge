@@ -77,7 +77,7 @@ export default function Sidebar({ threads, selectedId, onSelect, userData, onCre
       <div className="p-6 border-b border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-            Samsung Prism
+            Chats
           </h1>
           <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
         </div>

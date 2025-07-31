@@ -18,8 +18,8 @@ def chunk_page_text(page_text: str) -> List[str]:
 
 
 # Get Chroma vector store instance
-def get_vectorstore(user_id: str) -> Chroma:
-    persist_path = os.path.join("data", user_id, "chroma")
+def get_vectorstore(user_id: str, thread_id: str) -> Chroma:
+    persist_path = os.path.join("data", user_id, thread_id, "chroma")
     os.makedirs(persist_path, exist_ok=True)
 
     return Chroma(
@@ -33,7 +33,7 @@ import math
 
 async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
     start_time = time.time()
-    vectorstore = await asyncio.to_thread(get_vectorstore, user_id)
+    vectorstore = await asyncio.to_thread(get_vectorstore, user_id, thread_id)
     end_time = time.time()
     print(
         f"Initialized Chroma vector store in {end_time - start_time:.2f} seconds for user {user_id}"

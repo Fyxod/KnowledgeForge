@@ -14,7 +14,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
               </svg>
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              Welcome to Samsung Prism
+              Welcome to Knowledge Synthesis Platform
             </h2>
             <p className="text-gray-600 text-lg mb-6">
               Click "New Chat" in the sidebar to start a conversation, or upload files below to create a document-based thread.

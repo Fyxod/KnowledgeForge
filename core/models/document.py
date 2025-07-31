@@ -14,8 +14,8 @@ class Document(BaseModel):
     file_name: str
     content: List[Page] = Field(default_factory=list)
     title: str
-
-
+    full_text: str
+    summary: Optional[str] = None
 class Documents(BaseModel):
     documents: List[Document] = Field(default_factory=list)
     thread_id: str

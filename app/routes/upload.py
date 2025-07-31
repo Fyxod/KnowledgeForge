@@ -22,25 +22,27 @@ POST /upload/
         - On error:
                 "error": <error_message>
 """
+
 import datetime
 import uuid
-
+import asyncio
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile, BackgroundTasks
 
 from core.database import db
 from core.embeddings.vectorstore import save_documents_to_store
 from core.parsers.process_files import process_files
 from core.services.upload_files import upload_files
-
+from core.models.document import Documents
+from core.summarizer import summarize_documents
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
 @router.post("/")
 async def upload_file(
-    request: Request,  
+    request: Request,
     files: List[UploadFile] = File(...),
     thread_id: Optional[str] = Form(None),
     thread_name: Optional[str] = Form(None),
@@ -50,7 +52,7 @@ async def upload_file(
     print(f"Thread name: {thread_name}")
     print(f"Thread ID: {thread_id}")
     print(f"Files: {files}")
-    
+
     if not files:
         return {"error": "No files uploaded"}
 
@@ -98,18 +100,19 @@ async def upload_file(
         )
 
     # Upload and parse files
-    files_data = await upload_files(files, user_id)
+    files_data = await upload_files(files, user_id, thread_id)
     if not files_data:
         return {"error": "No files uploaded or failed to upload files"}
 
     print(f"Raw file paths: {files_data}")
 
-    parsed_data = await process_files(files_data, user_id, thread_id)
+    parsed_data: Documents = await process_files(files_data, user_id, thread_id)
     
+    asyncio.create_task(summarize_documents(parsed_data.model_copy()))
     # Check if any documents were successfully parsed
     if not parsed_data.documents:
         return {"error": "No documents could be processed successfully"}
-    
+
     json_data = parsed_data.model_dump_json()
     # Dump parsed data to a JSON file
     with open(f"parsed_data_{thread_id}.json", "w", encoding="utf-8") as f:
