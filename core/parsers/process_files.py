@@ -17,13 +17,13 @@ async def process_files(
     """
     Process a list of uploaded files:
     - Pass each file to the document parser.
-    - Store the parsed result as JSON in `data/{user_id}/{thread_id}/parsed/`.
+    - Store the parsed result as JSON in `data/{user_id}/threads/{thread_id}/parsed/`.
     - Accumulate all parsed documents into a Documents object.
 
     Returns:
         Documents: A structured object containing parsed documents.
     """
-    parsed_dir = f"data/{user_id}/{thread_id}/parsed"
+    parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
 
     documents = Documents(documents=[], thread_id=thread_id, user_id=user_id)

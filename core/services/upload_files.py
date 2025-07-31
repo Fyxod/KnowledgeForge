@@ -7,7 +7,7 @@ import aiofiles
 
 async def upload_files(files, user_id: str, thread_id: str) -> List[dict]:
     """
-    Asynchronously upload each file to the 'data/{user_id}/{thread_id}/uploads' directory.
+    Asynchronously upload each file to the 'data/{user_id}/threads/{thread_id}/uploads' directory.
     Each file is renamed to include a timestamp: filename_{timestamp}.{extension}.
 
     Args:
@@ -17,7 +17,7 @@ async def upload_files(files, user_id: str, thread_id: str) -> List[dict]:
     Returns:
         List[dict]: List of metadata dictionaries for each uploaded file.
     """
-    upload_dir = os.path.join("data", user_id, thread_id, "uploads")
+    upload_dir = os.path.join("data", user_id, "threads", thread_id, "uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
     files_data = []

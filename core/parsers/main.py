@@ -85,7 +85,7 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
 
         if image_list:
             print("there are images on this page")
-            image_dir = f"data/{user_id}/{thread_id}/images/{name}"
+            image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
             os.makedirs(image_dir, exist_ok=True)
             # await sio.emit("progress", {"message": f"Extracting data from images on page {page_number + 1}..."}, to=sid)
 

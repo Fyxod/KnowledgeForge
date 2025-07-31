@@ -19,7 +19,7 @@ def chunk_page_text(page_text: str) -> List[str]:
 
 # Get Chroma vector store instance
 def get_vectorstore(user_id: str, thread_id: str) -> Chroma:
-    persist_path = os.path.join("data", user_id, thread_id, "chroma")
+    persist_path = os.path.join("data", user_id, "chroma")
     os.makedirs(persist_path, exist_ok=True)
 
     return Chroma(

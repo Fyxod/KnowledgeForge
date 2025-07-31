@@ -76,7 +76,7 @@ async def summarize_documents(parsed_data: Documents):
     Asynchronously summarizes the parsed data in batches of up to 5 documents using the LLM.
     """
     print("Inside summarizer")
-    parsed_dir = f"data/{parsed_data.user_id}/{parsed_data.thread_id}/parsed"
+    parsed_dir = f"data/{parsed_data.user_id}/threads/{parsed_data.thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
 
     structured_llm = llm.with_structured_output(SummarizerLLMOutput)
@@ -130,8 +130,8 @@ async def global_summarizer(user_id: str, thread_id: str):
     """
     Asynchronously summarizes all documents for a user in a specific thread.
     """
-    save_dir = f"data/{user_id}/{thread_id}"
-    parsed_dir = f"data/{user_id}/{thread_id}/parsed"
+    save_dir = f"data/{user_id}/threads/{thread_id}"
+    parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
 
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
