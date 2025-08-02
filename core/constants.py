@@ -5,4 +5,6 @@ ANSWER = "answer"
 ROUTER = "router"
 FAILURE = "failure"
 REWRITE_QUERY = "rewrite_query"
+GLOBAL_SUMMARIZER = "global_summarizer"
+DOCUMENT_SUMMARIZER = "document_summarizer"
 MAX_WEB_SEARCH = 2

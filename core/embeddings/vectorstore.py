@@ -19,6 +19,7 @@ def chunk_page_text(page_text: str) -> List[str]:
 
 # Get Chroma vector store instance
 def get_vectorstore(user_id: str, thread_id: str) -> Chroma:
+    print("inside get_vectorstore")
     persist_path = os.path.join("data", user_id, "chroma")
     os.makedirs(persist_path, exist_ok=True)
 
@@ -32,6 +33,7 @@ def get_vectorstore(user_id: str, thread_id: str) -> Chroma:
 import math
 
 async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
+    print("inside save_documents_to_store")
     start_time = time.time()
     vectorstore = await asyncio.to_thread(get_vectorstore, user_id, thread_id)
     end_time = time.time()
@@ -55,7 +57,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     "page_no": page.number,
                     "chunk_index": i,
                     "file_name": doc.file_name,
-                    "doc_title": doc.title,
+                    "title": doc.title,
                 }
                 chunk_data.append((chunk_id, chunk, metadata))
     end_time = time.time()
@@ -97,3 +99,65 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
         )
 
     print(f"Saved {len(chunk_data)} chunks to Chroma for user {user_id}")
+
+# from typing import Any, Dict, List
+# from langchain_core.messages import SystemMessage, HumanMessage
+# from langchain_core.prompts import (
+#     ChatPromptTemplate,
+#     HumanMessagePromptTemplate,
+#     MessagesPlaceholder,
+# )
+
+
+# def main_prompt(
+#     messages: list,
+#     documents: str,
+#     question: str,
+#     summary: str,
+#     search_queries_results: List[Dict[str, Any]],
+# ) -> ChatPromptTemplate:
+#     """
+#     Builds the main prompt for the agent based on the current state.
+#     """
+
+#     messages_array = [
+#         SystemMessage(
+#             content=(
+#                 "You are a helpful assistant that answers questions based on the provided documents. "
+#                 # "Use the retrieved context to provide the most accurate, direct, and specific answer possible. "
+#                 "Use the retrieved context to give the best possible answer. "
+#                 "Extract and use as much relevant information as possible from the documents. "
+#                 "If the question is answerable using the provided documents, provide a direct, specific and detailed answer using relevant details."
+#                 "Only if the question truly cannot be answered using the documents and your own knowledge, then ask for clarification or suggest a web search. "
+#                 "Do not default to asking for clarification if relevant information is available in the context."
+#                 "\n\n"
+#                 "You also have access to these tools if needed:\n"
+#                 "- `answer`: Use this if you can directly answer the question.\n"
+#                 "- `web_search`: Use this if you need more recent or external information not available in the documents.\n"
+#                 "- `document_summarizer`: Use this if you need the summary of a specific document. You must provide the `document_id`.\n"
+#                 "- `global_summarizer`: Use this if you need a collective summary of all the documents.\n\n"
+#             )
+#         ),
+#         MessagesPlaceholder(variable_name="messages"),
+#         HumanMessagePromptTemplate.from_template(
+#             "Here is the retrieved context according to the question:\n{documents}"
+#         ),
+#     ]
+#     if summary:
+#         messages.append(HumanMessage(f"{summary}\n\n"))
+
+#     if search_queries_results:
+#         messages.append(
+#             HumanMessage(
+#                 f"Here are the web search queries results:{search_queries_results}\n\n"
+#             )
+#         )
+
+#     messages.append(HumanMessagePromptTemplate.from_template("{question}"))
+
+#     prompt = ChatPromptTemplate.from_messages(messages_array)
+#     return prompt.format_messages(
+#         messages=messages,
+#         documents=documents,
+#         question=question,
+#     )

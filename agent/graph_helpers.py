@@ -32,20 +32,18 @@ def build_main_prompt(state: AgentState) -> ChatPromptTemplate:
     """
     Builds the main prompt for the agent based on the current state.
     """
-    if state.web_search:
-        documents = state.search_queries_results
-    else:
-        documents = state.documents
 
     recent_chats = get_recent_history(
-        state.messages, turns=5
+        state.messages, turns=7
     )  # fine tune the no of turns
 
-    return main_prompt.format_messages(
+    return main_prompt(
         messages=recent_chats,
-        documents=documents,
+        documents=state.documents,
         question=state.question,
         # question=state.question + "\n" + (state.retrieval_query or ""),  # append retrieval query if exists,
+        summary=state.summary,
+        search_queries_results=state.search_queries_results,
     )
 
 

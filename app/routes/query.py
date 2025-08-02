@@ -51,13 +51,11 @@ async def query(request: Request, body: QueryRequest):
     if not user:
         return {"error": "User not found"}
 
-    print(user)
 
     thread = user["threads"].get(thread_id)
     if not thread:
         return {"error": "Thread not found"}
 
-    print(f"Thread found: {thread}")
     messages = []
 
     for message in thread.get("chats", []):
@@ -97,7 +95,6 @@ async def query(request: Request, body: QueryRequest):
         print("here 1")
         for doc_i in response.documents_used:
             for doc_j in response.documents:
-                print(doc_j)
                 if doc_i.document_id == doc_j["metadata"]["document_id"] and doc_i.page_no == doc_j["metadata"]["page_no"] and doc_i.chunk_index == doc_j["metadata"]["chunk_index"]:
                     documents_used.append(doc_j)
                     break

@@ -101,6 +101,7 @@ async def summarize_documents(parsed_data: Documents):
             result: SummarizerLLMOutput = await structured_llm.ainvoke(prompt)
             print(f"Summary result for batch {i}: ", result)
             end_time = time.time()
+            print(f"LLM response time: {end_time - start_time:.2f} seconds")
             print(f"Completed batch {i} in {end_time - start_time:.2f} seconds")
             
             for document in result.summaries:
@@ -188,7 +189,11 @@ async def global_summarizer(user_id: str, thread_id: str):
     
     structured_llm = llm.with_structured_output(GlobalSummarizerLLMOutput)
     try:
+        start_time = time.time()
+        print("Starting global summarization...")
         result: GlobalSummarizerLLMOutput = await structured_llm.ainvoke(summary_prompt)
+        end_time = time.time()
+        print(f"Global summarization completed in LLM response time {end_time - start_time:.2f} seconds")
         print(f"Global summary result: ", result)
         # save the global summary to a json file
         global_summary_path = os.path.join(save_dir, "global_summary.json")
@@ -197,4 +202,3 @@ async def global_summarizer(user_id: str, thread_id: str):
 
     except Exception as e:
         print(f"Error during global summarization: {e}")
-    return result
