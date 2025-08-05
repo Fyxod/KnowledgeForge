@@ -79,9 +79,11 @@ export default function ChatPage({ userData, setUserData }) {
     try {
       const response = await sendQuery(selectedThreadId, text);
       
+      console.log('Query response:', response);
+      console.log('Documents used in response:', response.documents_used);
+      
       await refreshUserData();
       
-      console.log('Query response:', response);
     } catch (error) {
       console.error('Failed to send message:', error);
       setError('Failed to send message. Please try again.');

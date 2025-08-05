@@ -10,6 +10,7 @@ export default function MessageBubble({ message }) {
   
   const isUser = message.type === 'user';
   const content = message.content || 'No content available';
+  const documentsUsed = message.documents_used || [];
   
   const formatTimestamp = (timestamp) => {
     try {
@@ -59,13 +60,62 @@ export default function MessageBubble({ message }) {
               </button>
             )}
             
-            {message.timestamp && (
-              <div className={`text-xs mt-2 ${
-                isUser ? 'text-blue-100' : 'text-gray-500'
-              }`}>
-                {formatTimestamp(message.timestamp)}
-              </div>
-            )}
+            {/* Subtle citation or timestamp display */}
+            <div className={`text-xs mt-2 ${
+              isUser ? 'text-blue-100' : 'text-gray-500'
+            }`}>
+              {!isUser && documentsUsed.length > 0 ? (
+                // Show document citation for AI messages
+                <span>
+                  {(() => {
+                    // Group citations by document
+                    const docGroups = documentsUsed.reduce((groups, doc) => {
+                      const docId = doc.metadata?.document_id;
+                      const docName = doc.metadata?.title || doc.metadata?.file_name || 'Document';
+                      const pageNo = doc.metadata?.page_no;
+                      
+                      if (!groups[docId]) {
+                        groups[docId] = { name: docName, pages: [] };
+                      }
+                      if (pageNo && !groups[docId].pages.includes(pageNo)) {
+                        groups[docId].pages.push(pageNo);
+                      }
+                      return groups;
+                    }, {});
+                    
+                    const docEntries = Object.values(docGroups);
+                    
+                    if (docEntries.length === 1) {
+                      // Single document case
+                      const doc = docEntries[0];
+                      if (doc.pages.length === 0) {
+                        return doc.name;
+                      } else if (doc.pages.length === 1) {
+                        return `${doc.name} • Page ${doc.pages[0]}`;
+                      } else {
+                        const sortedPages = doc.pages.sort((a, b) => a - b);
+                        return `${doc.name} • Pages ${sortedPages.join(', ')}`;
+                      }
+                    } else {
+                      // Multiple documents case
+                      const firstDoc = docEntries[0];
+                      const restCount = docEntries.length - 1;
+                      
+                      if (firstDoc.pages.length === 0) {
+                        return `${firstDoc.name} • +${restCount} more docs`;
+                      } else if (firstDoc.pages.length === 1) {
+                        return `${firstDoc.name} p.${firstDoc.pages[0]} • +${restCount} more`;
+                      } else {
+                        return `${firstDoc.name} p.${firstDoc.pages[0]}+ • +${restCount} more`;
+                      }
+                    }
+                  })()}
+                </span>
+              ) : message.timestamp ? (
+                // Show timestamp for user messages or AI messages without citations
+                formatTimestamp(message.timestamp)
+              ) : null}
+            </div>
           </div>
         </div>
         

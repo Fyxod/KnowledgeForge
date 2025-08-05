@@ -127,7 +127,8 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
                 const safeMessage = {
                   type: msg.type || 'user',
                   content: msg.content || msg.query || msg.result || 'No content',
-                  timestamp: msg.timestamp || new Date().toISOString()
+                  timestamp: msg.timestamp || new Date().toISOString(),
+                  documents_used: msg.documents_used || []  // Include citations
                 };
                 
                 return <MessageBubble key={i} message={safeMessage} />;

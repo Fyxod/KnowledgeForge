@@ -89,15 +89,24 @@ async def query(request: Request, body: QueryRequest):
 
     thread["chats"].extend(new_messages)
     thread["updatedAt"] = now
-    db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
+    
     documents_used = []
     if response.documents_used:
-        print("here 1")
+        print(f"Processing {len(response.documents_used)} citations...")
+        
         for doc_i in response.documents_used:
             for doc_j in response.documents:
                 if doc_i.document_id == doc_j["metadata"]["document_id"] and doc_i.page_no == doc_j["metadata"]["page_no"] and doc_i.chunk_index == doc_j["metadata"]["chunk_index"]:
                     documents_used.append(doc_j)
                     break
+    
+    print(f"Found {len(documents_used)} citation matches")
+    
+    # Update the agent message with citations
+    if documents_used:
+        thread["chats"][-1]["documents_used"] = documents_used
+    
+    db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
     #dump documents used to json file
     with open(f"documents_used_{user_id}.json", "w", encoding="utf-8") as f:
         json.dump(documents_used, f, indent=4)
