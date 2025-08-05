@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 export default function MessageBubble({ message }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showCitationDropdown, setShowCitationDropdown] = useState(false);
   
   if (!message || typeof message !== 'object') {
     console.warn('MessageBubble received invalid message:', message);
@@ -65,8 +66,8 @@ export default function MessageBubble({ message }) {
               isUser ? 'text-blue-100' : 'text-gray-500'
             }`}>
               {!isUser && documentsUsed.length > 0 ? (
-                // Show document citation for AI messages
-                <span>
+                // Show document citation for AI messages with dropdown
+                <div className="relative">
                   {(() => {
                     // Group citations by document
                     const docGroups = documentsUsed.reduce((groups, doc) => {
@@ -86,31 +87,72 @@ export default function MessageBubble({ message }) {
                     const docEntries = Object.values(docGroups);
                     
                     if (docEntries.length === 1) {
-                      // Single document case
+                      // Single document case - no dropdown needed
                       const doc = docEntries[0];
                       if (doc.pages.length === 0) {
-                        return doc.name;
+                        return <span>{doc.name}</span>;
                       } else if (doc.pages.length === 1) {
-                        return `${doc.name} • Page ${doc.pages[0]}`;
+                        return <span>{doc.name} • Page {doc.pages[0]}</span>;
                       } else {
                         const sortedPages = doc.pages.sort((a, b) => a - b);
-                        return `${doc.name} • Pages ${sortedPages.join(', ')}`;
+                        return <span>{doc.name} • Pages {sortedPages.join(', ')}</span>;
                       }
                     } else {
-                      // Multiple documents case
+                      // Multiple documents case - show dropdown
                       const firstDoc = docEntries[0];
                       const restCount = docEntries.length - 1;
                       
-                      if (firstDoc.pages.length === 0) {
-                        return `${firstDoc.name} • +${restCount} more docs`;
-                      } else if (firstDoc.pages.length === 1) {
-                        return `${firstDoc.name} p.${firstDoc.pages[0]} • +${restCount} more`;
-                      } else {
-                        return `${firstDoc.name} p.${firstDoc.pages[0]}+ • +${restCount} more`;
-                      }
+                      return (
+                        <>
+                          <button
+                            onClick={() => setShowCitationDropdown(!showCitationDropdown)}
+                            className="hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            <span>
+                              {firstDoc.pages.length === 0 
+                                ? `${firstDoc.name} • +${restCount} more docs`
+                                : firstDoc.pages.length === 1
+                                  ? `${firstDoc.name} p.${firstDoc.pages[0]} • +${restCount} more`
+                                  : `${firstDoc.name} p.${firstDoc.pages[0]}+ • +${restCount} more`
+                              }
+                            </span>
+                            <svg 
+                              className={`w-3 h-3 transition-transform ${showCitationDropdown ? 'rotate-180' : ''}`}
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          
+                          {showCitationDropdown && (
+                            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-48 max-w-80">
+                              <div className="p-3">
+                                <div className="text-xs font-medium text-gray-700 mb-2">Sources:</div>
+                                <div className="space-y-2">
+                                  {docEntries.map((doc, idx) => (
+                                    <div key={idx} className="text-xs">
+                                      <div className="font-medium text-gray-800">{doc.name}</div>
+                                      {doc.pages.length > 0 && (
+                                        <div className="text-gray-600 ml-2">
+                                          {doc.pages.length === 1 
+                                            ? `Page ${doc.pages[0]}`
+                                            : `Pages ${doc.pages.sort((a, b) => a - b).join(', ')}`
+                                          }
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
                     }
                   })()}
-                </span>
+                </div>
               ) : message.timestamp ? (
                 // Show timestamp for user messages or AI messages without citations
                 formatTimestamp(message.timestamp)

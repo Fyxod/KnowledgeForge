@@ -115,7 +115,24 @@ export default function Sidebar({ threads, selectedId, onSelect, userData, onCre
             <p className="text-xs">Upload files to create your first thread!</p>
           </div>
         ) : (
-          threads.map(({ id, thread_name, updatedAt, documents, chats }) => (
+          threads
+            .sort((a, b) => {
+              // Sort by creation date/updatedAt with newest first
+              const dateA = a.updatedAt || a.createdAt || a.created_at || new Date(0);
+              const dateB = b.updatedAt || b.createdAt || b.created_at || new Date(0);
+              
+              // Handle different date formats (string, Date object, MongoDB ObjectId with $date)
+              const getTimestamp = (date) => {
+                if (!date) return 0;
+                if (typeof date === 'string') return new Date(date).getTime();
+                if (date.$date) return new Date(date.$date).getTime();
+                if (date instanceof Date) return date.getTime();
+                return 0;
+              };
+              
+              return getTimestamp(dateB) - getTimestamp(dateA); // Newest first
+            })
+            .map(({ id, thread_name, updatedAt, documents, chats }) => (
             <div
               key={id}
               onClick={() => onSelect(id)}
