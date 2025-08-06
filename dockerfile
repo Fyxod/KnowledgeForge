@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libtesseract-dev \
     libleptonica-dev \
     pkg-config \
+    pandoc \
     poppler-utils \
     nginx \
     && rm -rf /var/lib/apt/lists/*
