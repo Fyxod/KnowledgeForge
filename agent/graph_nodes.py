@@ -11,8 +11,9 @@ from agent.tools.search import search_tool
 
 from core.constants import *
 from core.embeddings.retriever import get_user_retriever
-from core.llm.client import llm
+from core.llm.client import get_llm
 from core.llm.outputs import MainLLMOutput, REWRITELLMOutput
+from core.constants import QUERY_LLM, REWRITE_QUERY_LLM
 
 
 async def generate(state: AgentState) -> AgentState:
@@ -22,6 +23,7 @@ async def generate(state: AgentState) -> AgentState:
             role = msg.__class__.__name__.replace("Message", "").upper()
             f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
+    llm = get_llm(QUERY_LLM)
     structured_llm = llm.with_structured_output(MainLLMOutput)
     start_time = time.time()
     result: MainLLMOutput = await structured_llm.ainvoke(prompt)
@@ -87,6 +89,7 @@ async def rewrite_query(state: AgentState) -> AgentState:
             role = msg.__class__.__name__.replace("Message", "").upper()
             f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
+    llm = get_llm(REWRITE_QUERY_LLM)
     structured_llm = llm.with_structured_output(REWRITELLMOutput)
     start_time = time.time()
     result: REWRITELLMOutput = await structured_llm.ainvoke(prompt)
