@@ -2,13 +2,14 @@ import os
 import json
 import aiofiles
 from typing import List
-from core.llm.client import llm
+from core.llm.client import get_llm
 from core.models.document import Documents
 from core.llm.outputs import SummarizerLLMOutput, GlobalSummarizerLLMOutput
 from core.llm.prompts.summarizer_query import multi_document_summarization_prompt, global_summarization_prompt
 from langchain_core.prompts import ChatPromptTemplate
 import time
 from core.database import db
+from core.constants import SUMMARIZER_LLM
 
 # def summarize_documents(parsed_data: Documents):
 #     """
@@ -79,6 +80,7 @@ async def summarize_documents(parsed_data: Documents):
     parsed_dir = f"data/{parsed_data.user_id}/threads/{parsed_data.thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
 
+    llm = get_llm(SUMMARIZER_LLM)
     structured_llm = llm.with_structured_output(SummarizerLLMOutput)
 
     documents = parsed_data.documents
@@ -186,7 +188,8 @@ async def global_summarizer(user_id: str, thread_id: str):
         for msg in summary_prompt:
             role = msg.__class__.__name__.replace("Message", "").upper()
             await f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
-    
+
+    llm = get_llm(SUMMARIZER_LLM)
     structured_llm = llm.with_structured_output(GlobalSummarizerLLMOutput)
     try:
         start_time = time.time()

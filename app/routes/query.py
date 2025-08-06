@@ -113,6 +113,8 @@ async def query(request: Request, body: QueryRequest):
 
     response = response.model_dump(exclude_none=True)
     response["documents_used"] = documents_used
+    del response["search_queries_results"]
+    del response["documents"]
     return response
 
 
