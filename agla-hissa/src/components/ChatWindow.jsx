@@ -1,11 +1,95 @@
-import React from 'react';
+import React, { useState } from 'react';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 
 export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, isSending, uploadingFiles = [] }) {
+  const [isDraggingOverWindow, setIsDraggingOverWindow] = useState(false);
+  
+  // Drag and drop handlers for the entire chat window (works even without thread)
+  const handleWindowDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('ChatWindow: dragOver event');
+    setIsDraggingOverWindow(true);
+  };
+
+  const handleWindowDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('ChatWindow: dragLeave event', e.target, e.relatedTarget);
+    
+    // Use a timeout to prevent flickering when moving between child elements
+    setTimeout(() => {
+      // Check if we're still dragging by seeing if another dragOver hasn't happened
+      const rect = e.currentTarget.getBoundingClientRect();
+      const isOutside = e.clientX < rect.left || e.clientX > rect.right || 
+                       e.clientY < rect.top || e.clientY > rect.bottom;
+      
+      if (isOutside || !e.currentTarget.contains(e.relatedTarget)) {
+        setIsDraggingOverWindow(false);
+      }
+    }, 50);
+  };
+
+  const handleWindowDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('ChatWindow: dragEnter event');
+    setIsDraggingOverWindow(true);
+  };
+
+  const handleWindowDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('ChatWindow: drop event', e.dataTransfer.files);
+    setIsDraggingOverWindow(false);
+    
+    try {
+      const files = Array.from(e.dataTransfer?.files || []);
+      console.log('ChatWindow: Processing files', files);
+      if (files.length > 0) {
+        // Validate file types
+        const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.gif'];
+        const validFiles = files.filter(file => {
+          const extension = '.' + file.name.split('.').pop().toLowerCase();
+          return allowedTypes.includes(extension);
+        });
+        
+        console.log('ChatWindow: Valid files', validFiles);
+        if (validFiles.length > 0) {
+          onFileUpload(validFiles);
+        } else {
+          console.warn('No valid files dropped. Allowed types:', allowedTypes);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling file drop:', error);
+      setIsDraggingOverWindow(false);
+    }
+  };
+
   if (!thread) {
     return (
-      <div className="flex-1 flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div 
+        className="flex-1 flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100 relative"
+        onDragEnter={handleWindowDragEnter}
+        onDragOver={handleWindowDragOver}
+        onDragLeave={handleWindowDragLeave}
+        onDrop={handleWindowDrop}
+      >
+        {/* Full window drag overlay for welcome screen */}
+        {isDraggingOverWindow && (
+          <div className="absolute inset-0 bg-blue-100/90 border-4 border-dashed border-blue-400 z-50 flex items-center justify-center pointer-events-none">
+            <div className="text-center bg-white rounded-xl p-8 shadow-2xl pointer-events-none">
+              <div className="text-6xl mb-4">📁</div>
+              <h3 className="text-2xl font-bold text-blue-700 mb-2">Drop files to get started</h3>
+              <p className="text-blue-600">Upload documents to create a new conversation</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Supports: PDF, DOC, DOCX, TXT, PNG, JPG, JPEG, GIF
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md mx-auto p-8">
             <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -64,8 +148,34 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-white">
-      <div className="p-6 border-b bg-gradient-to-r from-white to-gray-50 shadow-sm">
+    <div 
+      className="flex-1 flex flex-col h-full bg-white relative"
+      onDragEnter={handleWindowDragEnter}
+      onDragOver={handleWindowDragOver}
+      onDragLeave={handleWindowDragLeave}
+      onDrop={handleWindowDrop}
+    >
+      {/* Full window drag overlay */}
+      {isDraggingOverWindow && (
+        <div className="absolute inset-0 bg-blue-100/90 border-4 border-dashed border-blue-400 z-50 flex items-center justify-center pointer-events-none">
+          <div className="text-center bg-white rounded-xl p-8 shadow-2xl pointer-events-none">
+            <div className="text-6xl mb-4">📁</div>
+            <h3 className="text-2xl font-bold text-blue-700 mb-2">Drop files anywhere</h3>
+            <p className="text-blue-600">Upload documents to enhance this conversation</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Supports: PDF, DOC, DOCX, TXT, PNG, JPG, JPEG, GIF
+            </p>
+          </div>
+        </div>
+      )}
+      
+      <div 
+        className="p-6 border-b bg-gradient-to-r from-white to-gray-50 shadow-sm"
+        onDragEnter={handleWindowDragEnter}
+        onDragOver={handleWindowDragOver}
+        onDragLeave={handleWindowDragLeave}
+        onDrop={handleWindowDrop}
+      >
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-1">{thread.thread_name}</h2>
@@ -114,7 +224,13 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white">
+      <div 
+        className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white"
+        onDragEnter={handleWindowDragEnter}
+        onDragOver={handleWindowDragOver}
+        onDragLeave={handleWindowDragLeave}
+        onDrop={handleWindowDrop}
+      >
         <div className="max-w-4xl mx-auto p-6">
           {thread.chats && thread.chats.length > 0 ? (
             <div className="space-y-6">
@@ -196,6 +312,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
           onFileUpload={onFileUpload}
           isUploading={isUploading}
           disabled={isSending}
+          disableDragDrop={true}  // Disable ChatInput drag/drop since ChatWindow handles it
         />
       </div>
     </div>

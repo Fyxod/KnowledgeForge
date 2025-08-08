@@ -6,7 +6,8 @@ export default function ChatInput({
   isUploading = false, 
   disabled = false, 
   placeholder = "Ask me anything about your documents...",
-  hideTextInput = false
+  hideTextInput = false,
+  disableDragDrop = false  // New prop to disable drag/drop when parent handles it
 }) {
   const [input, setInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -78,19 +79,52 @@ export default function ChatInput({
 
   const handleDragOver = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
   };
 
   const handleDragLeave = (e) => {
     e.preventDefault();
-    setIsDragging(false);
+    e.stopPropagation();
+    
+    // Use a more reliable method to detect leaving the drop zone
+    // Only set isDragging to false if the related target is not a child element
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    setSelectedFiles(files);
+    
+    try {
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (files.length > 0) {
+        // Validate file types
+        const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.gif'];
+        const validFiles = files.filter(file => {
+          const extension = '.' + file.name.split('.').pop().toLowerCase();
+          return allowedTypes.includes(extension);
+        });
+        
+        if (validFiles.length > 0) {
+          setSelectedFiles(validFiles);
+        } else {
+          console.warn('No valid files dropped. Allowed types:', allowedTypes);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling file drop:', error);
+      setIsDragging(false);
+    }
   };
 
   return (
@@ -138,14 +172,17 @@ export default function ChatInput({
 
       <div 
         className={`relative bg-white border-2 rounded-2xl shadow-lg transition-all duration-200 ${
-          isDragging 
+          isDragging && !disableDragDrop
             ? 'border-blue-400 bg-blue-50' 
             : 'border-gray-200 hover:border-gray-300 focus-within:border-blue-400'
         }`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}>
-        {isDragging && (
+        {...(!disableDragDrop && {
+          onDragEnter: handleDragEnter,
+          onDragOver: handleDragOver,
+          onDragLeave: handleDragLeave,
+          onDrop: handleDrop
+        })}>
+        {isDragging && !disableDragDrop && (
           <div className="absolute inset-0 bg-blue-100 border-2 border-dashed border-blue-400 rounded-2xl flex items-center justify-center z-10">
             <div className="text-center">
               <div className="text-3xl mb-2">📁</div>
