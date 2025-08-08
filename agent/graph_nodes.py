@@ -167,7 +167,6 @@ async def global_summarizer(state: AgentState) -> AgentState:
     if global_summary_data.get("summary"):
         state.summary = f"Global summary of all the documents: {global_summary_data['summary']}"
         print(f"Global summary: {global_summary_data['summary']}")
-    print(f"Summarizing {len(state.documents)} documents globally.")
 
     return state
 
@@ -175,7 +174,6 @@ async def retriever(state: AgentState) -> AgentState:
     """Retrieves documents based on the user's question.
     This is a placeholder function that simulates document retrieval.
     """
-    print("SLEEPING " * 8)
     start_time = time.time()
     doc_retriever = get_user_retriever(state.user_id, state.thread_id, k=75)  # try different k values
     end_time = time.time()

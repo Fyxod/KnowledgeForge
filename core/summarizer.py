@@ -168,7 +168,6 @@ async def global_summarizer(user_id: str, thread_id: str):
         
         async with aiofiles.open(json_file_path, "r") as f:
             content = await f.read()
-        print("error after this")
         document_data = json.loads(content)
         if document_data.get("summary"):
             summaries.append({

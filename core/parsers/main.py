@@ -18,7 +18,7 @@ from core.models.document import Document, Page
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
-
+import traceback
 # Extensions
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'}
 SUPPORTED_EXTENSIONS = {
@@ -65,7 +65,8 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
     except Exception as e:
         print(f"Error extracting file {file_name}: {str(e)}")
         # await sio.emit("progress", {"message": f"Error extracting file: Failed to load document (Corrupt file)"}, to=sid)
-        await asyncio.sleep(5)
+        # await asyncio.sleep(5)
+        traceback.print_exc()
         return None
 
     if result.content is None:
