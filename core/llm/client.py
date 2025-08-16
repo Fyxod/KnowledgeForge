@@ -5,18 +5,20 @@ from core.constants import QUERY_LLM, REWRITE_QUERY_LLM, SUMMARIZER_LLM
 
 llm = ChatGoogleGenerativeAI(
     model=QUERY_LLM,
-    temperature=1,
+    temperature=0.3,
+    max_output_tokens=50000,  # or higher, up to 65536
     google_api_key=settings.GOOGLE_API_KEY,
 )
 llm2 = ChatGoogleGenerativeAI(
     model=SUMMARIZER_LLM,
-    temperature=1,
+    temperature=0.2,
+    max_output_tokens=50000,   # or higher, up to 65536
     google_api_key=settings.GOOGLE_API_KEY,
 )
 
 llm3 = ChatGoogleGenerativeAI(
     model=REWRITE_QUERY_LLM,
-    temperature=1,
+    temperature=0.5,
     google_api_key=settings.GOOGLE_API_KEY,
 )
 

@@ -1,11 +1,12 @@
+import asyncio
 import os
 import json
 import aiofiles
 from typing import List
 from core.llm.client import get_llm
 from core.models.document import Documents
-from core.llm.outputs import SummarizerLLMOutput, GlobalSummarizerLLMOutput
-from core.llm.prompts.summarizer_query import multi_document_summarization_prompt, global_summarization_prompt
+from core.llm.outputs import SummarizerLLMOutput, GlobalSummarizerLLMOutput, SummarizerLLMOutputSingle
+from core.llm.prompts.summarizer_query import multi_document_summarization_prompt, global_summarization_prompt, summarize_documents_prompt
 from langchain_core.prompts import ChatPromptTemplate
 import time
 from core.database import db
@@ -63,12 +64,12 @@ def build_summarizer_prompt_batch(documents_batch: List) -> ChatPromptTemplate:
     Builds the summarizer prompt for a batch of up to 5 documents.
     """
     formatted_docs = [
-        {"document_id": document.id, "text": document.full_text}
+        {"document_id": document.id, "text": document.full_text.replace("\x00", " ").strip()}
         for document in documents_batch
     ]
 
-    return multi_document_summarization_prompt.format_messages(
-        documents=formatted_docs,
+    return summarize_documents_prompt.format_messages(
+        document=formatted_docs,
     )
 
 
@@ -81,10 +82,10 @@ async def summarize_documents(parsed_data: Documents):
     os.makedirs(parsed_dir, exist_ok=True)
 
     llm = get_llm(SUMMARIZER_LLM)
-    structured_llm = llm.with_structured_output(SummarizerLLMOutput)
+    structured_llm = llm.with_structured_output(SummarizerLLMOutputSingle)
 
     documents = parsed_data.documents
-    batch_size = 5
+    batch_size = 1
 
     def chunk_documents(documents: List, size: int):
         for i in range(0, len(documents), size):
@@ -100,17 +101,31 @@ async def summarize_documents(parsed_data: Documents):
                     await f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
             start_time = time.time()
-            result: SummarizerLLMOutput = await structured_llm.ainvoke(prompt)
-            print(f"Summary result for batch {i}: ", result)
-            end_time = time.time()
-            print(f"LLM response time: {end_time - start_time:.2f} seconds")
-            print(f"Completed batch {i} in {end_time - start_time:.2f} seconds")
-            
-            for document in result.summaries:
+            try:
+                # enforce timeout of 40 seconds
+                result: SummarizerLLMOutputSingle = await asyncio.wait_for(
+                    structured_llm.ainvoke(prompt),
+                    timeout=120
+                )
+
+                end_time = time.time()
+                print(f"Summary result for batch {i}: ", result)
+                print(f"LLM response time: {end_time - start_time:.2f} seconds")
+                print(f"Completed batch {i} in {end_time - start_time:.2f} seconds")
+
+                summarized_document_id = result.document_id
                 for document_obj in parsed_data.documents:
-                    if document.document_id == document_obj.id:
-                        document_obj.summary = document.summary
+                    if summarized_document_id == document_obj.id:
+                        document_obj.summary = result.summary
                         break
+
+            except asyncio.TimeoutError:
+                print(f"Batch {i} took longer than 40 seconds, skipping.")
+                continue
+            except Exception as e:
+                print(f"Error processing batch {i}: {e}")
+                print("Skipping this batch")
+                continue
 
         for document in parsed_data.documents:
             document_dict = document.model_dump()

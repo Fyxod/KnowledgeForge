@@ -4,28 +4,62 @@ from langchain_core.prompts import (
     HumanMessagePromptTemplate,
 )
 
+# summarize_documents_prompt = ChatPromptTemplate.from_messages(
+#     [
+#         SystemMessage(
+#             content=(
+#                 "You are a helpful assistant tasked with summarizing documents for efficient understanding and retrieval. "
+#                 "Your job is to read the provided document or text and produce a clear, concise summary of 600 - 800 words that captures the main ideas without losing critical details."
+#             )
+#         ),
+#         SystemMessage(
+#             content=(
+#                 "If the document contains multiple sections or themes, organize the summary accordingly. "
+#                 "Be objective and do not add your own interpretations or information not present in the original content. "
+#                 "Focus on clarity, coherence, and informativeness."
+#             )
+#         ),
+#         SystemMessage(
+#             content=(
+#                 "The goal is to provide a useful and accurate summary that reflects the content and intent of the original document, suitable for downstream tasks like search or knowledge retrieval."
+#             )
+#         ),
+#         HumanMessagePromptTemplate.from_template(
+#             "Document to summarize:\n\n{document}\n\nSummary:"
+#         ),
+#     ]
+# )
+# summarize_documents_prompt = ChatPromptTemplate.from_messages(
+#     [
+#         SystemMessage(
+#             content=(
+#                 "Write a summary of the document that is between 500-700 words.\n"
+#                 "- Structure it in multiple paragraphs.\n"
+#                 "- Expand on key events, characters, and themes.\n"
+#                 "- Do not skip over important details, even if they seem minor.\n"
+#                 "- Avoid single-paragraph answers."
+#                 # "If your output is shorter than 500 words, continue writing until you reach the target length."
+#             )
+#         ),
+#         HumanMessagePromptTemplate.from_template(
+#             "Document to summarize:\n\n{document}\n\nSummary:"
+#         ),
+#     ]
+# )
+
 summarize_documents_prompt = ChatPromptTemplate.from_messages(
     [
         SystemMessage(
             content=(
-                "You are a helpful assistant tasked with summarizing documents for efficient understanding and retrieval. "
-                "Your job is to read the provided document or text and produce a clear, concise summary that captures the main ideas without losing critical details."
-            )
-        ),
-        SystemMessage(
-            content=(
+                "You are a helpful assistant tasked with summarizing documents. "
+                "Write a comprehensive summary between 500-700 words. "
+                "Do not skip over important details, even if they seem minor. "
                 "If the document contains multiple sections or themes, organize the summary accordingly. "
-                "Be objective and do not add your own interpretations or information not present in the original content. "
-                "Focus on clarity, coherence, and informativeness."
-            )
-        ),
-        SystemMessage(
-            content=(
-                "The goal is to provide a useful and accurate summary that reflects the content and intent of the original document, suitable for downstream tasks like search or knowledge retrieval."
+                "Use multiple paragraphs and preserve important details."
             )
         ),
         HumanMessagePromptTemplate.from_template(
-            "Document to summarize:\n\n{document}\n\nSummary:"
+            "Document to summarize:\n\n{document}\n\nSummary (500-700 words):"
         ),
     ]
 )
