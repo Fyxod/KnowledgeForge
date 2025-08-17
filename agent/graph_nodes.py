@@ -11,22 +11,20 @@ from agent.tools.search import search_tool
 
 from core.constants import *
 from core.embeddings.retriever import get_user_retriever
-from core.llm.client import get_llm
+from core.llm.client import invoke_llm
 from core.llm.outputs import MainLLMOutput, REWRITELLMOutput
 from core.constants import QUERY_LLM, REWRITE_QUERY_LLM
 
 
 async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
-    with open("formatted_prompt.txt", "w", encoding="utf-8") as f:
-        for msg in prompt:
-            role = msg.__class__.__name__.replace("Message", "").upper()
-            f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
+    # with open("formatted_prompt.txt", "w", encoding="utf-8") as f:
+    #     for msg in prompt:
+    #         role = msg.__class__.__name__.replace("Message", "").upper()
+    #         f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
-    llm = get_llm(QUERY_LLM)
-    structured_llm = llm.with_structured_output(MainLLMOutput)
     start_time = time.time()
-    result: MainLLMOutput = await structured_llm.ainvoke(prompt)
+    result: MainLLMOutput = await invoke_llm(QUERY_LLM, MainLLMOutput, prompt)
     end_time = time.time()
     print("LLM result: ", result)
     print(f"LLM response time: {end_time - start_time:.2f} seconds")
@@ -84,15 +82,13 @@ async def rewrite_query(state: AgentState) -> AgentState:
     This function uses the most recent conversation turns to rewrite the question.
     """
     prompt = build_rewrite_prompt(state)
-    with open("rewrite_query.txt", "w", encoding="utf-8") as f:
-        for msg in prompt:
-            role = msg.__class__.__name__.replace("Message", "").upper()
-            f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
+    # with open("rewrite_query.txt", "w", encoding="utf-8") as f:
+    #     for msg in prompt:
+    #         role = msg.__class__.__name__.replace("Message", "").upper()
+    #         f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
-    llm = get_llm(REWRITE_QUERY_LLM)
-    structured_llm = llm.with_structured_output(REWRITELLMOutput)
     start_time = time.time()
-    result: REWRITELLMOutput = await structured_llm.ainvoke(prompt)
+    result: REWRITELLMOutput = await invoke_llm(REWRITE_QUERY_LLM, REWRITELLMOutput, prompt)
     end_time = time.time()
     print(f"Rewrite LLM response time: {end_time - start_time:.2f} seconds")
     rewritten_query = result.rewritten_query
@@ -142,10 +138,13 @@ async def document_summarizer(state: AgentState) -> AgentState:
             
             document_data = json.loads(content)
             if document_data.get("summary"):
+                state.answer = f"Summary: \n {document_data['summary']}"
                 state.summary = f"Summary for document {document_id}, title: {title}, summary: {document_data['summary']}"
+                state.after_summary = ANSWER
                 print(f"Summary for document {document_id}, title: {title}, summary: {document_data['summary']}")
             else:
-                state.summary = "No summary available for this document."
+                state.summary = "No summary available for this document. Use your own knowledge and context to provide an answer."
+                state.after_summary = GENERATE
                 print(f"No summary found for document {document_id}")
             break
 
@@ -158,15 +157,22 @@ async def global_summarizer(state: AgentState) -> AgentState:
 
     if not os.path.exists(json_file_path):
         print(f"Global summary for the documents not available")
-        state.summary = "No global summary available for the documents."
+        state.summary = "No global summary available for the documents. Use your own knowledge and context to provide an answer."
+        state.after_summary = GENERATE
         return state
         
     async with aiofiles.open(json_file_path, "r") as f:
         content = await f.read()
+        
     global_summary_data = json.loads(content)
     if global_summary_data.get("summary"):
+        state.answer = f"{global_summary_data['summary']}"
         state.summary = f"Global summary of all the documents: {global_summary_data['summary']}"
+        state.after_summary = ANSWER
         print(f"Global summary: {global_summary_data['summary']}")
+    else:
+        state.summary = "No global summary available for the documents. Use your own knowledge and context to provide an answer."
+        state.after_summary = GENERATE
 
     return state
 
@@ -197,7 +203,7 @@ async def retriever(state: AgentState) -> AgentState:
     return state
 
 
-def router(state: AgentState) -> str:
+def main_router(state: AgentState) -> str:
     if state.action == ANSWER:
         print("Answering the question")
         return ANSWER
@@ -215,4 +221,13 @@ def router(state: AgentState) -> str:
         print("Summarizing global context")
         return GLOBAL_SUMMARIZER
 
+    return ANSWER
+
+def summary_router(state: AgentState) -> str:
+    if state.after_summary == ANSWER:
+        print("Routing to answer after summarization")
+        return ANSWER
+    elif state.after_summary == GENERATE:
+        print("Routing to generate after summarization")
+        return GENERATE
     return ANSWER

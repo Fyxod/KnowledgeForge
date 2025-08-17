@@ -18,6 +18,10 @@ class AgentState(BaseModel):
     search_queries: List[str] = Field(default_factory=list)
     search_queries_results: List[Dict[str, Any]] = Field(default_factory=list)
     document_id: Optional[str] = None # if using document_summarizer
+    after_summary: Optional[Literal[f"{ANSWER}", f"{GENERATE}", f"{DOCUMENT_SUMMARIZER}", f"{GLOBAL_SUMMARIZER}"]] = Field(
+        default=f"{GENERATE}",
+        description="The action to be taken after summarization."
+    )
 
     summary: Optional[str] = None
     

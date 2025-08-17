@@ -3,11 +3,10 @@ import os
 import json
 import aiofiles
 from typing import List
-from core.llm.client import get_llm
+from core.llm.client import invoke_llm
 from core.models.document import Documents
 from core.llm.outputs import SummarizerLLMOutput, GlobalSummarizerLLMOutput, SummarizerLLMOutputSingle
 from core.llm.prompts.summarizer_query import multi_document_summarization_prompt, global_summarization_prompt, summarize_documents_prompt
-from langchain_core.prompts import ChatPromptTemplate
 import time
 from core.database import db
 from core.constants import SUMMARIZER_LLM
@@ -59,7 +58,7 @@ from core.constants import SUMMARIZER_LLM
 
 
 
-def build_summarizer_prompt_batch(documents_batch: List) -> ChatPromptTemplate:
+def build_summarizer_prompt_batch(documents_batch: List):
     """
     Builds the summarizer prompt for a batch of up to 5 documents.
     """
@@ -68,7 +67,7 @@ def build_summarizer_prompt_batch(documents_batch: List) -> ChatPromptTemplate:
         for document in documents_batch
     ]
 
-    return summarize_documents_prompt.format_messages(
+    return summarize_documents_prompt(
         document=formatted_docs,
     )
 
@@ -81,9 +80,6 @@ async def summarize_documents(parsed_data: Documents):
     parsed_dir = f"data/{parsed_data.user_id}/threads/{parsed_data.thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
 
-    llm = get_llm(SUMMARIZER_LLM)
-    structured_llm = llm.with_structured_output(SummarizerLLMOutputSingle)
-
     documents = parsed_data.documents
     batch_size = 1
 
@@ -95,36 +91,49 @@ async def summarize_documents(parsed_data: Documents):
         for i, batch in enumerate(chunk_documents(documents, batch_size)):
             prompt = build_summarizer_prompt_batch(batch)
 
-            async with aiofiles.open(f"formatted_summarizer_prompt_batch_{i}.txt", "w", encoding="utf-8") as f:
-                for msg in prompt:
-                    role = msg.__class__.__name__.replace("Message", "").upper()
-                    await f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
+            # async with aiofiles.open(f"formatted_summarizer_prompt_batch_{i}.txt", "w", encoding="utf-8") as f:
+            #     for msg in prompt:
+            #         role = msg.__class__.__name__.replace("Message", "").upper()
+            #         await f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
             start_time = time.time()
             try:
-                # enforce timeout of 40 seconds
-                result: SummarizerLLMOutputSingle = await asyncio.wait_for(
-                    structured_llm.ainvoke(prompt),
-                    timeout=120
-                )
+                result: SummarizerLLMOutputSingle | None = None
+                for attempt in range(2):  # max 2 attempts
+                    try:
+                        result = await invoke_llm(SUMMARIZER_LLM, SummarizerLLMOutputSingle, prompt)
+                        if result and result.summary and len(result.summary.split()) >= 5:
+                            break
+                        else:
+                            print(f"Batch {i}: summary too short ({len(result.summary.split())} words). Retrying once...")
+                    except asyncio.TimeoutError:
+                        print(f"Batch {i}: timeout on attempt {attempt+1}")
+                    except Exception as e:
+                        print(f"Batch {i}: error on attempt {attempt+1} -> {e}")
 
                 end_time = time.time()
-                print(f"Summary result for batch {i}: ", result)
-                print(f"LLM response time: {end_time - start_time:.2f} seconds")
-                print(f"Completed batch {i} in {end_time - start_time:.2f} seconds")
+                if result:
+                    print(f"Summary result for batch {i}: ", result)
+                    print(f"LLM response time: {end_time - start_time:.2f} seconds")
+                    print(f"Completed batch {i} in {end_time - start_time:.2f} seconds")
 
-                summarized_document_id = result.document_id
-                for document_obj in parsed_data.documents:
-                    if summarized_document_id == document_obj.id:
-                        document_obj.summary = result.summary
-                        break
+                    summarized_document_id = result.document_id
+                    for document_obj in parsed_data.documents:
+                        if summarized_document_id == document_obj.id:
+                            document_obj.summary = result.summary
+                            break
+                else:
+                    print(f"Batch {i}: Failed to get valid summary after retries.")
+                    await asyncio.sleep(2)  # wait 2 seconds before retry
 
             except asyncio.TimeoutError:
-                print(f"Batch {i} took longer than 40 seconds, skipping.")
+                print(f"Batch {i} took longer than 120 seconds, skipping.")
+                await asyncio.sleep(2)  # wait 2 seconds before retry
                 continue
             except Exception as e:
                 print(f"Error processing batch {i}: {e}")
                 print("Skipping this batch")
+                await asyncio.sleep(2)  # wait 2 seconds before retry
                 continue
 
         for document in parsed_data.documents:
@@ -194,21 +203,20 @@ async def global_summarizer(user_id: str, thread_id: str):
         print(f"No summaries found for thread {thread_id} for user {user_id}")
         return
 
-    summary_prompt = global_summarization_prompt.format_messages(
+    summary_prompt = global_summarization_prompt(
         summaries=summaries,
     )
     
-    async with aiofiles.open(f"global_summarizer_prompt.txt", "w", encoding="utf-8") as f:
-        for msg in summary_prompt:
-            role = msg.__class__.__name__.replace("Message", "").upper()
-            await f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
+    # async with aiofiles.open(f"global_summarizer_prompt.txt", "w", encoding="utf-8") as f:
+    #     for msg in summary_prompt:
+    #         role = msg.__class__.__name__.replace("Message", "").upper()
+    #         await f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
-    llm = get_llm(SUMMARIZER_LLM)
-    structured_llm = llm.with_structured_output(GlobalSummarizerLLMOutput)
     try:
         start_time = time.time()
         print("Starting global summarization...")
-        result: GlobalSummarizerLLMOutput = await structured_llm.ainvoke(summary_prompt)
+        result: GlobalSummarizerLLMOutput = await invoke_llm(SUMMARIZER_LLM, GlobalSummarizerLLMOutput, summary_prompt)
+
         end_time = time.time()
         print(f"Global summarization completed in LLM response time {end_time - start_time:.2f} seconds")
         print(f"Global summary result: ", result)
