@@ -7,6 +7,8 @@ import google.api_core.exceptions
 from typing import Any, List, Type
 import asyncio
 
+import sys
+sys.setrecursionlimit(5000)
 
 API_KEYS = [
     settings.GOOGLE_API_KEY_1,
@@ -21,7 +23,7 @@ count = 0
 async def invoke_llm(
     model: str,
     response_schema,
-    contents: List[dict],
+    contents,
 ):
     global count
 
@@ -30,6 +32,7 @@ async def invoke_llm(
         client = genai.Client(api_key=api_key)
 
         try:
+            print("before the llm")
             response = await asyncio.to_thread(
                 client.models.generate_content,
                 model=model,
@@ -41,7 +44,6 @@ async def invoke_llm(
                     "max_output_tokens": 100000,
                 },
             )
-            print("LLM response:", response)
             count = (count + 1) % len(API_KEYS)
             return response.parsed
 

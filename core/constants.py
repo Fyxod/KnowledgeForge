@@ -12,3 +12,4 @@ MAX_WEB_SEARCH = 2
 SUMMARIZER_LLM="gemini-2.5-flash"
 QUERY_LLM="gemini-2.5-pro"
 REWRITE_QUERY_LLM="gemini-2.0-flash"
+NODE_DESCRIPTION_LLM="gemini-2.0-flash"
