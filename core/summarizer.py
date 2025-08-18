@@ -59,7 +59,7 @@ async def summarize_documents(parsed_data: Documents):
                             and result.summary
                             and len(result.summary.split()) >= 5
                         ):
-                            
+
                             break
                         else:
                             print(
@@ -78,11 +78,13 @@ async def summarize_documents(parsed_data: Documents):
                         f"Completed document {i} in {end_time - start_time:.2f} seconds"
                     )
 
-                    summarized_document_id = result.document_id
-                    if summarized_document_id == document.id:
-                        document.summary = result.summary
-                        print("Entering mind map creation ", i)
-                        asyncio.create_task(create_mind_map(document, parsed_data.user_id, parsed_data.thread_id))
+                    document.summary = result.summary
+                    print("Entering mind map creation ", i)
+                    asyncio.create_task(
+                        create_mind_map(
+                            document, parsed_data.user_id, parsed_data.thread_id
+                        )
+                    )
                 else:
                     print(f"Document {i}: Failed to get valid summary after retries.")
                     await asyncio.sleep(2)  # wait 2 seconds before retry

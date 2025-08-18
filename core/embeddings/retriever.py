@@ -1,7 +1,7 @@
 from core.embeddings.vectorstore import get_vectorstore
 
 
-def get_user_retriever(user_id: str, thread_id: str, document_id:str,  k: int = 5):
+def get_user_retriever(user_id: str, thread_id: str, document_id:str = None,  k: int = 5):
     vectorstore = get_vectorstore(user_id, thread_id=thread_id)
     
     filter_conditions = []

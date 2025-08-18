@@ -61,6 +61,9 @@ class Node(BaseModel):
     parent_id: Optional[str] = None
     children: List["Node"] = []
 
+    class Config:
+        arbitrary_types_allowed = True
+
 
 class FlatNode(BaseModel):
     id: str
@@ -80,3 +83,10 @@ class FlatNodeWithDescription(BaseModel):
 
 class FlatNodeWithDescriptionOutput(BaseModel):
     output: List[FlatNodeWithDescription]
+
+
+class MindMap(BaseModel):
+    user_id: str
+    thread_id: str
+    document_id: str
+    roots: List[Node]
