@@ -4,7 +4,7 @@ import json
 from pydantic import BaseModel
 from core.database import db
 
-router = APIRouter(prefix="/", tags=["extra"])
+router = APIRouter(prefix="/extra", tags=["extra"])
 
 
 class MindMapRequest(BaseModel):
@@ -53,6 +53,7 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
                 continue
 
     return {"status": False, "message": "No mind map found for the given document_id"}
+
 
 @router.post("/summary")
 async def get_summary(request: Request, body: MindMapRequest = Body(...)):
