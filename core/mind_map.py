@@ -11,6 +11,7 @@ from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
 from core.llm.outputs import FlatNodeWithDescriptionOutput, MindMapOutput, Node, MindMap
 from core.models.document import Document
+from app.socket_handler import sio
 
 
 async def create_mind_map(document: Document, user_id: str, thread_id: str):
@@ -50,6 +51,9 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
             await asyncio.sleep(5)
             if attempt == max_retries - 1:
                 print("Max retries reached. Mind map generation failed.")
+                await sio.emit(
+                    f"{user_id}/{thread_id}/mind_map", {"document_id": document.id, "status": False}
+                )
         total_end = time.time()
         print(
             f"Total time taken for mind map generation: {total_end - total_start} seconds"
@@ -127,7 +131,9 @@ async def add_node_descriptions(
     mind_map: MindMap = build_mindmap(data["output"], user_id, thread_id, document.id)
 
     print("Mind map built successfully")
-
+    await sio.emit(
+        f"{user_id}/{thread_id}/mind_map", {"document_id": document.id, "status": True}
+    )
     async with aiofiles.open(
         f"{proper_mind_map_dir}/{document.file_name}_mind_map.json", "w"
     ) as f:

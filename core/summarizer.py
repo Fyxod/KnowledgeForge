@@ -14,6 +14,7 @@ from core.llm.prompts.summarizer_query import (
     summarize_documents_prompt,
 )
 import time
+from app.socket_handler import sio
 from core.mind_map import create_mind_map
 from core.database import db
 from core.constants import SUMMARIZER_LLM
@@ -85,6 +86,10 @@ async def summarize_documents(parsed_data: Documents):
                             document, parsed_data.user_id, parsed_data.thread_id
                         )
                     )
+                    await sio.emit(
+                        f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
+                        {"document_id": document.id, "status": True},
+                    )
                 else:
                     print(f"Document {i}: Failed to get valid summary after retries.")
                     await asyncio.sleep(2)  # wait 2 seconds before retry
@@ -97,6 +102,10 @@ async def summarize_documents(parsed_data: Documents):
                 print(f"Error processing document {i}: {e}")
                 print("Skipping this document")
                 await asyncio.sleep(2)  # wait 2 seconds before retry
+                await sio.emit(
+                    f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
+                    {"document_id": document.id, "status": False},
+                )
                 continue
 
         for document in parsed_data.documents:
@@ -128,17 +137,20 @@ async def global_summarizer(user_id: str, thread_id: str):
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
         print(f"User with ID {user_id} not found")
+        await sio.emit(f"{user_id}/{thread_id}/global", {"status": False})
         return
     user_threads = user.get("threads", {})
 
     if thread_id not in user_threads:
         print(f"No thread found with ID {thread_id} for user {user_id}")
+        await sio.emit(f"{user_id}/{thread_id}/global", {"status": False})
         return
 
     summaries = []
     thread_documents = user_threads.get(thread_id, {}).get("documents", [])
     if not thread_documents:
         print(f"No documents found in thread {thread_id} for user {user_id}")
+        await sio.emit(f"{user_id}/{thread_id}/global", {"status": False})
         return
 
     for document in thread_documents:
@@ -164,6 +176,7 @@ async def global_summarizer(user_id: str, thread_id: str):
 
     if not summaries:
         print(f"No summaries found for thread {thread_id} for user {user_id}")
+        await sio.emit(f"{user_id}/{thread_id}/global", {"status": False})
         return
 
     summary_prompt = global_summarization_prompt(
@@ -186,6 +199,7 @@ async def global_summarizer(user_id: str, thread_id: str):
         global_summary_path = os.path.join(save_dir, "global_summary.json")
         async with aiofiles.open(global_summary_path, "w") as f:
             await f.write(json.dumps(result.model_dump(), indent=2))
+        await sio.emit(f"{user_id}/{thread_id}/global", {"status": True})
 
     except Exception as e:
         print(f"Error during global summarization: {e}")
