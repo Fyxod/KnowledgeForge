@@ -8,6 +8,7 @@ from typing import Any, List, Type
 import asyncio
 
 import sys
+
 sys.setrecursionlimit(5000)
 
 API_KEYS = [
@@ -20,11 +21,7 @@ API_KEYS = [
 count = 0
 
 
-async def invoke_llm(
-    model: str,
-    response_schema,
-    contents,
-):
+async def invoke_llm(model: str, response_schema, contents, remove_thinking=False):
     global count
 
     for _ in range(len(API_KEYS) * 3):
@@ -33,19 +30,39 @@ async def invoke_llm(
 
         try:
             print("before the llm")
+
+            # config = {
+            #     "response_mime_type": "application/json",
+            #     "response_schema": response_schema,
+            #     "temperature": 0.2,
+            #     "max_output_tokens": 200000,
+            # }
+            
+            if remove_thinking:
+                config = genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=response_schema,
+                    temperature=0.2,
+                    max_output_tokens=200000,
+                    thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
+                )
+            else:
+                config = genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=response_schema,
+                    temperature=0.2,
+                    max_output_tokens=200000,
+                )
+
+
             response = await asyncio.to_thread(
                 client.models.generate_content,
                 model=model,
                 contents=str(contents),
-                config={
-                    "response_mime_type": "application/json",
-                    "response_schema": response_schema,
-                    "temperature": 0.2,
-                    "max_output_tokens": 100000,
-                },
+                config=config,
             )
             count = (count + 1) % len(API_KEYS)
-            if(count > 100):
+            if count > 100:
                 count = 0
             print("raw response")
             print(response)
