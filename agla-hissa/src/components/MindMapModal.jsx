@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getMindMap } from '../services/api';
 import {
   ReactFlow,
@@ -9,9 +9,101 @@ import {
   useEdgesState,
   addEdge,
   Position,
+  Handle,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import io from 'socket.io-client';
+
+// Custom node component that handles expansion state
+const CustomMindMapNode = ({ data }) => {
+  const { title, description, level, isExpanded, onToggle } = data;
+  
+  return (
+    <div 
+      className={`p-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-105 relative ${
+        isExpanded ? 'ring-2 ring-blue-300 ring-opacity-50' : ''
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (description && onToggle) {
+          onToggle();
+        }
+      }}
+      style={{ 
+        minWidth: isExpanded ? '320px' : '220px',
+        maxWidth: isExpanded ? '420px' : '280px',
+        minHeight: '50px',
+        background: level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb',
+        color: level <= 2 ? 'white' : 'black',
+        border: `2px solid ${level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : level === 2 ? '#7c3aed' : '#9ca3af'}`,
+        borderRadius: '12px',
+        fontSize: '12px',
+        boxShadow: isExpanded ? '0 8px 16px rgba(0, 0, 0, 0.15)' : '0 4px 8px rgba(0, 0, 0, 0.1)',
+        overflow: 'hidden',
+        wordWrap: 'break-word',
+      }}
+    >
+      {/* Connection handles */}
+      <Handle 
+        type="target" 
+        position={Position.Left} 
+        style={{ 
+          background: 'transparent', 
+          border: 'none',
+          width: 8,
+          height: 8,
+          left: -4
+        }} 
+      />
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        style={{ 
+          background: 'transparent', 
+          border: 'none',
+          width: 8,
+          height: 8,
+          right: -4
+        }} 
+      />
+      
+      {/* Expand/Collapse indicator */}
+      {description && (
+        <div className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center">
+          <svg 
+            className={`w-4 h-4 transition-transform duration-200 ${
+              level <= 2 ? 'text-white/80' : 'text-gray-500'
+            } ${isExpanded ? 'rotate-180' : ''}`} 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      )}
+
+      <div className={`font-semibold text-sm leading-tight break-words ${
+        description ? 'pr-8' : 'pr-2'
+      } ${level <= 2 ? 'text-white' : 'text-gray-800'}`}>
+        {title}
+      </div>
+      
+      {isExpanded && description && (
+        <div className={`text-xs leading-relaxed mt-3 break-words pr-8 ${
+          level <= 2 ? 'text-white/90' : 'text-gray-600'
+        }`}>
+          {description}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Register the custom node type
+const nodeTypes = {
+  mindMapNode: CustomMindMapNode,
+};
 
 const MindMapModal = ({ isOpen, onClose, thread }) => {
   const [documents, setDocuments] = useState([]);
@@ -23,6 +115,7 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
   const [socket, setSocket] = useState(null);
   const [timeoutIds, setTimeoutIds] = useState([]); // Track timeouts for cleanup
   const [socketHandledResult, setSocketHandledResult] = useState(false); // Track if socket handled the result
+  const [expandedNodes, setExpandedNodes] = useState(new Set()); // Track expanded nodes
   
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -39,12 +132,10 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
       const newSocket = io('http://127.0.0.1:8000');
       
       newSocket.on('connect', () => {
-        console.log('Socket connected:', newSocket.id);
         setSocket(newSocket);
       });
       
       newSocket.on('mindmap_progress', (data) => {
-        console.log('Mind map progress:', data);
         setProgressInfo(data);
         
         if (data.status === 'success') {
@@ -71,7 +162,6 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
       });
       
       newSocket.on('disconnect', () => {
-        console.log('Socket disconnected');
         setSocket(null);
       });
       
@@ -107,6 +197,7 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
       setLoading(false);
       setSelectedDocument(null);
       setMindMapData(null);
+      setExpandedNodes(new Set()); // Reset expanded nodes
       setNodes([]);
       setEdges([]);
     }
@@ -115,17 +206,10 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
   // Extract thread information and documents
   useEffect(() => {
     if (isOpen && thread) {
-      console.log('=== COMPLETE THREAD DATA ANALYSIS ===');
-      console.log('Full thread object:', thread);
-      console.log('Thread keys:', Object.keys(thread));
-      console.log('Thread type:', typeof thread);
-      
-      // Look for thread ID in various possible field names (same as we extract thread_id)
+      // Look for thread ID in various possible field names
       const threadId = thread.thread_id || thread.id || thread.threadId || thread._id;
-      console.log('Extracted thread ID:', threadId);
       
-      // Extract documents from the SAME thread object structure
-      // Try multiple possible document array locations
+      // Extract documents from the thread object structure
       let threadDocuments = [];
       
       // Check various possible document locations in the thread object
@@ -137,24 +221,11 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
         thread.attachments
       ];
       
-      console.log('=== SEARCHING FOR DOCUMENTS IN THREAD ===');
-      possibleDocumentArrays.forEach((docArray, index) => {
-        console.log(`Possible document array ${index}:`, docArray);
-      });
-      
       // Find the first non-empty document array
       threadDocuments = possibleDocumentArrays.find(arr => Array.isArray(arr) && arr.length > 0) || [];
       
-      console.log('Selected thread documents array:', threadDocuments);
-      console.log('Number of documents found:', threadDocuments.length);
-      
       if (threadDocuments.length > 0) {
         const processedDocs = threadDocuments.map((doc, index) => {
-          console.log(`=== DOCUMENT ${index} ANALYSIS ===`);
-          console.log(`Document object:`, doc);
-          console.log(`Document keys:`, Object.keys(doc || {}));
-          console.log(`Document values:`, doc);
-          
           // Use the exact MongoDB structure - the real document ID is in "docId" field
           const possibleDocIds = [
             doc.docId,        // ← This is the real field from MongoDB!
@@ -168,13 +239,7 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
             doc.fileId
           ];
           
-          console.log(`Possible document IDs:`, possibleDocIds);
-          
-          // Find the first non-null, non-undefined value (same logic as thread_id)
           const realDocId = possibleDocIds.find(id => id != null && id !== '' && id !== undefined);
-          
-          console.log(`Selected document ID:`, realDocId);
-          console.log(`Document ID type:`, typeof realDocId);
           
           // Use exact MongoDB field names for title
           const possibleTitles = [
@@ -188,20 +253,8 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
             doc.document_name
           ];
           
-          console.log(`Possible titles:`, possibleTitles);
-          
           const realTitle = possibleTitles.find(title => title != null && title !== '' && title !== undefined) || `Document ${index + 1}`;
           
-          console.log(`Selected title:`, realTitle);
-          
-          if (!realDocId) {
-            console.error(`⚠️  NO VALID DOCUMENT ID FOUND FOR DOCUMENT ${index}`);
-            console.error(`Document object:`, doc);
-            console.error(`This document will not work with the mind map API`);
-            console.error(`Available fields:`, Object.keys(doc || {}));
-          } else {
-            console.log(`✅ Valid document found: ID="${realDocId}" Title="${realTitle}"`);
-          }
           
           return {
             document_id: realDocId || `MISSING_DOC_ID_${index}`,
@@ -211,16 +264,8 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
           };
         });
         
-        console.log('=== PROCESSED DOCUMENTS SUMMARY ===');
-        processedDocs.forEach((doc, index) => {
-          console.log(`Doc ${index}: ID="${doc.document_id}" Title="${doc.document_title}" Valid=${doc.hasValidId}`);
-        });
-        
         setDocuments(processedDocs);
       } else {
-        console.log('=== NO DOCUMENTS FOUND ===');
-        console.log('Thread object keys:', Object.keys(thread));
-        console.log('Checked document arrays:', possibleDocumentArrays);
         setDocuments([]);
       }
     }
@@ -228,53 +273,86 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
 
   // Convert mind map data to React Flow format
   const convertMindMapToFlow = useCallback((mindMap) => {
-    console.log('=== CONVERTING MIND MAP TO FLOW ===');
-    console.log('Mind map data:', mindMap);
-    
     if (!mindMap || !mindMap.roots || !Array.isArray(mindMap.roots)) {
-      console.error('Invalid mind map structure:', mindMap);
       return;
     }
 
     const newNodes = [];
     const newEdges = [];
     let nodeCounter = 0;
+    
+    // BOTTOM-UP APPROACH: Calculate space requirements from leaf nodes upward
+    const calculateNodeSpace = (node) => {
+      if (!node.children || node.children.length === 0) {
+        // Leaf node - needs minimal space
+        node._requiredHeight = 100; // Base height for leaf nodes
+        return node._requiredHeight;
+      }
+      
+      // Parent node - calculate space needed for all children first
+      let totalChildrenHeight = 0;
+      node.children.forEach(child => {
+        totalChildrenHeight += calculateNodeSpace(child); // Recursive bottom-up
+      });
+      
+      // Parent needs at least as much space as its children, plus some padding
+      const minSpacing = 20; // Minimum gap between children
+      const paddingPerChild = node.children.length * minSpacing;
+      node._requiredHeight = Math.max(100, totalChildrenHeight + paddingPerChild);
+      
+      return node._requiredHeight;
+    };
 
-    const processNode = (node, parentId = null, level = 0, index = 0) => {
+    // Phase 1: Calculate space requirements bottom-up for all trees
+    mindMap.roots.forEach(root => {
+      calculateNodeSpace(root);
+    });
+
+    // Phase 2: Position nodes using the calculated space requirements
+    const processNode = (node, parentId = null, level = 0, allocatedY = 0, allocatedHeight = null) => {
       const currentNodeId = `node-${nodeCounter++}`;
       
-      // Calculate position with better spacing
-      const x = level * 350;
-      const y = index * 120 + level * 60;
+      // Use calculated height if not provided
+      const height = allocatedHeight || node._requiredHeight;
+      
+      // Calculate position
+      const horizontalSpacing = 450;
+      
+      let x, y;
+      
+      if (level === 0) {
+        // Root node - center it
+        x = 200;
+        y = allocatedY + (height / 2);
+      } else {
+        // Child nodes - position relative to parent
+        x = 200 + (level * horizontalSpacing);
+        y = allocatedY + (height / 2); // Center in allocated space
+      }
 
+      const isExpanded = expandedNodes.has(currentNodeId);
+      
       newNodes.push({
         id: currentNodeId,
-        type: 'default',
+        type: 'mindMapNode',
         position: { x, y },
         data: {
-          label: (
-            <div className="p-4 min-w-[250px] max-w-[350px]">
-              <div className="font-semibold text-sm mb-2 text-gray-800">{node.title}</div>
-              {node.description && (
-                <div className="text-xs text-gray-600 leading-relaxed">
-                  {node.description.length > 150 
-                    ? `${node.description.substring(0, 150)}...` 
-                    : node.description}
-                </div>
-              )}
-            </div>
-          ),
+          title: node.title,
+          description: node.description,
+          level: level,
+          isExpanded: expandedNodes.has(currentNodeId),
+          onToggle: () => {
+            setExpandedNodes(prev => {
+              const newSet = new Set(prev);
+              if (newSet.has(currentNodeId)) {
+                newSet.delete(currentNodeId);
+              } else {
+                newSet.add(currentNodeId);
+              }
+              return newSet;
+            });
+          }
         },
-        style: {
-          background: level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : '#e5e7eb',
-          color: level <= 1 ? 'white' : 'black',
-          border: `2px solid ${level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : '#9ca3af'}`,
-          borderRadius: '12px',
-          fontSize: '12px',
-          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-        },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
       });
 
       // Add edge from parent if exists
@@ -283,32 +361,67 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
           id: `edge-${parentId}-${currentNodeId}`,
           source: parentId,
           target: currentNodeId,
-          type: 'smoothstep',
+          type: 'bezier',
           style: { 
-            stroke: level <= 1 ? '#4338ca' : '#6b7280', 
-            strokeWidth: level === 0 ? 3 : 2 
+            stroke: level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : '#8b5cf6',
+            strokeWidth: level === 0 ? 3 : level === 1 ? 2.5 : 2,
           },
           animated: level === 0,
+          markerEnd: {
+            type: 'arrowclosed',
+            width: 15,
+            height: 15,
+          },
+          // Add curvature for more flowing lines
+          pathOptions: {
+            curvature: 0.6
+          }
         });
       }
 
-      // Process children recursively
+      // Process children using their pre-calculated space requirements
       if (node.children && Array.isArray(node.children) && node.children.length > 0) {
-        node.children.forEach((child, childIndex) => {
-          processNode(child, currentNodeId, level + 1, childIndex);
+        let currentChildY = allocatedY;
+        
+        node.children.forEach((child, index) => {
+          const childHeight = child._requiredHeight;
+          
+          // Position child in its allocated space
+          processNode(child, currentNodeId, level + 1, currentChildY, childHeight);
+          
+          // Move to next child position
+          currentChildY += childHeight;
         });
       }
     };
 
-    // Process all root nodes
-    mindMap.roots.forEach((root, rootIndex) => {
-      processNode(root, null, 0, rootIndex);
+    // Phase 3: Process all root nodes using their calculated heights
+    let currentRootY = 50; // Start with some top margin
+    
+    mindMap.roots.forEach((root, index) => {
+      const rootHeight = root._requiredHeight;
+      processNode(root, null, 0, currentRootY, rootHeight);
+      currentRootY += rootHeight + 50; // Add gap between root trees
     });
 
-    console.log(`Created ${newNodes.length} nodes and ${newEdges.length} edges`);
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, expandedNodes]);
+
+  // Update nodes when expandedNodes changes
+  useEffect(() => {
+    if (mindMapData && nodes.length > 0) {
+      setNodes(currentNodes => 
+        currentNodes.map(node => ({
+          ...node,
+          data: {
+            ...node.data,
+            isExpanded: expandedNodes.has(node.id)
+          }
+        }))
+      );
+    }
+  }, [expandedNodes, setNodes]);
 
   const handleDocumentSelect = async (documentId, documentTitle) => {
     // Clear any previous states and timeouts
@@ -320,37 +433,21 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
     setNodes([]);
     setEdges([]);
     setSocketHandledResult(false);
+    setExpandedNodes(new Set()); // Reset expanded nodes for new document
     setProgressInfo({ status: 'starting', message: 'Initializing mind map request...', progress: 0 });
     
     try {
       // Extract thread ID
       const threadId = thread.thread_id || thread.id || thread.threadId || thread._id;
       
-      console.log('=== PRE-API CALL VALIDATION ===');
-      console.log('Thread Object Keys:', Object.keys(thread));
-      console.log('Thread Object:', thread);
-      console.log('Extracted Thread ID:', threadId, typeof threadId);
-      console.log('Selected Document ID:', documentId, typeof documentId);
-      console.log('Document Title:', documentTitle);
-      console.log('Socket ID:', socket?.id);
-      
       // Additional validation
       if (!threadId) {
-        console.error('=== THREAD ID EXTRACTION FAILED ===');
-        console.error('Available thread fields:', Object.keys(thread));
-        console.error('Thread values:', thread);
         throw new Error('Thread ID not found in thread object');
       }
       
       if (!documentId) {
-        console.error('=== DOCUMENT ID MISSING ===');
         throw new Error('Document ID is required');
       }
-      
-      // Type validation
-      console.log('=== TYPE VALIDATION ===');
-      console.log('Thread ID type:', typeof threadId, 'value:', threadId);
-      console.log('Document ID type:', typeof documentId, 'value:', documentId);
       
       // Convert to strings if needed (some APIs expect strings)
       const finalThreadId = String(threadId);
@@ -363,19 +460,14 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
       // Use the API service with socket ID for progress updates
       const response = await getMindMap(finalThreadId, finalDocumentId, socket?.id);
       
-      console.log('=== API SUCCESS ===');
-      console.log('Response:', response);
-      
       if (response && response.status) {
         // Check if this is a "not found" response
         if (response.not_found) {
-          console.log('Mind map not found - handled by Socket.IO');
           // Socket.IO has already handled this case, don't override
           // The progress UI will transition to "not found" state via socket events
           return;
         }
         
-        console.log('Mind map fetched successfully!');
         setMindMapData(response.mind_map);
         convertMindMapToFlow(response.mind_map);
         setProgressInfo({ status: 'complete', message: 'Mind map loaded successfully!', progress: 100 });
@@ -424,6 +516,20 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
     (params) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
   );
+
+  // Handle node clicks for expand/collapse
+  const onNodeClick = useCallback((event, node) => {
+    console.log('Node clicked:', node.id);
+    setExpandedNodes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(node.id)) {
+        newSet.delete(node.id);
+      } else {
+        newSet.add(node.id);
+      }
+      return newSet;
+    });
+  }, []);
 
   if (!isOpen) return null;
 
@@ -553,11 +659,30 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
                 ))}
               </div>
             )}
+
+            {/* Instructions Panel */}
+            {documents.length > 0 && (
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2 flex items-center">
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  How to Use
+                </h4>
+                <div className="text-xs text-blue-700 space-y-1">
+                  <p>• Click any document to load its mind map</p>
+                  <p>• Click nodes to expand/collapse descriptions</p>
+                  <p>• Use mouse wheel to zoom in/out</p>
+                  <p>• Drag to pan around the mind map</p>
+                  <p>• Use controls (top-left) for fit view</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Mind Map Area */}
           <div className="flex-1 relative">
-            {loading && (
+            {(loading || error || (selectedDocument && !mindMapData)) && (
               <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-10">
                 <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
                   <div className="text-center">
@@ -651,25 +776,7 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
               </div>
             )}
 
-            {error && (
-              <div className="absolute inset-0 flex items-center justify-center p-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-red-700 max-w-md text-center">
-                  <h4 className="font-medium mb-2">Unable to Load Mind Map</h4>
-                  <p className="text-sm mb-4">{error}</p>
-                  <button 
-                    onClick={() => {
-                      setError(null);
-                      setSelectedDocument(null);
-                    }}
-                    className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md text-sm transition-colors"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {!selectedDocument && !loading && !error && (
+            {!selectedDocument && !loading && !error && !mindMapData && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-gray-500">
                   <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -685,48 +792,48 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
               </div>
             )}
 
-            {selectedDocument && !loading && !error && !mindMapData && progressInfo.status === 'not_found' && (
-              <div className="absolute inset-0 flex items-center justify-center p-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-blue-700 max-w-md text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <h4 className="font-medium mb-2">Mind Map Not Available</h4>
-                  <p className="text-sm mb-4">
-                    No mind map found for "{selectedDocument.title}". Mind maps are generated during document processing.
-                  </p>
-                  <button 
-                    onClick={() => {
-                      setSelectedDocument(null);
-                      setProgressInfo({ status: '', message: '', progress: 0 });
-                    }}
-                    className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md text-sm transition-colors"
-                  >
-                    Select Another Document
-                  </button>
-                </div>
-              </div>
-            )}
-
             {mindMapData && nodes.length > 0 && (
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
+                nodeTypes={nodeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                onNodeClick={onNodeClick}
                 fitView
-                className="bg-gray-50"
+                fitViewOptions={{
+                  padding: 0.3, // Add padding around the mind map
+                  maxZoom: 0.8, // Start more zoomed out
+                  minZoom: 0.1,
+                  duration: 800 // Smooth transition
+                }}
+                defaultViewport={{ x: 0, y: 0, zoom: 0.6 }} // Default zoom level
+                className="bg-gradient-to-br from-slate-50 to-blue-50"
+                nodesDraggable={false} // Disable dragging to ensure clicks work
+                nodesConnectable={false}
+                elementsSelectable={false} // Disable selection to ensure clicks work
               >
-                <Controls position="top-left" />
+                <Controls position="top-left" showInteractive={false} />
                 <MiniMap 
                   position="bottom-right"
-                  nodeColor="#3b82f6"
-                  maskColor="rgba(255, 255, 255, 0.7)"
+                  nodeColor={(node) => {
+                    const level = parseInt(node.id.split('-')[1]) || 0;
+                    return level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb';
+                  }}
+                  maskColor="rgba(255, 255, 255, 0.8)"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px'
+                  }}
                 />
-                <Background variant="dots" gap={12} size={1} />
+                <Background 
+                  variant="dots" 
+                  gap={20} 
+                  size={1.5} 
+                  color="#cbd5e1" 
+                />
               </ReactFlow>
             )}
           </div>
