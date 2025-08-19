@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// const API_BASE_URL = 'http://127.0.0.1:8000';
-const API_BASE_URL = 'https://api.dev-ansh.xyz';
+const API_BASE_URL = 'http://127.0.0.1:8000';
+// const API_BASE_URL = 'https://api.dev-ansh.xyz';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -149,6 +149,96 @@ export const createEmptyThread = async (threadName = 'New Chat') => {
     return response.data;
   } catch (error) {
     console.error('Create thread error:', error);
+    throw error;
+  }
+};
+
+export const getMindMap = async (threadId, documentId, socketId = null) => {
+  try {
+    console.log('=== MIND MAP API CALL START ===');
+    console.log('Raw Thread ID:', threadId, typeof threadId);
+    console.log('Raw Document ID:', documentId, typeof documentId);
+    console.log('Socket ID:', socketId);
+    
+    // Prepare the exact payload
+    const payload = {
+      thread_id: threadId,
+      document_id: documentId
+    };
+    
+    // Prepare headers with socket ID for progress updates
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (socketId) {
+      headers['x-socket-id'] = socketId;
+    }
+    
+    console.log('=== REQUEST DETAILS ===');
+    console.log('URL:', `${API_BASE_URL}/extra/mindmap`);
+    console.log('Method: POST');
+    console.log('Payload:', JSON.stringify(payload, null, 2));
+    console.log('Headers:', headers);
+    
+    // Get the token for logging
+    const token = localStorage.getItem('jwt');
+    console.log('Auth Token Present:', !!token);
+    console.log('Auth Token Length:', token ? token.length : 0);
+    if (token) {
+      console.log('Auth Token (first 20 chars):', token.substring(0, 20) + '...');
+    }
+    
+    console.log('=== SENDING REQUEST ===');
+    const response = await api.post('/extra/mindmap', payload, { headers });
+    
+    console.log('=== SUCCESS RESPONSE ===');
+    console.log('Status:', response.status);
+    console.log('Status Text:', response.statusText);
+    console.log('Response Headers:', response.headers);
+    console.log('Response Data:', JSON.stringify(response.data, null, 2));
+    
+    return response.data;
+  } catch (error) {
+    console.error('=== MIND MAP API ERROR ===');
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Message:', error.message);
+    
+    if (error.response) {
+      // Server responded with error status
+      console.error('=== SERVER ERROR RESPONSE ===');
+      console.error('Status:', error.response.status);
+      console.error('Status Text:', error.response.statusText);
+      console.error('Response Headers:', error.response.headers);
+      console.error('Response Data:', JSON.stringify(error.response.data, null, 2));
+      
+      if (error.response.status === 422) {
+        console.error('=== 422 VALIDATION ERROR DETAILS ===');
+        console.error('This suggests the request format is invalid');
+        console.error('Possible issues:');
+        console.error('- thread_id format/type mismatch');
+        console.error('- document_id format/type mismatch');
+        console.error('- Missing required fields');
+        console.error('- Invalid JSON structure');
+        
+        if (error.response.data?.detail) {
+          console.error('Validation Details:', error.response.data.detail);
+        }
+      }
+    } else if (error.request) {
+      // Request was made but no response received
+      console.error('=== NETWORK ERROR ===');
+      console.error('Request made but no response received');
+      console.error('Request:', error.request);
+    } else {
+      // Something else happened
+      console.error('=== UNKNOWN ERROR ===');
+      console.error('Error during request setup:', error.message);
+    }
+    
+    console.error('=== FULL ERROR OBJECT ===');
+    console.error(error);
+    
     throw error;
   }
 };

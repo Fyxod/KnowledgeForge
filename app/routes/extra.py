@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body, Request
 import os
 import json
 from pydantic import BaseModel
+from rich import _console
 from core.database import db
 from core.word_cloud import generate_word_cloud
 
@@ -95,14 +96,21 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
 
 @router.post("/mindmap")
 async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
+    from app.socket_handler import sio
 
     payload = request.state.user
+    
+    print(f"Received mind map request: {body}")
+    print(f"payload  {payload}")
 
     if not payload:
         return {"error": "User not authenticated"}
 
     thread_id = body.thread_id
     document_id = body.document_id
+    
+    # Get client socket ID from headers (if provided)
+    client_socket_id = request.headers.get("x-socket-id")
 
     print(
         f"Received mind map request for thread_id: {thread_id} and document_id: {document_id}"
@@ -119,21 +127,72 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
         return {"error": "Thread not found"}
 
     mind_map_dir = f"data/{user_id}/threads/{thread_id}/mind_maps"
+    
+    # Emit progress update - Starting search
+    if client_socket_id:
+        await sio.emit("mindmap_progress", {
+            "status": "searching",
+            "message": "Searching for existing mind map...",
+            "progress": 20
+        }, to=client_socket_id)
+    
     if not os.path.exists(mind_map_dir):
-        return {"error": "Mind map directory does not exist"}
+        # Emit progress update - No directory, mind map not generated yet
+        if client_socket_id:
+            await sio.emit("mindmap_progress", {
+                "status": "not_found",
+                "message": "Mind map not available. Generated during document processing.",
+                "progress": 100
+            }, to=client_socket_id)
+        
+        # Return success status with not_found indicator to avoid API error handling
+        return {"status": True, "not_found": True, "message": "No mind map found for the given document_id"}
+
+    # Emit progress update - Checking files
+    if client_socket_id:
+        await sio.emit("mindmap_progress", {
+            "status": "checking",
+            "message": "Checking available mind maps...",
+            "progress": 50
+        }, to=client_socket_id)
 
     for filename in os.listdir(mind_map_dir):
         if filename.endswith(".json"):
             file_path = os.path.join(mind_map_dir, filename)
             try:
+                # Emit progress update - Loading file
+                if client_socket_id:
+                    await sio.emit("mindmap_progress", {
+                        "status": "loading",
+                        "message": f"Loading mind map...",
+                        "progress": 80
+                    }, to=client_socket_id)
+                
                 with open(file_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 if isinstance(data, dict) and data.get("document_id") == document_id:
+                    # Emit success
+                    if client_socket_id:
+                        await sio.emit("mindmap_progress", {
+                            "status": "success",
+                            "message": "Mind map loaded successfully!",
+                            "progress": 100
+                        }, to=client_socket_id)
+                    
                     return {"status": True, "mind_map": data}
             except Exception as e:
                 continue
 
-    return {"status": False, "message": "No mind map found for the given document_id"}
+    # Mind map not found in any file
+    if client_socket_id:
+        await sio.emit("mindmap_progress", {
+            "status": "not_found",
+            "message": "Mind map not available for this document",
+            "progress": 100
+        }, to=client_socket_id)
+    
+    # Return success status with not_found indicator to avoid API error handling
+    return {"status": True, "not_found": True, "message": "No mind map found for the given document_id"}
 
 
 @router.post("/summary")
