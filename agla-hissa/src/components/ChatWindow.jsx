@@ -236,7 +236,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
             <div className="space-y-6">
               {thread.chats.map((msg, i) => {
                 if (!msg || typeof msg !== 'object') {
-                  console.warn('Invalid message object:', msg);
+                   console.warn('Invalid message object:', msg);
                   return null;
                 }
                 

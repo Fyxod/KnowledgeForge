@@ -17,7 +17,7 @@ export default function MessageBubble({ message }) {
     try {
       const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp.$date);
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
+    } catch { 
       return '';
     }
   };
