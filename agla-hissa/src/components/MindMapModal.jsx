@@ -562,48 +562,6 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
           <div className="w-1/4 border-r border-gray-200 p-4 overflow-y-auto">
             <h3 className="font-medium text-gray-700 mb-3">Select Document</h3>
             
-            {/* Test Button */}
-            <button
-              onClick={() => {
-                const mockMindMap = {
-                  "user_id": "test_user",
-                  "thread_id": "test_thread",
-                  "document_id": "test_doc",
-                  "roots": [
-                    {
-                      "id": "1",
-                      "title": "Certificate of Completion",
-                      "description": "A certificate of completion is a document that confirms an individual has successfully finished a training program.",
-                      "parent_id": null,
-                      "children": [
-                        {
-                          "id": "2",
-                          "title": "Recipient",
-                          "description": "The recipient is the individual to whom a certificate is awarded.",
-                          "parent_id": "1",
-                          "children": []
-                        },
-                        {
-                          "id": "3",
-                          "title": "Issuing Organization", 
-                          "description": "The entity responsible for providing the certificate.",
-                          "parent_id": "1",
-                          "children": []
-                        }
-                      ]
-                    }
-                  ]
-                };
-                setSelectedDocument({ id: 'test_doc', title: 'Test Document' });
-                setMindMapData(mockMindMap);
-                convertMindMapToFlow(mockMindMap);
-                setError(null);
-              }}
-              className="w-full mb-4 p-3 bg-green-50 border border-green-300 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm"
-            >
-              🧪 Test Visualization
-            </button>
-            
             {documents.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 mb-3">
