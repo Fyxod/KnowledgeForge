@@ -39,3 +39,4 @@ class AgentState(BaseModel):
 
     # Used to determine the next step in the state graph
     next: Optional[str] = None
+ 
