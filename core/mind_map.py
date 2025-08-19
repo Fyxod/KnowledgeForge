@@ -23,7 +23,7 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
     os.makedirs(incomplete_mind_map_dir, exist_ok=True)
     prompt = build_mind_maps_node_prompt(document)
     total_start = time.time()
-    max_retries = 3
+    max_retries = 8
     for attempt in range(max_retries):
         try:
             start = time.time()

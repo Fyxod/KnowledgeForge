@@ -2,7 +2,6 @@ from fastapi import APIRouter, Body, Request
 import os
 import json
 from pydantic import BaseModel
-from rich import _console
 from core.database import db
 from core.word_cloud import generate_word_cloud
 
