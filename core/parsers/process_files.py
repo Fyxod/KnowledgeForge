@@ -5,6 +5,7 @@ from typing import List
 import aiofiles
 import asyncio
 
+from app.socket_handler import sio
 from core.models.document import Documents
 from core.parsers.main import extract_document
 import time
@@ -31,6 +32,7 @@ async def process_files(
 
     # Helper to process one file
     async def process_file(file_data):
+        await sio.emit(f"{user_id}/progress", {"message": f"Processing {file_data['title']}"})
         parsed_data = await extract_document(
             path=file_data["path"],
             title=file_data["title"],
@@ -56,7 +58,7 @@ async def process_files(
 
         return parsed_data
     
-    batch_size = 20
+    batch_size = 10
     # Process in batches
     for i in range(0, len(files_data), batch_size):
         batch = files_data[i:i + batch_size]

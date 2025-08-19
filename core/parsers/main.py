@@ -8,6 +8,7 @@ import fitz
 from PIL import Image
 import io
 
+from app.socket_handler import sio
 from kreuzberg import extract_file, ExtractionResult
 from app.socket_handler import sio
 from core.parsers.image import image_parser
@@ -36,6 +37,7 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
     if ext in IMAGE_EXTENSIONS:
 
         try:
+            await sio.emit(f"{user_id}/progress", {"message": f"{title} is an image, extracting text..."})
             text = await image_parser(file_path)
             # text = "DUMMY TEXT FOR IMAGE"
         except Exception as e:
@@ -44,7 +46,7 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
             return None
 
         doc_id = str(uuid.uuid4())
-
+        await sio.emit(f"{user_id}/progress", {"message": f"processed {file_name} successfully"})
         return Document(
             id=doc_id,
             type=ext[1:],
@@ -55,6 +57,7 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
         )
 
     try:
+        await sio.emit(f"{user_id}/progress", {"message": f"{file_name} is a document, extracting text..."})
         result: ExtractionResult = await extract_file(file_path)
     except Exception as e:
         print(f"Error extracting file {file_name}: {str(e)}")
@@ -80,9 +83,9 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
             print("there are images on this page")
             image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
             os.makedirs(image_dir, exist_ok=True)
+            await sio.emit(f"{user_id}/progress", {"message": f"Processing images from {title}..."})
 
         for img_index, img in enumerate(image_list):
-            
             xref = img[0]
             base_image = doc.extract_image(xref)
             image_bytes = base_image["image"]
@@ -106,6 +109,7 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
 
     doc_id = str(uuid.uuid4())
 
+    await sio.emit(f"{user_id}/progress", {"message": f"Processing {title} successfully..."})
     return Document(
         id=doc_id,
         type=ext[1:],

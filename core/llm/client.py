@@ -1,10 +1,5 @@
-import time
-from langchain_google_genai import ChatGoogleGenerativeAI
 from core.config import settings
-from core.constants import QUERY_LLM, REWRITE_QUERY_LLM, SUMMARIZER_LLM
 from google import genai
-import google.api_core.exceptions
-from typing import Any, List, Type
 import asyncio
 
 import sys
@@ -27,7 +22,8 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
     for _ in range(len(API_KEYS) * 3):
         api_key = API_KEYS[count % len(API_KEYS)]
         client = genai.Client(api_key=api_key)
-
+        count = (count + 1) % len(API_KEYS)
+        
         try:
             print("before the llm")
 
@@ -61,9 +57,7 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
                 contents=str(contents),
                 config=config,
             )
-            count = (count + 1) % len(API_KEYS)
-            if count > 100:
-                count = 0
+
             print("raw response")
             print(response)
             return response.parsed

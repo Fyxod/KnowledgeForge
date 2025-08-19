@@ -4,6 +4,7 @@ import json
 from pydantic import BaseModel
 from core.database import db
 from core.word_cloud import generate_word_cloud
+from app.socket_handler import sio
 
 router = APIRouter(prefix="/extra", tags=["extra"])
 
@@ -95,7 +96,6 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
 
 @router.post("/mindmap")
 async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
-    from app.socket_handler import sio
 
     payload = request.state.user
     

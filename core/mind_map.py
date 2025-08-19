@@ -19,6 +19,9 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
     Function to invoke the LLM for generating a mind map.
     Retries the LLM call up to 3 times if an error occurs.
     """
+    await sio.emit(
+        f"{user_id}/progress", {"message": f"Creating mind map for {document.title}"}
+    )
     incomplete_mind_map_dir = f"data/{user_id}/threads/{thread_id}/incomplete_mind_maps"
     os.makedirs(incomplete_mind_map_dir, exist_ok=True)
     prompt = build_mind_maps_node_prompt(document)
@@ -26,6 +29,12 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
     max_retries = 8
     for attempt in range(max_retries):
         try:
+            await sio.emit(
+                f"{user_id}/progress",
+                {
+                    "message": f"Attempt {attempt + 1} of creating mind map for {document.title}"
+                },
+            )
             start = time.time()
             print(f"invoking mind map node creation llm (attempt {attempt + 1})")
             print(prompt)
@@ -44,7 +53,19 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
             ) as f:
                 await f.write(response.model_dump_json())
             print("entering description function")
+            await sio.emit(
+                f"{user_id}/progress",
+                {"message": f"Mind map nodes creation completed for {document.title}"},
+            )
+            await sio.emit(
+                f"{user_id}/progress",
+                {"message": f"Creating node descriptions for {document.title}"},
+            )
             await add_node_descriptions(response, user_id, thread_id, document)
+            await sio.emit(
+                f"{user_id}/progress",
+                {"message": f"Created node descriptions for {document.title}"},
+            )
             break  # Success, exit loop
         except Exception as e:
             print(f"Error during mind map generation (attempt {attempt + 1}): {e}")
@@ -52,7 +73,12 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
             if attempt == max_retries - 1:
                 print("Max retries reached. Mind map generation failed.")
                 await sio.emit(
-                    f"{user_id}/{thread_id}/mind_map", {"document_id": document.id, "status": False}
+                    f"{user_id}/progress",
+                    {"message": f"Failed to create mind map for {document.title}"},
+                )
+                await sio.emit(
+                    f"{user_id}/{thread_id}/mind_map",
+                    {"document_id": document.id, "status": False},
                 )
         total_end = time.time()
         print(
@@ -94,29 +120,57 @@ async def add_node_descriptions(
                 f"Retrieval time: {end_time - start_time} seconds for node {node['id']}"
             )
             batch_relevant_texts.append(relevant_str)
-        prompt = build_mind_maps_description_prompt(batch_nodes, batch_relevant_texts)
-        llm_res_bef = time.time()
-        response: FlatNodeWithDescriptionOutput = await invoke_llm(
-            contents=prompt,
-            model=NODE_DESCRIPTION_LLM,
-            response_schema=FlatNodeWithDescriptionOutput,
-        )
-        llm_res_aft = time.time()
-        print(
-            f"LLM response time: {llm_res_aft - llm_res_bef} seconds for batch {batch_start // DESCRIPTION_PROCESSING_BATCH_SIZE}"
-        )
 
-        # Update nodes with descriptions
-        for i, node in enumerate(batch_nodes):
-            resp_node = response.output[i] if i < len(response.output) else None
-            if resp_node and node["id"] == resp_node.id:
-                node["description"] = resp_node.description
-                print(f"Updated description for node {node['id']}")
-            else:
-                print(f"Failed to update description for node {node['id']}")
-                if resp_node:
-                    print(f"Expected ID: {node['id']}, but got: {resp_node.id}")
-        await asyncio.sleep(1)
+        # Retry logic for LLM call per batch
+        max_batch_retries = 4
+        for batch_attempt in range(max_batch_retries):
+            try:
+                prompt = build_mind_maps_description_prompt(
+                    batch_nodes, batch_relevant_texts
+                )
+                llm_res_bef = time.time()
+                response: FlatNodeWithDescriptionOutput = await invoke_llm(
+                    contents=prompt,
+                    model=NODE_DESCRIPTION_LLM,
+                    response_schema=FlatNodeWithDescriptionOutput,
+                )
+                llm_res_aft = time.time()
+                print(
+                    f"LLM response time: {llm_res_aft - llm_res_bef} seconds for batch {batch_start // DESCRIPTION_PROCESSING_BATCH_SIZE} (attempt {batch_attempt + 1})"
+                )
+                await sio.emit(
+                    f"{user_id}/progress",
+                    {
+                        "message": f"Created descriptions for batch {batch_start // DESCRIPTION_PROCESSING_BATCH_SIZE} (attempt {batch_attempt + 1})"
+                    },
+                )
+
+                # Update nodes with descriptions
+                for i, node in enumerate(batch_nodes):
+                    resp_node = response.output[i] if i < len(response.output) else None
+                    if resp_node and node["id"] == resp_node.id:
+                        node["description"] = resp_node.description
+                        print(f"Updated description for node {node['id']}")
+                    else:
+                        print(f"Failed to update description for node {node['id']}")
+                        if resp_node:
+                            print(f"Expected ID: {node['id']}, but got: {resp_node.id}")
+                break  # Success, exit retry loop
+            except Exception as e:
+                print(
+                    f"Error during description generation for batch {batch_start // DESCRIPTION_PROCESSING_BATCH_SIZE} (attempt {batch_attempt + 1}): {e}"
+                )
+                await asyncio.sleep(2)
+                if batch_attempt == max_batch_retries - 1:
+                    print(
+                        f"Max retries reached for batch {batch_start // DESCRIPTION_PROCESSING_BATCH_SIZE}. Skipping batch."
+                    )
+                    await sio.emit(
+                        f"{user_id}/progress",
+                        {
+                            "message": f"Failed to create descriptions for batch {batch_start // DESCRIPTION_PROCESSING_BATCH_SIZE}"
+                        },
+                    )
     after_for = time.time()
     print("Total time taken:", after_for - before_for)
     async with aiofiles.open("mind_map_output_with_descriptions.json", "w") as f:
@@ -129,6 +183,10 @@ async def add_node_descriptions(
 
     print("building proper mind map now")
     mind_map: MindMap = build_mindmap(data["output"], user_id, thread_id, document.id)
+    await sio.emit(
+        f"{user_id}/progress",
+        {"message": f"Mind map built successfully for {document.title}"},
+    )
 
     print("Mind map built successfully")
     await sio.emit(

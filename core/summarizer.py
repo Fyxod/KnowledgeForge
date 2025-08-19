@@ -43,70 +43,73 @@ async def summarize_documents(parsed_data: Documents):
 
     documents = parsed_data.documents
 
-    try:
-        for i, document in enumerate(documents):
-            prompt = build_summarizer_prompt(document)
+    async def process_document(i, document):
+        prompt = build_summarizer_prompt(document)
+        start_time = time.time()
+        try:
+            await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Summarizing {document.title}"})
 
-            start_time = time.time()
-            try:
-                result: SummarizerLLMOutputSingle | None = None
-                for attempt in range(2):  # max 2 attempts
-                    try:
-                        result = await invoke_llm(
-                            SUMMARIZER_LLM, SummarizerLLMOutputSingle, prompt
+            result: SummarizerLLMOutputSingle | None = None
+            for attempt in range(5):  # max 5 attempts
+                try:
+                    await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Attempt {attempt + 1} of summarizing {document.title}"})
+
+                    result = await invoke_llm(
+                        SUMMARIZER_LLM, SummarizerLLMOutputSingle, prompt
+                    )
+                    if result and result.summary and len(result.summary.split()) >= 5:
+                        break
+                    else:
+                        print(
+                            f"Document {i}: summary too short ({len(result.summary.split())} words). Retrying once..."
                         )
-                        if (
-                            result
-                            and result.summary
-                            and len(result.summary.split()) >= 5
-                        ):
+                except asyncio.TimeoutError:
+                    print(f"Document {i}: timeout on attempt {attempt+1}")
+                except Exception as e:
+                    print(f"Document {i}: error on attempt {attempt+1} -> {e}")
 
-                            break
-                        else:
-                            print(
-                                f"Document {i}: summary too short ({len(result.summary.split())} words). Retrying once..."
-                            )
-                    except asyncio.TimeoutError:
-                        print(f"Document {i}: timeout on attempt {attempt+1}")
-                    except Exception as e:
-                        print(f"Document {i}: error on attempt {attempt+1} -> {e}")
+            end_time = time.time()
+            if result:
+                await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Summary completed for {document.title}"})
+                print(f"Summary completed for document {i}")
+                print(f"LLM response time: {end_time - start_time:.2f} seconds")
+                print(f"Completed document {i} in {end_time - start_time:.2f} seconds")
 
-                end_time = time.time()
-                if result:
-                    print(f"Summary completed for document {i}")
-                    print(f"LLM response time: {end_time - start_time:.2f} seconds")
-                    print(
-                        f"Completed document {i} in {end_time - start_time:.2f} seconds"
+                document.summary = result.summary
+                print("Entering mind map creation ", i)
+                asyncio.create_task(
+                    create_mind_map(
+                        document, parsed_data.user_id, parsed_data.thread_id
                     )
-
-                    document.summary = result.summary
-                    print("Entering mind map creation ", i)
-                    asyncio.create_task(
-                        create_mind_map(
-                            document, parsed_data.user_id, parsed_data.thread_id
-                        )
-                    )
-                    await sio.emit(
-                        f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
-                        {"document_id": document.id, "status": True},
-                    )
-                else:
-                    print(f"Document {i}: Failed to get valid summary after retries.")
-                    await asyncio.sleep(2)  # wait 2 seconds before retry
-
-            except asyncio.TimeoutError:
-                print(f"Document {i} took longer than 120 seconds, skipping.")
-                await asyncio.sleep(2)  # wait 2 seconds before retry
-                continue
-            except Exception as e:
-                print(f"Error processing document {i}: {e}")
-                print("Skipping this document")
-                await asyncio.sleep(2)  # wait 2 seconds before retry
+                )
                 await sio.emit(
                     f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
-                    {"document_id": document.id, "status": False},
+                    {"document_id": document.id, "status": True},
                 )
-                continue
+            else:
+                print(f"Document {i}: Failed to get valid summary after retries.")
+                await asyncio.sleep(2)  # wait 2 seconds before retry
+        except asyncio.TimeoutError:
+            print(f"Document {i} took longer than 120 seconds, skipping.")
+            await asyncio.sleep(2)  # wait 2 seconds before retry
+        except Exception as e:
+            print(f"Error processing document {i}: {e}")
+            print("Skipping this document")
+            await asyncio.sleep(2)  # wait 2 seconds before retry
+            await sio.emit(
+                f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
+                {"document_id": document.id, "status": False},
+            )
+
+    try:
+        batch_size = 5
+        total_docs = len(documents)
+        for batch_start in range(0, total_docs, batch_size):
+            batch = [
+                (i, documents[i])
+                for i in range(batch_start, min(batch_start + batch_size, total_docs))
+            ]
+            await asyncio.gather(*(process_document(i, doc) for i, doc in batch))
 
         for document in parsed_data.documents:
             document_dict = document.model_dump()

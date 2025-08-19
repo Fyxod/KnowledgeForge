@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from typing import List
-
+from app.socket_handler import sio
 import aiofiles
 
 
@@ -27,10 +27,12 @@ async def upload_files(files, user_id: str, thread_id: str) -> List[dict]:
         name, ext = os.path.splitext(file.filename)
         file_name = f"{name}_{timestamp}{ext}"
         file_path = os.path.join(upload_dir, file_name)
-
+        await sio.emit(f"{user_id}/progress", {"message": f"Uploading {file.filename}"})
         async with aiofiles.open(file_path, "wb") as f:
             content = await file.read()
             await f.write(content)
+            
+        await sio.emit(f"{user_id}/progress", {"message": f"Uploaded {file.filename}"})
 
         files_data.append({
             "title": file.filename,
