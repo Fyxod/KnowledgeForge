@@ -40,6 +40,7 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
                     response_schema=response_schema,
                     temperature=0.2,
                     max_output_tokens=200000,
+                    safety_settings=[],
                     thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
                 )
             else:
@@ -47,6 +48,7 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
                     response_mime_type="application/json",
                     response_schema=response_schema,
                     temperature=0.2,
+                    safety_settings=[],
                     max_output_tokens=200000,
                 )
 
