@@ -5,12 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.middlewares.auth import AuthMiddleware
 
-from app.routes import query, user, upload, health, thread
+from app.routes import query, user, upload, health, thread, extra
 from app.socket_handler import sio
 
 fastapi_app = FastAPI()
 
-included_paths = ["/user", "/upload", "/query", "/thread"]
+included_paths = ["/user", "/upload", "/query", "/thread", "/extra"]
 excluded_routes = [
     ("POST", "/user"),
     ("POST", "/user/login")
@@ -35,5 +35,6 @@ fastapi_app.include_router(user.router)
 fastapi_app.include_router(upload.router)
 fastapi_app.include_router(health.router)
 fastapi_app.include_router(thread.router)
+fastapi_app.include_router(extra.router)
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

@@ -1,5 +1,3 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
 import uuid
 import os
 import shutil
@@ -18,7 +16,7 @@ from core.models.document import Document, Page
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
-
+import traceback
 # Extensions
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'}
 SUPPORTED_EXTENSIONS = {
@@ -26,9 +24,7 @@ SUPPORTED_EXTENSIONS = {
     '.xls', '.xlsx', '.csv', '.html', '.xml', *IMAGE_EXTENSIONS
 }
 
-# async def extract_document(name, sid, image_parser, doc_type="document", title="Untitled"):
-async def extract_document(path, sid = "d", title="Untitled", file_name=None, user_id=None, thread_id=None):
-    # file_path = os.path.join(UPLOAD_DIR, name)
+async def extract_document(path, title="Untitled", file_name=None, user_id=None, thread_id=None):
 
     file_path = path
     ext = Path(path).suffix.lower()
@@ -38,14 +34,12 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
         raise ValueError(f"Unsupported file type: {ext}")
 
     if ext in IMAGE_EXTENSIONS:
-        # await sio.emit("progress", {"message": "Extracting data from image..."}, to=sid)
 
         try:
             text = await image_parser(file_path)
             # text = "DUMMY TEXT FOR IMAGE"
         except Exception as e:
             print(f"Error processing image {file_name}: {str(e)}")
-            # await sio.emit("progress", {"message": f"Error processing image: {str(e)}"}, to=sid)
             await asyncio.sleep(3)
             return None
 
@@ -53,7 +47,7 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
 
         return Document(
             id=doc_id,
-            type=ext[1:],  # Get the extension without the dot
+            type=ext[1:],
             file_name=file_name or os.path.basename(file_path),
             content=[Page(number=1, text=text)],
             title=title,
@@ -64,8 +58,7 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
         result: ExtractionResult = await extract_file(file_path)
     except Exception as e:
         print(f"Error extracting file {file_name}: {str(e)}")
-        # await sio.emit("progress", {"message": f"Error extracting file: Failed to load document (Corrupt file)"}, to=sid)
-        await asyncio.sleep(5)
+        traceback.print_exc()
         return None
 
     if result.content is None:
@@ -87,7 +80,6 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
             print("there are images on this page")
             image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
             os.makedirs(image_dir, exist_ok=True)
-            # await sio.emit("progress", {"message": f"Extracting data from images on page {page_number + 1}..."}, to=sid)
 
         for img_index, img in enumerate(image_list):
             
@@ -104,7 +96,6 @@ async def extract_document(path, sid = "d", title="Untitled", file_name=None, us
             image.save(image_path)
 
             image_text = await image_parser(image_path)
-            # image_text = "DUMMY TEXT FOR IMAGE"
             page_text += f"\n\n[Image: {image_name}]\n{image_text}"  # Append image text to page text
 
             image_names.append(image_name)

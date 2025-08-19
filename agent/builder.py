@@ -5,7 +5,8 @@ from agent.graph_nodes import (
     generate,
     retriever,
     rewrite_query,
-    router,
+    main_router,
+    summary_router,
     web_search,
     document_summarizer,
     global_summarizer,
@@ -21,7 +22,7 @@ graph_builder = StateGraph(AgentState)
 graph_builder.add_node(REWRITE_QUERY, rewrite_query)
 graph_builder.add_node(RETRIEVER, retriever)
 graph_builder.add_node(GENERATE, generate)
-graph_builder.add_node(ROUTER, router)
+graph_builder.add_node(ROUTER, main_router)
 graph_builder.add_node(WEB_SEARCH, web_search)
 graph_builder.add_node(ANSWER, lambda state: END)
 graph_builder.add_node(FAILURE, failure)
@@ -38,7 +39,7 @@ graph_builder.add_edge(RETRIEVER, GENERATE)
 # Conditional edges from GENERATE via router
 graph_builder.add_conditional_edges(
     GENERATE,
-    router,
+    main_router,
     {
         ANSWER: END,
         WEB_SEARCH: WEB_SEARCH,
@@ -48,14 +49,26 @@ graph_builder.add_conditional_edges(
     },
 )
 
+graph_builder.add_conditional_edges(
+    DOCUMENT_SUMMARIZER,
+    summary_router,
+    {
+        ANSWER: END,
+        GENERATE: GENERATE,
+    },
+)
+graph_builder.add_conditional_edges(
+    GLOBAL_SUMMARIZER,
+    summary_router,
+    {
+        ANSWER: END,
+        GENERATE: GENERATE,
+    },
+)
+
 # Web search loops back to GENERATE
 graph_builder.add_edge(WEB_SEARCH, GENERATE)
 
-# summarization nodes
-graph_builder.add_edge(DOCUMENT_SUMMARIZER, GENERATE)
-graph_builder.add_edge(GLOBAL_SUMMARIZER, GENERATE)
-
-# Failure goes to END
 graph_builder.add_edge(FAILURE, END)
 
 # Compile the agent

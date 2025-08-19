@@ -1,7 +1,6 @@
 from typing import Any, Dict, List
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import (
-    ChatPromptTemplate,
     MessagesPlaceholder,
 )
 
@@ -14,56 +13,122 @@ def main_prompt(
     search_queries_results: List[Dict[str, Any]],
 ):
     """
-    Builds the main prompt for the agent based on the current state.
+    Builds the main prompt for the agent in Gemini format (contents list).
     """
 
-    messages_array = [
-        SystemMessage(
-            content=(
+    contents = []
+
+    # System instruction
+    contents.append(
+        {
+            "role": "system",
+            "parts": (
                 "You are a helpful assistant that answers questions based on the provided documents. "
-                # "Use the retrieved context to provide the most accurate, direct, and specific answer possible. "
                 "Use the retrieved context to give the best possible answer. "
                 "Extract and use as much relevant information as possible from the documents. "
-                "If the question is answerable using the provided documents, provide a direct, specific and detailed answer using relevant details."
+                "If the question is answerable using the provided documents, provide a direct, specific and detailed answer using relevant details. "
                 "Only if the question truly cannot be answered using the documents and your own knowledge, then ask for clarification or suggest a web search or use summarizers accordingly. "
-                "Do not default to asking for clarification if relevant information is available in the context."
-                "\n\n"
+                "Do not default to asking for clarification if relevant information is available in the context.\n\n"
                 "You also have access to these tools if needed:\n"
                 "- `answer`: Use this if you can directly answer the question.\n"
                 "- `web_search`: Use this if you need more recent or external information not available in the documents.\n"
                 "- `document_summarizer`: Use this if you need the summary of a specific document for answering the user's question. You must provide the `document_id`.\n"
-                "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question."
+                "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question.\n"
                 "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly."
-            )
-        ),
-        MessagesPlaceholder(variable_name="messages"),
-        SystemMessage(
-            content=f"Here is the retrieved context according to the question:\n{documents}"
-        ),
-    ]
-    if summary:
-        messages_array.append(SystemMessage(content=f"This is the summary that the you asked for. Use this accordingly to answer the user's question: {summary}\n\n"))
-
-    if search_queries_results:
-        messages_array.append(
-            SystemMessage(
-                content=f"Here are the web search queries results:\n{search_queries_results}"
-            )
-        )
-
-    messages_array.append(HumanMessage(content=question))
-
-    prompt = ChatPromptTemplate.from_messages(messages_array)
-    return prompt.format_messages(
-        messages=messages,
+            ),
+        }
     )
 
-# from typing import Any, Dict, List
-# from langchain_core.messages import SystemMessage, HumanMessage
-# from langchain_core.prompts import (
-#     ChatPromptTemplate,
-#     MessagesPlaceholder,
-# )
+    # Retrieved context
+    contents.append(
+        {
+            "role": "system",
+            "parts": f"Here is the retrieved context according to the question:\n{documents}",
+        }
+    )
+
+    # Optional summary
+    if summary:
+        contents.append(
+            {
+                "role": "system",
+                "parts": f"This is the summary that you asked for. Use this accordingly to answer the user's question:\n{summary}",
+            }
+        )
+
+    # Optional web search results
+    if search_queries_results:
+        contents.append(
+            {
+                "role": "system",
+                "parts": f"Here are the web search queries results:\n{search_queries_results}",
+            }
+        )
+
+    # Conversation history
+    for m in messages:
+        if m.type == "human":
+            contents.append({"role": "user", "parts": m.content})
+        elif m.type == "ai":
+            contents.append({"role": "assistant", "parts": m.content})
+
+    # Final user question
+    contents.append({"role": "user", "parts": question})
+
+    return contents
+
+
+# def main_prompt(
+#     messages: list,
+#     documents: str,
+#     question: str,
+#     summary: str,
+#     search_queries_results: List[Dict[str, Any]],
+# ):
+#     """
+#     Builds the main prompt for the agent based on the current state.
+#     """
+
+#     messages_array = [
+#         SystemMessage(
+#             content=(
+#                 "You are a helpful assistant that answers questions based on the provided documents. "
+#                 # "Use the retrieved context to provide the most accurate, direct, and specific answer possible. "
+#                 "Use the retrieved context to give the best possible answer. "
+#                 "Extract and use as much relevant information as possible from the documents. "
+#                 "If the question is answerable using the provided documents, provide a direct, specific and detailed answer using relevant details."
+#                 "Only if the question truly cannot be answered using the documents and your own knowledge, then ask for clarification or suggest a web search or use summarizers accordingly. "
+#                 "Do not default to asking for clarification if relevant information is available in the context."
+#                 "\n\n"
+#                 "You also have access to these tools if needed:\n"
+#                 "- `answer`: Use this if you can directly answer the question.\n"
+#                 "- `web_search`: Use this if you need more recent or external information not available in the documents.\n"
+#                 "- `document_summarizer`: Use this if you need the summary of a specific document for answering the user's question. You must provide the `document_id`.\n"
+#                 "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question."
+#                 "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly."
+#             )
+#         ),
+#         MessagesPlaceholder(variable_name="messages"),
+#         SystemMessage(
+#             content=f"Here is the retrieved context according to the question:\n{documents}"
+#         ),
+#     ]
+#     if summary:
+#         messages_array.append(SystemMessage(content=f"This is the summary that the you asked for. Use this accordingly to answer the user's question: {summary}\n\n"))
+
+#     if search_queries_results:
+#         messages_array.append(
+#             SystemMessage(
+#                 content=f"Here are the web search queries results:\n{search_queries_results}"
+#             )
+#         )
+
+#     messages_array.append(HumanMessage(content=question))
+
+#     prompt = ChatPromptTemplate.from_messages(messages_array)
+#     return prompt.format_messages(
+#         messages=messages,
+#     )
 
 
 # def main_prompt(
