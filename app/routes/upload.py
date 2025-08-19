@@ -37,7 +37,7 @@ from core.services.upload_files import upload_files
 from core.models.document import Documents
 from core.summarizer import summarize_documents
 from core.word_cloud import create_stop_words
-
+from app.socket_handler import sio
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
@@ -62,10 +62,11 @@ async def upload_file(
         return {"error": "User not authenticated"}
 
     user_id = payload.userId
-
+    await sio.emit(f"{user_id}/progress", {"message": "request for upload received"})
     # Find user in DB
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
+        await sio.emit(f"{user_id}/progress", {"message": "User not found"})
         return {"error": "User not found"}
 
     print(f"User found: {user.get('name', 'Unknown')}")

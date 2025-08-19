@@ -11,6 +11,7 @@ from nltk.corpus import stopwords
 import nltk
 from core.constants import STOP_WORDS_EXTRACTION_LLM
 from core.models.document import Documents
+from app.socket_handler import sio
 
 nltk.download("stopwords")
 from core.llm.client import invoke_llm
@@ -40,7 +41,7 @@ async def generate_word_cloud(text: str, stop_words: list[str], max_words: int =
     plt.tight_layout(pad=0)
 
     buf = BytesIO()
-    fig.savefig(buf, format='png')
+    fig.savefig(buf, format="png")
     buf.seek(0)
     plt.close(fig)
     return buf
@@ -103,20 +104,37 @@ async def create_stop_words(parsed_data: Documents):
         f"data/{parsed_data.user_id}/threads/{parsed_data.thread_id}/stop_words"
     )
     os.makedirs(stop_words_dir, exist_ok=True)
-    for doc in parsed_data.documents:
-        doc_text = doc.full_text
-        doc_text = clean_text(doc_text)
-        stop_words = await get_stop_words_llm(doc_text)
-        save_dict = {
-            "user_id": parsed_data.user_id,
-            "thread_id": parsed_data.thread_id,
-            "document_id": doc.id,
-            "stop_words": stop_words,
-        }
-        with open(
-            f"{stop_words_dir}/{doc.file_name}_stop_words.json", "w", encoding="utf-8"
-        ) as f:
-            json.dump(save_dict, f)
+    import asyncio
+
+    documents = parsed_data.documents
+    batch_size = 3
+    for i in range(0, len(documents), batch_size):
+        batch_docs = documents[i : i + batch_size]
+
+        async def process_doc(doc):
+            doc_text = doc.full_text
+            doc_text = clean_text(doc_text)
+            await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Creating stop words for {doc.title}"})
+            stop_words = await get_stop_words_llm(doc_text)
+            save_dict = {
+                "user_id": parsed_data.user_id,
+                "thread_id": parsed_data.thread_id,
+                "document_id": doc.id,
+                "stop_words": stop_words,
+            }
+            with open(
+                f"{stop_words_dir}/{doc.file_name}_stop_words.json",
+                "w",
+                encoding="utf-8",
+            ) as f:
+                json.dump(save_dict, f)
+            await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Stop words creation for {doc.title} completed"})
+
+        # Run batch in parallel
+        await asyncio.gather(*(process_doc(doc) for doc in batch_docs))
+        print(
+            f"Processed batch {i//batch_size + 1}: docs {i+1} to {min(i+batch_size, len(documents))}"
+        )
     print(f"Stop words created and saved in {stop_words_dir}" * 10)
 
 
@@ -129,19 +147,34 @@ async def get_stop_words_llm(text: str) -> list[str]:
         batch_words = words[batch_idx * batch_size : (batch_idx + 1) * batch_size]
         batch_text = " ".join(batch_words)
         prompt = f"""
-    You are an expert in text processing and natural language processing.
-    Your task is to extract stop words from the given text.
+You are an expert in text processing and natural language processing.
+Your task is to identify stop words from the given text so they can be excluded when generating a word cloud.
 
-    <<<TEXT START>>>
-    {batch_text}
-    <<<TEXT END>>>
+<<<TEXT START>>>
+{batch_text}
+<<<TEXT END>>>
 
-    Your task:
-    1. Identify words that are uninformative or “stopword-like” in this context.
-    2. These include: common function words (like “the”, “and”, “is”), filler verbs (like “said”, “would”, “could”), dialogue markers, or generic academic terms (like “introduction”, “method”) depending on the genre of the text.
-    3. Do not include meaningful domain-specific words (e.g., character names, technical terms, or thematic keywords).
-            """
-        for i in range(3):
+Guidelines:
+1. Only identify words that are truly generic and carry little to no meaning on their own.
+2. These include:
+   - Function words (e.g., "the", "and", "or", "of", "to", "in", "for", "on").
+   - Auxiliary verbs and modal verbs (e.g., "is", "are", "was", "were", "be", "been", "being", 
+     "do", "does", "did", "can", "could", "would", "should", "shall", "will", "may", "might", "must").
+   - Basic pronouns (e.g., "I", "you", "he", "she", "it", "we", "they", "me", "him", "her", "them").
+   - Articles and determiners (e.g., "a", "an", "the", "this", "that", "these", "those").
+   - Very generic adverbs/adjectives with no contextual meaning (e.g., "very", "really", "just").
+   - Discourse fillers (e.g., "oh", "uh", "um", "well", "yes", "no", "okay").
+3. DO NOT include:
+   - Proper nouns (names of people, characters, places, organizations, mythological beings, etc.).
+   - Any noun, verb, or adjective that conveys concrete meaning (e.g., "city", "battle", "prophecy", "fire", "blue").
+   - Words that may be common but are thematically relevant in context.
+   - Technical or domain-specific terms.
+4. Err on the side of keeping words if unsure — only remove words that are universally considered stop words.
+5. Return only the list of identified stop words, with no explanation or extra formatting.
+"""
+
+
+        for i in range(4):
             try:
                 start_time = time.time()
                 response: StopWordOutput = await invoke_llm(
