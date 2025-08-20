@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+// import ReactMarkdown from 'react-markdown';
+// import remarkGfm from 'remark-gfm';
+import '../styles/markdown.css'; // Custom markdown styles
 
 export default function MessageBubble({ message }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -29,7 +32,7 @@ export default function MessageBubble({ message }) {
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} group`}>
-      <div className={`max-w-3xl ${isUser ? 'order-2' : 'order-1'}`}>
+      <div className={`w-full max-w-none sm:max-w-3xl ${isUser ? 'order-2' : 'order-1'}`}>
         <div className={`flex items-end gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${
             isUser 
@@ -39,15 +42,25 @@ export default function MessageBubble({ message }) {
             {isUser ? 'U' : 'AI'}
           </div>
           
-          <div className={`px-4 py-3 rounded-lg shadow-sm max-w-2xl ${
+          <div className={`px-4 py-3 rounded-lg shadow-sm w-full sm:max-w-2xl ${
             isUser 
               ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' 
               : 'bg-gray-100 border border-gray-200 text-gray-800'
           }`}>
-            <div className={`whitespace-pre-wrap leading-relaxed ${
+            <div className={`leading-relaxed ${
               isUser ? 'text-white' : 'text-gray-800'
             }`}>
-              {displayContent}
+              {isUser ? (
+                // For user messages, display as plain text with line breaks
+                <div className="whitespace-pre-wrap">
+                  {displayContent}
+                </div>
+              ) : (
+                // For AI messages, temporarily render as plain text
+                <div className="whitespace-pre-wrap">
+                  {displayContent}
+                </div>
+              )}
             </div>
             
             {isLongMessage && (

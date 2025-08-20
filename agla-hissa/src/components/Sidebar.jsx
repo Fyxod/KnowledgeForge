@@ -73,7 +73,7 @@ export default function Sidebar({ threads, selectedId, onSelect, userData, onCre
   };
 
   return (
-    <div className="w-80 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col h-full shadow-2xl">
+    <div className="w-80 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col min-h-0 shadow-2xl">
       <div className="p-6 border-b border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
