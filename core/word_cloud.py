@@ -8,12 +8,10 @@ from pydantic import Field, BaseModel
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from nltk.corpus import stopwords
-import nltk
 from core.constants import STOP_WORDS_EXTRACTION_LLM
 from core.models.document import Documents
 from app.socket_handler import sio
 
-nltk.download("stopwords")
 from core.llm.client import invoke_llm
 
 
