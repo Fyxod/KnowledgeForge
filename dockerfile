@@ -10,7 +10,6 @@ WORKDIR /backend
 COPY req.txt .
 RUN pip install --no-cache-dir -r req.txt
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
@@ -21,7 +20,6 @@ RUN apt-get update && apt-get install -y \
     nginx \
     && rm -rf /var/lib/apt/lists/*
 
-# Pre-download NLTK stopwords so workers don’t crash on boot
 RUN python -m nltk.downloader stopwords -d /usr/local/nltk_data
 ENV NLTK_DATA=/usr/local/nltk_data
 
