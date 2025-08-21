@@ -57,7 +57,7 @@ def summarize_documents_prompt(document: str):
             "role": "system",
             "parts": (
                 "You are a helpful assistant tasked with summarizing documents. "
-                "Write a comprehensive summary between 500-700 words. "
+                "Write a comprehensive summary between 300-700 words. "
                 "The summary should not exceed 700 words. "
                 "Do not skip over important details, even if they seem minor. "
                 "If the document contains multiple sections or themes, organize the summary accordingly. "
@@ -67,7 +67,7 @@ def summarize_documents_prompt(document: str):
         },
         {
             "role": "user",
-            "parts": f"Document to summarize:\n\n{document}\n\nSummary (500-700 words):"
+            "parts": f"Document to summarize:\n\n{document}\n\nSummary (300-700 words):"
         }
     ]
 

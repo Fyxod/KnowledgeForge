@@ -28,7 +28,7 @@ count = 0
 async def invoke_llm(model: str, response_schema, contents, remove_thinking=False):
     global count
 
-    for _ in range(len(API_KEYS) * 3):
+    for _ in range(len(API_KEYS) * 4):
         api_key = API_KEYS[count % len(API_KEYS)]
         client = genai.Client(api_key=api_key)
         count = (count + 1) % len(API_KEYS)
@@ -76,6 +76,6 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
         except Exception as e:
             print(f"LLM invocation failed with key {count}: {e}")
             count = (count + 1) % len(API_KEYS)
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)
 
     raise RuntimeError("All API keys exhausted or rate-limited.")
