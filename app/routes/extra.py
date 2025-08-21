@@ -22,17 +22,9 @@ class MindMapRequest(BaseModel):
 
 @router.post("/wordcloud")
 async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
-    print("=== WORD CLOUD ENDPOINT START ===")
-    print(f"Received payload: {body}")
-    print(f"Thread ID: {body.thread_id}")
-    print(f"Document IDs: {body.document_ids}")
-    print(f"Max words: {body.max_words}")
-
     payload = request.state.user
-    print(f"User payload: {payload}")
     
     if not payload:
-        print("ERROR: User not authenticated")
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     thread_id = body.thread_id
@@ -40,28 +32,17 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
     max_words = body.max_words or 1000
 
     user_id = payload.userId
-    print(f"User ID: {user_id}")
     
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
-        print("ERROR: User not found")
         raise HTTPException(status_code=404, detail="User not found")
-
-    print(f"User found: {user.get('username', 'Unknown')}")
 
     thread = user["threads"].get(thread_id)
     if not thread:
-        print(f"ERROR: Thread not found. Available threads: {list(user['threads'].keys())}")
         raise HTTPException(status_code=404, detail="Thread not found")
-
-    print(f"Thread found: {thread.get('thread_name', 'Unknown')}")
 
     parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
     stop_words_dir = f"data/{user_id}/threads/{thread_id}/stop_words"
-    print(f"Parsed directory: {parsed_dir}")
-    print(f"Stop words directory: {stop_words_dir}")
-    print(f"Parsed dir exists: {os.path.exists(parsed_dir)}")
-    print(f"Stop words dir exists: {os.path.exists(stop_words_dir)}")
     
     combined_text = ""
     combined_stop_words = set()
@@ -69,49 +50,32 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
     # Combine text from matching parsed files
     if os.path.exists(parsed_dir):
         files_in_dir = os.listdir(parsed_dir)
-        print(f"Files in parsed directory: {files_in_dir}")
         
         for file_name in files_in_dir:
-            print(f"Processing file: {file_name}")
             file_path = os.path.join(parsed_dir, file_name)
             
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    print(f"File data keys: {list(data.keys())}")
                     
                     # Get document_id from the file - try both 'id' and 'document_id' fields
                     file_document_id = data.get('id') or data.get('document_id')
-                    print(f"File document_id: {file_document_id}")
-                    print(f"Looking for document_ids: {body.document_ids}")
                     
                     # Check if this document_id is in our requested list
                     if file_document_id in body.document_ids:
-                        print(f"Match found: True")
                         text_content = data.get('full_text', '')
                         if text_content:
                             combined_text += text_content + " "
-                            print(f"Added text from {file_name}: {len(text_content)} characters")
-                        else:
-                            print(f"No full_text found in {file_name}")
-                    else:
-                        print(f"Match found: False")
-                        print(f"Document ID {file_document_id} not in requested IDs {body.document_ids}")
             except Exception as e:
-                print(f"Error processing file {file_name}: {e}")
                 continue
-    else:
-        print("Parsed directory does not exist")
 
     # Combine stop words from matching files
     if os.path.exists(stop_words_dir):
         files_in_stop_dir = os.listdir(stop_words_dir)
-        print(f"Files in stop words directory: {files_in_stop_dir}")
         
         for filename in files_in_stop_dir:
             if filename.endswith(".json"):
                 file_path = os.path.join(stop_words_dir, filename)
-                print(f"Processing stop words file: {filename}")
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
@@ -120,47 +84,24 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
                         file_doc_id = data.get("document_id")
                         if file_doc_id in document_ids:
                             sw = data.get("stop_words", [])
-                            print(f"Stop words from {filename}: {len(sw)} words")
                             combined_stop_words.update(sw)
                 except Exception as e:
-                    print(f"Error processing stop words file {filename}: {str(e)}")
                     continue
-    else:
-        print("Stop words directory does not exist")
-
-    print(f"Combined text length: {len(combined_text)} characters")
-    print(f"Combined text preview: {combined_text[:200]}...")
-    print(f"Combined stop words count: {len(combined_stop_words)}")
 
     if not combined_text.strip():
-        print("ERROR: No text found for the given document_ids")
         raise HTTPException(status_code=400, detail="No text found for the given document_ids")
 
     # Generate word cloud
     try:
-        print("=== STARTING WORD CLOUD GENERATION ===")
-        print(f"Calling generate_word_cloud with text length: {len(combined_text)}")
-        print(f"Stop words count: {len(combined_stop_words)}")
-        print(f"Max words: {max_words}")
-        
         img_bytes = await generate_word_cloud(
             combined_text, stop_words=list(combined_stop_words), max_words=max_words
         )
         
-        print(f"Word cloud generated successfully")
-        print(f"Image bytes type: {type(img_bytes)}")
-        print(f"Image bytes size: {len(img_bytes) if hasattr(img_bytes, '__len__') else 'Unknown'}")
-        
         from fastapi.responses import StreamingResponse
         
-        print("=== RETURNING STREAMING RESPONSE ===")
         return StreamingResponse(img_bytes, media_type="image/png")
         
     except Exception as e:
-        print(f"ERROR during word cloud generation: {str(e)}")
-        print(f"Error type: {type(e)}")
-        import traceback
-        print(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to generate word cloud: {str(e)}")
 
 

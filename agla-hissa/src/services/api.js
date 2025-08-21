@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
-// const API_BASE_URL = 'https://api.dev-ansh.xyz';
+// const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = 'https://api.dev-ansh.xyz';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -245,11 +245,6 @@ export const getMindMap = async (threadId, documentId, socketId = null) => {
 
 export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
   try {
-    console.log('=== WORD CLOUD API CALL START ===');
-    console.log('Thread ID:', threadId, typeof threadId);
-    console.log('Document IDs:', documentIds, Array.isArray(documentIds));
-    console.log('Max Words:', maxWords);
-    
     // Prepare the payload
     const payload = {
       thread_id: threadId,
@@ -257,31 +252,17 @@ export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
       max_words: maxWords
     };
     
-    console.log('=== REQUEST DETAILS ===');
-    console.log('URL:', `${API_BASE_URL}/extra/wordcloud`);
-    console.log('Method: POST');
-    console.log('Payload:', JSON.stringify(payload, null, 2));
-    
-    console.log('=== SENDING REQUEST ===');
     const response = await api.post('/extra/wordcloud', payload, {
       responseType: 'blob', // Important: This tells axios to expect binary data
       timeout: 30000 // 30 second timeout
     });
     
-    console.log('=== SUCCESS RESPONSE ===');
-    console.log('Status:', response.status);
-    console.log('Content Type:', response.headers['content-type']);
-    console.log('Response Size:', response.data.size, 'bytes');
-    
     // Check if response is actually an image
     const contentType = response.headers['content-type'];
     if (!contentType || !contentType.startsWith('image/')) {
-      console.warn('Response is not an image, content-type:', contentType);
-      
       // Try to read as text to see if it's an error message
       try {
         const errorText = await response.data.text();
-        console.error('Non-image response content:', errorText);
         throw new Error(errorText || 'Server returned non-image response');
       } catch (textError) {
         throw new Error('Server returned invalid response format');
@@ -290,7 +271,6 @@ export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
     
     // Convert blob to URL for display
     const imageUrl = URL.createObjectURL(response.data);
-    console.log('Created blob URL:', imageUrl);
     
     return {
       status: true,
@@ -298,34 +278,22 @@ export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
       blob: response.data
     };
   } catch (error) {
-    console.error('=== WORD CLOUD API ERROR ===');
-    console.error('Error Type:', error.constructor.name);
-    console.error('Error Message:', error.message);
-    
     if (error.response) {
-      console.error('Status:', error.response.status);
-      console.error('Status Text:', error.response.statusText);
-      console.error('Response Headers:', error.response.headers);
-      
       // Check if the error response is JSON (not a blob)
       const contentType = error.response.headers['content-type'];
-      console.error('Error Content-Type:', contentType);
       
       if (contentType && contentType.includes('application/json')) {
         // This is a JSON error response from FastAPI
-        console.error('JSON Error Response:', error.response.data);
         const errorMessage = error.response.data?.detail || error.response.data?.error || 'Unknown error from server';
         throw new Error(errorMessage);
       } else if (error.response.data instanceof Blob) {
         // This is a blob error response - try to read it
         try {
           const errorText = await error.response.data.text();
-          console.error('Blob Error Content:', errorText);
           
           // Try to parse as JSON for structured error
           try {
             const errorData = JSON.parse(errorText);
-            console.error('Parsed Error Data:', errorData);
             
             // Throw the specific error message from the backend
             const errorMessage = errorData.error || errorData.detail || errorText;
@@ -335,20 +303,15 @@ export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
             throw new Error(errorText);
           }
         } catch (readError) {
-          console.error('Could not read error response blob:', readError);
           throw new Error('Failed to generate word cloud - unknown error');
         }
       } else {
         // Handle other response types
-        console.error('Unknown Response Data Type:', typeof error.response.data);
-        console.error('Response Data:', error.response.data);
         throw new Error(error.response.data?.error || error.response.data?.detail || 'Failed to generate word cloud');
       }
     } else if (error.request) {
-      console.error('Network Error - No response received');
       throw new Error('Network error - please check your connection');
     } else {
-      console.error('Request Setup Error:', error.message);
       throw new Error('Failed to generate word cloud: ' + error.message);
     }
   }
