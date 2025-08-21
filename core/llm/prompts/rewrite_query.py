@@ -5,10 +5,6 @@ from langchain_core.prompts import (
 )
 
 def rewrite_query_prompt(recent_history: list, question: str):
-    """
-    Gemini-native version of the rewrite_query_prompt.
-    Converts LangChain-style prompt into Gemini contents format.
-    """
 
     contents = [
         {

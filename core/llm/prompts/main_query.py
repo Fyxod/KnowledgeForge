@@ -12,9 +12,6 @@ def main_prompt(
     summary: str,
     search_queries_results: List[Dict[str, Any]],
 ):
-    """
-    Builds the main prompt for the agent in Gemini format (contents list).
-    """
 
     contents = []
 

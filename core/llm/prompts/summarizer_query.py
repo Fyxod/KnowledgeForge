@@ -48,9 +48,6 @@ from langchain_core.prompts import (
 # )
 
 def summarize_documents_prompt(document: str):
-    """
-    Gemini-native version of summarize_documents_prompt.
-    """
 
     contents = [
         {
@@ -93,10 +90,6 @@ def summarize_documents_prompt(document: str):
 # )
 
 def global_summarization_prompt(summaries: str):
-    """
-    Gemini-native version of global_summarization_prompt.
-    """
-
     contents = [
         {
             "role": "system",
