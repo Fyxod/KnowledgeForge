@@ -2,6 +2,7 @@ import json
 import time
 import os
 import aiofiles
+import asyncio
 
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -23,43 +24,62 @@ async def generate(state: AgentState) -> AgentState:
     #         role = msg.__class__.__name__.replace("Message", "").upper()
     #         f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
-    start_time = time.time()
-    result: MainLLMOutput = await invoke_llm(QUERY_LLM, MainLLMOutput, prompt)
-    end_time = time.time()
-    print("LLM result: ", result)
-    print(f"LLM response time: {end_time - start_time:.2f} seconds")
-    with open("llm_result.json", "w", encoding="utf-8") as f:
-        json.dump(result.model_dump(), f, indent=4)
-    state.messages.append(HumanMessage(content=state.question))  # controversial
-    state.messages.append(AIMessage(content=result.answer))
-    state.messages.append(AIMessage("Action taken: " + result.action))
-    state.answer = result.answer
-    state.action = result.action
-    state.documents_used = result.documents_used or []
-    state.search_queries = result.web_search_queries or []
-    state.attempts += 1
-    state.document_id = result.document_id or None
-    return state
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            start_time = time.time()
+            result: MainLLMOutput = await invoke_llm(QUERY_LLM, MainLLMOutput, prompt)
+            end_time = time.time()
+            print("LLM result: ", result)
+            print(f"LLM response time: {end_time - start_time:.2f} seconds")
+            with open("llm_result.json", "w", encoding="utf-8") as f:
+                json.dump(result.model_dump(), f, indent=4)
+            state.messages.append(HumanMessage(content=state.question))  # controversial
+            state.messages.append(AIMessage(content=result.answer))
+            state.messages.append(AIMessage("Action taken: " + result.action))
+            state.answer = result.answer
+            state.action = result.action
+            state.documents_used = result.documents_used or []
+            state.search_queries = result.web_search_queries or []
+            state.attempts += 1
+            state.document_id = result.document_id or None
+            return state
+        except Exception as e:
+            print(f"Error in generate (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                state.answer = "An error occurred while generating the answer. Please try again later."
+                state.action = "FAILURE"
+                return state
+            await asyncio.sleep(1)  # brief pause before retry
 
 
 async def web_search(state: AgentState) -> AgentState:
     queries = state.search_queries
-
-    results = await parallel_search(queries, search_tool)
-    with open("web_search_results.json", "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=4)
-    state.web_search = True
-    state.documents = []
-    state.messages.append(
-        HumanMessage(content=f"Web search initiated for queries: {queries}")
-    )
-    
-    state.web_search_attempts += 1
-    state.search_queries_results = results
-
-    # state.messages.append(HumanMessage(content=f"Web search results: {results}"))
-
-    return state
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            results = await parallel_search(queries, search_tool)
+            with open("web_search_results.json", "w", encoding="utf-8") as f:
+                json.dump(results, f, indent=4)
+            state.web_search = True
+            state.documents = []
+            state.messages.append(
+                HumanMessage(content=f"Web search initiated for queries: {queries}")
+            )
+            state.web_search_attempts += 1
+            state.search_queries_results = results
+            # state.messages.append(HumanMessage(content=f"Web search results: {results}"))
+            return state
+        except Exception as e:
+            print(f"Error in web_search (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                state.web_search = False
+                state.search_queries_results = []
+                state.messages.append(
+                    AIMessage(content="Web search failed. Please try again later.")
+                )
+                return state
+            await asyncio.sleep(1)  # brief pause before retry
 
 
 async def failure(state: AgentState) -> AgentState:
@@ -80,28 +100,27 @@ async def rewrite_query(state: AgentState) -> AgentState:
     """
     Rewrites the user's question for semantic vector search.
     This function uses the most recent conversation turns to rewrite the question.
+    Retries up to three times in case of error.
     """
     prompt = build_rewrite_prompt(state)
-    # with open("rewrite_query.txt", "w", encoding="utf-8") as f:
-    #     for msg in prompt:
-    #         role = msg.__class__.__name__.replace("Message", "").upper()
-    #         f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
-
-    start_time = time.time()
-    result: REWRITELLMOutput = await invoke_llm(REWRITE_QUERY_LLM, REWRITELLMOutput, prompt)
-    end_time = time.time()
-    print(f"Rewrite LLM response time: {end_time - start_time:.2f} seconds")
-    rewritten_query = result.rewritten_query
-    with open("rewrite_result.json", "w", encoding="utf-8") as f:
-        json.dump(result.model_dump(), f, indent=4)
-    # state.messages.append(
-    #     HumanMessage(
-    #         content=f"Rewriting question for semantic search: {state.question}"
-    #     )
-    # )
-    # state.messages.append(HumanMessage(content=f"Rewritten query: {rewritten_query}"))
-    state.retrieval_query = rewritten_query
-    return state
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            start_time = time.time()
+            result: REWRITELLMOutput = await invoke_llm(REWRITE_QUERY_LLM, REWRITELLMOutput, prompt)
+            end_time = time.time()
+            print(f"Rewrite LLM response time: {end_time - start_time:.2f} seconds")
+            rewritten_query = result.rewritten_query or state.question
+            with open("rewrite_result.json", "w", encoding="utf-8") as f:
+                json.dump(result.model_dump(), f, indent=4)
+            state.retrieval_query = rewritten_query
+            return state
+        except Exception as e:
+            print(f"Error in rewrite_query (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                state.retrieval_query = state.question
+                return state
+            await asyncio.sleep(1)
 
 async def document_summarizer(state: AgentState) -> AgentState:
     document_id = state.document_id

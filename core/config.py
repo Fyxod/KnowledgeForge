@@ -12,6 +12,15 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY_2: str
     GOOGLE_API_KEY_3: str
     GOOGLE_API_KEY_4: str
+    GOOGLE_API_KEY_5: str
+    GOOGLE_API_KEY_6: str
+    GOOGLE_API_KEY_7: str
+    GOOGLE_API_KEY_8: str
+    GOOGLE_API_KEY_9: str
+    GOOGLE_API_KEY_10: str
+    GOOGLE_API_KEY_11: str
+    GOOGLE_API_KEY_12: str
+    GOOGLE_API_KEY_13: str
     LLM_URL: str
 
     class Config:

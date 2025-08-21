@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 import asyncio
 import fitz
+import time
 
 from PIL import Image
 import io
@@ -26,7 +27,7 @@ SUPPORTED_EXTENSIONS = {
 }
 
 async def extract_document(path, title="Untitled", file_name=None, user_id=None, thread_id=None):
-
+    start_time = time.time()
     file_path = path
     ext = Path(path).suffix.lower()
     name, _ = os.path.splitext(file_name)
@@ -35,18 +36,17 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
         raise ValueError(f"Unsupported file type: {ext}")
 
     if ext in IMAGE_EXTENSIONS:
-
         try:
             await sio.emit(f"{user_id}/progress", {"message": f"{title} is an image, extracting text..."})
             text = await image_parser(file_path)
-            # text = "DUMMY TEXT FOR IMAGE"
         except Exception as e:
             print(f"Error processing image {file_name}: {str(e)}")
-            await asyncio.sleep(3)
             return None
 
         doc_id = str(uuid.uuid4())
         await sio.emit(f"{user_id}/progress", {"message": f"processed {file_name} successfully"})
+        end_time = time.time()
+        print(f"Time taken to process {file_name} main image: {end_time - start_time} seconds")
         return Document(
             id=doc_id,
             type=ext[1:],
@@ -72,6 +72,9 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
     pages = []
     combined_texts = []
 
+    ocr_tasks = {}
+    placeholders = {}
+
     for page_number in range(len(doc)):
         page = doc.load_page(page_number)
         page_text = page.get_text()
@@ -93,23 +96,40 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
             image = Image.open(io.BytesIO(image_bytes))
 
             image_name = f"page{page_number + 1}_img{img_index + 1}.{image_ext}"
-            image_path = os.path.join(
-                image_dir, image_name
-            )
+            image_path = os.path.join(image_dir, image_name)
             image.save(image_path)
 
-            image_text = await image_parser(image_path)
-            page_text += f"\n\n[Image: {image_name}]\n{image_text}"  # Append image text to page text
-
+            # Insert placeholder
+            placeholder = f"{{PENDING_{image_name}}}"
+            page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
             image_names.append(image_name)
 
+            # Schedule OCR globally
+            ocr_tasks[placeholder] = asyncio.create_task(image_parser(image_path))
 
         combined_texts.append(page_text)
         pages.append(Page(number=page_number + 1, text=page_text, images=image_names))
 
-    doc_id = str(uuid.uuid4())
+    #await all OCR in parallel
+    for placeholder, task in ocr_tasks.items():
+        try:
+            image_text = await task
+        except Exception as e:
+            print(f"Error parsing image: {e}")
+            image_text = "[Image OCR failed]"
 
+        #Replace in all pages
+        for page in pages:
+            if placeholder in page.text:
+                page.text = page.text.replace(placeholder, image_text, 1)
+
+        #update combined text
+        combined_texts = [txt.replace(placeholder, image_text, 1) for txt in combined_texts]
+
+    doc_id = str(uuid.uuid4())
     await sio.emit(f"{user_id}/progress", {"message": f"Processing {title} successfully..."})
+    end_time = time.time()
+    print(f"Time taken to process {title} successfully: {end_time - start_time} seconds")
     return Document(
         id=doc_id,
         type=ext[1:],

@@ -18,7 +18,7 @@ parthenv
 data
 .json
 .pdf
-
+images/
 # Project specific files
 formatted_prompt.txt
 llm_result.json
