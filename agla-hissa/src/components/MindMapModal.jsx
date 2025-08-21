@@ -652,18 +652,6 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
                       Loading Mind Map
                     </h3>
                     
-                    <div className="mb-4">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
-                          style={{ width: `${progressInfo.progress}%` }}
-                        ></div>
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>{progressInfo.progress}%</span>
-                        <span>{progressInfo.status}</span>
-                      </div>
-                    </div>
                     
                     <p className="text-gray-600 text-sm">
                       {progressInfo.message || 'Searching for mind map...'}
@@ -693,16 +681,7 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
                       </div>
                     )}
                     
-                    {progressInfo.status === 'not_found' && (
-                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-xs text-blue-700">
-                          📄 Mind map not available for this document
-                        </p>
-                        <p className="text-xs text-blue-500 mt-1">
-                          Mind maps are generated during document processing
-                        </p>
-                      </div>
-                    )}
+                    
                     
                     {progressInfo.status === 'error' && (
                       <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -723,12 +702,7 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
                       </div>
                     )}
                     
-                    {socket?.connected && (
-                      <div className="mt-4 flex items-center justify-center text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-                        Real-time updates connected
-                      </div>
-                    )}
+                    
                   </div>
                 </div>
               </div>

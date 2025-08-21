@@ -143,7 +143,7 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
         if client_socket_id:
             await sio.emit("mindmap_progress", {
                 "status": "not_found",
-                "message": "Mind map not available. Generated during document processing.",
+                "message": " .",
                 "progress": 100
             }, to=client_socket_id)
         
