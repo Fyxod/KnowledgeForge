@@ -94,26 +94,28 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
             </div>
           </div>
         )}
-        <div className="flex-1 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="text-center max-w-sm sm:max-w-md mx-auto">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 sm:mb-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-            </div>
-            <h2 className="text-lg sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-4">
-              Welcome to Knowledge Synthesis Platform
-            </h2>
-            <p className="text-sm sm:text-lg text-gray-600 mb-4 sm:mb-6">
-              Click "New Chat" in the sidebar to start a conversation, or upload files below to create a document-based thread.
-            </p>
-            <div className="bg-white p-3 sm:p-4 rounded-lg shadow-md mb-4 sm:mb-6">
-              <p className="text-xs sm:text-sm text-gray-500">
-                <svg className="w-3 h-3 sm:w-4 sm:h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="min-h-full flex items-center justify-center">
+            <div className="text-center max-w-sm sm:max-w-md mx-auto my-8">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 sm:mb-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                Tip: Upload PDFs, images, or documents to get AI-powered insights
+              </div>
+              <h2 className="text-lg sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-4">
+                Welcome to Knowledge Synthesis Platform
+              </h2>
+              <p className="text-sm sm:text-lg text-gray-600 mb-4 sm:mb-6">
+                Click "New Chat" in the sidebar to start a conversation, or upload files below to create a document-based thread.
               </p>
+              <div className="bg-white p-3 sm:p-4 rounded-lg shadow-md mb-4 sm:mb-6">
+                <p className="text-xs sm:text-sm text-gray-500">
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Tip: Upload PDFs, images, or documents to get AI-powered insights
+                </p>
+              </div>
             </div>
           </div>
         </div>

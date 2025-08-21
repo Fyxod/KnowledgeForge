@@ -73,8 +73,8 @@ export default function Sidebar({ threads, selectedId, onSelect, userData, onCre
   };
 
   return (
-    <div className="w-80 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col min-h-0 shadow-2xl">
-      <div className="p-6 border-b border-gray-700">
+    <div className="w-80 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col min-h-0 shadow-2xl overflow-hidden">
+      <div className="p-6 border-b border-gray-700 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
             Chats
@@ -103,7 +103,7 @@ export default function Sidebar({ threads, selectedId, onSelect, userData, onCre
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {threads.length === 0 ? (
           <div className="text-center text-gray-400 mt-12">
             <div className="w-12 h-12 mx-auto mb-4 bg-gray-600 rounded-full flex items-center justify-center">
@@ -211,7 +211,7 @@ export default function Sidebar({ threads, selectedId, onSelect, userData, onCre
         )}
       </div>
 
-      <div className="p-6 border-t border-gray-700 bg-gray-900/50">
+      <div className="p-6 border-t border-gray-700 bg-gray-900/50 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
             {userData?.name?.charAt(0)?.toUpperCase() || 'U'}
