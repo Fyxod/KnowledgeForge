@@ -109,9 +109,6 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
 async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
 
     payload = request.state.user
-    
-    print(f"Received mind map request: {body}")
-    print(f"payload  {payload}")
 
     if not payload:
         return {"error": "User not authenticated"}
@@ -122,12 +119,7 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
     # Get client socket ID from headers (if provided)
     client_socket_id = request.headers.get("x-socket-id")
 
-    print(
-        f"Received mind map request for thread_id: {thread_id} and document_id: {document_id}"
-    )
-
     user_id = payload.userId
-    print(f"User ID from payload: {user_id}")
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
         return {"error": "User not found"}
@@ -216,12 +208,7 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
     thread_id = body.thread_id
     document_id = body.document_id
 
-    print(
-        f"Received summary request for thread_id: {thread_id} and document_id: {document_id}"
-    )
-
     user_id = payload.userId
-    print(f"User ID from payload: {user_id}")
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
         return {"error": "User not found"}
