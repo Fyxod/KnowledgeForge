@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import MindMapModal from './MindMapModal';
+import WordCloudModal from './WordCloudModal';
 
 export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, isSending, uploadingFiles = [] }) {
   const [isDraggingOverWindow, setIsDraggingOverWindow] = useState(false);
   const [showMindMap, setShowMindMap] = useState(false);
+  const [showWordCloud, setShowWordCloud] = useState(false);
   
   // Drag and drop handlers for the entire chat window (works even without thread)
   const handleWindowDragOver = (e) => {
@@ -207,6 +209,20 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
                 <span className="hidden sm:inline">Mind Map</span>
               </button>
             )}
+            
+            {/* Word Cloud Button */}
+            {thread.documents && thread.documents.length > 0 && (
+              <button
+                onClick={() => setShowWordCloud(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
+                title="Generate Word Cloud"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+                <span className="hidden sm:inline">Word Cloud</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -308,6 +324,14 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
         isOpen={showMindMap}
         onClose={() => setShowMindMap(false)}
         thread={thread}
+      />
+
+      {/* Word Cloud Modal */}
+      <WordCloudModal 
+        isOpen={showWordCloud}
+        onClose={() => setShowWordCloud(false)}
+        threadId={thread?.id}
+        availableDocuments={thread?.documents || []}
       />
     </div>
   );

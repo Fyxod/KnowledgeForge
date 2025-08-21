@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import SafeMarkdownRenderer from './SafeMarkdownRenderer';
 // import ReactMarkdown from 'react-markdown';
 // import remarkGfm from 'remark-gfm';
-import '../styles/markdown.css'; // Custom markdown styles
+// import '../styles/markdown.css'; // Temporarily commented out
 
 export default function MessageBubble({ message }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showCitationDropdown, setShowCitationDropdown] = useState(false);
+  const [markdownEnabled, setMarkdownEnabled] = useState(true); // Toggle for markdown
   
   if (!message || typeof message !== 'object') {
     console.warn('MessageBubble received invalid message:', message);
@@ -56,10 +58,11 @@ export default function MessageBubble({ message }) {
                   {displayContent}
                 </div>
               ) : (
-                // For AI messages, temporarily render as plain text
-                <div className="whitespace-pre-wrap">
-                  {displayContent}
-                </div>
+                // For AI messages, use safe markdown renderer
+                <SafeMarkdownRenderer 
+                  content={displayContent} 
+                  enableMarkdown={markdownEnabled}
+                />
               )}
             </div>
             
@@ -177,13 +180,28 @@ export default function MessageBubble({ message }) {
         <div className={`mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
           isUser ? 'text-right' : 'text-left'
         }`}>
-          <button
-            onClick={() => navigator.clipboard.writeText(content)}
-            className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-            title="Copy message"
-          >
-            Copy
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigator.clipboard.writeText(content)}
+              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+              title="Copy message"
+            >
+              Copy
+            </button>
+            {!isUser && (
+              <button
+                onClick={() => setMarkdownEnabled(!markdownEnabled)}
+                className={`text-xs px-2 py-1 rounded transition-colors ${
+                  markdownEnabled 
+                    ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                }`}
+                title={markdownEnabled ? 'Disable formatting' : 'Enable formatting'}
+              >
+                {markdownEnabled ? 'MD' : 'TXT'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
