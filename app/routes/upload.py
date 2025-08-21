@@ -116,10 +116,6 @@ async def upload_file(
     if not parsed_data.documents:
         return {"error": "No documents could be processed successfully"}
 
-    json_data = parsed_data.model_dump_json()
-    # Dump parsed data to a JSON file
-    with open(f"parsed_data_{thread_id}.json", "w", encoding="utf-8") as f:
-        f.write(json_data)
 
     # Build document objects for DB
     parsed_data_dict = parsed_data.model_dump()

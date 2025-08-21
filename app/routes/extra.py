@@ -1,3 +1,4 @@
+import aiofiles
 from fastapi import APIRouter, Body, Request, HTTPException
 import os
 import json
@@ -55,17 +56,17 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
             file_path = os.path.join(parsed_dir, file_name)
             
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    
-                    # Get document_id from the file - try both 'id' and 'document_id' fields
-                    file_document_id = data.get('id') or data.get('document_id')
-                    
-                    # Check if this document_id is in our requested list
-                    if file_document_id in body.document_ids:
-                        text_content = data.get('full_text', '')
-                        if text_content:
-                            combined_text += text_content + " "
+                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                data = json.loads(content)
+                # Get document_id from the file - try both 'id' and 'document_id' fields
+                file_document_id = data.get('id') or data.get('document_id')
+                
+                # Check if this document_id is in our requested list
+                if file_document_id in body.document_ids:
+                    text_content = data.get('full_text', '')
+                    if text_content:
+                        combined_text += text_content + " "
             except Exception as e:
                 continue
 
@@ -77,9 +78,9 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
             if filename.endswith(".json"):
                 file_path = os.path.join(stop_words_dir, filename)
                 try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    
+                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                        content = await f.read()
+                    data = json.loads(content)
                     if isinstance(data, dict):
                         file_doc_id = data.get("document_id")
                         if file_doc_id in document_ids:
@@ -170,8 +171,9 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
                         "progress": 80
                     }, to=client_socket_id)
                 
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                data = json.loads(content)
                 if isinstance(data, dict) and data.get("document_id") == document_id:
                     # Emit success
                     if client_socket_id:
@@ -225,8 +227,9 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
         if filename.endswith(".json"):
             file_path = os.path.join(parsed_dir, filename)
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                data = json.loads(content)
                 if isinstance(data, dict) and data.get("document_id") == document_id:
                     return {"status": True, "summary": data.get("summary")}
             except Exception as e:

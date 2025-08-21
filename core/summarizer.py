@@ -115,12 +115,12 @@ async def summarize_documents(parsed_data: Documents):
             document_dict = document.model_dump()
             document_dict["thread_id"] = parsed_data.thread_id
             document_dict["user_id"] = parsed_data.user_id
-            document_json = json.dumps(document_dict)
+            document_json = json.dumps(document_dict, ensure_ascii=False)
 
             name, _ = os.path.splitext(document.file_name)
             json_file_path = os.path.join(parsed_dir, f"{name}.json")
 
-            async with aiofiles.open(json_file_path, "w") as f:
+            async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
                 await f.write(document_json)
         print("before global summarizer")
         await global_summarizer(parsed_data.user_id, parsed_data.thread_id)
@@ -169,9 +169,10 @@ async def global_summarizer(user_id: str, thread_id: str):
             print(f"Parsed file {json_file_path} does not exist, skipping...")
             continue
 
-        async with aiofiles.open(json_file_path, "r") as f:
+        async with aiofiles.open(json_file_path, "r", encoding="utf-8") as f:
             content = await f.read()
         document_data = json.loads(content)
+        
         if document_data.get("summary"):
             summaries.append(
                 {"title": document_data["title"], "summary": document_data["summary"]}
@@ -200,8 +201,11 @@ async def global_summarizer(user_id: str, thread_id: str):
         print(f"Global summary completed: ")
         # save the global summary to a json file
         global_summary_path = os.path.join(save_dir, "global_summary.json")
-        async with aiofiles.open(global_summary_path, "w") as f:
-            await f.write(json.dumps(result.model_dump(), indent=2))
+
+        result_dict = result.model_dump()
+
+        async with aiofiles.open(global_summary_path, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(result_dict, indent=2, ensure_ascii=False))
         await sio.emit(f"{user_id}/{thread_id}/global", {"status": True})
 
     except Exception as e:

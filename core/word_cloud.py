@@ -4,8 +4,11 @@ import re
 import time
 from io import BytesIO
 from typing import List
+import aiofiles
 from pydantic import Field, BaseModel
 from wordcloud import WordCloud
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from nltk.corpus import stopwords
 from core.constants import STOP_WORDS_EXTRACTION_LLM
@@ -82,6 +85,12 @@ def clean_text(text: str) -> str:
         "conclusion",
         "method",
         "results",
+        "page",
+        "image",
+        "img",
+        "[",
+        "]",
+        "[]"
     }
     stop_words.update(custom_stopwords)
 
@@ -120,12 +129,10 @@ async def create_stop_words(parsed_data: Documents):
                 "document_id": doc.id,
                 "stop_words": stop_words,
             }
-            with open(
-                f"{stop_words_dir}/{doc.file_name}_stop_words.json",
-                "w",
-                encoding="utf-8",
-            ) as f:
-                json.dump(save_dict, f)
+            json_content = json.dumps(save_dict, ensure_ascii=False, indent=2)
+            async with aiofiles.open(f"{stop_words_dir}/{doc.file_name}_stop_words.json", "w", encoding="utf-8") as f:
+                await f.write(json_content)
+                
             await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Stop words creation for {doc.title} completed"})
 
         # Run batch in parallel
@@ -194,10 +201,5 @@ Guidelines:
                     i + 1,
                 )
                 continue
-    try:
-        with open("stop_words.json", "w", encoding="utf-8") as file:
-            json.dump(list(stopwords_set), file)
-            print(f"Stop words extracted and saved to stop_words.json")
-    except Exception as e:
-        print("Error saving stop words:", e)
+
     return list(stopwords_set)

@@ -46,13 +46,19 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
             end = time.time()
             print(response)
             print(f"Mind map generation took {end - start} seconds.")
-            with open("mind_map_output.json", "w") as f:
-                f.write(response.model_dump_json())
+
             print("mind map saved")
+
+            data_dict = response.model_dump()
+            json_content = json.dumps(data_dict, indent=2, ensure_ascii=False)
+            
             async with aiofiles.open(
-                f"{incomplete_mind_map_dir}/{document.file_name}_mind_map.json", "w"
+                f"{incomplete_mind_map_dir}/{document.file_name}_mind_map.json",
+                "w",
+                encoding="utf-8",
             ) as f:
-                await f.write(response.model_dump_json())
+                await f.write(json_content)
+
             print("entering description function")
             await sio.emit(
                 f"{user_id}/progress",
@@ -98,6 +104,7 @@ def load_document_from_json(path: str) -> Document:
 
 DESCRIPTION_PROCESSING_BATCH_SIZE = 4
 PARALLEL_LLM_CALLS = 3
+
 
 async def add_node_descriptions(
     mind_map: MindMapOutput,
@@ -202,13 +209,11 @@ async def add_node_descriptions(
 
     after_for = time.time()
     print("Total time taken:", after_for - before_for)
-    async with aiofiles.open("mind_map_output_with_descriptions.json", "w") as f:
-        await f.write(json.dumps(data, indent=2))
-    print("saved mind_map_output_with_descriptions.json")
+
     async with aiofiles.open(
-        f"{mind_map_dir}/{document.file_name}_mind_map.json", "w"
+        f"{mind_map_dir}/{document.file_name}_mind_map.json", "w", encoding="utf-8"
     ) as f:
-        await f.write(json.dumps(data, indent=2))
+        await f.write(json.dumps(data, indent=2, ensure_ascii=False))
 
     print("building proper mind map now")
     mind_map: MindMap = build_mindmap(data["output"], user_id, thread_id, document.id)
@@ -221,10 +226,15 @@ async def add_node_descriptions(
     await sio.emit(
         f"{user_id}/{thread_id}/mind_map", {"document_id": document.id, "status": True}
     )
+    data_dict = mind_map.model_dump()
+    json_content = json.dumps(data_dict, indent=2, ensure_ascii=False)
+
     async with aiofiles.open(
-        f"{proper_mind_map_dir}/{document.file_name}_mind_map.json", "w"
+        f"{proper_mind_map_dir}/{document.file_name}_mind_map.json",
+        "w",
+        encoding="utf-8",
     ) as f:
-        await f.write(json.dumps(mind_map.model_dump(), indent=2))
+        await f.write(json_content)
 
 
 def build_mind_maps_node_prompt(document: Document):
@@ -242,7 +252,7 @@ def build_mind_maps_node_prompt(document: Document):
         text = document.title
 
     return f"""
-Respond ONLY with a valid JSON array of nodes, no explanations.
+Respond ONLY with a valid JSON array of nodes(max_limit: 50), no explanations.
 You are to create a mind map node structure from the provided text. 
 The output must be in JSON with the following rules:
 - Each node must contain: id, title, and parent_id.
@@ -251,6 +261,7 @@ The output must be in JSON with the following rules:
 - parent_id: the id of the parent node, or null if it is a root node.
 - Preserve the logical hierarchy of concepts by linking nodes through parent_id.
 Text: {text}
+Do not exceed the max limit of 50 nodes.
 Respond ONLY with a valid JSON array of nodes, no explanations.
 
 """

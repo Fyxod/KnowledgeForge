@@ -1,6 +1,8 @@
 import asyncio
 import time
 import requests
+import aiofiles
+import httpx
 from PIL import Image
 import pytesseract
 from core.constants import IMAGE_PARSER_LLM
@@ -28,11 +30,16 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
         for attempt in range(1, retries + 1):
             try:
                 start = time.time()
-                with open(image_path, "rb") as f:
-                    files = {"file": f}
-                    params = {"model": MODEL}
-                    response = requests.post(URL, files=files, params=params)
 
+                async with aiofiles.open(image_path, "rb") as f:
+                    file_content = await f.read()
+
+                files = {"file": ("filename", file_content)}
+                params = {"model": MODEL}
+
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(URL, files=files, params=params)
+                
                 end = time.time()
                 print(f"[Gemma attempt {attempt}] Time taken: {end - start:.2f} seconds")
 

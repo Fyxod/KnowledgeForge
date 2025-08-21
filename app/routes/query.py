@@ -107,9 +107,7 @@ async def query(request: Request, body: QueryRequest):
         thread["chats"][-1]["documents_used"] = documents_used
     
     db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
-    #dump documents used to json file
-    with open(f"documents_used_{user_id}.json", "w", encoding="utf-8") as f:
-        json.dump(documents_used, f, indent=4)
+
 
     response = response.model_dump(exclude_none=True)
     response["documents_used"] = documents_used

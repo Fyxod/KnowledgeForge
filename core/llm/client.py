@@ -11,6 +11,7 @@ API_KEYS = [
     settings.GOOGLE_API_KEY_15,
     settings.GOOGLE_API_KEY_16,
     settings.GOOGLE_API_KEY_17,
+    settings.GOOGLE_API_KEY_18,
     settings.GOOGLE_API_KEY_1,
     settings.GOOGLE_API_KEY_2,
     settings.GOOGLE_API_KEY_3,
@@ -38,7 +39,6 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
         count = (count + 1) % len(API_KEYS)
         
         try:
-            print("before the llm")
 
             # config = {
             #     "response_mime_type": "application/json",
@@ -74,12 +74,11 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
             )
 
             print("raw response")
-            print(response)
             return response.parsed
 
         except Exception as e:
-            print(f"LLM invocation failed with key {count}: {e}")
+            print("ex")
             count = (count + 1) % len(API_KEYS)
             await asyncio.sleep(1)
 
-    raise RuntimeError("All API keys exhausted or rate-limited.")
+    raise RuntimeError("All gone")

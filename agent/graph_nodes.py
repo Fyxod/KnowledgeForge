@@ -19,10 +19,6 @@ from core.constants import QUERY_LLM, REWRITE_QUERY_LLM
 
 async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
-    # with open("formatted_prompt.txt", "w", encoding="utf-8") as f:
-    #     for msg in prompt:
-    #         role = msg.__class__.__name__.replace("Message", "").upper()
-    #         f.write(f"{role}:\n{msg.content}\n\n{'-'*40}\n\n")
 
     max_retries = 3
     for attempt in range(max_retries):
@@ -32,8 +28,6 @@ async def generate(state: AgentState) -> AgentState:
             end_time = time.time()
             print("LLM result: ", result)
             print(f"LLM response time: {end_time - start_time:.2f} seconds")
-            with open("llm_result.json", "w", encoding="utf-8") as f:
-                json.dump(result.model_dump(), f, indent=4)
             state.messages.append(HumanMessage(content=state.question))  # controversial
             state.messages.append(AIMessage(content=result.answer))
             state.messages.append(AIMessage("Action taken: " + result.action))
@@ -59,8 +53,6 @@ async def web_search(state: AgentState) -> AgentState:
     for attempt in range(max_retries):
         try:
             results = await parallel_search(queries, search_tool)
-            with open("web_search_results.json", "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=4)
             state.web_search = True
             state.documents = []
             state.messages.append(
@@ -111,8 +103,6 @@ async def rewrite_query(state: AgentState) -> AgentState:
             end_time = time.time()
             print(f"Rewrite LLM response time: {end_time - start_time:.2f} seconds")
             rewritten_query = result.rewritten_query or state.question
-            with open("rewrite_result.json", "w", encoding="utf-8") as f:
-                json.dump(result.model_dump(), f, indent=4)
             state.retrieval_query = rewritten_query
             return state
         except Exception as e:
@@ -152,7 +142,7 @@ async def document_summarizer(state: AgentState) -> AgentState:
                 print(f"Parsed file {json_file_path} does not exist, skipping...")
                 continue
             
-            async with aiofiles.open(json_file_path, "r") as f:
+            async with aiofiles.open(json_file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
             
             document_data = json.loads(content)
@@ -180,7 +170,7 @@ async def global_summarizer(state: AgentState) -> AgentState:
         state.after_summary = GENERATE
         return state
         
-    async with aiofiles.open(json_file_path, "r") as f:
+    async with aiofiles.open(json_file_path, "r", encoding="utf-8") as f:
         content = await f.read()
         
     global_summary_data = json.loads(content)
@@ -215,8 +205,6 @@ async def retriever(state: AgentState) -> AgentState:
         f"Retrieved {len(retrieved_docs)} documents in {end_time - start_time:.2f} seconds for user {state.user_id}"
     )
     retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
-    with open(f"retrieved_docs_{state.user_id}.json", "w", encoding="utf-8") as f:
-        json.dump(retrieved_docs, f)
     state.documents = retrieved_docs
     return state
 

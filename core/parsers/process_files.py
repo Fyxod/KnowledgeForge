@@ -48,12 +48,12 @@ async def process_files(
         parsed_dict = parsed_data.model_dump()
         parsed_dict["thread_id"] = thread_id
         parsed_dict["user_id"] = user_id
-        parsed_json = json.dumps(parsed_dict)
+        parsed_json = json.dumps(parsed_dict, indent=2, ensure_ascii=False)
 
         name, _ = os.path.splitext(file_data["file_name"])
         json_file_path = os.path.join(parsed_dir, f"{name}.json")
 
-        async with aiofiles.open(json_file_path, "w") as f:
+        async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
             await f.write(parsed_json)
 
         return parsed_data
