@@ -20,11 +20,13 @@ from core.constants import QUERY_LLM, REWRITE_QUERY_LLM
 async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
 
-    max_retries = 3
+    max_retries = 8
     for attempt in range(max_retries):
         try:
             start_time = time.time()
-            result: MainLLMOutput = await invoke_llm(QUERY_LLM, MainLLMOutput, prompt)
+            result: MainLLMOutput = await invoke_llm(QUERY_LLM, MainLLMOutput, prompt, 
+                                                    #  remove_thinking=True
+                                                     )
             end_time = time.time()
             print("LLM result: ", result)
             print(f"LLM response time: {end_time - start_time:.2f} seconds")

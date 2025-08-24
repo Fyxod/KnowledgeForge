@@ -71,6 +71,8 @@ def main_prompt(
 
     # Final user question
     contents.append({"role": "user", "parts": question})
+    # ask to return correct json
+    contents.append({"role": "user", "parts": "Please return the response in the correct JSON format."})
 
     return contents
 
