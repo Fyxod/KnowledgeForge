@@ -75,7 +75,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
   if (!thread) {
     return (
       <div 
-        className="flex-1 flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100 relative min-h-0"
+        className="flex-1 flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100 relative h-full"
         onDragEnter={handleWindowDragEnter}
         onDragOver={handleWindowDragOver}
         onDragLeave={handleWindowDragLeave}
@@ -94,7 +94,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
             </div>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
           <div className="min-h-full flex items-center justify-center">
             <div className="text-center max-w-sm sm:max-w-md mx-auto my-8">
               <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 sm:mb-6 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -155,7 +155,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
 
   return (
     <div 
-      className="flex-1 flex flex-col bg-white relative min-h-0"
+      className="flex-1 flex flex-col bg-white relative h-full"
       onDragEnter={handleWindowDragEnter}
       onDragOver={handleWindowDragOver}
       onDragLeave={handleWindowDragLeave}
@@ -176,7 +176,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
       )}
       
       <div 
-        className="p-4 border-b bg-white shadow-sm"
+        className="p-4 border-b bg-white shadow-sm flex-shrink-0"
         onDragEnter={handleWindowDragEnter}
         onDragOver={handleWindowDragOver}
         onDragLeave={handleWindowDragLeave}
@@ -230,7 +230,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
       </div>
 
       <div 
-        className="flex-1 overflow-y-auto bg-white min-h-0"
+        className="flex-1 overflow-y-auto overflow-x-hidden bg-white"
         onDragEnter={handleWindowDragEnter}
         onDragOver={handleWindowDragOver}
         onDragLeave={handleWindowDragLeave}
@@ -311,7 +311,7 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
         </div>
       </div>
 
-      <div className="border-t bg-white">
+      <div className="border-t bg-white flex-shrink-0">
         <ChatInput 
           onSend={onSend} 
           onFileUpload={onFileUpload}

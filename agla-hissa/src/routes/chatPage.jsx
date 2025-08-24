@@ -182,8 +182,8 @@ export default function ChatPage({ userData, setUserData }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <div className="flex-1 flex min-h-0">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      <div className="flex-1 flex overflow-hidden">
       {error && (
         <div className="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
           <div className="flex items-center justify-between">
