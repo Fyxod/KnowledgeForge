@@ -2,6 +2,7 @@ import asyncio
 import os
 import json
 import aiofiles
+import datetime
 from typing import List
 from core.llm.client import invoke_llm
 from core.models.document import Documents
@@ -47,12 +48,20 @@ async def summarize_documents(parsed_data: Documents):
         prompt = build_summarizer_prompt(document)
         start_time = time.time()
         try:
-            await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Summarizing {document.title}"})
+            await sio.emit(
+                f"{parsed_data.user_id}/progress",
+                {"message": f"Summarizing {document.title}"},
+            )
 
             result: SummarizerLLMOutputSingle | None = None
             for attempt in range(5):  # max 5 attempts
                 try:
-                    await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Attempt {attempt + 1} of summarizing {document.title}"})
+                    await sio.emit(
+                        f"{parsed_data.user_id}/progress",
+                        {
+                            "message": f"Attempt {attempt + 1} of summarizing {document.title}"
+                        },
+                    )
 
                     result = await invoke_llm(
                         SUMMARIZER_LLM, SummarizerLLMOutputSingle, prompt
@@ -70,7 +79,10 @@ async def summarize_documents(parsed_data: Documents):
 
             end_time = time.time()
             if result:
-                await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Summary completed for {document.title}"})
+                await sio.emit(
+                    f"{parsed_data.user_id}/progress",
+                    {"message": f"Summary completed for {document.title}"},
+                )
                 print(f"Summary completed for document {i}")
                 print(f"LLM response time: {end_time - start_time:.2f} seconds")
                 print(f"Completed document {i} in {end_time - start_time:.2f} seconds")
@@ -172,7 +184,7 @@ async def global_summarizer(user_id: str, thread_id: str):
         async with aiofiles.open(json_file_path, "r", encoding="utf-8") as f:
             content = await f.read()
         document_data = json.loads(content)
-        
+
         if document_data.get("summary"):
             summaries.append(
                 {"title": document_data["title"], "summary": document_data["summary"]}
@@ -208,5 +220,23 @@ async def global_summarizer(user_id: str, thread_id: str):
             await f.write(json.dumps(result_dict, indent=2, ensure_ascii=False))
         await sio.emit(f"{user_id}/{thread_id}/global", {"status": True})
 
+        if result.title:
+            await updateThread(user_id, thread_id, result.title)
+
     except Exception as e:
         print(f"Error during global summarization: {e}")
+
+
+async def updateThread(user_id: str, thread_id: str, updated_title: str):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    db.users.update_one(
+        {"userId": user_id},
+        {
+            "$set": {
+                f"threads.{thread_id}.thread_name": updated_title,
+                f"threads.{thread_id}.updatedAt": now
+            }
+        }
+    )
+    await sio.emit(f"{user_id}/{thread_id}/thread_update", {"newTitle": updated_title})
+    print("sent updated title")

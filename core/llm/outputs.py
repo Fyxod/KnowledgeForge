@@ -49,6 +49,9 @@ class SummarizerLLMOutput(BaseModel):
 
 
 class GlobalSummarizerLLMOutput(BaseModel):
+    title: str = Field(
+        description="A concise and descriptive title for the collection of documents."
+    )
     summary: str = Field(
         description="The global summary of all provided document summaries."
     )
