@@ -228,6 +228,7 @@ async def global_summarizer(user_id: str, thread_id: str):
 
 
 async def updateThread(user_id: str, thread_id: str, updated_title: str):
+    print(f"[WebSocket] Updating thread: user_id={user_id}, thread_id={thread_id}, title={updated_title}")
     now = datetime.datetime.now(datetime.timezone.utc)
     db.users.update_one(
         {"userId": user_id},
@@ -238,5 +239,13 @@ async def updateThread(user_id: str, thread_id: str, updated_title: str):
             }
         }
     )
-    await sio.emit(f"{user_id}/{thread_id}/thread_update", {"newTitle": updated_title})
-    print("sent updated title")
+    
+    event_name = f"{user_id}/{thread_id}/thread_update"
+    event_data = {
+        "threadId": thread_id,
+        "newTitle": updated_title
+    }
+    print(f"[WebSocket] Emitting event: {event_name} with data: {event_data}")
+    
+    await sio.emit(event_name, event_data)
+    print(f"[WebSocket] Event emitted successfully!")
