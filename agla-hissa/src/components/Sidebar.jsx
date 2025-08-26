@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 
-export default function Sidebar({ threads, selectedId, onSelect, userData, onCreateThread, onUpdateThreadName }) {
+export default function Sidebar({ 
+  threads, 
+  selectedId, 
+  onSelect, 
+  userData, 
+  onCreateThread, 
+  onUpdateThreadName,
+  connectionStatus = 'disconnected',
+  isConnected = false 
+}) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingThreadId, setEditingThreadId] = useState(null);
   const [editingName, setEditingName] = useState('');
@@ -79,7 +88,18 @@ export default function Sidebar({ threads, selectedId, onSelect, userData, onCre
           <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
             Chats
           </h1>
-          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          <div className="flex items-center gap-2">
+            {/* WebSocket Connection Status */}
+            <div 
+              className={`w-2 h-2 rounded-full ${
+                isConnected ? 'bg-green-400 animate-pulse' : 
+                connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
+                connectionStatus === 'error' ? 'bg-red-400' :
+                'bg-gray-500'
+              }`}
+              title={`WebSocket: ${connectionStatus}`}
+            ></div>
+          </div>
         </div>
         <div className="space-y-3">
           <button

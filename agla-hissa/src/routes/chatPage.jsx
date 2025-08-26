@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import ChatWindow from '../components/ChatWindow';
 import { uploadFiles, sendQuery, getUser, createEmptyThread, updateThreadName } from '../services/api';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function ChatPage({ userData, setUserData }) {
   const [selectedThreadId, setSelectedThreadId] = useState(null);
@@ -11,6 +12,12 @@ export default function ChatPage({ userData, setUserData }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState([]);
+
+  // WebSocket for thread name updates
+  const { isConnected, connectionStatus, subscribeToThreadUpdates } = useWebSocket(
+    userData?.userId, 
+    !!userData?.userId // Enable only when user is available
+  );
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -35,6 +42,37 @@ export default function ChatPage({ userData, setUserData }) {
 
     loadUserData();
   }, [userData?.userId, setUserData]);
+
+  // WebSocket effect for thread name updates
+  useEffect(() => {
+    if (!isConnected || !userData?.userId) {
+      return;
+    }
+
+    console.log('[WebSocket] Setting up thread update subscription');
+
+    const unsubscribe = subscribeToThreadUpdates((data) => {
+      console.log('[WebSocket] Received thread update:', data);
+      
+      if (data.threadId && data.newTitle) {
+        // Update the specific thread in the threads list
+        setThreads(prevThreads => 
+          prevThreads.map(thread => 
+            thread.id === data.threadId 
+              ? { ...thread, thread_name: data.newTitle, updatedAt: new Date().toISOString() }
+              : thread
+          )
+        );
+        
+        console.log(`[WebSocket] Updated thread ${data.threadId} name to: ${data.newTitle}`);
+      }
+    });
+
+    return () => {
+      console.log('[WebSocket] Cleaning up thread update subscription');
+      unsubscribe();
+    };
+  }, [isConnected, userData?.userId, subscribeToThreadUpdates]);
 
   const refreshUserData = async () => {
     try {
@@ -205,6 +243,8 @@ export default function ChatPage({ userData, setUserData }) {
         userData={userData}
         onCreateThread={handleCreateThread}
         onUpdateThreadName={handleUpdateThreadName}
+        connectionStatus={connectionStatus}
+        isConnected={isConnected}
       />
       
       <ChatWindow 

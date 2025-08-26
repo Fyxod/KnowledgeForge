@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getMindMap } from '../services/api';
+import { API_BASE_URL } from '../url';
 import {
   ReactFlow,
   MiniMap,
@@ -129,7 +130,7 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
   // Initialize Socket.IO connection
   useEffect(() => {
     if (isOpen) {
-      const newSocket = io('http://127.0.0.1:8000');
+      const newSocket = io(API_BASE_URL);
       
       newSocket.on('connect', () => {
         setSocket(newSocket);
