@@ -10,7 +10,6 @@ from PIL import Image
 import io
 
 from app.socket_handler import sio
-from kreuzberg import extract_file, ExtractionResult
 from app.socket_handler import sio
 from core.parsers.image import image_parser
 from core.models.document import Document, Page
@@ -55,17 +54,6 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
             title=title,
             full_text=text
         )
-
-    try:
-        await sio.emit(f"{user_id}/progress", {"message": f"{file_name} is a document, extracting text..."})
-        result: ExtractionResult = await extract_file(file_path)
-    except Exception as e:
-        print(f"Error extracting file {file_name}: {str(e)}")
-        traceback.print_exc()
-        return None
-
-    if result.content is None:
-        result.content = ""
 
     doc = fitz.open(file_path)
 
