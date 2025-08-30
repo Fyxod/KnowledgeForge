@@ -17,6 +17,7 @@ from core.llm.prompts.summarizer_query import (
 import time
 from app.socket_handler import sio
 from core.mind_map import create_mind_map
+from core.mind_map_global import create_mind_map_global
 from core.database import db
 from core.constants import SUMMARIZER_LLM
 
@@ -135,6 +136,7 @@ async def summarize_documents(parsed_data: Documents):
             async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
                 await f.write(document_json)
         print("before global summarizer")
+        asyncio.create_task(create_mind_map_global(parsed_data))
         await global_summarizer(parsed_data.user_id, parsed_data.thread_id)
 
     except Exception as e:

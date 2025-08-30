@@ -93,3 +93,9 @@ class MindMap(BaseModel):
     thread_id: str
     document_id: str
     roots: List[Node]
+
+
+class GlobalMindMap(BaseModel):
+    user_id: str
+    thread_id: str
+    roots: List[Node]

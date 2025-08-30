@@ -20,6 +20,10 @@ class MindMapRequest(BaseModel):
     thread_id: str
     document_id: str
 
+class GlobalMindMapRequest(BaseModel):
+    thread_id: str
+    document_id: str
+
 
 @router.post("/wordcloud")
 async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
@@ -144,7 +148,7 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
         if client_socket_id:
             await sio.emit("mindmap_progress", {
                 "status": "not_found",
-                "message": " .",
+                "message": "Mind map not available.",
                 "progress": 100
             }, to=client_socket_id)
         
@@ -186,6 +190,96 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
                     return {"status": True, "mind_map": data}
             except Exception as e:
                 continue
+
+    # Mind map not found in any file
+    if client_socket_id:
+        await sio.emit("mindmap_progress", {
+            "status": "not_found",
+            "message": "Mind map not available for this document",
+            "progress": 100
+        }, to=client_socket_id)
+    
+    # Return success status with not_found indicator to avoid API error handling
+    return {"status": True, "not_found": True, "message": "No mind map found for the given document_id"}
+
+
+@router.post("/mindmap/global")
+async def get_mind_map(request: Request, body: GlobalMindMapRequest = Body(...)):
+
+    payload = request.state.user
+
+    if not payload:
+        return {"error": "User not authenticated"}
+
+    thread_id = body.thread_id
+    
+    # Get client socket ID from headers (if provided)
+    client_socket_id = request.headers.get("x-socket-id")
+
+    user_id = payload.userId
+    user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
+    if not user:
+        return {"error": "User not found"}
+
+    thread = user["threads"].get(thread_id)
+    if not thread:
+        return {"error": "Thread not found"}
+
+    mind_map_dir = f"data/{user_id}/threads/{thread_id}/mind_maps"
+    
+    # Emit progress update - Starting search
+    if client_socket_id:
+        await sio.emit("mindmap_progress", {
+            "status": "searching",
+            "message": "Searching for existing mind map...",
+            "progress": 20
+        }, to=client_socket_id)
+    
+    if not os.path.exists(mind_map_dir):
+        # Emit progress update - No directory, mind map not generated yet
+        if client_socket_id:
+            await sio.emit("mindmap_progress", {
+                "status": "not_found",
+                "message": "GLOBAL Mind map not available.",
+                "progress": 100
+            }, to=client_socket_id)
+        
+        # Return success status with not_found indicator to avoid API error handling
+        return {"status": True, "not_found": True, "message": "Global Mind Map not found"}
+
+    # Emit progress update - Checking files
+    if client_socket_id:
+        await sio.emit("mindmap_progress", {
+            "status": "checking",
+            "message": "Checking available mind maps...",
+            "progress": 50
+        }, to=client_socket_id)
+
+    name = f"{user_id}_{thread_id}_global_mind_map.json"
+    file_path = os.path.join(mind_map_dir, name)
+    if os.path.exists(file_path):
+        try:
+            # Emit progress update - Loading file
+            if client_socket_id:
+                await sio.emit("mindmap_progress", {
+                    "status": "loading",
+                    "message": f"Loading global mind map...",
+                    "progress": 80
+                }, to=client_socket_id)
+
+            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                content = await f.read()
+            data = json.loads(content)
+            # Emit success
+            if client_socket_id:
+                await sio.emit("mindmap_progress", {
+                    "status": "success",
+                    "message": "Global mind map loaded successfully!",
+                    "progress": 100
+                }, to=client_socket_id)
+            return {"status": True, "mind_map": data}
+        except Exception as e:
+            pass
 
     # Mind map not found in any file
     if client_socket_id:

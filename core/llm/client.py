@@ -7,6 +7,19 @@ import sys
 sys.setrecursionlimit(5000)
 
 API_KEYS = [
+    settings.GOOGLE_API_KEY_1,
+    settings.GOOGLE_API_KEY_2,
+    settings.GOOGLE_API_KEY_3,
+    settings.GOOGLE_API_KEY_4,
+    settings.GOOGLE_API_KEY_5,
+    settings.GOOGLE_API_KEY_6,
+    settings.GOOGLE_API_KEY_7,
+    settings.GOOGLE_API_KEY_8,
+    settings.GOOGLE_API_KEY_9,
+    settings.GOOGLE_API_KEY_10,
+    settings.GOOGLE_API_KEY_11,
+    settings.GOOGLE_API_KEY_12,
+    settings.GOOGLE_API_KEY_13,
     settings.GOOGLE_API_KEY_14,
     settings.GOOGLE_API_KEY_15,
     settings.GOOGLE_API_KEY_16,
@@ -22,19 +35,15 @@ API_KEYS = [
     settings.GOOGLE_API_KEY_26,
     settings.GOOGLE_API_KEY_27,
     settings.GOOGLE_API_KEY_28,
-    settings.GOOGLE_API_KEY_1,
-    settings.GOOGLE_API_KEY_2,
-    settings.GOOGLE_API_KEY_3,
-    settings.GOOGLE_API_KEY_4,
-    settings.GOOGLE_API_KEY_5,
-    settings.GOOGLE_API_KEY_6,
-    settings.GOOGLE_API_KEY_7,
-    settings.GOOGLE_API_KEY_8,
-    settings.GOOGLE_API_KEY_9,
-    settings.GOOGLE_API_KEY_10,
-    settings.GOOGLE_API_KEY_11,
-    settings.GOOGLE_API_KEY_12,
-    settings.GOOGLE_API_KEY_13
+    settings.GOOGLE_API_KEY_29,
+    settings.GOOGLE_API_KEY_30,
+    settings.GOOGLE_API_KEY_31,
+    settings.GOOGLE_API_KEY_32,
+    settings.GOOGLE_API_KEY_33,
+    settings.GOOGLE_API_KEY_34,
+    settings.GOOGLE_API_KEY_35,
+    settings.GOOGLE_API_KEY_36,
+    settings.GOOGLE_API_KEY_37,
 ]
 
 count = 0
@@ -89,6 +98,6 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
         except Exception as e:
             print("ex")
             count = (count + 1) % len(API_KEYS)
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.1)
 
     raise RuntimeError("All gone")
