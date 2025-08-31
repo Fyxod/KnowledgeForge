@@ -3,6 +3,7 @@ from google import genai
 from openai import AsyncOpenAI
 import asyncio
 import sys
+import asyncio.exceptions
 
 sys.setrecursionlimit(5000)
 
@@ -67,9 +68,9 @@ count = 0
 
 async def invoke_llm(model: str, response_schema, contents, remove_thinking=False):
     global count
-    
+
     for pass_num in range(4):
-        # Try Gemini via Google GenAI keys
+
         for _ in range(len(API_KEYS)):
             api_key = API_KEYS[count % len(API_KEYS)]
             client = genai.Client(api_key=api_key)
@@ -94,20 +95,27 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
                         max_output_tokens=200000,
                     )
 
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model=model,
-                    contents=str(contents),
-                    config=config,
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.models.generate_content,
+                        model=model,
+                        contents=str(contents),
+                        config=config,
+                    ),
+                    timeout=45,
                 )
                 print("raw response")
                 return response.parsed
+
+            except asyncio.TimeoutError:
+                print("timeout, switching to fall")
+                break
 
             except Exception as e:
                 print("ex")
                 await asyncio.sleep(0.1)
 
-        
+
         try:
             print("falling main")
             response = await openai_client.chat.completions.create(
@@ -122,7 +130,7 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
                 },
                 temperature=0.2,
             )
-            
+
             raw_json = response.choices[0].message.content
 
             structured = response_schema.model_validate_json(raw_json)
