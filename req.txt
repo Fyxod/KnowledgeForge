@@ -53,6 +53,7 @@ idna==3.10
 importlib_metadata==8.7.0
 importlib_resources==6.5.2
 Jinja2==3.1.6
+jiter==0.10.0
 joblib==1.5.1
 jsonpatch==1.33
 jsonpointer==3.0.0
@@ -105,6 +106,7 @@ nvidia-nvjitlink-cu12==12.6.85
 nvidia-nvtx-cu12==12.6.77
 oauthlib==3.3.1
 onnxruntime==1.22.0
+openai==1.102.0
 opentelemetry-api==1.35.0
 opentelemetry-exporter-otlp-proto-common==1.35.0
 opentelemetry-exporter-otlp-proto-grpc==1.35.0
