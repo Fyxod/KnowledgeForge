@@ -256,12 +256,12 @@ The output must be in JSON with the following rules:
 Text: {final_text}
 Do not exceed the max limit of 70 nodes.
 Cover each document really well in detail.
+Try to keep only 1 root node if possible
 Respond ONLY with a valid JSON array of nodes, no explanations.
 
 """
 
 
-# - Try to keep only 1 root node
 
 
 def build_mind_maps_description_prompt(nodes, relevant_texts):

@@ -61,45 +61,15 @@ async def image_parser(image_path: str) -> str:
                 print(f"[VISION attempt {attempt}] Time taken: {end - start:.2f} seconds")
 
                 if response.choices and response.choices[0].message.content:
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    #REMOVE THIS
-                    print("printing vision model response")
-                    print(response.choices[0].message.content)
                     return response.choices[0].message.content
                 
                 print(f"[VISION attempt {attempt}] Failed: Empty response from API.")
 
             except Exception as e:
-                print(f"[VISION attempt {attempt}] Exception: {e}")
+                print(f"[VISION attempt {attempt}] failed")
 
             if attempt < retries:
-                await asyncio.sleep(1) # Wait before retrying
+                await asyncio.sleep(0.1) # Wait before retrying
 
         return None
 
@@ -133,7 +103,7 @@ async def image_parser(image_path: str) -> str:
                 print(f"[Gemma attempt {attempt}] Exception: {e}")
 
             if attempt < retries:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
 
         return None
 

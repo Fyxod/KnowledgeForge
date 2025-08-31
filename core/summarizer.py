@@ -89,16 +89,16 @@ async def summarize_documents(parsed_data: Documents):
                 print(f"Completed document {i} in {end_time - start_time:.2f} seconds")
 
                 document.summary = result.summary
-                print("Entering mind map creation ", i)
-                asyncio.create_task(
-                    create_mind_map(
-                        document, parsed_data.user_id, parsed_data.thread_id
-                    )
-                )
-                await sio.emit(
-                    f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
-                    {"document_id": document.id, "status": True},
-                )
+                # print("Entering mind map creation ", i)
+                # asyncio.create_task(
+                #     create_mind_map(
+                #         document, parsed_data.user_id, parsed_data.thread_id
+                #     )
+                # )
+                # await sio.emit(
+                #     f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
+                #     {"document_id": document.id, "status": True},
+                # )
             else:
                 print(f"Document {i}: Failed to get valid summary after retries.")
                 await asyncio.sleep(2)  # wait 2 seconds before retry

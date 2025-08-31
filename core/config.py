@@ -49,6 +49,17 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY_39: str
     GOOGLE_API_KEY_40: str
     GOOGLE_API_KEY_41: str
+    GOOGLE_API_KEY_42: str
+    GOOGLE_API_KEY_43: str
+    GOOGLE_API_KEY_44: str
+    GOOGLE_API_KEY_45: str
+    GOOGLE_API_KEY_46: str
+    GOOGLE_API_KEY_47: str
+    GOOGLE_API_KEY_48: str
+    GOOGLE_API_KEY_49: str
+    GOOGLE_API_KEY_50: str
+    GOOGLE_API_KEY_51: str
+    GOOGLE_API_KEY_52: str
     VISION_API: str
     LLM_URL: str
 
