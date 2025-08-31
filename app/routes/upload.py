@@ -28,7 +28,7 @@ import uuid
 import asyncio
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, Request, UploadFile, BackgroundTasks
+from fastapi import APIRouter, File, Form, Request, UploadFile
 
 from core.database import db
 from core.embeddings.vectorstore import save_documents_to_store

@@ -36,6 +36,31 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY_26: str
     GOOGLE_API_KEY_27: str
     GOOGLE_API_KEY_28: str
+    GOOGLE_API_KEY_29: str
+    GOOGLE_API_KEY_30: str
+    GOOGLE_API_KEY_31: str
+    GOOGLE_API_KEY_32: str
+    GOOGLE_API_KEY_33: str
+    GOOGLE_API_KEY_34: str
+    GOOGLE_API_KEY_35: str
+    GOOGLE_API_KEY_36: str
+    GOOGLE_API_KEY_37: str
+    GOOGLE_API_KEY_38: str
+    GOOGLE_API_KEY_39: str
+    GOOGLE_API_KEY_40: str
+    GOOGLE_API_KEY_41: str
+    GOOGLE_API_KEY_42: str
+    GOOGLE_API_KEY_43: str
+    GOOGLE_API_KEY_44: str
+    GOOGLE_API_KEY_45: str
+    GOOGLE_API_KEY_46: str
+    GOOGLE_API_KEY_47: str
+    GOOGLE_API_KEY_48: str
+    GOOGLE_API_KEY_49: str
+    GOOGLE_API_KEY_50: str
+    GOOGLE_API_KEY_51: str
+    GOOGLE_API_KEY_52: str
+    VISION_API: str
     LLM_URL: str
 
     class Config:

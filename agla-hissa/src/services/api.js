@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../url';
+import { API_BASE_URL } from '../../url';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -87,10 +87,26 @@ export const getThreads = async () => {
 
 export const deleteThread = async (threadId) => {
   try {
+    console.log(`Attempting to delete thread with ID: ${threadId}`);
+    console.log(`Delete URL: /thread/${threadId}`);
+    
+    // Ensure we have a valid threadId
+    if (!threadId) {
+      throw new Error('Thread ID is required for deletion');
+    }
+    
     const response = await api.delete(`/thread/${threadId}`);
+    console.log('Delete thread successful response:', response.data);
     return response.data;
   } catch (error) {
     console.error('Delete thread error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      config: error.config
+    });
     throw error;
   }
 };
@@ -169,6 +185,42 @@ export const getMindMap = async (threadId, documentId, socketId = null) => {
     }
     
     const response = await api.post('/extra/mindmap', payload, { headers });
+    
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      if (error.response.status === 422) {
+        if (error.response.data?.detail) {
+          console.error('Validation Details:', error.response.data.detail);
+        }
+      }
+    } else {
+      // Something else happened
+      throw new Error('Error during request setup: ' + error.message);
+    }
+    
+    throw error;
+  }
+};
+
+export const getGlobalMindMap = async (threadId, socketId = null) => {
+  try {
+    // Prepare the exact payload
+    const payload = {
+      thread_id: threadId,
+      document_id: 'global' // This field is required by the API but for global mindmap, we just use a placeholder
+    };
+    
+    // Prepare headers with socket ID for progress updates
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (socketId) {
+      headers['x-socket-id'] = socketId;
+    }
+    
+    const response = await api.post('/extra/mindmap/global', payload, { headers });
     
     return response.data;
   } catch (error) {

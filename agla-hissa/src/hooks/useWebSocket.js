@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { API_BASE_URL } from '../url';
+import { API_BASE_URL } from '../../url';
 
 /**
  * Simple WebSocket hook for thread name updates with comprehensive debugging
@@ -156,10 +156,64 @@ const useWebSocket = (userId, enabled = true) => {
     };
   };
 
+  /**
+   * Subscribe to mind map creation updates for a specific thread
+   * @param {string} threadId - Thread ID to subscribe to
+   * @param {Function} callback - Callback function to handle updates
+   * @returns {Function} - Unsubscribe function
+   */
+  const subscribeToMindMapUpdates = (threadId, callback) => {
+    if (!socketRef.current || !isConnected || !threadId) {
+      console.warn('[WebSocket] ⚠️ Cannot subscribe to mind maps: not connected or missing threadId');
+      console.warn('[WebSocket] Socket exists:', !!socketRef.current);
+      console.warn('[WebSocket] Is connected:', isConnected);
+      console.warn('[WebSocket] ThreadId:', threadId);
+      return () => {};
+    }
+
+    console.log('[WebSocket] 🗺️ Setting up mind map update subscription for thread:', threadId);
+
+    // Create a pattern to match mind map update events for this thread
+    const eventPattern = new RegExp(`^${userId}/${threadId}/mind_map$`);
+    console.log('[WebSocket] 🔍 Looking for mind map events matching pattern:', eventPattern.toString());
+
+    // Handle mind map updates
+    const handleMindMapUpdate = (data) => {
+      console.log('[WebSocket] 🗺️ Received mind map update event:', data);
+      callback(data);
+    };
+
+    // Register event handler
+    const eventHandler = (eventName, data) => {
+      console.log('[WebSocket] 🔍 Checking event for mind map:', eventName);
+      
+      if (eventPattern.test(eventName)) {
+        console.log('[WebSocket] ✅ Mind map event pattern match!');
+        handleMindMapUpdate({
+          ...data,
+          threadId: threadId
+        });
+      }
+    };
+
+    // Add the event handler
+    socketRef.current.onAny(eventHandler);
+    console.log('[WebSocket] 🎧 Mind map event handler attached');
+
+    // Return unsubscribe function
+    return () => {
+      if (socketRef.current) {
+        console.log('[WebSocket] 🔇 Unsubscribing from mind map updates');
+        socketRef.current.offAny(eventHandler);
+      }
+    };
+  };
+
   return {
     isConnected,
     connectionStatus,
-    subscribeToThreadUpdates
+    subscribeToThreadUpdates,
+    subscribeToMindMapUpdates
   };
 };
 
