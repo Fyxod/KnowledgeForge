@@ -90,11 +90,11 @@ async def summarize_documents(parsed_data: Documents):
 
                 document.summary = result.summary
                 print("Entering mind map creation ", i)
-                asyncio.create_task(
-                    create_mind_map(
-                        document, parsed_data.user_id, parsed_data.thread_id
-                    )
-                )
+                # asyncio.create_task(
+                #     create_mind_map(
+                #         document, parsed_data.user_id, parsed_data.thread_id
+                #     )
+                # )
                 await sio.emit(
                     f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
                     {"document_id": document.id, "status": True},

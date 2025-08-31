@@ -99,7 +99,7 @@ async def image_parser(image_path: str) -> str:
                 print(f"[VISION attempt {attempt}] Exception: {e}")
 
             if attempt < retries:
-                await asyncio.sleep(1) # Wait before retrying
+                await asyncio.sleep(0.1) # Wait before retrying
 
         return None
 
@@ -133,7 +133,7 @@ async def image_parser(image_path: str) -> str:
                 print(f"[Gemma attempt {attempt}] Exception: {e}")
 
             if attempt < retries:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
 
         return None
 
