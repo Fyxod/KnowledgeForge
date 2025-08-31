@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import ChatWindow from '../components/ChatWindow';
-import { uploadFiles, sendQuery, getUser, createEmptyThread, updateThreadName } from '../services/api';
+import { uploadFiles, sendQuery, getUser, createEmptyThread, updateThreadName, deleteThread } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function ChatPage({ userData, setUserData }) {
@@ -205,6 +205,31 @@ export default function ChatPage({ userData, setUserData }) {
       throw error;
     }
   };
+  
+  const handleDeleteThread = async (threadId) => {
+    console.log('handleDeleteThread called:', threadId);
+    try {
+      if (confirm('Are you sure you want to delete this thread? This action cannot be undone.')) {
+        const response = await deleteThread(threadId);
+        console.log('Thread deleted:', response);
+        
+        // If the deleted thread was selected, clear the selection
+        if (threadId === selectedThreadId) {
+          setSelectedThreadId(null);
+        }
+        
+        // Update the threads list by removing the deleted thread
+        setThreads(prevThreads => prevThreads.filter(thread => thread.id !== threadId));
+        
+        // Don't refresh user data to avoid page reset
+        // This prevents the current chat from being closed when deleting other threads
+      }
+    } catch (error) {
+      console.error('Failed to delete thread:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to delete thread. Please try again.';
+      setError(errorMessage);
+    }
+  };
 
   const currentThread = threads.find(t => t.id === selectedThreadId);
 
@@ -243,8 +268,7 @@ export default function ChatPage({ userData, setUserData }) {
         userData={userData}
         onCreateThread={handleCreateThread}
         onUpdateThreadName={handleUpdateThreadName}
-        connectionStatus={connectionStatus}
-        isConnected={isConnected}
+        onDeleteThread={handleDeleteThread}
       />
       
       <ChatWindow 

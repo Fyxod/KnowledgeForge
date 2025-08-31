@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../url';
+import { API_BASE_URL } from '../../url';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -87,10 +87,26 @@ export const getThreads = async () => {
 
 export const deleteThread = async (threadId) => {
   try {
+    console.log(`Attempting to delete thread with ID: ${threadId}`);
+    console.log(`Delete URL: /thread/${threadId}`);
+    
+    // Ensure we have a valid threadId
+    if (!threadId) {
+      throw new Error('Thread ID is required for deletion');
+    }
+    
     const response = await api.delete(`/thread/${threadId}`);
+    console.log('Delete thread successful response:', response.data);
     return response.data;
   } catch (error) {
     console.error('Delete thread error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      config: error.config
+    });
     throw error;
   }
 };

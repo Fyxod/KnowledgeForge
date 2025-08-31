@@ -7,8 +7,7 @@ export default function Sidebar({
   userData, 
   onCreateThread, 
   onUpdateThreadName,
-  connectionStatus = 'disconnected',
-  isConnected = false 
+  onDeleteThread
 }) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingThreadId, setEditingThreadId] = useState(null);
@@ -89,16 +88,7 @@ export default function Sidebar({
             Chats
           </h1>
           <div className="flex items-center gap-2">
-            {/* WebSocket Connection Status */}
-            <div 
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-400 animate-pulse' : 
-                connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
-                connectionStatus === 'error' ? 'bg-red-400' :
-                'bg-gray-500'
-              }`}
-              title={`WebSocket: ${connectionStatus}`}
-            ></div>
+            {/* Intentionally left empty for spacing */}
           </div>
         </div>
         <div className="space-y-3">
@@ -177,20 +167,39 @@ export default function Sidebar({
                     />
                   </div>
                 ) : (
-                  <h3 
-                    className="font-semibold truncate text-base cursor-pointer hover:text-blue-200 transition-colors"
+                  <div className="flex-1">
+                    <h3 
+                      className="font-semibold truncate text-base cursor-pointer hover:text-blue-200 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditThreadName(id, thread_name);
+                      }}
+                      title="Click to edit thread name"
+                    >
+                      {thread_name}
+                    </h3>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2">
+                  {id === selectedId && (
+                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                  )}
+                  
+                  {/* Delete button */}
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleEditThreadName(id, thread_name);
+                      onDeleteThread(id);
                     }}
-                    title="Click to edit thread name"
+                    className="text-gray-400 hover:text-red-400 transition-colors p-1 rounded-full hover:bg-black/20"
+                    title="Delete thread"
                   >
-                    {thread_name}
-                  </h3>
-                )}
-                {id === selectedId && (
-                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
-                )}
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               
               {documents?.length > 0 && (

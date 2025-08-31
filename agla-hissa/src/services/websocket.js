@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { API_BASE_URL } from '../url';
+import { API_BASE_URL } from '../../url';
 
 class WebSocketService {
   constructor() {

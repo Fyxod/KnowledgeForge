@@ -249,7 +249,7 @@ export default function ChatInput({
 
       <div className="mt-3 text-center">
         <p className="text-xs text-gray-500">
-          💡 Supports PDF, Word, text files, and images. Drag and drop or click to upload.
+           Supports PDF, Word, text files, and images. Drag and drop or click to upload.
         </p>
       </div>
     </div>

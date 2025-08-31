@@ -148,7 +148,7 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
         if client_socket_id:
             await sio.emit("mindmap_progress", {
                 "status": "not_found",
-                "message": "Mind map not available.",
+                "message": "   ",
                 "progress": 100
             }, to=client_socket_id)
         
@@ -195,7 +195,7 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
     if client_socket_id:
         await sio.emit("mindmap_progress", {
             "status": "not_found",
-            "message": "Mind map not available for this document",
+            "message": "   ",
             "progress": 100
         }, to=client_socket_id)
     
@@ -240,7 +240,7 @@ async def get_mind_map(request: Request, body: GlobalMindMapRequest = Body(...))
         if client_socket_id:
             await sio.emit("mindmap_progress", {
                 "status": "not_found",
-                "message": "GLOBAL Mind map not available.",
+                "message": "  ",
                 "progress": 100
             }, to=client_socket_id)
         
@@ -285,7 +285,7 @@ async def get_mind_map(request: Request, body: GlobalMindMapRequest = Body(...))
     if client_socket_id:
         await sio.emit("mindmap_progress", {
             "status": "not_found",
-            "message": "Mind map not available for this document",
+            "message": "   ",
             "progress": 100
         }, to=client_socket_id)
     
