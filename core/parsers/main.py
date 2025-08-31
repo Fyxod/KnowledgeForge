@@ -11,7 +11,7 @@ import io
 
 from app.socket_handler import sio
 from app.socket_handler import sio
-from core.parsers.image import image_parser
+from core.parsers.image2 import image_parser
 from core.models.document import Document, Page
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

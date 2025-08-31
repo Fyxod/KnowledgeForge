@@ -245,7 +245,7 @@ def build_mind_maps_node_prompt_global(parsed_data: Documents):
 
 
     return f"""
-Respond ONLY with a valid JSON array of nodes(max_limit: 50), no explanations.
+Respond ONLY with a valid JSON array of nodes(max_limit: 70), no explanations.
 You are to create a mind map node structure from the provided text. 
 The output must be in JSON with the following rules:
 - Each node must contain: id, title, and parent_id.
@@ -254,7 +254,8 @@ The output must be in JSON with the following rules:
 - parent_id: the id of the parent node, or null if it is a root node.
 - Preserve the logical hierarchy of concepts by linking nodes through parent_id.
 Text: {final_text}
-Do not exceed the max limit of 50 nodes.
+Do not exceed the max limit of 70 nodes.
+Cover each document really well in detail.
 Respond ONLY with a valid JSON array of nodes, no explanations.
 
 """
