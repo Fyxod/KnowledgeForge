@@ -187,6 +187,42 @@ export const getMindMap = async (threadId, documentId, socketId = null) => {
   }
 };
 
+export const getGlobalMindMap = async (threadId, socketId = null) => {
+  try {
+    // Prepare the exact payload
+    const payload = {
+      thread_id: threadId,
+      document_id: 'global' // This field is required by the API but for global mindmap, we just use a placeholder
+    };
+    
+    // Prepare headers with socket ID for progress updates
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (socketId) {
+      headers['x-socket-id'] = socketId;
+    }
+    
+    const response = await api.post('/extra/mindmap/global', payload, { headers });
+    
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      if (error.response.status === 422) {
+        if (error.response.data?.detail) {
+          console.error('Validation Details:', error.response.data.detail);
+        }
+      }
+    } else {
+      // Something else happened
+      throw new Error('Error during request setup: ' + error.message);
+    }
+    
+    throw error;
+  }
+};
+
 export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
   try {
     // Prepare the payload

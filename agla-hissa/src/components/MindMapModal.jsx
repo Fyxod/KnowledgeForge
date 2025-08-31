@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getMindMap } from '../services/api';
+import { getMindMap, getGlobalMindMap } from '../services/api';
 import { API_BASE_URL } from '../url';
 import {
   ReactFlow,
@@ -424,6 +424,86 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
     }
   }, [expandedNodes, setNodes]);
 
+  const handleGlobalMindMap = async (threadId) => {
+    // Clear any previous states and timeouts
+    clearAllTimeouts();
+    setSelectedDocument({ id: 'global', title: 'Global Mind Map' });
+    setLoading(true);
+    setError(null);
+    setMindMapData(null);
+    setNodes([]);
+    setEdges([]);
+    setSocketHandledResult(false);
+    setExpandedNodes(new Set()); // Reset expanded nodes for new global map
+    setProgressInfo({ status: 'starting', message: 'Initializing global mind map request...', progress: 0 });
+    
+    try {
+      // Extract thread ID if not provided
+      const finalThreadId = threadId || thread.thread_id || thread.id || thread.threadId || thread._id;
+      
+      // Additional validation
+      if (!finalThreadId) {
+        throw new Error('Thread ID not found in thread object');
+      }
+      
+      // Convert to string if needed (some APIs expect strings)
+      const threadIdStr = String(finalThreadId);
+      
+      console.log('=== GLOBAL MIND MAP REQUEST ===');
+      console.log('Thread ID:', threadIdStr, typeof threadIdStr);
+      
+      // Use the global mind map API service with socket ID for progress updates
+      const response = await getGlobalMindMap(threadIdStr, socket?.id);
+      
+      if (response && response.status) {
+        // Check if this is a "not found" response
+        if (response.not_found) {
+          // Socket.IO has already handled this case, don't override
+          // The progress UI will transition to "not found" state via socket events
+          return;
+        }
+        
+        setMindMapData(response.mind_map);
+        convertMindMapToFlow(response.mind_map);
+        setProgressInfo({ status: 'complete', message: 'Global mind map loaded successfully!', progress: 100 });
+        
+        // Only control loading if socket hasn't handled it
+        if (!socketHandledResult) {
+          const timeoutId = setTimeout(() => {
+            setLoading(false);
+          }, 800);
+          setTimeoutIds(prev => [...prev, timeoutId]);
+        }
+      } else {
+        const errorMsg = response?.message || response?.error || 'Failed to fetch global mind map';
+        throw new Error(errorMsg);
+      }
+    } catch (apiError) {
+      console.error('=== HANDLE GLOBAL MIND MAP ERROR ===');
+      console.error('Error:', apiError);
+      
+      // Only handle error if socket hasn't already handled it
+      if (!socketHandledResult) {
+        const timeoutId = setTimeout(() => {
+          let errorMessage = 'Unable to fetch global mind map. ';
+          
+          if (apiError.response?.status === 401) {
+            errorMessage += 'Authentication failed. Please log in again.';
+          } else if (apiError.response?.status === 422) {
+            errorMessage += 'Request format error. Check console for details.';
+          } else {
+            errorMessage += apiError.message || 'Unknown error occurred.';
+          }
+          
+          setError(errorMessage);
+          setLoading(false);
+        }, 800);
+        
+        setTimeoutIds(prev => [...prev, timeoutId]);
+      }
+    }
+  };
+
   const handleDocumentSelect = async (documentId, documentTitle) => {
     // Clear any previous states and timeouts
     clearAllTimeouts();
@@ -546,7 +626,16 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
       <div className="relative w-[90vw] h-[90vh] bg-white rounded-lg shadow-xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">Mind Map Visualization</h2>
+          <h2 className="text-xl font-semibold text-gray-800">
+            {selectedDocument?.id === 'global' 
+              ? '🌐 Global Mind Map (All Documents)' 
+              : 'Mind Map Visualization'}
+            {selectedDocument && selectedDocument.id !== 'global' && (
+              <span className="ml-2 text-sm font-normal text-gray-500">
+                - {selectedDocument.title}
+              </span>
+            )}
+          </h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -562,6 +651,32 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
           {/* Sidebar */}
           <div className="w-1/4 border-r border-gray-200 p-4 overflow-y-auto">
             <h3 className="font-medium text-gray-700 mb-3">Select Document</h3>
+            
+            {/* Global Mind Map Option */}
+            <button
+              onClick={() => handleGlobalMindMap(thread?.threadId)}
+              className={`w-full text-left p-3 mb-4 rounded-lg border transition-colors bg-indigo-50 border-indigo-300 hover:bg-indigo-100 ${
+                selectedDocument?.id === 'global' ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'text-indigo-600'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="font-medium text-sm">
+                  🌐 Global Mind Map (All Documents)
+                </div>
+              </div>
+              <div className="text-xs mt-1 text-indigo-500">
+                Create a mind map from all documents in this thread
+              </div>
+            </button>
+            
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center">
+                <span className="px-2 bg-white text-sm text-gray-500">OR SELECT DOCUMENT</span>
+              </div>
+            </div>
             
             {documents.length === 0 ? (
               <div className="text-center py-8">
@@ -629,7 +744,8 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
                   How to Use
                 </h4>
                 <div className="text-xs text-blue-700 space-y-1">
-                  <p>• Click any document to load its mind map</p>
+                  <p>• Click <strong>Global Mind Map</strong> to see a mind map of all documents</p>
+                  <p>• Or click any document to load its specific mind map</p>
                   <p>• Click nodes to expand/collapse descriptions</p>
                   <p>• Use mouse wheel to zoom in/out</p>
                   <p>• Drag to pan around the mind map</p>
