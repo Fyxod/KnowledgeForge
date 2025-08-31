@@ -44,6 +44,10 @@ API_KEYS = [
     settings.GOOGLE_API_KEY_35,
     settings.GOOGLE_API_KEY_36,
     settings.GOOGLE_API_KEY_37,
+    settings.GOOGLE_API_KEY_38,
+    settings.GOOGLE_API_KEY_39,
+    settings.GOOGLE_API_KEY_40,
+    settings.GOOGLE_API_KEY_41,
 ]
 
 count = 0

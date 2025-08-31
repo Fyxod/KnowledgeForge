@@ -10,6 +10,7 @@ from core.models.document import Documents
 from core.parsers.main import extract_document
 import time
 
+# ppt, pdf, xlsx, docx, txt, html, png, jpeg, jpg
 async def process_files(
     files_data: List[dict],
     user_id: str,

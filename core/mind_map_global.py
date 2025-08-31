@@ -254,7 +254,8 @@ The output must be in JSON with the following rules:
 - parent_id: the id of the parent node, or null if it is a root node.
 - Preserve the logical hierarchy of concepts by linking nodes through parent_id.
 Text: {final_text}
-Do not exceed the max limit of 50 nodes.
+Do not exceed the max limit of 70 nodes.
+Cover each document really well in detail.
 Respond ONLY with a valid JSON array of nodes, no explanations.
 
 """
