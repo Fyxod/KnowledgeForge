@@ -1,7 +1,7 @@
 # Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
 
 # Build And run loacly 
-- docker  (only to be followed onn linux operating system )
+- docker  (only to be followed on linux operating system )
   <!-- - build image yourself -->
   <!-- - pull from docker hub (--preferred) -->
 
@@ -56,7 +56,7 @@ cd Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
     ```
   - Windows
 
-    from `https://github.com/UB-Mannheim/tesseract/wiki?utm_source=chatgpt.com`  install via `tesseract-ocr-w64-setup-5.5.0.20241111.exe` file 
+    from `https://github.com/UB-Mannheim/tesseract/wiki`  install via `tesseract-ocr-w64-setup-5.5.0.20241111.exe` file 
 
 - **make .env file and populate it**
 
@@ -74,7 +74,7 @@ source venv/bin/activate    (linux)
 
 .\env\Scripts\activate      (windows)
 ```
-- install requiremnet.txt
+- install requirement.txt
 ```bash
 pip install -r req.txt     (linux)
 
