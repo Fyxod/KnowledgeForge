@@ -13,10 +13,9 @@ export default function ChatPage({ userData, setUserData }) {
   const [error, setError] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState([]);
 
-  // WebSocket for thread name updates
   const { isConnected, connectionStatus, subscribeToThreadUpdates } = useWebSocket(
     userData?.userId, 
-    !!userData?.userId // Enable only when user is available
+    !!userData?.userId
   );
 
   useEffect(() => {
@@ -43,7 +42,6 @@ export default function ChatPage({ userData, setUserData }) {
     loadUserData();
   }, [userData?.userId, setUserData]);
 
-  // WebSocket effect for thread name updates
   useEffect(() => {
     if (!isConnected || !userData?.userId) {
       return;
@@ -55,7 +53,6 @@ export default function ChatPage({ userData, setUserData }) {
       console.log('[WebSocket] Received thread update:', data);
       
       if (data.threadId && data.newTitle) {
-        // Update the specific thread in the threads list
         setThreads(prevThreads => 
           prevThreads.map(thread => 
             thread.id === data.threadId 
@@ -213,16 +210,11 @@ export default function ChatPage({ userData, setUserData }) {
         const response = await deleteThread(threadId);
         console.log('Thread deleted:', response);
         
-        // If the deleted thread was selected, clear the selection
         if (threadId === selectedThreadId) {
           setSelectedThreadId(null);
         }
         
-        // Update the threads list by removing the deleted thread
         setThreads(prevThreads => prevThreads.filter(thread => thread.id !== threadId));
-        
-        // Don't refresh user data to avoid page reset
-        // This prevents the current chat from being closed when deleting other threads
       }
     } catch (error) {
       console.error('Failed to delete thread:', error);

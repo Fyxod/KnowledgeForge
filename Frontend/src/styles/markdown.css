@@ -1,6 +1,4 @@
-/* Custom styles for markdown content in chat messages */
 
-/* Zoom-responsive base styles */
 .markdown-content {
   line-height: 1.6;
   word-wrap: break-word;
@@ -16,7 +14,6 @@
   margin-bottom: 0 !important;
 }
 
-/* Headers */
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3,
@@ -35,7 +32,6 @@
 .markdown-content h5,
 .markdown-content h6 { font-size: clamp(0.9rem, 1.8vw, 1rem); }
 
-/* Paragraphs and text */
 .markdown-content p {
   margin: 0.5rem 0;
   line-height: 1.6;
@@ -49,7 +45,6 @@
   font-style: italic;
 }
 
-/* Lists */
 .markdown-content ul,
 .markdown-content ol {
   margin: 0.5rem 0;

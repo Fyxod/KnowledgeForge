@@ -1,10 +1,7 @@
-// Simple, safe markdown formatter
-// Handles basic formatting without external dependencies
 
 export function formatMarkdown(text) {
   if (!text || typeof text !== 'string') return text;
   
-  // Split into lines for processing
   let lines = text.split('\n');
   let result = [];
   let inCodeBlock = false;
@@ -13,10 +10,8 @@ export function formatMarkdown(text) {
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
     
-    // Handle code blocks
     if (line.trim().startsWith('```')) {
       if (inCodeBlock) {
-        // End of code block
         result.push({
           type: 'code-block',
           content: codeBlockContent.join('\n'),
@@ -25,7 +20,6 @@ export function formatMarkdown(text) {
         codeBlockContent = [];
         inCodeBlock = false;
       } else {
-        // Start of code block
         inCodeBlock = true;
         const language = line.trim().substring(3).trim();
       }
@@ -37,14 +31,12 @@ export function formatMarkdown(text) {
       continue;
     }
     
-    // Process regular lines
     const processed = processLine(line);
     if (processed) {
       result.push(processed);
     }
   }
   
-  // Handle unclosed code block
   if (inCodeBlock && codeBlockContent.length > 0) {
     result.push({
       type: 'code-block',
@@ -59,12 +51,10 @@ export function formatMarkdown(text) {
 function processLine(line) {
   const trimmed = line.trim();
   
-  // Empty line
   if (!trimmed) {
     return { type: 'break' };
   }
   
-  // Headers
   if (trimmed.startsWith('#')) {
     const match = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (match) {
@@ -76,7 +66,6 @@ function processLine(line) {
     }
   }
   
-  // Lists
   if (trimmed.match(/^[-*+]\s+/)) {
     return {
       type: 'list-item',
@@ -91,7 +80,6 @@ function processLine(line) {
     };
   }
   
-  // Blockquotes
   if (trimmed.startsWith('>')) {
     return {
       type: 'blockquote',
@@ -99,7 +87,6 @@ function processLine(line) {
     };
   }
   
-  // Regular paragraph
   return {
     type: 'paragraph',
     content: processInlineFormatting(line)
@@ -114,7 +101,6 @@ function processInlineFormatting(text) {
   let i = 0;
   
   while (i < text.length) {
-    // Bold (**text**)
     if (text.substring(i, i + 2) === '**') {
       if (current) {
         parts.push({ type: 'text', content: current });
@@ -132,7 +118,6 @@ function processInlineFormatting(text) {
       }
     }
     
-    // Italic (*text*)
     if (text[i] === '*' && text.substring(i, i + 2) !== '**') {
       if (current) {
         parts.push({ type: 'text', content: current });
@@ -150,7 +135,6 @@ function processInlineFormatting(text) {
       }
     }
     
-    // Inline code (`code`)
     if (text[i] === '`') {
       if (current) {
         parts.push({ type: 'text', content: current });

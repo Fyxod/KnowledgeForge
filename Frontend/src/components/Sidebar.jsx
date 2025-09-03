@@ -88,7 +88,6 @@ export default function Sidebar({
             Chats
           </h1>
           <div className="flex items-center gap-2">
-            {/* Intentionally left empty for spacing */}
           </div>
         </div>
         <div className="space-y-3">
@@ -127,11 +126,9 @@ export default function Sidebar({
         ) : (
           threads
             .sort((a, b) => {
-              // Sort by creation date/updatedAt with newest first
               const dateA = a.updatedAt || a.createdAt || a.created_at || new Date(0);
               const dateB = b.updatedAt || b.createdAt || b.created_at || new Date(0);
               
-              // Handle different date formats (string, Date object, MongoDB ObjectId with $date)
               const getTimestamp = (date) => {
                 if (!date) return 0;
                 if (typeof date === 'string') return new Date(date).getTime();
@@ -140,7 +137,7 @@ export default function Sidebar({
                 return 0;
               };
               
-              return getTimestamp(dateB) - getTimestamp(dateA); // Newest first
+              return getTimestamp(dateB) - getTimestamp(dateA);
             })
             .map(({ id, thread_name, updatedAt, documents, chats }) => (
             <div
@@ -186,7 +183,6 @@ export default function Sidebar({
                     <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
                   )}
                   
-                  {/* Delete button */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

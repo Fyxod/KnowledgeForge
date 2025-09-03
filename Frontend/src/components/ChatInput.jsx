@@ -7,7 +7,7 @@ export default function ChatInput({
   disabled = false, 
   placeholder = "Ask me anything about your documents...",
   hideTextInput = false,
-  disableDragDrop = false  // New prop to disable drag/drop when parent handles it
+  disableDragDrop = false
 }) {
   const [input, setInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -87,8 +87,6 @@ export default function ChatInput({
     e.preventDefault();
     e.stopPropagation();
     
-    // Use a more reliable method to detect leaving the drop zone
-    // Only set isDragging to false if the related target is not a child element
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setIsDragging(false);
     }
@@ -108,7 +106,6 @@ export default function ChatInput({
     try {
       const files = Array.from(e.dataTransfer?.files || []);
       if (files.length > 0) {
-        // Validate file types
         const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.gif'];
         const validFiles = files.filter(file => {
           const extension = '.' + file.name.split('.').pop().toLowerCase();
