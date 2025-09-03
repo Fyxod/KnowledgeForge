@@ -29,11 +29,11 @@ rewrite_query.txt
 rewrite_result.json
 
 # Frontend build artifacts
-agla-hissa/dist/
-agla-hissa/node_modules/
-agla-hissa/.env
-agla-hissa/.env.local
-agla-hissa/.env.production
+Frontend/dist/
+Frontend/node_modules/
+Frontend/.env
+Frontend/.env.local
+Frontend/.env.production
 
 # Distribution / packaging
 .Python
