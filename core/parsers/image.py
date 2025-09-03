@@ -9,7 +9,7 @@ from core.constants import IMAGE_PARSER_LLM
 # Optional for Windows:
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-URL = "https://llm.katiyar.xyz/vision-query"
+URL = "https://llm.katiar.xyz/vision-query"
 MODEL = IMAGE_PARSER_LLM
 # gemma=True
 
@@ -54,12 +54,13 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
 
             except Exception as e:
                 print(f"[Gemma attempt {attempt}] Exception: {e}")
-
+                print(e)
             await asyncio.sleep(1)
 
         return None
 
-    gemma_result = await gemma_parse()
+    gemma_result = None
+    # gemma_result = await gemma_parse()
     if gemma_result:
         return gemma_result.strip()
 

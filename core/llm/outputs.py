@@ -75,7 +75,7 @@ class FlatNode(BaseModel):
 
 
 class MindMapOutput(BaseModel):
-    output: List[FlatNode] = Field(description="The generated mind map structure.")
+    mind_map: List[FlatNode] = Field(description="The generated mind map structure.")
 
 
 class FlatNodeWithDescription(BaseModel):
@@ -85,7 +85,7 @@ class FlatNodeWithDescription(BaseModel):
 
 
 class FlatNodeWithDescriptionOutput(BaseModel):
-    output: List[FlatNodeWithDescription]
+    mind_map: List[FlatNodeWithDescription]
 
 
 class MindMap(BaseModel):

@@ -66,7 +66,20 @@ def summarize_documents_prompt(document: str):
         {
             "role": "user",
             "parts": f"Document to summarize:\n\n{document}\n\nSummary (300-700 words):"
-        }
+        },
+        {
+            "role": "system",
+            "parts": (
+                "You are a helpful assistant tasked with summarizing documents. "
+                "Write a comprehensive summary between 300-700 words. "
+                "The summary should not exceed 700 words. "
+                "Do not skip over important details, even if they seem minor. "
+                "If the document contains multiple sections or themes, organize the summary accordingly. "
+                "Use multiple paragraphs and preserve important details. "
+                "Also give a 3-7 words concise title for the summary."
+                "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
+            )
+        },
     ]
 
     return contents

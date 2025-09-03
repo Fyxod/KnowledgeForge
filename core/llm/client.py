@@ -4,25 +4,22 @@ from openai import AsyncOpenAI
 from langchain.output_parsers import PydanticOutputParser
 import asyncio
 import sys
+import time
 
 from core.llm.custom_llm import MyServerLLM
 
 sys.setrecursionlimit(5000)
 
 API_KEYS = [
-    settings.API_KEY_1,
-    settings.API_KEY_2,
-    settings.API_KEY_3,
-    settings.API_KEY_4,
-    settings.API_KEY_5,
+    "settings.API_KEY_1",
 ]
 
-openai_client = AsyncOpenAI(api_key=settings.VISION_API)
+openai_client = AsyncOpenAI(api_key='settings.VISION_API')
 OPENAI_MODEL = "gpt-4o-mini"
 
 count = 0
 
-async def invoke_llm(model: str, response_schema, contents, remove_thinking=False, gpu_url="https://llm.katiyar.xyz?model=gemma-lat"):
+async def invoke_llm(model: str, response_schema, contents, remove_thinking=False, gpu_url="https://llm.katiyar.xyz/query?model=gemma-lat:latest"):
     """
     Structured LLM invocation with fallbacks:
     1. Custom GPU server (via MyServerLLM)
@@ -47,13 +44,16 @@ async def invoke_llm(model: str, response_schema, contents, remove_thinking=Fals
             Input:
             {contents}
             """
+            s = time.time()
             llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
+            e = time.time()
+            print(f"GPU LLM call took {e - s:.2f} seconds")
             print(llm_output)
             structured = parser.parse(llm_output)
             print(structured)
             return structured
         except Exception as e:
-            print(f"GPU server failed: {e}, switching to API keys...")
+            print(f"GPU server failed: {e}, ")
 
     # 2. Loop through API keys
     for _ in range(len(API_KEYS)):

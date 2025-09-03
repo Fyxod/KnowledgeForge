@@ -20,6 +20,13 @@ from core.mind_map import create_mind_map
 from core.mind_map_global import create_mind_map_global
 from core.database import db
 from core.constants import SUMMARIZER_LLM
+import re
+
+def limit_words(text, max_words=15000):
+    words = text.split()  # Split text into words (whitespace-based)
+    if len(words) > max_words:
+        words = words[:max_words]  # Cut off after max_words
+    return " ".join(words)
 
 
 def build_summarizer_prompt(document):
@@ -28,7 +35,7 @@ def build_summarizer_prompt(document):
     """
     formatted_doc = {
         "document_id": document.id,
-        "text": document.full_text.replace("\x00", " ").strip(),
+        "text": re.sub(r"[\x00\n\t]+", " ", limit_words(document.full_text, 15000)).strip(),
     }
     return summarize_documents_prompt(
         document=str(formatted_doc),

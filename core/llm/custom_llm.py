@@ -1,8 +1,10 @@
 import requests
 from langchain.llms.base import LLM
 from typing import Optional, List
+import re
 
-global_url = "https://llm.katiyr.xyz/query?model=gemma-lat:latest"
+model = "qwen3:8b-30k-8k"
+global_url = f"https://llm.katiyar.xyz/query?model={model}"
 
 class MyServerLLM(LLM):
     """
@@ -29,6 +31,8 @@ class MyServerLLM(LLM):
             response.raise_for_status()
             data = response.json()
             print(data)
-            return data.get("output", "")
+            # return data.get("output", "")
+            cleaned_text = re.sub(r"<think>.*?</think>", "", data["content"], flags=re.DOTALL)
+            return cleaned_text
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Failed to call GPU LLM server: {e}") from e

@@ -94,7 +94,7 @@ async def create_mind_map_global(parsed_data: Documents):
 
 
 DESCRIPTION_PROCESSING_BATCH_SIZE = 4
-PARALLEL_LLM_CALLS = 3
+PARALLEL_LLM_CALLS = 2
 
 
 async def add_node_descriptions_global(
@@ -114,7 +114,7 @@ async def add_node_descriptions_global(
 
     print("**" * 20)
     before_for = time.time()
-    output_nodes = data["output"]
+    output_nodes = data["mind_map"]
     total_nodes = len(output_nodes)
 
     # Prepare batches
@@ -123,7 +123,7 @@ async def add_node_descriptions_global(
         for i in range(0, total_nodes, DESCRIPTION_PROCESSING_BATCH_SIZE)
     ]
 
-    doc_retriever = get_user_retriever(parsed_data.user_id, parsed_data.thread_id, k=30)
+    doc_retriever = get_user_retriever(parsed_data.user_id, parsed_data.thread_id, k=15)
     async def process_batch(batch_nodes, batch_idx):
         batch_relevant_texts = []
         for node in batch_nodes:
@@ -160,7 +160,7 @@ async def add_node_descriptions_global(
                 )
 
                 for i, node in enumerate(batch_nodes):
-                    resp_node = response.output[i] if i < len(response.output) else None
+                    resp_node = response.mind_map[i] if i < len(response.mind_map) else None
                     if resp_node and node["id"] == resp_node.id:
                         node["description"] = resp_node.description
                         print(f"Updated description for node {node['id']}")
@@ -205,7 +205,7 @@ async def add_node_descriptions_global(
         await f.write(json.dumps(data, indent=2, ensure_ascii=False))
 
     print("building proper mind map now")
-    mind_map: GlobalMindMap = build_mindmap_global(data["output"], parsed_data.user_id, parsed_data.thread_id)
+    mind_map: GlobalMindMap = build_mindmap_global(data["mind_map"], parsed_data.user_id, parsed_data.thread_id)
     await sio.emit(
         f"{parsed_data.user_id}/progress",
         {"message": f"GLOBAL Mind map built successfully"},
@@ -245,7 +245,7 @@ def build_mind_maps_node_prompt_global(parsed_data: Documents):
 
 
     return f"""
-Respond ONLY with a valid JSON array of nodes(max_limit: 70), no explanations.
+Respond with a valid JSON of nodes(max_limit: 70).
 You are to create a mind map node structure from the provided text. 
 The output must be in JSON with the following rules:
 - Each node must contain: id, title, and parent_id.
@@ -256,8 +256,7 @@ The output must be in JSON with the following rules:
 Text: {final_text}
 Do not exceed the max limit of 70 nodes.
 Cover each document really well in detail.
-Try to keep only 1 root node if possible
-Respond ONLY with a valid JSON array of nodes, no explanations.
+Try to keep only 1 root node if possible.
 
 """
 

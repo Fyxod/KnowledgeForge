@@ -125,7 +125,7 @@ async def add_node_descriptions(
 
     print("**" * 20)
     before_for = time.time()
-    output_nodes = data["output"]
+    output_nodes = data["mind_map"]
     total_nodes = len(output_nodes)
 
     # Prepare batches
@@ -171,7 +171,7 @@ async def add_node_descriptions(
                 )
 
                 for i, node in enumerate(batch_nodes):
-                    resp_node = response.output[i] if i < len(response.output) else None
+                    resp_node = response.mind_map[i] if i < len(response.mind_map) else None
                     if resp_node and node["id"] == resp_node.id:
                         node["description"] = resp_node.description
                         print(f"Updated description for node {node['id']}")
@@ -216,7 +216,7 @@ async def add_node_descriptions(
         await f.write(json.dumps(data, indent=2, ensure_ascii=False))
 
     print("building proper mind map now")
-    mind_map: MindMap = build_mindmap(data["output"], user_id, thread_id, document.id)
+    mind_map: MindMap = build_mindmap(data["mind_map"], user_id, thread_id, document.id)
     await sio.emit(
         f"{user_id}/progress",
         {"message": f"Mind map built successfully for {document.title}"},
@@ -252,7 +252,7 @@ def build_mind_maps_node_prompt(document: Document):
         text = document.title
 
     return f"""
-Respond ONLY with a valid JSON array of nodes(max_limit: 50), no explanations.
+Respond with a valid JSON of nodes(max_limit: 50).
 You are to create a mind map node structure from the provided text. 
 The output must be in JSON with the following rules:
 - Each node must contain: id, title, and parent_id.
@@ -262,9 +262,9 @@ The output must be in JSON with the following rules:
 - Preserve the logical hierarchy of concepts by linking nodes through parent_id.
 Text: {text}
 Do not exceed the max limit of 50 nodes.
-Respond ONLY with a valid JSON array of nodes, no explanations.
 
 """
+# Return valid json as told
 
 
 # - Try to keep only 1 root node
