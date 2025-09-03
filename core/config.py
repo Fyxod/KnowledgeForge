@@ -8,58 +8,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
     DATABASE_NAME: str = "bedrock"
-    GOOGLE_API_KEY_1: str
-    GOOGLE_API_KEY_2: str
-    GOOGLE_API_KEY_3: str
-    GOOGLE_API_KEY_4: str
-    GOOGLE_API_KEY_5: str
-    GOOGLE_API_KEY_6: str
-    GOOGLE_API_KEY_7: str
-    GOOGLE_API_KEY_8: str
-    GOOGLE_API_KEY_9: str
-    GOOGLE_API_KEY_10: str
-    GOOGLE_API_KEY_11: str
-    GOOGLE_API_KEY_12: str
-    GOOGLE_API_KEY_13: str
-    GOOGLE_API_KEY_14: str
-    GOOGLE_API_KEY_15: str
-    GOOGLE_API_KEY_16: str
-    GOOGLE_API_KEY_17: str
-    GOOGLE_API_KEY_18: str
-    GOOGLE_API_KEY_19: str
-    GOOGLE_API_KEY_20: str
-    GOOGLE_API_KEY_21: str
-    GOOGLE_API_KEY_22: str
-    GOOGLE_API_KEY_23: str
-    GOOGLE_API_KEY_24: str
-    GOOGLE_API_KEY_25: str
-    GOOGLE_API_KEY_26: str
-    GOOGLE_API_KEY_27: str
-    GOOGLE_API_KEY_28: str
-    GOOGLE_API_KEY_29: str
-    GOOGLE_API_KEY_30: str
-    GOOGLE_API_KEY_31: str
-    GOOGLE_API_KEY_32: str
-    GOOGLE_API_KEY_33: str
-    GOOGLE_API_KEY_34: str
-    GOOGLE_API_KEY_35: str
-    GOOGLE_API_KEY_36: str
-    GOOGLE_API_KEY_37: str
-    GOOGLE_API_KEY_38: str
-    GOOGLE_API_KEY_39: str
-    GOOGLE_API_KEY_40: str
-    GOOGLE_API_KEY_41: str
-    GOOGLE_API_KEY_42: str
-    GOOGLE_API_KEY_43: str
-    GOOGLE_API_KEY_44: str
-    GOOGLE_API_KEY_45: str
-    GOOGLE_API_KEY_46: str
-    GOOGLE_API_KEY_47: str
-    GOOGLE_API_KEY_48: str
-    GOOGLE_API_KEY_49: str
-    GOOGLE_API_KEY_50: str
-    GOOGLE_API_KEY_51: str
-    GOOGLE_API_KEY_52: str
+    API_KEY_1: str
+    API_KEY_2: str
+    API_KEY_3: str
+    API_KEY_4: str
+    API_KEY_5: str
     VISION_API: str
     LLM_URL: str
 
