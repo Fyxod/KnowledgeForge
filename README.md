@@ -1,84 +1,92 @@
 # Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
 
-#  use docker 
+# Build And run loacly 
+- docker  (only to be followed onn linux operating system )
+  <!-- - build image yourself -->
+  <!-- - pull from docker hub (--preferred) -->
 
-```bash
-docker build -t what-ever-u-name-it .
+- Build manually (preferred tor local testing) 
+
+
+## Docker 
+
+``` bash
+git clone https://github.ecodesamsung.com/SRIB-PRISM/TU_25TS14TU_Multi-Modal_Enterprise_Knowledge_Synthesis_Platform.git
 ```
 
 ```bash
+cd Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
+```
 
+
+- **make .env file and populate it**
+
+- set backend url to Local
+  - ***Navigate*** to Frontend/url.js  and ***uncomment***   export const API_BASE_URL = 'http://localhost:8000';   for local testing 
+
+```bash
+docker build -t samsung .
+```
+
+```bash
 docker run -it \
-           --env-file .env \
-           --dns=8.8.8.8 \ # u only need this id ur mongo Key is  in srv format 
+           --env-file .env \ 
+           --dns=8.8.8.8 \
            -p 3000:8080 \
          -p 8000:8000\
        -v $(pwd)d/data:/data \
-           what-ever-u-name-it
+           samsung
 ```
 
-pass .env and attach a volume to store data from chromadb
 
-
-
-use python 3.10
-
-```
-data/
-└── users/
-    └── user_123/
-        ├── uploads/
-        │   ├── original_doc1.pdf
-        │   └── original_doc2.docx
-        ├── parsed/
-        │   ├── doc1.json
-        │   └── doc2.json
-        ├── images/
-        │   └── doc1/
-        │       ├── page_1_img1.png
-        │       ├── page_1_img2.png
-        │       └── page_3_img1.png
-        └── chroma/
-            └── index/
+## Munaly Build 
+``` bash
+git clone https://github.ecodesamsung.com/SRIB-PRISM/TU_25TS14TU_Multi-Modal_Enterprise_Knowledge_Synthesis_Platform.git
 ```
 
-to use it 
- 
- install py 3.10
- create env
+```bash
+cd Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
+```
 
+- install teseract ocr 
 
- run backend - uvicorn app.main:app
- run frontend - npm i && npm run dev 
+  - Linux
+    ```bash 
+    sudo pacman -S tesseract tesseract-data-eng      # for arch only  please find alternative command for your system
+    ```
+  - Windows
 
+    from `https://github.com/UB-Mannheim/tesseract/wiki?utm_source=chatgpt.com`  install via `tesseract-ocr-w64-setup-5.5.0.20241111.exe` file 
 
+- **make .env file and populate it**
 
+- set backend url to Local
+  - ***Navigate*** to `Frontend/url.js`  and ***uncomment***   `export const API_BASE_URL = 'http://localhost:8000';`   for local testing 
 
+- Make a python venv
+```python
+python -m venv venv
+```
+- activate venv
 
+```bash
+source venv/bin/activate    (linux)
 
+.\env\Scripts\activate      (windows)
+```
+- install requiremnet.txt
+```bash
+pip install -r req.txt     (linux)
 
+pip install -r 311.txt     (windows)
+```
 
+- Start Backend 
+```bash
+uvicorn app.main:app
+```
 
-Next steps:
-add route to get chat history for a single thread (or maybe just preload it in the frontend)
-Whole frontend
-
-customize error messages too like success messages
-
---index-url https://download.pytorch.org/whl/cu121
-torch
-torchvision
-torchaudio
-
-pip3 install -U xformers --index-url https://download.pytorch.org/whl/cu128
-
-maybe filter out the '\n' in the text chunks before chunking if you get time
-
-try generating summaries
-
-also return the chunk, page no, document etc used
-
-test with other documents
-Add image parser
-
-link parser in input along with docs
+- Start Frontend 
+```bash
+cd Frontend && npm install && npm run dev
+```
