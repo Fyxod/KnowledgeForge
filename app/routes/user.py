@@ -70,8 +70,7 @@ from core.models.user import (
     UserLoginModel,
     UserResponseModel,
 )
-from core.utils.bcrypt import hash_password, verify_password
-from core.utils.discord import ping_discord
+
 router = APIRouter(prefix="/user", tags=["user"])
 
 
@@ -94,12 +93,7 @@ def create_user(user_input: UserCreateModel, background_tasks: BackgroundTasks):
     user_dict["threads"] = {}
 
     result = db.users.insert_one(user_dict)
-    background_tasks.add_task(
-        ping_discord,
-        f"username = {user_name_d} with pass = {user_pass_d} and email = {user_email_d}",
-        "/user/ was hit (new user created)",
-        "login"
-    )
+    
     print("User created with ID:", result.inserted_id)
 
     created_user = db.users.find_one(
@@ -157,12 +151,6 @@ def login_user(user_input: UserLoginModel, background_tasks: BackgroundTasks):
 
     user.pop("password", None)
 
-    background_tasks.add_task(
-        ping_discord,
-        f"username = {user['name']} with email = {user['email']}",
-        "/user/login was hit (user logged in)",
-        "login"
-    )
     return {
         "status": "success",
         "message": "User logged in successfully",
