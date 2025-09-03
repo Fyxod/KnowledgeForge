@@ -90,7 +90,6 @@ export const deleteThread = async (threadId) => {
     console.log(`Attempting to delete thread with ID: ${threadId}`);
     console.log(`Delete URL: /thread/${threadId}`);
     
-    // Ensure we have a valid threadId
     if (!threadId) {
       throw new Error('Thread ID is required for deletion');
     }
@@ -169,13 +168,11 @@ export const createEmptyThread = async (threadName = 'New Chat') => {
 
 export const getMindMap = async (threadId, documentId, socketId = null) => {
   try {
-    // Prepare the exact payload
     const payload = {
       thread_id: threadId,
       document_id: documentId
     };
     
-    // Prepare headers with socket ID for progress updates
     const headers = {
       'Content-Type': 'application/json'
     };
@@ -195,7 +192,6 @@ export const getMindMap = async (threadId, documentId, socketId = null) => {
         }
       }
     } else {
-      // Something else happened
       throw new Error('Error during request setup: ' + error.message);
     }
     
@@ -205,13 +201,11 @@ export const getMindMap = async (threadId, documentId, socketId = null) => {
 
 export const getGlobalMindMap = async (threadId, socketId = null) => {
   try {
-    // Prepare the exact payload
     const payload = {
       thread_id: threadId,
-      document_id: 'global' // This field is required by the API but for global mindmap, we just use a placeholder
+      document_id: 'global'
     };
     
-    // Prepare headers with socket ID for progress updates
     const headers = {
       'Content-Type': 'application/json'
     };
@@ -231,7 +225,6 @@ export const getGlobalMindMap = async (threadId, socketId = null) => {
         }
       }
     } else {
-      // Something else happened
       throw new Error('Error during request setup: ' + error.message);
     }
     
@@ -241,7 +234,6 @@ export const getGlobalMindMap = async (threadId, socketId = null) => {
 
 export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
   try {
-    // Prepare the payload
     const payload = {
       thread_id: threadId,
       document_ids: documentIds,
@@ -249,14 +241,13 @@ export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
     };
     
     const response = await api.post('/extra/wordcloud', payload, {
-      responseType: 'blob', // Important: This tells axios to expect binary data
-      timeout: 30000 // 30 second timeout
+      responseType: 'blob',
+      timeout: 30000
     });
     
     // Check if response is actually an image
     const contentType = response.headers['content-type'];
     if (!contentType || !contentType.startsWith('image/')) {
-      // Try to read as text to see if it's an error message
       try {
         const errorText = await response.data.text();
         throw new Error(errorText || 'Server returned non-image response');
@@ -265,7 +256,6 @@ export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
       }
     }
     
-    // Convert blob to URL for display
     const imageUrl = URL.createObjectURL(response.data);
     
     return {
@@ -275,34 +265,27 @@ export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
     };
   } catch (error) {
     if (error.response) {
-      // Check if the error response is JSON (not a blob)
       const contentType = error.response.headers['content-type'];
       
       if (contentType && contentType.includes('application/json')) {
-        // This is a JSON error response from FastAPI
         const errorMessage = error.response.data?.detail || error.response.data?.error || 'Unknown error from server';
         throw new Error(errorMessage);
       } else if (error.response.data instanceof Blob) {
-        // This is a blob error response - try to read it
         try {
           const errorText = await error.response.data.text();
           
-          // Try to parse as JSON for structured error
           try {
             const errorData = JSON.parse(errorText);
             
-            // Throw the specific error message from the backend
             const errorMessage = errorData.error || errorData.detail || errorText;
             throw new Error(errorMessage);
           } catch (parseError) {
-            // If not JSON, throw the raw text
             throw new Error(errorText);
           }
         } catch (readError) {
           throw new Error('Failed to generate word cloud - unknown error');
         }
       } else {
-        // Handle other response types
         throw new Error(error.response.data?.error || error.response.data?.detail || 'Failed to generate word cloud');
       }
     } else if (error.request) {
