@@ -2,7 +2,7 @@ import requests
 from langchain.llms.base import LLM
 from typing import Optional, List
 
-global_url = "https://llm.katiyar.xyz/query?model=gemma-lat:latest"
+global_url = "https://llm.katiyr.xyz/query?model=gemma-lat:latest"
 
 class MyServerLLM(LLM):
     """
