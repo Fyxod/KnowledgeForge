@@ -30,7 +30,7 @@ docker build -t samsung .
 
 ```bash
 docker run -it \
-           --env-file .env \ 
+           --env-file .env \
            --dns=8.8.8.8 \
            -p 3000:8080 \
          -p 8000:8000\
@@ -39,7 +39,7 @@ docker run -it \
 ```
 
 
-## Munaly Build 
+## Build from code
 ``` bash
 git clone https://github.ecodesamsung.com/SRIB-PRISM/TU_25TS14TU_Multi-Modal_Enterprise_Knowledge_Synthesis_Platform.git
 ```
@@ -48,7 +48,7 @@ git clone https://github.ecodesamsung.com/SRIB-PRISM/TU_25TS14TU_Multi-Modal_Ent
 cd Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
 ```
 
-- install teseract ocr 
+- install tesseract ocr 
 
   - Linux
     ```bash 
