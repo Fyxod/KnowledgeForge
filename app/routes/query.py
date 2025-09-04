@@ -89,34 +89,24 @@ async def query(request: Request, body: QueryRequest):
 
     thread["chats"].extend(new_messages)
     thread["updatedAt"] = now
-    
-    documents_used = []
-    if response.documents_used:
-        print(f"Processing {len(response.documents_used)} citations...")
+
+    chunks_used = []
+    if response.chunks_used:
+        print(f"Processing {len(response.chunks_used)} citations...")
         
-        for doc_i in response.documents_used:
+        for doc_i in response.chunks_used:
             for doc_j in response.documents:
                 if doc_i.document_id == doc_j["metadata"]["document_id"] and doc_i.page_no == doc_j["metadata"]["page_no"] and doc_i.chunk_index == doc_j["metadata"]["chunk_index"]:
-                    documents_used.append(doc_j)
+                    chunks_used.append(doc_j)
                     break
-    
-    print(f"Found {len(documents_used)} citation matches")
-    
-    # Update the agent message with citations
-    if documents_used:
-        thread["chats"][-1]["documents_used"] = documents_used
-    
+
+    print(f"Found {len(chunks_used)} citation matches")
+
     db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
 
 
     response = response.model_dump(exclude_none=True)
-    response["documents_used"] = documents_used
+    response["documents_used"] = chunks_used
     del response["search_queries_results"]
     del response["documents"]
     return response
-
-
-# {
-#   "thread_id":"8ee807b9-ce2f-4c7b-99ec-709f78fd7ce9",
-#   "question":"how is the day"
-# }

@@ -6,7 +6,7 @@ import asyncio
 import aiofiles
 from typing import List
 
-from core.constants import NODE_DESCRIPTION_LLM, NODE_GENERATION_LLM
+from core.constants import NODE_DESCRIPTION_LLM, NODE_GENERATION_LLM, GPU_NODE_GENERATION_LLM, GPU_NODE_DESCRIPTION_LLM
 from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
 from core.llm.outputs import FlatNodeWithDescriptionOutput, MindMapOutput, Node, MindMap
@@ -42,6 +42,7 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
                 model=NODE_GENERATION_LLM,
                 response_schema=MindMapOutput,
                 contents=prompt,
+                gpu_model=GPU_NODE_GENERATION_LLM
             )
             end = time.time()
             print(response)
@@ -158,6 +159,7 @@ async def add_node_descriptions(
                     contents=prompt,
                     model=NODE_DESCRIPTION_LLM,
                     response_schema=FlatNodeWithDescriptionOutput,
+                    gpu_model=GPU_NODE_DESCRIPTION_LLM
                 )
                 llm_res_aft = time.time()
                 print(

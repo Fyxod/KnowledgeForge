@@ -19,7 +19,7 @@ from app.socket_handler import sio
 from core.mind_map import create_mind_map
 from core.mind_map_global import create_mind_map_global
 from core.database import db
-from core.constants import SUMMARIZER_LLM
+from core.constants import SUMMARIZER_LLM, GPU_DOC_SUMMARIZER_LLM, GPU_GLOBAL_SUMMARIZER_LLM
 import re
 
 def limit_words(text, max_words=15000):
@@ -29,23 +29,120 @@ def limit_words(text, max_words=15000):
     return " ".join(words)
 
 
-def build_summarizer_prompt(document):
+# def build_summarizer_prompt(document):
+#     """
+#     Builds the summarizer prompt for a single document.
+#     """
+#     formatted_doc = {
+#         "document_id": document.id,
+#         "text": re.sub(r"[\x00\n\t]+", " ", document.full_text).strip(),
+#     }
+#     return summarize_documents_prompt(
+#         document=str(formatted_doc),
+#     )
+
+def build_chunk_summarizer_prompt(document_id: str, chunk_text: str, chunk_idx: int) -> str:
     """
-    Builds the summarizer prompt for a single document.
+    Builds the summarizer prompt for a single chunk of a document.
     """
-    formatted_doc = {
-        "document_id": document.id,
-        "text": re.sub(r"[\x00\n\t]+", " ", limit_words(document.full_text, 15000)).strip(),
+    formatted_chunk = {
+        "document_id": document_id,
+        # "chunk_index": chunk_idx,
+        "text": re.sub(r"[\x00\n\t]+", " ", chunk_text).strip(),
     }
-    return summarize_documents_prompt(
-        document=str(formatted_doc),
-    )
+    return summarize_documents_prompt(document=str(formatted_chunk))
+
+
+def chunk_text(text: str, max_words: int = 10000) -> list[str]:
+    """
+    Splits the text into chunks of up to `max_words` words.
+    """
+    words = text.split()
+    return [
+        " ".join(words[i : i + max_words])
+        for i in range(0, len(words), max_words)
+    ]
+
+
+async def process_document_with_chunks(document, user_id: str, thread_id: str):
+    """
+    Summarizes a document with conditional chunking:
+    - ≤10k words: summarize directly
+    - 10k-11k words: summarize directly (avoid unnecessary chunking)
+    - >11k words: split into chunks of ~10k and combine summaries
+    """
+    word_count = len(document.full_text.split())
+    partial_summaries = []
+
+    if word_count <= 11000:
+        # Just one summary, no chunking
+        prompt = build_chunk_summarizer_prompt(document.id, document.full_text, 0)
+        result = None
+        for attempt in range(5):
+            try:
+                result = await invoke_llm(
+                    response_schema=SummarizerLLMOutputSingle,
+                    contents=prompt,
+                    gpu_model=GPU_DOC_SUMMARIZER_LLM,
+                )
+                if result and result.summary and len(result.summary.split()) >= 5:
+                    document.summary = result.summary
+                    return
+            except Exception as e:
+                print(f"Error summarizing document {document.id}: {e}")
+        print(f"Failed to summarize document {document.id}")
+        return
+
+    # If >11k words → chunk + combine
+    chunks = chunk_text(document.full_text, max_words=10000)
+
+    # Step 1: Summarize each chunk
+    for idx, chunk in enumerate(chunks):
+        prompt = build_chunk_summarizer_prompt(document.id, chunk, idx)
+        result = None
+        for attempt in range(5):  # retry logic
+            try:
+                result = await invoke_llm(
+                    model=SUMMARIZER_LLM,
+                    response_schema=SummarizerLLMOutputSingle,
+                    contents=prompt,
+                    gpu_model=GPU_DOC_SUMMARIZER_LLM,
+                )
+                if result and result.summary and len(result.summary.split()) >= 5:
+                    partial_summaries.append(result.summary)
+                    print(f"Successfully summarized chunk {idx} of document {document.id}")
+                    break
+            except Exception as e:
+                print(f"Error summarizing chunk {idx} of document {document.id}: {e}")
+
+        if not result:
+            print(f"Failed to summarize chunk {idx} of document {document.id}")
+
+    # Step 2: Combine partial summaries into final summary
+    if partial_summaries:
+        combine_prompt = summarize_documents_prompt(
+            document=json.dumps(
+                {
+                    "document_id": document.id,
+                    "partial_summaries": partial_summaries,
+                },
+                ensure_ascii=False,
+            )
+        )
+        try:
+            combined_result = await invoke_llm(
+                model=SUMMARIZER_LLM,
+                response_schema=SummarizerLLMOutputSingle,
+                contents=combine_prompt,
+                gpu_model=GPU_DOC_SUMMARIZER_LLM,
+            )
+            if combined_result and combined_result.summary:
+                document.summary = combined_result.summary
+        except Exception as e:
+            print(f"Error combining summaries for document {document.id}: {e}")
 
 
 async def summarize_documents(parsed_data: Documents):
-    """
-    Asynchronously summarizes the parsed data in batches of up to 5 documents using the LLM.
-    """
     print("Inside summarizer")
     parsed_dir = f"data/{parsed_data.user_id}/threads/{parsed_data.thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
@@ -53,72 +150,21 @@ async def summarize_documents(parsed_data: Documents):
     documents = parsed_data.documents
 
     async def process_document(i, document):
-        prompt = build_summarizer_prompt(document)
-        start_time = time.time()
-        try:
+        await sio.emit(
+            f"{parsed_data.user_id}/progress",
+            {"message": f"Summarizing {document.title} in chunks"},
+        )
+        await process_document_with_chunks(document, parsed_data.user_id, parsed_data.thread_id)
+
+        if document.summary:
             await sio.emit(
                 f"{parsed_data.user_id}/progress",
-                {"message": f"Summarizing {document.title}"},
+                {"message": f"Completed summary for {document.title}"},
             )
-
-            result: SummarizerLLMOutputSingle | None = None
-            for attempt in range(5):  # max 5 attempts
-                try:
-                    await sio.emit(
-                        f"{parsed_data.user_id}/progress",
-                        {
-                            "message": f"Attempt {attempt + 1} of summarizing {document.title}"
-                        },
-                    )
-
-                    result = await invoke_llm(
-                        SUMMARIZER_LLM, SummarizerLLMOutputSingle, prompt
-                    )
-                    if result and result.summary and len(result.summary.split()) >= 5:
-                        break
-                    else:
-                        print(
-                            f"Document {i}: summary too short ({len(result.summary.split())} words). Retrying once..."
-                        )
-                except asyncio.TimeoutError:
-                    print(f"Document {i}: timeout on attempt {attempt+1}")
-                except Exception as e:
-                    print(f"Document {i}: error on attempt {attempt+1} -> {e}")
-
-            end_time = time.time()
-            if result:
-                await sio.emit(
-                    f"{parsed_data.user_id}/progress",
-                    {"message": f"Summary completed for {document.title}"},
-                )
-                print(f"Summary completed for document {i}")
-                print(f"LLM response time: {end_time - start_time:.2f} seconds")
-                print(f"Completed document {i} in {end_time - start_time:.2f} seconds")
-
-                document.summary = result.summary
-                # print("Entering mind map creation ", i)
-                # asyncio.create_task(
-                #     create_mind_map(
-                #         document, parsed_data.user_id, parsed_data.thread_id
-                #     )
-                # )
-                # await sio.emit(
-                #     f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
-                #     {"document_id": document.id, "status": True},
-                # )
-            else:
-                print(f"Document {i}: Failed to get valid summary after retries.")
-                await asyncio.sleep(2)  # wait 2 seconds before retry
-        except asyncio.TimeoutError:
-            print(f"Document {i} took longer than 120 seconds, skipping.")
-            await asyncio.sleep(2)  # wait 2 seconds before retry
-        except Exception as e:
-            print(f"Error processing document {i}: {e}")
-            print("Skipping this document")
-            await asyncio.sleep(2)  # wait 2 seconds before retry
+        else:
             await sio.emit(
-                f"{parsed_data.user_id}/{parsed_data.thread_id}/summary",
-                {"document_id": document.id, "status": False},
+                f"{parsed_data.user_id}/progress",
+                {"message": f"Failed to summarize {document.title}"},
             )
 
     try:
@@ -131,6 +177,7 @@ async def summarize_documents(parsed_data: Documents):
             ]
             await asyncio.gather(*(process_document(i, doc) for i, doc in batch))
 
+        # Save per-document summaries
         for document in parsed_data.documents:
             document_dict = document.model_dump()
             document_dict["thread_id"] = parsed_data.thread_id
@@ -142,6 +189,7 @@ async def summarize_documents(parsed_data: Documents):
 
             async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
                 await f.write(document_json)
+
         print("before global summarizer")
         asyncio.create_task(create_mind_map_global(parsed_data))
         await global_summarizer(parsed_data.user_id, parsed_data.thread_id)
@@ -212,7 +260,7 @@ async def global_summarizer(user_id: str, thread_id: str):
         start_time = time.time()
         print("Starting global summarization...")
         result: GlobalSummarizerLLMOutput = await invoke_llm(
-            SUMMARIZER_LLM, GlobalSummarizerLLMOutput, summary_prompt
+            model=SUMMARIZER_LLM, response_schema=GlobalSummarizerLLMOutput, contents=summary_prompt, gpu_model=GPU_GLOBAL_SUMMARIZER_LLM
         )
 
         end_time = time.time()

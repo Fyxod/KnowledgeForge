@@ -3,8 +3,8 @@ from langchain.llms.base import LLM
 from typing import Optional, List
 import re
 
-model = "qwen3:8b-30k-8k"
-global_url = f"https://llm.katiyar.xyz/query?model={model}"
+BASE_URL = "https://llm.katiyar.xyz/query"
+
 
 class MyServerLLM(LLM):
     """
@@ -12,8 +12,12 @@ class MyServerLLM(LLM):
     Supports LangChain-style calls.
     """
 
-    url: str = global_url
-    
+    model: str
+    url: str
+
+    def __init__(self, model: str, **kwargs):
+        super().__init__(model=model, url=f"{BASE_URL}?model={model}", **kwargs)
+
     @property
     def _llm_type(self) -> str:
         return "custom_server_llm"
@@ -26,13 +30,14 @@ class MyServerLLM(LLM):
             response = requests.post(
                 self.url,
                 json={"prompt": prompt},
-                timeout=120
+                timeout=200,
             )
             response.raise_for_status()
             data = response.json()
             print(data)
-            # return data.get("output", "")
-            cleaned_text = re.sub(r"<think>.*?</think>", "", data["content"], flags=re.DOTALL)
+            cleaned_text = re.sub(
+                r"<think>.*?</think>", "", data.get("content", ""), flags=re.DOTALL
+            )
             return cleaned_text
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Failed to call GPU LLM server: {e}") from e

@@ -3,8 +3,8 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class DocumentsUsed(BaseModel):
-    document_id: str = Field(description="The ID of the document used.")
+class ChunksUsed(BaseModel):
+    document_id: str = Field(description="The ID of the document used to which the chunk belongs.")
     # title: str = Field(description="The title of the document used.")
     page_no: int = Field(description="The page_no of the document used.")
     chunk_index: int = Field(description="The chunk_index used from the document.")
@@ -18,9 +18,9 @@ class MainLLMOutput(BaseModel):
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
     ] = Field(description="The action to take based on the answer.")
-    documents_used: Optional[List[DocumentsUsed]] = Field(
+    chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
-        description="List of documents used to generate the answer, if applicable.",
+        description="List of chunks used to generate the answer, if applicable.",
     )
     web_search_queries: Optional[List[str]] = Field(
         default=None,

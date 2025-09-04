@@ -11,7 +11,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from nltk.corpus import stopwords
-from core.constants import STOP_WORDS_EXTRACTION_LLM
+from core.constants import STOP_WORDS_EXTRACTION_LLM, GPU_STOP_WORDS_EXTRACTION_LLM
 from core.models.document import Documents
 from app.socket_handler import sio
 
@@ -142,10 +142,15 @@ async def create_stop_words(parsed_data: Documents):
         )
     print(f"Stop words created and saved in {stop_words_dir}" * 10)
 
+def limit_words(text, max_words=15000):
+    words = text.split()  # Split text into words (whitespace-based)
+    if len(words) > max_words:
+        words = words[:max_words]  # Cut off after max_words
+    return " ".join(words)
 
 async def get_stop_words_llm(text: str) -> list[str]:
     words = text.split()
-    batch_size = 40000
+    batch_size = 20000
     stopwords_set = set()
     num_batches = (len(words) + batch_size - 1) // batch_size
     for batch_idx in range(num_batches):
@@ -187,6 +192,7 @@ Guidelines:
                     model=STOP_WORDS_EXTRACTION_LLM,
                     response_schema=StopWordOutput,
                     remove_thinking=True,
+                    gpu_model=GPU_STOP_WORDS_EXTRACTION_LLM
                 )
                 stopwords_set.update(response.stopwords)
                 print(f"Stop words extracted for batch {batch_idx+1}")

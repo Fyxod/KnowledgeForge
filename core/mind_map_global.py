@@ -6,7 +6,7 @@ import asyncio
 import aiofiles
 from typing import List
 
-from core.constants import NODE_DESCRIPTION_LLM, NODE_GENERATION_LLM
+from core.constants import NODE_DESCRIPTION_LLM, NODE_GENERATION_LLM, GPU_NODE_DESCRIPTION_LLM, GPU_NODE_GENERATION_LLM
 from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
 from core.llm.outputs import FlatNodeWithDescriptionOutput, MindMapOutput, Node, GlobalMindMap
@@ -42,6 +42,7 @@ async def create_mind_map_global(parsed_data: Documents):
                 model=NODE_GENERATION_LLM,
                 response_schema=MindMapOutput,
                 contents=prompt,
+                gpu_model=GPU_NODE_GENERATION_LLM
             )
             end = time.time()
             print(response)
@@ -123,7 +124,7 @@ async def add_node_descriptions_global(
         for i in range(0, total_nodes, DESCRIPTION_PROCESSING_BATCH_SIZE)
     ]
 
-    doc_retriever = get_user_retriever(parsed_data.user_id, parsed_data.thread_id, k=15)
+    doc_retriever = get_user_retriever(parsed_data.user_id, parsed_data.thread_id, k=8)
     async def process_batch(batch_nodes, batch_idx):
         batch_relevant_texts = []
         for node in batch_nodes:
@@ -147,6 +148,7 @@ async def add_node_descriptions_global(
                     contents=prompt,
                     model=NODE_DESCRIPTION_LLM,
                     response_schema=FlatNodeWithDescriptionOutput,
+                    gpu_model=GPU_NODE_DESCRIPTION_LLM
                 )
                 llm_res_aft = time.time()
                 print(

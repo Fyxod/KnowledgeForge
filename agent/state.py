@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from langchain_core.messages import BaseMessage
-from core.llm.outputs import DocumentsUsed
+from core.llm.outputs import ChunksUsed
 from core.constants import *
 
 class AgentState(BaseModel):
@@ -26,7 +26,7 @@ class AgentState(BaseModel):
     summary: Optional[str] = None
     
     answer: Optional[str] = None
-    documents_used: List[DocumentsUsed] = Field(default_factory=list)
+    chunks_used: List[ChunksUsed] = Field(default_factory=list)
 
     attempts: int = 0
     web_search_attempts: int = 0
