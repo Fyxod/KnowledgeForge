@@ -4,7 +4,9 @@ from pydantic import BaseModel, Field
 
 
 class ChunksUsed(BaseModel):
-    document_id: str = Field(description="The ID of the document used to which the chunk belongs.")
+    document_id: str = Field(
+        description="The ID of the document used to which the chunk belongs."
+    )
     # title: str = Field(description="The title of the document used.")
     page_no: int = Field(description="The page_no of the document used.")
     chunk_index: int = Field(description="The chunk_index used from the document.")
@@ -31,10 +33,20 @@ class MainLLMOutput(BaseModel):
     )
 
 
-class REWRITELLMOutput(BaseModel):
-    rewritten_query: str = Field(
-        description="The rewritten query for semantic vector search based on the user's message."
+class DecompositionLLMOutput(BaseModel):
+    requires_decomposition: bool = Field(
+        description="Indicates whether the query requires decomposition."
     )
+    resolved_query: str = Field(
+        description="The resolved query after context resolution."
+    )
+    sub_queries: List[str] = Field(
+        description="List of sub-queries generated from the original query."
+    )
+
+
+class CombinationLLMOutput(BaseModel):
+    answer: str = Field(description="The combined answer from multiple sub-answers.")
 
 
 class SummarizerLLMOutputSingle(BaseModel):

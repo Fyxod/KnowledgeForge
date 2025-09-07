@@ -6,16 +6,38 @@ import asyncio
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from agent.graph_helpers import build_main_prompt, build_rewrite_prompt, parallel_search
+from agent.graph_helpers import build_main_prompt, parallel_search
 from agent.state import AgentState
 from agent.tools.search import search_tool
 
 from core.constants import *
 from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
-from core.llm.outputs import MainLLMOutput, REWRITELLMOutput
-from core.constants import QUERY_LLM, REWRITE_QUERY_LLM
+from core.llm.outputs import MainLLMOutput
+from core.constants import QUERY_LLM, GPU_QUERY_LLM
 
+async def retriever(state: AgentState) -> AgentState:
+    """Retrieves documents based on the user's question.
+    This is a placeholder function that simulates document retrieval.
+    """
+    start_time = time.time()
+    doc_retriever = get_user_retriever(state.user_id, state.thread_id, k=17)  # try different k values
+    end_time = time.time()
+    print(
+        f"Initialized retriever in {end_time - start_time:.2f} seconds for user {state.user_id}"
+    )
+
+    start_time = time.time()
+    retrieved_docs = await doc_retriever.ainvoke(
+        state.query or state.resolved_query or state.original_query
+    )
+    end_time = time.time()
+    print(
+        f"Retrieved {len(retrieved_docs)} documents in {end_time - start_time:.2f} seconds for user {state.user_id}"
+    )
+    retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
+    state.chunks = retrieved_docs
+    return state
 
 async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
@@ -24,19 +46,17 @@ async def generate(state: AgentState) -> AgentState:
     for attempt in range(max_retries):
         try:
             start_time = time.time()
-            result: MainLLMOutput = await invoke_llm(QUERY_LLM, MainLLMOutput, prompt, 
-                                                    #  remove_thinking=True
-                                                     )
+            result: MainLLMOutput = await invoke_llm(QUERY_LLM, MainLLMOutput, prompt, gpu_model=GPU_QUERY_LLM)
             end_time = time.time()
             print("LLM result: ", result)
             print(f"LLM response time: {end_time - start_time:.2f} seconds")
-            state.messages.append(HumanMessage(content=state.question))  # controversial
+            state.messages.append(HumanMessage(content=state.query))  # controversial
             state.messages.append(AIMessage(content=result.answer))
             state.messages.append(AIMessage("Action taken: " + result.action))
             state.answer = result.answer
             state.action = result.action
-            state.documents_used = result.documents_used or []
-            state.search_queries = result.web_search_queries or []
+            state.chunks_used = result.chunks_used or []
+            state.web_search_queries = result.web_search_queries or []
             state.attempts += 1
             state.document_id = result.document_id or None
             return state
@@ -44,31 +64,30 @@ async def generate(state: AgentState) -> AgentState:
             print(f"Error in generate (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 state.answer = "An error occurred while generating the answer. Please try again later."
-                state.action = "FAILURE"
+                state.action = FAILURE
                 return state
             await asyncio.sleep(1)  # brief pause before retry
 
 
 async def web_search(state: AgentState) -> AgentState:
-    queries = state.search_queries
+    queries = state.web_search_queries
     max_retries = 3
     for attempt in range(max_retries):
         try:
             results = await parallel_search(queries, search_tool)
             state.web_search = True
-            state.documents = []
+            # state.chunks = []
             state.messages.append(
                 HumanMessage(content=f"Web search initiated for queries: {queries}")
             )
             state.web_search_attempts += 1
-            state.search_queries_results = results
-            # state.messages.append(HumanMessage(content=f"Web search results: {results}"))
+            state.web_search_results = results
             return state
         except Exception as e:
             print(f"Error in web_search (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 state.web_search = False
-                state.search_queries_results = []
+                state.web_search_results = []
                 state.messages.append(
                     AIMessage(content="Web search failed. Please try again later.")
                 )
@@ -89,31 +108,6 @@ async def failure(state: AgentState) -> AgentState:
     return state
     # return END if the above line ever throws error
 
-
-async def rewrite_query(state: AgentState) -> AgentState:
-    """
-    Rewrites the user's question for semantic vector search.
-    This function uses the most recent conversation turns to rewrite the question.
-    Retries up to three times in case of error.
-    """
-    prompt = build_rewrite_prompt(state)
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            start_time = time.time()
-            result: REWRITELLMOutput = await invoke_llm(REWRITE_QUERY_LLM, REWRITELLMOutput, prompt)
-            end_time = time.time()
-            print(f"Rewrite LLM response time: {end_time - start_time:.2f} seconds")
-            rewritten_query = result.rewritten_query or state.question
-            state.retrieval_query = rewritten_query
-            return state
-        except Exception as e:
-            print(f"Error in rewrite_query (attempt {attempt+1}/{max_retries}): {e}")
-            if attempt == max_retries - 1:
-                state.retrieval_query = state.question
-                return state
-            await asyncio.sleep(1)
-
 async def document_summarizer(state: AgentState) -> AgentState:
     document_id = state.document_id
     if not document_id:
@@ -129,7 +123,7 @@ async def document_summarizer(state: AgentState) -> AgentState:
 
     parsed_dir = f"data/{state.user_id}/threads/{state.thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
-    for doc in state.documents:
+    for doc in state.chunks:
         if(doc["metadata"]["document_id"] == document_id):
             file_name = doc["metadata"]["file_name"]
             title = doc["metadata"]["title"]
@@ -143,10 +137,10 @@ async def document_summarizer(state: AgentState) -> AgentState:
             if not os.path.exists(json_file_path):
                 print(f"Parsed file {json_file_path} does not exist, skipping...")
                 continue
-            
+
             async with aiofiles.open(json_file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
-            
+
             document_data = json.loads(content)
             if document_data.get("summary"):
                 state.answer = f"Summary: \n {document_data['summary']}"
@@ -174,7 +168,7 @@ async def global_summarizer(state: AgentState) -> AgentState:
         
     async with aiofiles.open(json_file_path, "r", encoding="utf-8") as f:
         content = await f.read()
-        
+
     global_summary_data = json.loads(content)
     if global_summary_data.get("summary"):
         state.answer = f"{global_summary_data['summary']}"
@@ -186,30 +180,6 @@ async def global_summarizer(state: AgentState) -> AgentState:
         state.after_summary = GENERATE
 
     return state
-
-async def retriever(state: AgentState) -> AgentState:
-    """Retrieves documents based on the user's question.
-    This is a placeholder function that simulates document retrieval.
-    """
-    start_time = time.time()
-    doc_retriever = get_user_retriever(state.user_id, state.thread_id, k=75)  # try different k values
-    end_time = time.time()
-    print(
-        f"Initialized retriever in {end_time - start_time:.2f} seconds for user {state.user_id}"
-    )
-
-    start_time = time.time()
-    retrieved_docs = await doc_retriever.ainvoke(
-        state.retrieval_query or state.question
-    )
-    end_time = time.time()
-    print(
-        f"Retrieved {len(retrieved_docs)} documents in {end_time - start_time:.2f} seconds for user {state.user_id}"
-    )
-    retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
-    state.documents = retrieved_docs
-    return state
-
 
 def main_router(state: AgentState) -> str:
     if state.action == ANSWER:

@@ -4,7 +4,6 @@ from agent.graph_nodes import (
     failure,
     generate,
     retriever,
-    rewrite_query,
     main_router,
     summary_router,
     web_search,
@@ -19,7 +18,6 @@ from core.constants import *
 graph_builder = StateGraph(AgentState)
 
 # Add nodes
-graph_builder.add_node(REWRITE_QUERY, rewrite_query)
 graph_builder.add_node(RETRIEVER, retriever)
 graph_builder.add_node(GENERATE, generate)
 graph_builder.add_node(ROUTER, main_router)
@@ -30,10 +28,9 @@ graph_builder.add_node(DOCUMENT_SUMMARIZER, document_summarizer)
 graph_builder.add_node(GLOBAL_SUMMARIZER, global_summarizer)
 
 # Set the entry point
-graph_builder.set_entry_point(REWRITE_QUERY)
+graph_builder.set_entry_point(RETRIEVER)
 
 # Define edges
-graph_builder.add_edge(REWRITE_QUERY, RETRIEVER)
 graph_builder.add_edge(RETRIEVER, GENERATE)
 
 # Conditional edges from GENERATE via router

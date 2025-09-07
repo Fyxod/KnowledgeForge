@@ -6,37 +6,44 @@ from langchain_core.messages import BaseMessage
 from core.llm.outputs import ChunksUsed
 from core.constants import *
 
+
 class AgentState(BaseModel):
     user_id: str
     thread_id: str
-    question: str
-    original_question: str
+    query: str
+    resolved_query: str
+    original_query: str
     messages: List[BaseMessage]
 
-    documents: List[Dict[str, Any]] = Field(default_factory=list)
+    chunks: List[Dict[str, Any]] = Field(default_factory=list)
     web_search: bool = False
-    search_queries: List[str] = Field(default_factory=list)
-    search_queries_results: List[Dict[str, Any]] = Field(default_factory=list)
-    document_id: Optional[str] = None # if using document_summarizer
-    after_summary: Optional[Literal[f"{ANSWER}", f"{GENERATE}", f"{DOCUMENT_SUMMARIZER}", f"{GLOBAL_SUMMARIZER}"]] = Field(
-        default=f"{GENERATE}",
-        description="The action to be taken after summarization."
+    web_search_queries: List[str] = Field(default_factory=list)
+    web_search_results: List[Dict[str, Any]] = Field(default_factory=list)
+    document_id: Optional[str] = None  # if using document_summarizer
+    after_summary: Optional[Literal[f"{ANSWER}", f"{GENERATE}"]] = Field(
+        default=f"{GENERATE}", description="The action to be taken after summarization."
     )
 
     summary: Optional[str] = None
-    
+
     answer: Optional[str] = None
     chunks_used: List[ChunksUsed] = Field(default_factory=list)
 
     attempts: int = 0
     web_search_attempts: int = 0
 
-    action: Optional[Literal[f"{ANSWER}", f"{WEB_SEARCH}", f"{DOCUMENT_SUMMARIZER}", f"{GLOBAL_SUMMARIZER}"]] = Field(
+    action: Optional[
+        Literal[
+            f"{ANSWER}",
+            f"{WEB_SEARCH}",
+            f"{DOCUMENT_SUMMARIZER}",
+            f"{GLOBAL_SUMMARIZER}",
+            f"{FAILURE}",
+        ]
+    ] = Field(
         default=None,
-        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', or 'global_summarizer'."
+        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', or 'failure'.",
     )
-    retrieval_query: Optional[str] = None
 
     # Used to determine the next step in the state graph
     next: Optional[str] = None
- 

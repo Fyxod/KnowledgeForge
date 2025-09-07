@@ -21,8 +21,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from langchain.schema import AIMessage, HumanMessage
-
+from core.llm.outputs import DecompositionLLMOutput
 from agent.builder import Agent, AgentState
+from agent.decomposition import decomposition_node
+from agent.combination import combination_node
 from core.database import db
 
 router = APIRouter(prefix="/query", tags=["query"])
@@ -63,18 +65,49 @@ async def query(request: Request, body: QueryRequest):
             messages.append(HumanMessage(content=message["content"]))
         elif message["type"] == "agent":
             messages.append(AIMessage(content=message["content"]))
+    ds = time.time()
+    decomposition_result: DecompositionLLMOutput = await decomposition_node(question, messages)
+    de = time.time() - ds
+    print(f"Decomposition time: {de:.2f} seconds")
+    decomposed = decomposition_result.requires_decomposition
 
-    state = AgentState(
-        user_id=user_id,
-        thread_id=thread_id,
-        question=question,
-        original_question=question,
-        messages=messages,
-        web_search=False,
-    )
     start_time = time.time()
-    response = await Agent.ainvoke(state)
-    response = AgentState(**response)
+    sub_answers = []
+    if decomposed:
+        print("TO BE DECOMPOSED")
+        print("No of sub-queries:", len(decomposition_result.sub_queries))
+        for idx, sub_query in enumerate(decomposition_result.sub_queries):
+            qs = time.time()
+            state = await Agent.ainvoke(AgentState(
+                user_id=user_id,
+                thread_id=thread_id,
+                query=sub_query,
+                resolved_query=decomposition_result.resolved_query,
+                original_query=question,
+                messages=[],
+                web_search=False,
+            ))
+            state = AgentState(**state)
+            qe = time.time() - qs
+            print(f"Sub-query '{idx}. {sub_query}' processed in {qe:.2f} seconds")
+            sub_answers.append({"sub_query": sub_query, "sub_answer": state.answer})
+        cs = time.time()
+        answer = await combination_node(sub_answers, decomposition_result.resolved_query, question)
+        ce = time.time() - cs
+        print(f"Combination time: {ce:.2f} seconds")
+    else:
+        print("NO DECOMPOSITION REQUIRED")
+        state = await Agent.ainvoke(AgentState(
+            user_id=user_id,
+            thread_id=thread_id,
+            query=decomposition_result.resolved_query,
+            resolved_query=decomposition_result.resolved_query,
+            original_query=question,
+            messages=[],
+            web_search=False,
+        ))
+        state = AgentState(**state)
+        answer = state.answer
     end_time = time.time()
 
     print("I actually reached here" * 10)
@@ -83,30 +116,38 @@ async def query(request: Request, body: QueryRequest):
     # Update the thread with the new messages
     now = datetime.now(timezone.utc)
     new_messages = [
-        {"type": "user", "content": response.question, "timestamp": now},
-        {"type": "agent", "content": response.answer, "timestamp": now},
+        {"type": "user", "content": question, "timestamp": now},
+        {"type": "agent", "content": answer, "timestamp": now},
     ]
 
     thread["chats"].extend(new_messages)
     thread["updatedAt"] = now
+    
 
-    chunks_used = []
-    if response.chunks_used:
-        print(f"Processing {len(response.chunks_used)} citations...")
+    # chunks_used = []
+    # if response.chunks_used:
+    #     print(f"Processing {len(response.chunks_used)} citations...")
         
-        for doc_i in response.chunks_used:
-            for doc_j in response.documents:
-                if doc_i.document_id == doc_j["metadata"]["document_id"] and doc_i.page_no == doc_j["metadata"]["page_no"] and doc_i.chunk_index == doc_j["metadata"]["chunk_index"]:
-                    chunks_used.append(doc_j)
-                    break
+    #     for doc_i in response.chunks_used:
+    #         for doc_j in response.documents:
+    #             if doc_i.document_id == doc_j["metadata"]["document_id"] and doc_i.page_no == doc_j["metadata"]["page_no"] and doc_i.chunk_index == doc_j["metadata"]["chunk_index"]:
+    #                 chunks_used.append(doc_j)
+    #                 break
 
-    print(f"Found {len(chunks_used)} citation matches")
+    # print(f"Found {len(chunks_used)} citation matches")
+
+    # # Update the agent message with citations
+    # if chunks_used:
+    #     thread["chats"][-1]["documents_used"] = chunks_used
 
     db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
-
-
-    response = response.model_dump(exclude_none=True)
-    response["documents_used"] = chunks_used
-    del response["search_queries_results"]
-    del response["documents"]
+    response = {
+        "thread_id": thread_id,
+        "user_id": user_id,
+        "question": question,
+        "answer": answer,
+    }
+    # response["documents_used"] = chunks_used
+    # del response["search_queries_results"]
+    # del response["documents"]
     return response

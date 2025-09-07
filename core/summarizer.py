@@ -10,7 +10,7 @@ from core.llm.outputs import (
     GlobalSummarizerLLMOutput,
     SummarizerLLMOutputSingle,
 )
-from core.llm.prompts.summarizer_query import (
+from core.llm.prompts.summarizer_prompt import (
     global_summarization_prompt,
     summarize_documents_prompt,
 )

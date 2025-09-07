@@ -1,10 +1,8 @@
 import asyncio
 from typing import Dict, List
 
-
 from agent.state import AgentState
-from core.llm.prompts.main_query import main_prompt
-from core.llm.prompts.rewrite_query import rewrite_query_prompt
+from core.llm.prompts.main_prompt import main_prompt
 
 
 def get_recent_history(
@@ -34,24 +32,13 @@ def build_main_prompt(state: AgentState):
     """
 
     recent_chats = get_recent_history(
-        state.messages, turns=7
+        state.messages, turns=5
     )  # fine tune the no of turns
 
     return main_prompt(
         messages=recent_chats,
-        documents=state.documents,
-        question=state.question,
-        # question=state.question + "\n" + (state.retrieval_query or ""),  # append retrieval query if exists,
+        chunks=state.chunks,
+        question=state.query or state.resolved_query or state.original_query,
         summary=state.summary,
-        search_queries_results=state.search_queries_results,
+        web_search_results=state.web_search_results or [],
     )
-
-
-def build_rewrite_prompt(state: AgentState):
-    """Builds the rewrite prompt for the agent based on the current state."""
-    recent_history = get_recent_history(state.messages, turns=5)
-    prompt = rewrite_query_prompt(
-        recent_history=recent_history,
-        question=state.question,
-    )
-    return prompt

@@ -1,9 +1,10 @@
 from langchain_tavily import TavilySearch
 from dotenv import load_dotenv
+
 load_dotenv()
 
 search_tool = TavilySearch(
-    search_depth="basic"
+    search_depth="advanced"
 )  # also have to try the below web search function
 
 

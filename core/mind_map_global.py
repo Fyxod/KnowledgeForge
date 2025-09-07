@@ -270,8 +270,6 @@ def build_mind_maps_description_prompt(nodes, relevant_texts):
         You are to write clear, concise, and informative descriptions of 40-50 words for each of the following mind map nodes.
         For each node, the description should explain what the concept means. It should be useful to the user, no blabbering about anything else.
         Take reference and help from the provided source text for each node but don't reference them in the description itself.
-
-        Nodes:
     """
     for i, node in enumerate(nodes):
         prompt += f"\nNode {i+1}:\n  Node id: {node['id']}\n  Node title: {node['title']}\n  Source text: {relevant_texts[i]}\n"
