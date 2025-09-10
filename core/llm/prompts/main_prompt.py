@@ -27,6 +27,7 @@ def main_prompt(
                 "- `document_summarizer`: Use this if you need the summary of a specific document for answering the user's question. You must provide the `document_id`.\n"
                 "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question.\n"
                 "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly.\n"
+                "Give your final answer in clear, structured Markdown format for readability.\n"
             ),
         }
     )
@@ -39,6 +40,13 @@ def main_prompt(
                 "parts": f"Context from which you must try to answer the question:\n{chunks}\n",
             }
         )
+
+    # Conversation history
+    for m in messages:
+        if m.type == "human":
+            contents.append({"role": "user", "parts": m.content})
+        elif m.type == "ai":
+            contents.append({"role": "assistant", "parts": m.content})
 
     # Optional summary
     if summary:
@@ -58,12 +66,6 @@ def main_prompt(
             }
         )
 
-    # Conversation history
-    for m in messages:
-        if m.type == "human":
-            contents.append({"role": "user", "parts": m.content})
-        elif m.type == "ai":
-            contents.append({"role": "assistant", "parts": m.content})
 
     # Final user question
     contents.append({"role": "user", "parts": question})

@@ -18,12 +18,12 @@ API_KEYS = [
     settings.API_KEY_5,
 ]
 
-openai_client = AsyncOpenAI(api_key='settings.VISION_API')
-OPENAI_MODEL = "gpt-4o-mini"
+openai_client = AsyncOpenAI(api_key=settings.VISION_API)
+FALLBACK_OPENAI_MODEL = "gpt-4o-mini"
 
 count = 0
 
-async def invoke_llm(model: str, response_schema, contents, gpu_model=None, remove_thinking=False, api=False):
+async def invoke_llm(gpu_model, response_schema, contents, fallback_model, port=11434, remove_thinking=False):
     """
     Structured LLM invocation with fallbacks:
     1. Custom GPU server (via MyServerLLM)
@@ -37,17 +37,11 @@ async def invoke_llm(model: str, response_schema, contents, gpu_model=None, remo
     parser = PydanticOutputParser(pydantic_object=response_schema)
 
     # 1. Try GPU server first
-
-    #REMOVE THIS 
-    #REMOVE THIS 
-    #REMOVE THIS 
-    #REMOVE THIS 
-    #REMOVE THIS 
-    #REMOVE THIS 
-    if not api and gpu_model:
+    if gpu_model:
         try:
             print("Trying GPU server first...")
-            gpu_llm = MyServerLLM(model=gpu_model)
+            print("client received gpu_model:", gpu_model, "port:", port)
+            gpu_llm = MyServerLLM(model=gpu_model, port=port)
             prompt = f"""
             Extract structured data according to this model:
             {parser.get_format_instructions()}
@@ -66,63 +60,54 @@ async def invoke_llm(model: str, response_schema, contents, gpu_model=None, remo
         except Exception as e:
             print(f"GPU server failed: {e}, ")
 
-    # 2. Loop through API keys
-    #REMOVE THIS 
-    #REMOVE THIS 
-    #REMOVE THIS 
-    #REMOVE THIS 
-    #REMOVE THIS 
-    #REMOVE THIS 
-    if api:
-        for _ in range(len(API_KEYS)):
-            api_key = API_KEYS[count % len(API_KEYS)]
-            client = genai.Client(api_key=api_key)
-            count = (count + 1) % len(API_KEYS)
+    # 2. Loop through fallback API keys
+    for _ in range(len(API_KEYS)):
+        api_key = API_KEYS[count % len(API_KEYS)]
+        client = genai.Client(api_key=api_key)
+        count = (count + 1) % len(API_KEYS)
 
-            try:
-                if remove_thinking:
-                    config = genai.types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=response_schema,
-                        temperature=0.2,
-                        max_output_tokens=200000,
-                        safety_settings=[],
-                        thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
-                    )
-                else:
-                    config = genai.types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=response_schema,
-                        temperature=0.2,
-                        max_output_tokens=200000,
-                        safety_settings=[],
-                    )
-
-                response = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        client.models.generate_content,
-                        model=model,
-                        contents=str(contents),
-                        config=config,
-                    ),
-                    timeout=45,
+        try:
+            if remove_thinking:
+                config = genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=response_schema,
+                    temperature=0.2,
+                    max_output_tokens=200000,
+                    safety_settings=[],
+                    thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
+                )
+            else:
+                config = genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=response_schema,
+                    temperature=0.2,
+                    max_output_tokens=200000,
+                    safety_settings=[],
                 )
 
-                print("Google API success")
-                print(response)
-                return response.parsed
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.models.generate_content,
+                    model=fallback_model,
+                    contents=str(contents),
+                    config=config,
+                ),
+                timeout=80,
+            )
 
-            except asyncio.TimeoutError:
-                print("Google API timeout, switching key...")
-            except Exception as e:
-                print(f"Google API error: {e}")
-                await asyncio.sleep(0.1)
+            return response.parsed
+
+        except asyncio.TimeoutError:
+            print("API timeout, switching key...")
+        except Exception as e:
+            print(f"API error: {e}")
+            await asyncio.sleep(0.1)
 
     # 3. Fallback to OpenAI
     try:
         print("Falling back to OpenAI...")
         response = await openai_client.chat.completions.create(
-            model=OPENAI_MODEL,
+            model=FALLBACK_OPENAI_MODEL,
             messages=[{"role": "user", "content": str(contents)}],
             response_format={
                 "type": "json_schema",

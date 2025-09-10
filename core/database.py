@@ -22,7 +22,7 @@ user_schema = {
                 "bsonType": "object",
                 "additionalProperties": {
                     "bsonType": "object",
-                    "required": ["documents", "chats", "createdAt", "updatedAt"],
+                    "required": ["documents", "chats", "createdAt", "updatedAt", "extra_done"],
                     "properties": {
                         "thread_name": {"bsonType": "string"},
                         "documents": {
@@ -52,13 +52,19 @@ user_schema = {
                             }
                         },
                         "createdAt": {"bsonType": "date"},
-                        "updatedAt": {"bsonType": "date"}
+                        "updatedAt": {"bsonType": "date"},
+                        "extra_done": {
+                            "bsonType": "bool",
+                            "description": "Indicates if extra task is done",
+                            "default": False
+                        }
                     }
                 }
             }
         }
     }
 }
+
 
 try:
     db.create_collection("users", validator=user_schema)

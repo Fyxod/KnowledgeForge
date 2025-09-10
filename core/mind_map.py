@@ -39,10 +39,11 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
             print(f"invoking mind map node creation llm (attempt {attempt + 1})")
             print(prompt)
             response: MindMapOutput = await invoke_llm(
-                model=NODE_GENERATION_LLM,
                 response_schema=MindMapOutput,
                 contents=prompt,
-                gpu_model=GPU_NODE_GENERATION_LLM
+                gpu_model=GPU_NODE_GENERATION_LLM.model,
+                port=GPU_NODE_GENERATION_LLM.port,
+                fallback_model=NODE_GENERATION_LLM,
             )
             end = time.time()
             print(response)
@@ -135,7 +136,7 @@ async def add_node_descriptions(
         for i in range(0, total_nodes, DESCRIPTION_PROCESSING_BATCH_SIZE)
     ]
 
-    doc_retriever = get_user_retriever(user_id, thread_id, document.id, k=25)
+    doc_retriever = get_user_retriever(user_id, thread_id, document.id, k=8)
     async def process_batch(batch_nodes, batch_idx):
         batch_relevant_texts = []
         for node in batch_nodes:
@@ -157,9 +158,10 @@ async def add_node_descriptions(
                 llm_res_bef = time.time()
                 response: FlatNodeWithDescriptionOutput = await invoke_llm(
                     contents=prompt,
-                    model=NODE_DESCRIPTION_LLM,
                     response_schema=FlatNodeWithDescriptionOutput,
-                    gpu_model=GPU_NODE_DESCRIPTION_LLM
+                    gpu_model=GPU_NODE_DESCRIPTION_LLM.model,
+                    port=GPU_NODE_DESCRIPTION_LLM.port,
+                    fallback_model=NODE_DESCRIPTION_LLM,
                 )
                 llm_res_aft = time.time()
                 print(

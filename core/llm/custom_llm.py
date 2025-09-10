@@ -15,8 +15,9 @@ class MyServerLLM(LLM):
     model: str
     url: str
 
-    def __init__(self, model: str, **kwargs):
-        super().__init__(model=model, url=f"{BASE_URL}?model={model}", **kwargs)
+    def __init__(self, model: str, port: int = 11434, **kwargs):
+        print(f"Initializing MyServerLLM with model={model} at port={port}")
+        super().__init__(model=model, url=f"{BASE_URL}?model={model}&port={port}", **kwargs)
 
     @property
     def _llm_type(self) -> str:

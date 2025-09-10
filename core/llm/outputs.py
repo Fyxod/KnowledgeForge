@@ -54,6 +54,10 @@ class SummarizerLLMOutputSingle(BaseModel):
     summary: str = Field(description="The summary of the document.")
 
 
+class SummarizerLLMOutputCombination(BaseModel):
+    summary: str = Field(description="The summary of the document.")
+
+
 class SummarizerLLMOutput(BaseModel):
     summaries: List[SummarizerLLMOutputSingle] = Field(
         description="List of summaries for each document."

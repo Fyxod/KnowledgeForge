@@ -38,6 +38,7 @@ from core.models.document import Documents
 from core.summarizer import summarize_documents
 from core.word_cloud import create_stop_words
 from app.socket_handler import sio
+from core.utils.extra_done_check import mark_extra_done
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
@@ -74,6 +75,7 @@ async def upload_file(
     now = datetime.datetime.now(datetime.timezone.utc)
 
     # Create new thread if thread_id not provided
+
     if not thread_id:
         print("Creating a new thread")
         thread_id = str(uuid.uuid4())
@@ -84,10 +86,12 @@ async def upload_file(
                 "chats": [],
                 "createdAt": now,
                 "updatedAt": now,
+                "extra_done": False,
             }
         }
         db.users.update_one({"userId": user_id}, {"$set": new_thread})
     else:
+        mark_extra_done(user_id, thread_id, False)
         print(f"Updating existing thread with ID: {thread_id}")
         # Check if thread exists for this user
         user_threads = user.get("threads", {})
@@ -111,7 +115,6 @@ async def upload_file(
     parsed_data: Documents = await process_files(files_data, user_id, thread_id)
     
     asyncio.create_task(summarize_documents(parsed_data.model_copy()))
-    asyncio.create_task(create_stop_words(parsed_data.model_copy()))
     # Check if any documents were successfully parsed
     if not parsed_data.documents:
         return {"error": "No documents could be processed successfully"}

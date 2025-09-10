@@ -11,9 +11,10 @@ async def combination_node(
 
     result: CombinationLLMOutput = await invoke_llm(
         contents=combined_prompt,
-        gpu_model=GPU_COMBINATION_LLM,
-        model=COMBINATION_LLM,
+        gpu_model=GPU_COMBINATION_LLM.model,
+        port=GPU_COMBINATION_LLM.port,
         response_schema=CombinationLLMOutput,
+        fallback_model=COMBINATION_LLM,
     )
 
     return result.answer

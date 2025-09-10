@@ -14,6 +14,7 @@ Returns (JSON):
     - On success: The agent's response as a dictionary, containing the answer and relevant state fields, with all None values excluded.
     - On error: A dictionary with an "error" key and a descriptive message, e.g., {"error": "User not authenticated"}, {"error": "User not found"}, or {"error": "Thread not found"}.
 """
+import asyncio
 import json
 import time
 from datetime import datetime, timezone
@@ -26,6 +27,8 @@ from agent.builder import Agent, AgentState
 from agent.decomposition import decomposition_node
 from agent.combination import combination_node
 from core.database import db
+from core.utils.extra_done_check import is_extra_done 
+from core.constants import GPU_QUERY_LLM, GPU_QUERY_LLM2
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -72,27 +75,57 @@ async def query(request: Request, body: QueryRequest):
     decomposed = decomposition_result.requires_decomposition
 
     start_time = time.time()
-    sub_answers = []
     if decomposed:
+        can_use_second_model = is_extra_done(user_id, thread_id)
         print("TO BE DECOMPOSED")
         print("No of sub-queries:", len(decomposition_result.sub_queries))
+
+        async def run_worker(model, task_queue, results):
+            while True:
+                try:
+                    idx, sub_query = task_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+
+                qs = time.time()
+                state = await Agent.ainvoke(AgentState(
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    query=sub_query,
+                    resolved_query=decomposition_result.resolved_query,
+                    original_query=question,
+                    messages=[],
+                    web_search=False,
+                    llm=model
+                ))
+                state = AgentState(**state)
+                qe = time.time() - qs
+                print(f"Sub-query '{idx}. {sub_query}' processed in {qe:.2f} seconds using {model}")
+
+                results[idx] = {"sub_query": sub_query, "sub_answer": state.answer}
+
+        # Prepare a queue of sub-queries
+        task_queue = asyncio.Queue()
         for idx, sub_query in enumerate(decomposition_result.sub_queries):
-            qs = time.time()
-            state = await Agent.ainvoke(AgentState(
-                user_id=user_id,
-                thread_id=thread_id,
-                query=sub_query,
-                resolved_query=decomposition_result.resolved_query,
-                original_query=question,
-                messages=[],
-                web_search=False,
-            ))
-            state = AgentState(**state)
-            qe = time.time() - qs
-            print(f"Sub-query '{idx}. {sub_query}' processed in {qe:.2f} seconds")
-            sub_answers.append({"sub_query": sub_query, "sub_answer": state.answer})
+            task_queue.put_nowait((idx, sub_query))
+
+        # Results stored in index order
+        results = [None] * len(decomposition_result.sub_queries)
+
+        # Start with the first model
+        workers = [asyncio.create_task(run_worker(GPU_QUERY_LLM, task_queue, results))]
+
+    # Add the second model only if allowed
+        if can_use_second_model:
+            print("Using second model for parallel execution")
+            workers.append(asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results)))
+        else:
+            print("Second model disabled, running only on first model")
+
+        await asyncio.gather(*workers)
+
         cs = time.time()
-        answer = await combination_node(sub_answers, decomposition_result.resolved_query, question)
+        answer = await combination_node(results, decomposition_result.resolved_query, question)
         ce = time.time() - cs
         print(f"Combination time: {ce:.2f} seconds")
     else:
@@ -105,6 +138,7 @@ async def query(request: Request, body: QueryRequest):
             original_query=question,
             messages=[],
             web_search=False,
+            llm=GPU_QUERY_LLM
         ))
         state = AgentState(**state)
         answer = state.answer
@@ -122,23 +156,6 @@ async def query(request: Request, body: QueryRequest):
 
     thread["chats"].extend(new_messages)
     thread["updatedAt"] = now
-    
-
-    # chunks_used = []
-    # if response.chunks_used:
-    #     print(f"Processing {len(response.chunks_used)} citations...")
-        
-    #     for doc_i in response.chunks_used:
-    #         for doc_j in response.documents:
-    #             if doc_i.document_id == doc_j["metadata"]["document_id"] and doc_i.page_no == doc_j["metadata"]["page_no"] and doc_i.chunk_index == doc_j["metadata"]["chunk_index"]:
-    #                 chunks_used.append(doc_j)
-    #                 break
-
-    # print(f"Found {len(chunks_used)} citation matches")
-
-    # # Update the agent message with citations
-    # if chunks_used:
-    #     thread["chats"][-1]["documents_used"] = chunks_used
 
     db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
     response = {
@@ -147,7 +164,5 @@ async def query(request: Request, body: QueryRequest):
         "question": question,
         "answer": answer,
     }
-    # response["documents_used"] = chunks_used
-    # del response["search_queries_results"]
-    # del response["documents"]
+    
     return response

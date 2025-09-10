@@ -16,12 +16,15 @@ from core.llm.client import invoke_llm
 from core.llm.outputs import MainLLMOutput
 from core.constants import QUERY_LLM, GPU_QUERY_LLM
 
+
 async def retriever(state: AgentState) -> AgentState:
     """Retrieves documents based on the user's question.
     This is a placeholder function that simulates document retrieval.
     """
     start_time = time.time()
-    doc_retriever = get_user_retriever(state.user_id, state.thread_id, k=17)  # try different k values
+    doc_retriever = get_user_retriever(
+        state.user_id, state.thread_id, k=17
+    )  # try different k values
     end_time = time.time()
     print(
         f"Initialized retriever in {end_time - start_time:.2f} seconds for user {state.user_id}"
@@ -39,6 +42,7 @@ async def retriever(state: AgentState) -> AgentState:
     state.chunks = retrieved_docs
     return state
 
+
 async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
 
@@ -46,7 +50,13 @@ async def generate(state: AgentState) -> AgentState:
     for attempt in range(max_retries):
         try:
             start_time = time.time()
-            result: MainLLMOutput = await invoke_llm(QUERY_LLM, MainLLMOutput, prompt, gpu_model=GPU_QUERY_LLM)
+            result: MainLLMOutput = await invoke_llm(
+                response_schema=MainLLMOutput,
+                contents=prompt,
+                gpu_model=state.llm.model,
+                port=state.llm.port,
+                fallback_model=QUERY_LLM,
+            )
             end_time = time.time()
             print("LLM result: ", result)
             print(f"LLM response time: {end_time - start_time:.2f} seconds")
@@ -108,15 +118,16 @@ async def failure(state: AgentState) -> AgentState:
     return state
     # return END if the above line ever throws error
 
+
 async def document_summarizer(state: AgentState) -> AgentState:
     document_id = state.document_id
     if not document_id:
         print("No document ID provided for summarization.")
         state.summary = "No summary available for this document."
         return state
-    
+
     print(f"Summarizing document with ID: {document_id}")
-    
+
     state.messages.append(
         HumanMessage(content=f"Summarizing document with ID: {document_id}")
     )
@@ -124,7 +135,7 @@ async def document_summarizer(state: AgentState) -> AgentState:
     parsed_dir = f"data/{state.user_id}/threads/{state.thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
     for doc in state.chunks:
-        if(doc["metadata"]["document_id"] == document_id):
+        if doc["metadata"]["document_id"] == document_id:
             file_name = doc["metadata"]["file_name"]
             title = doc["metadata"]["title"]
             if not file_name:
@@ -146,7 +157,9 @@ async def document_summarizer(state: AgentState) -> AgentState:
                 state.answer = f"Summary: \n {document_data['summary']}"
                 state.summary = f"Summary for document {document_id}, title: {title}, summary: {document_data['summary']}"
                 state.after_summary = ANSWER
-                print(f"Summary for document {document_id}, title: {title}, summary: {document_data['summary']}")
+                print(
+                    f"Summary for document {document_id}, title: {title}, summary: {document_data['summary']}"
+                )
             else:
                 state.summary = "No summary available for this document. Use your own knowledge and context to provide an answer."
                 state.after_summary = GENERATE
@@ -154,6 +167,7 @@ async def document_summarizer(state: AgentState) -> AgentState:
             break
 
     return state
+
 
 async def global_summarizer(state: AgentState) -> AgentState:
     parsed_dir = f"data/{state.user_id}/threads/{state.thread_id}"
@@ -165,14 +179,16 @@ async def global_summarizer(state: AgentState) -> AgentState:
         state.summary = "No global summary available for the documents. Use your own knowledge and context to provide an answer."
         state.after_summary = GENERATE
         return state
-        
+
     async with aiofiles.open(json_file_path, "r", encoding="utf-8") as f:
         content = await f.read()
 
     global_summary_data = json.loads(content)
     if global_summary_data.get("summary"):
         state.answer = f"{global_summary_data['summary']}"
-        state.summary = f"Global summary of all the documents: {global_summary_data['summary']}"
+        state.summary = (
+            f"Global summary of all the documents: {global_summary_data['summary']}"
+        )
         state.after_summary = ANSWER
         print(f"Global summary: {global_summary_data['summary']}")
     else:
@@ -181,12 +197,13 @@ async def global_summarizer(state: AgentState) -> AgentState:
 
     return state
 
+
 def main_router(state: AgentState) -> str:
     if state.action == ANSWER:
         print("Answering the question")
         return ANSWER
 
-    elif state.action == WEB_SEARCH :
+    elif state.action == WEB_SEARCH:
         print("Initiating web search")
         if state.web_search_attempts < MAX_WEB_SEARCH:
             return WEB_SEARCH
@@ -200,6 +217,7 @@ def main_router(state: AgentState) -> str:
         return GLOBAL_SUMMARIZER
 
     return ANSWER
+
 
 def summary_router(state: AgentState) -> str:
     if state.after_summary == ANSWER:

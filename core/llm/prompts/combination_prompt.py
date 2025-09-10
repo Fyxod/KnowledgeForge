@@ -31,7 +31,8 @@ Instructions:
 5. If Sub_answers contradict, note the discrepancy clearly.
 6. If any Sub_answer is missing or empty, state that information was not found.
 7. Maintain clarity, conciseness, and factual tone.
-
+8. Retain the formatting of any lists/headings/bullets etc from Sub_answers.
+9. Ensure the final answer is in **clear, structured Markdown** for readability.
 Output:
 Return only the final synthesized answer, written for the end user, without repeating the Resolved_query.
 """

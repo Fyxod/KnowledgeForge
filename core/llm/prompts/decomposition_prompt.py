@@ -157,15 +157,15 @@ query: “What are the limitations of GPT-4o and what are the recommended mitiga
 }
 
 Quantifier + Enumeration
-chat_history: "The DL Data Transfer Procedures are split into two subsections: 5.2.2.1 Procedures for DRBs mapped on RLC AM, and 5.2.2.2 Procedures for DRBs mapped on RLC UM."
-query: "Explain both subsections"
+chat_history: ""The Employee Training Program is divided into two modules: 3.1 Technical Skills Development, and 3.2 Soft Skills Enhancement.""
+query: "Explain both modules."
 
 {
   "requires_decomposition": true,
-  "resolved_query": "Explain both subsections of the DL Data Transfer Procedures",
+  "resolved_query": "Explain both modules of the Employee Training Program",
   "sub_queries": [
-    "Explain subsection 5.2.2.1 (Procedures for DRBs mapped on RLC AM)",
-    "Explain subsection 5.2.2.2 (Procedures for DRBs mapped on RLC UM)"
+    "Explain module 3.1 (Technical Skills Development)",
+    "Explain module 3.2 (Soft Skills Enhancement)"
   ]
 }
 """

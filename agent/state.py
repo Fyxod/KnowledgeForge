@@ -47,3 +47,4 @@ class AgentState(BaseModel):
 
     # Used to determine the next step in the state graph
     next: Optional[str] = None
+    llm: Optional[GPULLMConfig] = Field(default=None, description="The model to be used for the agent.")  # add more validation
