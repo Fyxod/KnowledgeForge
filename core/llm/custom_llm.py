@@ -1,44 +1,42 @@
-import requests
+from langchain_ollama import ChatOllama
 from langchain.llms.base import LLM
 from typing import Optional, List
+from pydantic import PrivateAttr
 import re
-
-BASE_URL = "https://llm.katiyar.xyz/query"
 
 
 class MyServerLLM(LLM):
     """
-    Custom LLM wrapper for a GPU-hosted LLM accessible via HTTP.
-    Supports LangChain-style calls.
+    Custom LLM wrapper using ChatOllama to call a locally running Ollama model.
     """
 
     model: str
-    url: str
+    port: int
+    _client: ChatOllama = PrivateAttr()
 
     def __init__(self, model: str, port: int = 11434, **kwargs):
-        print(f"Initializing MyServerLLM with model={model} at port={port}")
-        super().__init__(model=model, url=f"{BASE_URL}?model={model}&port={port}", **kwargs)
+        print(f"Initializing MyOllamaLLM with model={model} at port={port}")
+        super().__init__(model=model, port=port, **kwargs)
+
+        self._client = ChatOllama(
+            model=model,
+            base_url=f"http://localhost:{port}",
+            **kwargs
+        )
 
     @property
     def _llm_type(self) -> str:
-        return "custom_server_llm"
+        return "ollama_local_llm"
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
         """
-        Synchronously call the GPU LLM endpoint.
+        Call the local Ollama model using ChatOllama.
         """
         try:
-            response = requests.post(
-                self.url,
-                json={"prompt": prompt},
-                timeout=200,
-            )
-            response.raise_for_status()
-            data = response.json()
-            print(data)
+            response = self._client.invoke(prompt, stop=stop)
             cleaned_text = re.sub(
-                r"<think>.*?</think>", "", data.get("content", ""), flags=re.DOTALL
+                r"<think>.*?</think>", "", response.content, flags=re.DOTALL
             )
             return cleaned_text
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Failed to call GPU LLM server: {e}") from e
+        except Exception as e:
+            raise RuntimeError(f"Failed to call Ollama locally: {e}") from e

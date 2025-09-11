@@ -109,7 +109,7 @@ async def create_mind_map_global(parsed_data: Documents):
 
 
 DESCRIPTION_PROCESSING_BATCH_SIZE = 4
-PARALLEL_LLM_CALLS = 2
+PARALLEL_LLM_CALLS = 1 # CPU can handle only 1 I think
 
 
 async def add_node_descriptions_global(
@@ -279,7 +279,7 @@ def build_mind_maps_node_prompt_global(parsed_data: Documents):
             text = document.summary
         else:
             print("Using title for mind map creation")
-            words = document.full_text.split()[:15000]
+            words = document.full_text.split()[:10000]
             text = " ".join(words)
         final_text += f"\n{document.title}\n\n{text}\n\n"
 

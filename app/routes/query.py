@@ -76,7 +76,6 @@ async def query(request: Request, body: QueryRequest):
 
     start_time = time.time()
     if decomposed:
-        can_use_second_model = is_extra_done(user_id, thread_id)
         print("TO BE DECOMPOSED")
         print("No of sub-queries:", len(decomposition_result.sub_queries))
 
@@ -114,13 +113,6 @@ async def query(request: Request, body: QueryRequest):
 
         # Start with the first model
         workers = [asyncio.create_task(run_worker(GPU_QUERY_LLM, task_queue, results))]
-
-    # Add the second model only if allowed
-        if can_use_second_model:
-            print("Using second model for parallel execution")
-            workers.append(asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results)))
-        else:
-            print("Second model disabled, running only on first model")
 
         await asyncio.gather(*workers)
 

@@ -25,6 +25,7 @@ from core.constants import (
     GPU_DOC_SUMMARIZER_LLM,
     GPU_GLOBAL_SUMMARIZER_LLM,
 )
+from core.constants import SWITCHES
 import re
 
 
@@ -173,35 +174,39 @@ async def summarize_documents(parsed_data: Documents):
                 {"message": f"Failed to summarize {document.title}"},
             )
 
-    try:
-        batch_size = 5
-        total_docs = len(documents)
-        for batch_start in range(0, total_docs, batch_size):
-            batch = [
-                (i, documents[i])
-                for i in range(batch_start, min(batch_start + batch_size, total_docs))
-            ]
-            await asyncio.gather(*(process_document(i, doc) for i, doc in batch))
+    if SWITCHES["SUMMARIZATION"]:
+        try:
+            batch_size = 1
+            total_docs = len(documents)
+            for batch_start in range(0, total_docs, batch_size):
+                batch = [
+                    (i, documents[i])
+                    for i in range(batch_start, min(batch_start + batch_size, total_docs))
+                ]
+                await asyncio.gather(*(process_document(i, doc) for i, doc in batch))
 
-        # Save per-document summaries
-        for document in parsed_data.documents:
-            document_dict = document.model_dump()
-            document_dict["thread_id"] = parsed_data.thread_id
-            document_dict["user_id"] = parsed_data.user_id
-            document_json = json.dumps(document_dict, ensure_ascii=False)
+            # Save per-document summaries
+            for document in parsed_data.documents:
+                document_dict = document.model_dump()
+                document_dict["thread_id"] = parsed_data.thread_id
+                document_dict["user_id"] = parsed_data.user_id
+                document_json = json.dumps(document_dict, ensure_ascii=False)
 
-            name, _ = os.path.splitext(document.file_name)
-            json_file_path = os.path.join(parsed_dir, f"{name}.json")
+                name, _ = os.path.splitext(document.file_name)
+                json_file_path = os.path.join(parsed_dir, f"{name}.json")
 
-            async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
-                await f.write(document_json)
+                async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
+                    await f.write(document_json)
+        except Exception as e:
+            print(f"Error during summarization: {e}")
 
-        print("before global summarizer")
+    if SWITCHES["MIND_MAP"]:
         asyncio.create_task(create_mind_map_global(parsed_data))
+
+    if SWITCHES["SUMMARIZATION"]:
+        print("before global summarizer")
         await global_summarizer(parsed_data.user_id, parsed_data.thread_id)
 
-    except Exception as e:
-        print(f"Error during summarization: {e}")
 
 
 async def global_summarizer(user_id: str, thread_id: str):
