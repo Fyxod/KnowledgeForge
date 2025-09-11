@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 # Ollama model name for local deployment
-OLLAMA_MODEL = "qwen3:4b-15k-8k"
+OLLAMA_MODEL = "qwen3:4b"
 
 # SETTINGS
 SWITCHES = {
