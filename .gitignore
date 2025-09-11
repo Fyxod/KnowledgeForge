@@ -2,6 +2,7 @@
 .txt
 .pdf
 data
+.virtual
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
