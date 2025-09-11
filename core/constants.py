@@ -5,13 +5,14 @@ OLLAMA_MODEL = "qwen3:4b"
 
 # SETTINGS
 SWITCHES = {
-    "MIND_MAP": False,  # For long documents, mind map will be better if SUMMARIZATION = True
-    "SUMMARIZATION": False,
-    "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
-    "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
+    "MIND_MAP": False,               # For long documents, mind map will be better if SUMMARIZATION = True
+                                     # For Cpu based testing we suggest to keep both False
+    "SUMMARIZATION": False,          # Summery is used by model to get a general idea of the document and for generation of nodes in mind map
+    "FALLBACK_TO_GEMINI": False,     # Fallback to Gemini if Ollama fails
+    "FALLBACK_TO_OPENAI": False,     # Fallback to OpenAI if BOTH Ollama and Gemini fails
 }
 
-PORT = 11434
+PORT = 11434  # Default port for Ollama API
 
 
 class GPULLMConfig(BaseModel):
@@ -31,9 +32,10 @@ GPU_NODE_GENERATION_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
 GPU_NODE_DESCRIPTION_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
 
 # Fallback LLM models
+# Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
 SUMMARIZER_LLM = "gemini-2.0-flash"
 QUERY_LLM = "gemini-2.5-flash"
-DECOMPOSITION_LLM = "gemini-2.0-flash"
+DECOMPOSITION_LLM = "gemini-2.0-flash" 
 COMBINATION_LLM = "gemini-2.0-flash"
 NODE_GENERATION_LLM = "gemini-2.5-flash"
 NODE_DESCRIPTION_LLM = "gemini-2.0-flash"
