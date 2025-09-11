@@ -6,27 +6,29 @@ import httpx
 from PIL import Image
 import pytesseract
 from core.constants import IMAGE_PARSER_LLM
-# Optional for Windows:
-# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 URL = "https://llm.katiar.xyz/vision-query"
 MODEL = IMAGE_PARSER_LLM
-# gemma=True
+
 
 async def image_parser(image_path: str, retries: int = 3) -> str:
     """
     Parse image text using Gemma vision API.
     Falls back to Tesseract OCR if Gemma fails after `retries` attempts.
-    Always returns plain text.
+    Always returns plain text or empty string if everything fails.
     """
 
     def tesseract_parse() -> str:
         """Fallback OCR with Tesseract."""
-        image = Image.open(image_path).convert("RGB")
-        return pytesseract.image_to_string(image)
+        try:
+            image = Image.open(image_path).convert("RGB")
+            return pytesseract.image_to_string(image)
+        except Exception as e:
+            print(f"[Tesseract] Exception: {e}")
+            return ""
 
     async def gemma_parse() -> str | None:
-        """Try Gemma vision API with retries, return plain text."""
+        """Try Gemma vision API with retries, return plain text or None."""
         for attempt in range(1, retries + 1):
             try:
                 start = time.time()
@@ -39,33 +41,36 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
 
                 async with httpx.AsyncClient() as client:
                     response = await client.post(URL, files=files, params=params)
-                
+
                 end = time.time()
                 print(f"[Gemma attempt {attempt}] Time taken: {end - start:.2f} seconds")
 
                 if response.status_code == 200:
                     data = response.json()
-                        
                     if isinstance(data, dict) and "text" in data:
                         return data["text"]
-                    return str(data) 
+                    return str(data)
 
                 print(f"[Gemma attempt {attempt}] Failed with status {response.status_code}: {response.text}")
 
             except Exception as e:
                 print(f"[Gemma attempt {attempt}] Exception: {e}")
-                print(e)
+
             await asyncio.sleep(1)
 
         return None
 
-    gemma_result = None
-    # gemma_result = await gemma_parse()
-    if gemma_result:
-        return gemma_result.strip()
+    try:
+        # gemma_result = await gemma_parse()
+        gemma_result = None
+        if gemma_result:
+            return gemma_result.strip()
+    except Exception as e:
+        print(f"using Tesseract")
 
     # fallback to Tesseract
-    print("[Fallback] Using Tesseract OCR")
-    return (await asyncio.to_thread(tesseract_parse)).strip()
-
-
+    try:
+        return (await asyncio.to_thread(tesseract_parse)).strip()
+    except Exception as e:
+        print(f"[Fallback Tesseract] Fatal exception: {e}")
+        return ""
