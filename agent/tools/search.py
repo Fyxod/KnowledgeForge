@@ -1,13 +1,35 @@
-from langchain_tavily import TavilySearch
 from dotenv import load_dotenv
+from tavily import TavilyClient
+import os
+import asyncio
 
+# Load environment variables
 load_dotenv()
+tavily_api_key = os.getenv("TAVILY_API_KEY")
 
-search_tool = TavilySearch(
-    search_depth="advanced"
-)  # also have to try the below web search function
+# Initialize Tavily client
+client = TavilyClient(api_key=tavily_api_key)
 
-
+async def search_tavily(query: str, max_results: int = 5, depth: str = "advanced"):
+    """
+    Perform an asynchronous web search using Tavily API.
+    
+    Args:
+        query (str): The search query string.
+        max_results (int): Maximum number of results to return (default=5).
+        depth (str): Search depth, "basic" or "advanced" (default="advanced").
+    
+    Returns:
+        dict: Tavily API response containing search results.
+    """
+    return await asyncio.to_thread(
+        client.search,
+        query=query,
+        include_answer="advanced",
+        search_depth=depth,
+        max_results=max_results,
+        include_favicon=True,
+    )
 # or this maybe, we'll see
 # def search(queries: list, max_results: int = 5, word_limit: int = 300):
 #     """

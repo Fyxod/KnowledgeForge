@@ -28,16 +28,19 @@ from agent.decomposition import decomposition_node
 from agent.combination import combination_node
 from core.database import db
 from core.utils.extra_done_check import is_extra_done 
-from core.constants import GPU_QUERY_LLM, GPU_QUERY_LLM2
-
+from core.constants import GPU_QUERY_LLM, GPU_QUERY_LLM2, INTERNAL, EXTERNAL
+from agent.tools.search import search_tavily as search_tool
+from typing import Literal
 router = APIRouter(prefix="/query", tags=["query"])
 
 
 class QueryRequest(BaseModel):
     thread_id: str
     question: str
-
-
+    mode: Literal[
+        f"{INTERNAL}",
+        f"{EXTERNAL}"
+    ]
 @router.post("/")
 async def query(request: Request, body: QueryRequest):
     payload = request.state.user
@@ -47,8 +50,9 @@ async def query(request: Request, body: QueryRequest):
 
     thread_id = body.thread_id
     question = body.question
+    mode = body.mode
 
-    print(f"Received query for thread_id: {thread_id} with question: {question}")
+    print(f"Received query for thread_id: {thread_id} with question: {question} and mode: {mode}")
 
     user_id = payload.userId
     print(f"User ID from payload: {user_id}")
@@ -83,7 +87,7 @@ async def query(request: Request, body: QueryRequest):
         async def run_worker(model, task_queue, results):
             while True:
                 try:
-                    idx, sub_query = task_queue.get_nowait()
+                    idx, query_data = task_queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
 
@@ -91,29 +95,69 @@ async def query(request: Request, body: QueryRequest):
                 state = await Agent.ainvoke(AgentState(
                     user_id=user_id,
                     thread_id=thread_id,
-                    query=sub_query,
+                    query=query_data["query"],
                     resolved_query=decomposition_result.resolved_query,
                     original_query=question,
                     messages=[],
                     web_search=False,
-                    llm=model
+                    llm=model,
+                    initial_search_answer=query_data["answer"],
+                    initial_search_results=query_data["results"],
+                    mode=mode
                 ))
+                
                 state = AgentState(**state)
                 qe = time.time() - qs
-                print(f"Sub-query '{idx}. {sub_query}' processed in {qe:.2f} seconds using {model}")
+                print(f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {model}")
 
-                results[idx] = {"sub_query": sub_query, "sub_answer": state.answer}
+                results[idx] = {"sub_query": query_data["query"], "sub_answer": state.answer}
 
         # Prepare a queue of sub-queries
+        if mode == EXTERNAL:
+            search_results = await asyncio.gather(
+                *(search_tool(sub_query) for sub_query in decomposition_result.sub_queries)
+            )
+
+            all_favicons = []
+            cleaned_results = []
+
+            for res in search_results:
+                favicons = [r.get("favicon") for r in res.get("results", []) if r.get("favicon")]
+                all_favicons.extend(favicons)
+
+                # Strip unwanted keys
+                for r in res.get("results", []):
+                    r.pop("raw_content", None)
+                    r.pop("score", None)
+                    r.pop("favicon", None)
+
+                cleaned_results.append({
+                    "query": res["query"],
+                    "answer": res.get("answer", None),
+                    "results": res.get("results", None),
+                })
+
+        else:
+            all_favicons = []
+            cleaned_results = [
+                {
+                    "query": sub_query,
+                    "answer": None,
+                    "results": None,
+                }
+                for sub_query in decomposition_result.sub_queries
+            ]
+
         task_queue = asyncio.Queue()
-        for idx, sub_query in enumerate(decomposition_result.sub_queries):
-            task_queue.put_nowait((idx, sub_query))
+        for idx, query_data in enumerate(cleaned_results):
+            task_queue.put_nowait((idx, query_data))
 
         # Results stored in index order
-        results = [None] * len(decomposition_result.sub_queries)
+        results = [None] * len(cleaned_results)
 
         # Start with the first model
         workers = [asyncio.create_task(run_worker(GPU_QUERY_LLM, task_queue, results))]
+
 
     # Add the second model only if allowed
         if can_use_second_model:
@@ -130,6 +174,17 @@ async def query(request: Request, body: QueryRequest):
         print(f"Combination time: {ce:.2f} seconds")
     else:
         print("NO DECOMPOSITION REQUIRED")
+        if mode == EXTERNAL:
+            search_result = await search_tool(decomposition_result.resolved_query)
+        else:
+            search_result = {}
+        all_favicons = [r.get("favicon") for r in search_result.get("results", []) if r.get("favicon")]
+
+        for r in search_result.get("results", []):
+            r.pop("raw_content", None)
+            r.pop("score", None)
+            r.pop("favicon", None)
+            
         state = await Agent.ainvoke(AgentState(
             user_id=user_id,
             thread_id=thread_id,
@@ -138,8 +193,12 @@ async def query(request: Request, body: QueryRequest):
             original_query=question,
             messages=[],
             web_search=False,
-            llm=GPU_QUERY_LLM
+            llm=GPU_QUERY_LLM,
+            mode=mode,
+            initial_search_answer=search_result.get("answer", None),
+            initial_search_results=search_result.get("results", None)
         ))
+
         state = AgentState(**state)
         answer = state.answer
     end_time = time.time()

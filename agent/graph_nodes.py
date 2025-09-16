@@ -8,13 +8,13 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from agent.graph_helpers import build_main_prompt, parallel_search
 from agent.state import AgentState
-from agent.tools.search import search_tool
+from agent.tools.search import search_tavily as search_tool
 
 from core.constants import *
 from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
-from core.llm.outputs import MainLLMOutput
-from core.constants import QUERY_LLM, GPU_QUERY_LLM
+from core.llm.outputs import MainLLMOutputExternal, MainLLMOutputInternal
+from core.constants import QUERY_LLM
 
 
 async def retriever(state: AgentState) -> AgentState:
@@ -50,13 +50,19 @@ async def generate(state: AgentState) -> AgentState:
     for attempt in range(max_retries):
         try:
             start_time = time.time()
-            result: MainLLMOutput = await invoke_llm(
-                response_schema=MainLLMOutput,
+            if state.mode == EXTERNAL:
+                response_schema = MainLLMOutputExternal
+            else:
+                response_schema = MainLLMOutputInternal
+                
+            result = await invoke_llm(
+                response_schema=response_schema,
                 contents=prompt,
                 gpu_model=state.llm.model,
                 port=state.llm.port,
                 fallback_model=QUERY_LLM,
             )
+            result = response_schema.model_validate(result)
             end_time = time.time()
             print("LLM result: ", result)
             print(f"LLM response time: {end_time - start_time:.2f} seconds")
@@ -66,7 +72,7 @@ async def generate(state: AgentState) -> AgentState:
             state.answer = result.answer
             state.action = result.action
             state.chunks_used = result.chunks_used or []
-            state.web_search_queries = result.web_search_queries or []
+            state.web_search_queries = getattr(result, "web_search_queries", []) or []
             state.attempts += 1
             state.document_id = result.document_id or None
             return state
@@ -102,7 +108,7 @@ async def web_search(state: AgentState) -> AgentState:
                     AIMessage(content="Web search failed. Please try again later.")
                 )
                 return state
-            await asyncio.sleep(1)  # brief pause before retry
+            await asyncio.sleep(0.5)  # brief pause before retry
 
 
 async def failure(state: AgentState) -> AgentState:

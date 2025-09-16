@@ -70,7 +70,7 @@ from core.models.user import (
     UserLoginModel,
     UserResponseModel,
 )
-
+from core.utils.bcrypt import hash_password, verify_password
 router = APIRouter(prefix="/user", tags=["user"])
 
 

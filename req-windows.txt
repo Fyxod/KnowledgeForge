@@ -14,6 +14,7 @@ cachetools==5.5.2
 certifi==2025.7.14
 chardetng_py==0.3.4
 charset-normalizer==3.4.2
+tavily-python
 chromadb==1.0.15
 click==8.2.1
 colorama==0.4.6

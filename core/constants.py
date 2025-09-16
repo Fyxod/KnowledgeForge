@@ -10,7 +10,8 @@ FAILURE = "failure"
 GLOBAL_SUMMARIZER = "global_summarizer"
 DOCUMENT_SUMMARIZER = "document_summarizer"
 MAX_WEB_SEARCH = 2
-
+INTERNAL = "Internal"
+EXTERNAL = "External"
 
 class GPULLMConfig(BaseModel):
     model: str
