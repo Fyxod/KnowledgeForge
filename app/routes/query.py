@@ -40,7 +40,7 @@ class QueryRequest(BaseModel):
     mode: Literal[
         f"{INTERNAL}",
         f"{EXTERNAL}"
-    ]
+    ] = EXTERNAL
 @router.post("/")
 async def query(request: Request, body: QueryRequest):
     payload = request.state.user
@@ -101,8 +101,8 @@ async def query(request: Request, body: QueryRequest):
                     messages=[],
                     web_search=False,
                     llm=model,
-                    initial_search_answer=query_data["answer"],
-                    initial_search_results=query_data["results"],
+                    initial_search_answer=query_data["answer"] or "",
+                    initial_search_results=query_data["results"] or [],
                     mode=mode
                 ))
                 
@@ -121,21 +121,32 @@ async def query(request: Request, body: QueryRequest):
             all_favicons = []
             cleaned_results = []
 
-            for res in search_results:
-                favicons = [r.get("favicon") for r in res.get("results", []) if r.get("favicon")]
-                all_favicons.extend(favicons)
+            for idx, sub_query in enumerate(decomposition_result.sub_queries):
+                if idx < len(search_results) and search_results[idx]:
+                    res = search_results[idx]
 
-                # Strip unwanted keys
-                for r in res.get("results", []):
-                    r.pop("raw_content", None)
-                    r.pop("score", None)
-                    r.pop("favicon", None)
+                    favicons = [r.get("favicon") for r in res.get("results", []) if r.get("favicon")]
+                    all_favicons.extend(favicons)
 
-                cleaned_results.append({
-                    "query": res["query"],
-                    "answer": res.get("answer", None),
-                    "results": res.get("results", None),
-                })
+                    # Strip unwanted keys
+                    for r in res.get("results", []):
+                        r.pop("raw_content", None)
+                        r.pop("score", None)
+                        r.pop("favicon", None)
+
+                    cleaned_results.append({
+                        "query": res.get("query", sub_query),
+                        "answer": res.get("answer", None),
+                        "results": res.get("results", None),
+                    })
+                else:
+                    # No search result → keep subquery with None values
+                    cleaned_results.append({
+                        "query": sub_query,
+                        "answer": None,
+                        "results": None,
+                    })
+
 
         else:
             all_favicons = []
@@ -195,8 +206,8 @@ async def query(request: Request, body: QueryRequest):
             web_search=False,
             llm=GPU_QUERY_LLM,
             mode=mode,
-            initial_search_answer=search_result.get("answer", None),
-            initial_search_results=search_result.get("results", None)
+            initial_search_answer=search_result.get("answer", ""),
+            initial_search_results=search_result.get("results", [])
         ))
 
         state = AgentState(**state)
@@ -213,10 +224,18 @@ async def query(request: Request, body: QueryRequest):
         {"type": "agent", "content": answer, "timestamp": now},
     ]
 
-    thread["chats"].extend(new_messages)
-    thread["updatedAt"] = now
+    db.users.update_one(
+        {"userId": user_id},
+        {
+            "$push": {
+                f"threads.{thread_id}.chats": {"$each": new_messages}
+            },
+            "$set": {
+                f"threads.{thread_id}.updatedAt": now
+            }
+        }
+    )
 
-    db.users.update_one({"userId": user_id}, {"$set": {f"threads.{thread_id}": thread}})
     response = {
         "thread_id": thread_id,
         "user_id": user_id,

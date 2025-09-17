@@ -57,7 +57,7 @@ class DecompositionLLMOutput(BaseModel):
         description="The resolved query after context resolution."
     )
     sub_queries: List[str] = Field(
-        description="List of sub-queries generated from the original query."
+        description="List of standalone sub-queries generated from the original query."
     )
 
 

@@ -62,11 +62,12 @@ async def process_document_with_chunks(document, user_id: str, thread_id: str):
     - >11k words: split into chunks of ~10k and combine summaries
     """
     word_count = len(document.full_text.split())
+    print("no of words: ", word_count)
     partial_summaries = []
 
     if word_count <= 11000:
         # Just one summary, no chunking
-        prompt = build_chunk_summarizer_prompt(document.id, document.full_text, 0)
+        prompt = build_chunk_summarizer_prompt(document.id, document.full_text)
         result = None
         for attempt in range(5):
             try:
@@ -90,7 +91,7 @@ async def process_document_with_chunks(document, user_id: str, thread_id: str):
 
     # Step 1: Summarize each chunk
     for idx, chunk in enumerate(chunks):
-        prompt = build_chunk_summarizer_prompt(document.id, chunk, idx)
+        prompt = build_chunk_summarizer_prompt(document.id, chunk)
         result = None
         for attempt in range(5):  # retry logic
             try:

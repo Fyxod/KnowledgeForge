@@ -37,7 +37,8 @@ class MyServerLLM(LLM):
             data = response.json()
             print(data)
             cleaned_text = re.sub(
-                r"<think>.*?</think>", "", data.get("content", ""), flags=re.DOTALL
+                r"<think>.*?</think>", "", data.get("response", ""), flags=re.DOTALL
+                # r"<think>.*?</think>", "", data.get("content", ""), flags=re.DOTALL
             )
             return cleaned_text
         except requests.exceptions.RequestException as e:

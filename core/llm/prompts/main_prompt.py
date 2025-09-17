@@ -39,7 +39,7 @@ def main_prompt(
             contents.append(
                 {
                     "role": "system",
-                    "parts": f"Context from which you must try to answer the question:\n{chunks}\n",
+                    "parts": f"Documents chunks from which you must try to answer the question:\n{chunks}\n",
                 }
             )
 
@@ -70,7 +70,7 @@ def main_prompt(
                     "You are a helpful assistant that answers questions based on the provided documents. "
                     "Use the retrieved context to give the best possible answer. "
                     "Extract and use as much relevant information as possible from the documents. "
-                    "If the question is answerable using the provided documents, provide a direct, specific and detailed answer using relevant details. "
+                    "If the question is answerable using the provided documents, provide a direct, clear and detailed answer using relevant details. "
                     "Only if the question truly cannot be answered using the documents and your own knowledge, then ask for clarification or suggest a web search or use summarizers accordingly. "
                     "Do not default to asking for clarification if relevant information is available in the context.\n\n"
                     "You also have access to these tools if needed:\n"
@@ -89,7 +89,7 @@ def main_prompt(
             contents.append(
                 {
                     "role": "system",
-                    "parts": f"Context from which you must try to answer the question:\n{chunks}\n",
+                    "parts": f"Documents chunks from which you must try to answer the question:\n{chunks}\n",
                 }
             )
         if initial_search_results:
@@ -132,12 +132,19 @@ def main_prompt(
                     "parts": f"Initial web search answer that might be useful to answer the question: {initial_search_answer}\n",
                 }
             )
+        contents.append(
+            {
+                "role": "system",
+                "parts": "If conflicted information is present, prioritise the document information over web search results.",
+            }
+        )
+        
 
         # Final user question
     else:
         raise ValueError("Invalid mode. Mode must be either 'Internal' or 'External'.")
     
-    contents.append({"role": "user", "parts": question})
+    contents.append({"role": "user", "parts": f"Question: {question}\n"})
     # ask to return correct json
     contents.append({"role": "user", "parts": "Please return the response in the correct JSON format."})
     return contents

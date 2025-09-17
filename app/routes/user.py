@@ -118,6 +118,7 @@ def get_user(request: Request, user_id: str):
 
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
+        print("User not found for userId:", user_id)
         raise HTTPException(status_code=404, detail="User not found")
     return {
         "status": "success",

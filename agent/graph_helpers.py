@@ -43,4 +43,5 @@ def build_main_prompt(state: AgentState):
         web_search_results=state.web_search_results or None,
         initial_search_answer=state.initial_search_answer or None,
         initial_search_results=state.initial_search_results or None,
+        mode=state.mode,
     )

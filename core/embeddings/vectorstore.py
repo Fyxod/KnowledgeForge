@@ -13,7 +13,7 @@ embedding_function = get_embedding_function()
 
 
 def chunk_page_text(page_text: str) -> List[str]:
-    splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=100) # try different chunk sizes
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150) # try different chunk sizes
     return splitter.split_text(page_text)
 
 

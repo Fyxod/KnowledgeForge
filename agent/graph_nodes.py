@@ -23,7 +23,7 @@ async def retriever(state: AgentState) -> AgentState:
     """
     start_time = time.time()
     doc_retriever = get_user_retriever(
-        state.user_id, state.thread_id, k=17
+        state.user_id, state.thread_id, k=12
     )  # try different k values
     end_time = time.time()
     print(
