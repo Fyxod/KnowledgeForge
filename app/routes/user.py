@@ -70,7 +70,7 @@ from core.models.user import (
     UserLoginModel,
     UserResponseModel,
 )
-
+from core.utils.bcrypt import hash_password, verify_password
 router = APIRouter(prefix="/user", tags=["user"])
 
 
@@ -118,6 +118,7 @@ def get_user(request: Request, user_id: str):
 
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
+        print("User not found for userId:", user_id)
         raise HTTPException(status_code=404, detail="User not found")
     return {
         "status": "success",
