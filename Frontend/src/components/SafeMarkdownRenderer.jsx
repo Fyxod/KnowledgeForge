@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatMarkdown } from '../utils/markdownFormatter';
 
 export default function SafeMarkdownRenderer({ content, enableMarkdown = true }) {

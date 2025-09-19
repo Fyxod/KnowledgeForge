@@ -4,7 +4,21 @@ import Login from './routes/Login';
 import SignUp from './routes/signUp';
 import ChatPage from './routes/chatPage';
 import NavBar from './components/NavBar';
+import { ModeProvider, useMode } from './contexts/ModeContext';
+import { setModeGetter } from './services/api';
 import './App.css';
+
+// Component to initialize the mode getter
+function ModeInitializer() {
+  const { currentMode } = useMode();
+  
+  useEffect(() => {
+    // Set the mode getter callback for the API service
+    setModeGetter(() => currentMode);
+  }, [currentMode]);
+  
+  return null;
+}
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -56,60 +70,63 @@ function App() {
   }
 
   return (
-    <Router>
-      <div className="App min-h-screen bg-gray-50">
-        <NavBar 
-          isAuthenticated={isAuthenticated}
-          userData={userData}
-          onLogout={handleLogout}
-        />
-        
-        <Routes>
-          <Route 
-            path="/login" 
-            element={
-              isAuthenticated ? 
-                <Navigate to="/chat" replace /> : 
-                <Login onLogin={handleLogin} />
-            } 
-          />
-          <Route 
-            path="/signup" 
-            element={
-              isAuthenticated ? 
-                <Navigate to="/chat" replace /> : 
-                <SignUp />
-            } 
+    <ModeProvider>
+      <ModeInitializer />
+      <Router>
+        <div className="App min-h-screen bg-gray-50">
+          <NavBar 
+            isAuthenticated={isAuthenticated}
+            userData={userData}
+            onLogout={handleLogout}
           />
           
-          <Route 
-            path="/chat" 
-            element={
-              isAuthenticated ? 
-                <ChatPage 
-                  userData={userData} 
-                  setUserData={setUserData}
-                /> : 
-                <Navigate to="/login" replace />
-            } 
-          />
-          
-          <Route 
-            path="/" 
-            element={
-              <Navigate to={isAuthenticated ? "/chat" : "/login"} replace />
-            } 
-          />
-          
-          <Route 
-            path="*" 
-            element={
-              <Navigate to={isAuthenticated ? "/chat" : "/login"} replace />
-            } 
-          />
-        </Routes>
-      </div>
-    </Router>
+          <Routes>
+            <Route 
+              path="/login" 
+              element={
+                isAuthenticated ? 
+                  <Navigate to="/chat" replace /> : 
+                  <Login onLogin={handleLogin} />
+              } 
+            />
+            <Route 
+              path="/signup" 
+              element={
+                isAuthenticated ? 
+                  <Navigate to="/chat" replace /> : 
+                  <SignUp />
+              } 
+            />
+            
+            <Route 
+              path="/chat" 
+              element={
+                isAuthenticated ? 
+                  <ChatPage 
+                    userData={userData} 
+                    setUserData={setUserData}
+                  /> : 
+                  <Navigate to="/login" replace />
+              } 
+            />
+            
+            <Route 
+              path="/" 
+              element={
+                <Navigate to={isAuthenticated ? "/chat" : "/login"} replace />
+              } 
+            />
+            
+            <Route 
+              path="*" 
+              element={
+                <Navigate to={isAuthenticated ? "/chat" : "/login"} replace />
+              } 
+            />
+          </Routes>
+        </div>
+      </Router>
+    </ModeProvider>
   );
 }
 

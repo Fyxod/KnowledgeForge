@@ -1,6 +1,25 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../../url';
 
+// We'll need to get the mode dynamically in each function
+// since we can't access React context directly in a service file
+let getModeCallback = null;
+
+// Function to set the mode getter callback
+export const setModeGetter = (callback) => {
+  getModeCallback = callback;
+};
+
+// Function to get current mode
+const getCurrentMode = () => {
+  if (getModeCallback) {
+    return getModeCallback();
+  }
+  // Fallback to localStorage if callback not set
+  const savedMode = localStorage.getItem('app_mode');
+  return savedMode || 'Internal';
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -18,7 +37,8 @@ api.interceptors.request.use((config) => {
 
 export const uploadFiles = async (files, threadId = null, threadName = null) => {
   try {
-    console.log('Upload request:', { threadId, threadName, filesCount: files.length });
+    const currentMode = getCurrentMode();
+    console.log('Upload request:', { threadId, threadName, filesCount: files.length, mode: currentMode });
     
     const formData = new FormData();
     
@@ -34,6 +54,10 @@ export const uploadFiles = async (files, threadId = null, threadName = null) => 
       formData.append('thread_name', threadName);
       console.log('Added thread_name to formData:', threadName);
     }
+    
+    // Always append current mode
+    formData.append('mode', currentMode);
+    console.log('Added mode to formData:', currentMode);
 
     const response = await api.post('/upload/', formData, {
       headers: {
@@ -50,9 +74,13 @@ export const uploadFiles = async (files, threadId = null, threadName = null) => 
 
 export const sendQuery = async (threadId, question) => {
   try {
+    const currentMode = getCurrentMode();
+    console.log('Query request:', { threadId, question, mode: currentMode });
+    
     const response = await api.post('/query/', {
       thread_id: threadId,
       question: question,
+      mode: currentMode,
     });
     
     return response.data;
@@ -168,9 +196,11 @@ export const createEmptyThread = async (threadName = 'New Chat') => {
 
 export const getMindMap = async (threadId, documentId, socketId = null) => {
   try {
+    const currentMode = getCurrentMode();
     const payload = {
       thread_id: threadId,
-      document_id: documentId
+      document_id: documentId,
+      mode: currentMode
     };
     
     const headers = {
@@ -181,6 +211,7 @@ export const getMindMap = async (threadId, documentId, socketId = null) => {
       headers['x-socket-id'] = socketId;
     }
     
+    console.log('MindMap request:', payload);
     const response = await api.post('/extra/mindmap', payload, { headers });
     
     return response.data;
@@ -201,9 +232,11 @@ export const getMindMap = async (threadId, documentId, socketId = null) => {
 
 export const getGlobalMindMap = async (threadId, socketId = null) => {
   try {
+    const currentMode = getCurrentMode();
     const payload = {
       thread_id: threadId,
-      document_id: 'global'
+      document_id: 'global',
+      mode: currentMode
     };
     
     const headers = {
@@ -214,6 +247,7 @@ export const getGlobalMindMap = async (threadId, socketId = null) => {
       headers['x-socket-id'] = socketId;
     }
     
+    console.log('Global MindMap request:', payload);
     const response = await api.post('/extra/mindmap/global', payload, { headers });
     
     return response.data;
@@ -234,12 +268,15 @@ export const getGlobalMindMap = async (threadId, socketId = null) => {
 
 export const getWordCloud = async (threadId, documentIds, maxWords = 1000) => {
   try {
+    const currentMode = getCurrentMode();
     const payload = {
       thread_id: threadId,
       document_ids: documentIds,
-      max_words: maxWords
+      max_words: maxWords,
+      mode: currentMode
     };
     
+    console.log('WordCloud request:', payload);
     const response = await api.post('/extra/wordcloud', payload, {
       responseType: 'blob',
       timeout: 30000
