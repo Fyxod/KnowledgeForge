@@ -56,7 +56,7 @@ user_schema = {
                         "extra_done": {
                             "bsonType": "bool",
                             "description": "Indicates if extra task is done",
-                            "default": False
+                          
                         }
                     }
                 }
