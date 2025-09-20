@@ -59,7 +59,7 @@ async def query(request: Request, body: QueryRequest):
     ds = time.time()
     decomposition_result: DecompositionLLMOutput = await decomposition_node(question, messages)
     de = time.time() - ds
-    print(f"Decomposition time: {de:.2f} seconds")
+    print(f"Rewrite query time: {de:.2f} seconds")
     decomposed = decomposition_result.requires_decomposition
 
     start_time = time.time()

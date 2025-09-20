@@ -26,6 +26,7 @@ aiofiles
 matplotlib
 wordcloud
 nltk
+pydantic
 pydantic[email]
 sentence-transformers
 PyMuPDF
