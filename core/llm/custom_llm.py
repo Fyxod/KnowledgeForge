@@ -19,9 +19,7 @@ class MyServerLLM(LLM):
         super().__init__(model=model, port=port, **kwargs)
 
         self._client = ChatOllama(
-            model=model,
-            base_url=f"http://localhost:{port}",
-            **kwargs
+            model=model, base_url=f"http://localhost:{port}", timeout=1000, **kwargs
         )
 
     @property

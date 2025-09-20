@@ -8,7 +8,7 @@ langchain-community
 langchain-core
 langchain-google-genai
 langchain-huggingface
-langchain-tavily
+tavily-python
 langchain-ollama
 langgraph
 langsmith
@@ -22,3 +22,7 @@ torch
 uvicorn
 google-genai
 openai
+aiofiles
+matplotlib
+wordcloud
+nltk

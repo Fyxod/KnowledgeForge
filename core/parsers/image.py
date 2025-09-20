@@ -1,14 +1,18 @@
 import asyncio
 import time
-import requests
 import aiofiles
 import httpx
 from PIL import Image
 import pytesseract
 from core.constants import IMAGE_PARSER_LLM
+from core.config import settings
 
-URL = "https://llm.katiar.xyz/vision-query"
+# Optional for Windows if Tesseract throws errors:
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+VISION_URL = settings.VISION_URL
 MODEL = IMAGE_PARSER_LLM
+# gemma=True
 
 
 async def image_parser(image_path: str, retries: int = 3) -> str:
@@ -43,15 +47,20 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
                     response = await client.post(URL, files=files, params=params)
 
                 end = time.time()
-                print(f"[Gemma attempt {attempt}] Time taken: {end - start:.2f} seconds")
+                print(
+                    f"[Gemma attempt {attempt}] Time taken: {end - start:.2f} seconds"
+                )
 
                 if response.status_code == 200:
                     data = response.json()
+
                     if isinstance(data, dict) and "text" in data:
                         return data["text"]
                     return str(data)
 
-                print(f"[Gemma attempt {attempt}] Failed with status {response.status_code}: {response.text}")
+                print(
+                    f"[Gemma attempt {attempt}] Failed with status {response.status_code}: {response.text}"
+                )
 
             except Exception as e:
                 print(f"[Gemma attempt {attempt}] Exception: {e}")
@@ -60,13 +69,10 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
 
         return None
 
-    try:
-        # gemma_result = await gemma_parse()
-        gemma_result = None
-        if gemma_result:
-            return gemma_result.strip()
-    except Exception as e:
-        print(f"using Tesseract")
+    # gemma_result = await gemma_parse() # removed due to scarce gpu resources
+    gemma_result = None
+    if gemma_result:
+        return gemma_result.strip()
 
     # fallback to Tesseract
     try:

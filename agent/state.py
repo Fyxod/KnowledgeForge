@@ -47,4 +47,13 @@ class AgentState(BaseModel):
 
     # Used to determine the next step in the state graph
     next: Optional[str] = None
-    llm: Optional[GPULLMConfig] = Field(default=None, description="The model to be used for the agent.")  # add more validation
+    llm: Optional[GPULLMConfig] = Field(
+        default=None, description="The model to be used for the agent."
+    )  # add more validation
+    mode: Literal[f"{INTERNAL}", f"{EXTERNAL}"] = Field(
+        description="The mode of the agent, either 'Internal' or 'External'."
+    )
+    initial_search_answer: Optional[str] = None  # to store initial web search answer
+    initial_search_results: List[Dict[str, Any]] = Field(
+        default_factory=list
+    )  # to store initial web search results

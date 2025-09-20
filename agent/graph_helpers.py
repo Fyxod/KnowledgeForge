@@ -21,7 +21,7 @@ def get_recent_history(
 
 
 async def parallel_search(queries, tool):
-    tasks = [tool.ainvoke(query) for query in queries]
+    tasks = [tool(query) for query in queries]
     results = await asyncio.gather(*tasks)
     return results
 
@@ -40,5 +40,8 @@ def build_main_prompt(state: AgentState):
         chunks=state.chunks,
         question=state.query or state.resolved_query or state.original_query,
         summary=state.summary,
-        web_search_results=state.web_search_results or [],
+        web_search_results=state.web_search_results or None,
+        initial_search_answer=state.initial_search_answer or None,
+        initial_search_results=state.initial_search_results or None,
+        mode=state.mode,
     )

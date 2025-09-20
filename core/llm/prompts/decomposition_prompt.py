@@ -15,7 +15,7 @@ Schema:
 {
   "requires_decomposition": <bool>,
   "resolved_query":         <string>,  // query after context resolution
-  "sub_queries":            <string[]> // 1–10 standalone items
+  "sub_queries":            <string[]> // 1–10 standalone sub queries
 }
 
 ⸻
@@ -155,6 +155,25 @@ query: “What are the limitations of GPT-4o and what are the recommended mitiga
     "What are the recommended mitigations for the limitations of GPT-4o?"
   ]
 }
+
+Split into sub-questions
+chat_history: "RLC‑AM (Acknowledged Mode) mapping
+
+Signalling Radio Bearers (SRBs) – All SRBs except SRB0 are mapped to RLC‑AM. They use the DL/UL DCCH logical channels.
+Data Radio Bearers (DRBs) – DRBs can be mapped to either RLC‑UM or RLC‑AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
+Sidelink – The sidelink logical channels SCCH and STCH are also mapped to RLC‑AM."
+query: “SRBs and DRBs”
+
+{
+  "requires_decomposition": true,
+  "resolved_query": "Explain SRBs and DRBs",
+  "sub_queries": [
+    "What are Signalling Radio Bearers (SRBs)?",
+    "What are Data Radio Bearers (DRBs)?"
+  ]
+}
+
+
 
 Quantifier + Enumeration
 chat_history: ""The Employee Training Program is divided into two modules: 3.1 Technical Skills Development, and 3.2 Soft Skills Enhancement.""
