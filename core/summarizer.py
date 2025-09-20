@@ -148,7 +148,6 @@ Here are the section summaries: {partial_summaries}. Please return the final com
 
 
 async def summarize_documents(parsed_data: Documents):
-    print("Inside summarizer")
     parsed_dir = f"data/{parsed_data.user_id}/threads/{parsed_data.thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
 

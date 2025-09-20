@@ -26,3 +26,6 @@ aiofiles
 matplotlib
 wordcloud
 nltk
+pydantic[email]
+sentence-transformers
+PyMuPDF
