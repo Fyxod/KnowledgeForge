@@ -1,6 +1,5 @@
 
 import { Link, useLocation } from 'react-router-dom';
-import ModeToggle from './ModeToggle';
 
 export default function NavBar({ isAuthenticated, userData, onLogout }) {
   const location = useLocation();
@@ -28,9 +27,6 @@ export default function NavBar({ isAuthenticated, userData, onLogout }) {
 
           {isAuthenticated && userData && (
             <div className="flex items-center space-x-4">
-              {/* Mode Toggle */}
-              <ModeToggle />
-              
               {/* User Info */}
               <div className="flex items-center space-x-3">
                 <div className="w-7 h-7 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">

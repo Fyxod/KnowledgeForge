@@ -3,6 +3,7 @@ import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
+import ModeToggle from './ModeToggle';
 
 export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, isSending, uploadingFiles = [] }) {
   const [isDraggingOverWindow, setIsDraggingOverWindow] = useState(false);
@@ -198,6 +199,9 @@ export default function ChatWindow({ thread, onSend, onFileUpload, isUploading, 
           </div>
           
           <div className="flex items-center gap-3">
+            {/* Mode Toggle */}
+            <ModeToggle />
+            
             {/* Mind Map Button */}
             {thread.documents && thread.documents.length > 0 && (
               <button
