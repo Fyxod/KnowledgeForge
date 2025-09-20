@@ -12,7 +12,7 @@ from agent.decomposition import decomposition_node
 from agent.combination import combination_node
 from core.database import db
 from core.utils.extra_done_check import is_extra_done 
-from core.constants import GPU_QUERY_LLM, GPU_QUERY_LLM2, INTERNAL, EXTERNAL
+from core.constants import GPU_QUERY_LLM, GPU_QUERY_LLM2, INTERNAL, EXTERNAL, SWITCHES
 from agent.tools.search import search_tavily as search_tool
 from typing import Literal
 router = APIRouter(prefix="/query", tags=["query"])
@@ -59,7 +59,7 @@ async def query(request: Request, body: QueryRequest):
     ds = time.time()
     decomposition_result: DecompositionLLMOutput = await decomposition_node(question, messages)
     de = time.time() - ds
-    print(f"Decomposition time: {de:.2f} seconds")
+    print(f"Rewrite query time: {de:.2f} seconds")
     decomposed = decomposition_result.requires_decomposition
 
     start_time = time.time()
@@ -89,7 +89,7 @@ async def query(request: Request, body: QueryRequest):
                     initial_search_results=query_data["results"] or [],
                     mode=mode
                 ))
-                
+
                 state = AgentState(**state)
                 qe = time.time() - qs
                 print(f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {model}")
@@ -155,11 +155,16 @@ async def query(request: Request, body: QueryRequest):
 
 
     # Add the second model only if allowed
-        if can_use_second_model:
+        if not SWITCHES["MIND_MAP"] or can_use_second_model:
             print("Using second model for parallel execution")
             workers.append(asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results)))
         else:
             print("Second model disabled, running only on first model")
+        # if can_use_second_model:
+        #     print("Using second model for parallel execution")
+        #     workers.append(asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results)))
+        # else:
+        #     print("Second model disabled, running only on first model")
 
         await asyncio.gather(*workers)
 
