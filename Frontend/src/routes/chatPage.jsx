@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar';
 import ChatWindow from '../components/ChatWindow';
 import { uploadFiles, sendQuery, getUser, createEmptyThread, updateThreadName, deleteThread } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useMode } from '../contexts/ModeContext';
 
 export default function ChatPage({ userData, setUserData }) {
   const [selectedThreadId, setSelectedThreadId] = useState(null);
@@ -17,6 +18,9 @@ export default function ChatPage({ userData, setUserData }) {
     userData?.userId, 
     !!userData?.userId
   );
+
+  const { getCurrentModeConfig } = useMode();
+  const currentModeConfig = getCurrentModeConfig();
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -116,6 +120,7 @@ export default function ChatPage({ userData, setUserData }) {
       
       console.log('Query response:', response);
       console.log('Documents used in response:', response.documents_used);
+      console.log('Mode used:', currentModeConfig.name);
       
       await refreshUserData();
       

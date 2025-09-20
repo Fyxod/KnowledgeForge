@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { useMode } from '../contexts/ModeContext';
 
 export default function ChatInput({ 
   onSend, 
   onFileUpload, 
   isUploading = false, 
   disabled = false, 
-  placeholder = "Ask me anything about your documents...",
+  placeholder = null,
   hideTextInput = false,
   disableDragDrop = false
 }) {
@@ -15,6 +16,16 @@ export default function ChatInput({
   
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  
+  const { getCurrentModeConfig, isWebEnhanced } = useMode();
+  const currentModeConfig = getCurrentModeConfig();
+  
+  // Dynamic placeholder based on mode
+  const defaultPlaceholder = placeholder || 
+    `Ask me anything ${isWebEnhanced() 
+      ? '(searching documents + web)' 
+      : '(searching your documents only)'
+    }...`;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -218,7 +229,7 @@ export default function ChatInput({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={placeholder}
+                placeholder={defaultPlaceholder}
                 disabled={disabled}
                 rows={1}
               />
