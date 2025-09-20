@@ -173,7 +173,21 @@ query: “SRBs and DRBs”
   ]
 }
 
+Expand terms if in previous chat history
+chat_history: "RLC‑AM (Acknowledged Mode) mapping
 
+Signalling Radio Bearers (SRBs) – All SRBs except SRB0 are mapped to RLC‑AM. They use the DL/UL DCCH logical channels.
+Data Radio Bearers (DRBs) – DRBs can be mapped to either RLC‑UM or RLC‑AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
+Sidelink – The sidelink logical channels SCCH and STCH are also mapped to RLC‑AM."
+query: "Explain SRBs in detail"
+
+{
+  "requires_decomposition": false,
+  "resolved_query": "Explain Signalling Radio Bearers (SRBs) in detail",
+  "sub_queries": [
+    "Explain Signalling Radio Bearers (SRBs) in detail"
+  ]
+}
 
 Quantifier + Enumeration
 chat_history: ""The Employee Training Program is divided into two modules: 3.1 Technical Skills Development, and 3.2 Soft Skills Enhancement.""
@@ -187,6 +201,8 @@ query: "Explain both modules."
     "Explain module 3.2 (Soft Skills Enhancement)"
   ]
 }
+Respond ONLY with valid JSON. Do not include explanations, reasoning, or extra text. 
+
 """
 
   full_prompt = (
@@ -205,6 +221,3 @@ Input payload:
         )
 
   return full_prompt
-
-
-
