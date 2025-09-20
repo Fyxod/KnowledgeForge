@@ -3,12 +3,9 @@ from google import genai
 from openai import AsyncOpenAI
 from langchain.output_parsers import PydanticOutputParser
 import asyncio
-import sys
 import time
-
+from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL
 from core.llm.custom_llm import MyServerLLM
-
-sys.setrecursionlimit(5000)
 
 API_KEYS = [
     settings.API_KEY_1,
@@ -19,9 +16,10 @@ API_KEYS = [
 ]
 
 openai_client = AsyncOpenAI(api_key=settings.VISION_API)
-FALLBACK_OPENAI_MODEL = "gpt-4o-mini"
-fallback = False
+MAX_RETRIES = 8  # Total attempts across all LLMs
+
 count = 0
+
 
 async def invoke_llm(
     gpu_model,
@@ -30,7 +28,6 @@ async def invoke_llm(
     fallback_model,
     port=11434,
     remove_thinking=False,
-    max_retries=8,
 ):
     """
     Structured LLM invocation with retries and fallbacks:
@@ -45,8 +42,8 @@ async def invoke_llm(
     # Initialize the parser for structured output
     parser = PydanticOutputParser(pydantic_object=response_schema)
 
-    for attempt in range(1, max_retries + 1):
-        print(f"\n=== Attempt {attempt}/{max_retries} ===")
+    for attempt in range(1, MAX_RETRIES + 1):
+        print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
 
         # 1. Try GPU server first
         if gpu_model:
@@ -73,7 +70,9 @@ async def invoke_llm(
                 print(f"GPU server failed: {e}")
 
         # 2. Loop through fallback API keys
-        if fallback:
+        if SWITCHES["FALLBACK_TO_GEMINI"]:
+            print("Falling back to Gemini API...")
+            # 2. Loop through fallback API keys
             for _ in range(len(API_KEYS)):
                 api_key = API_KEYS[count % len(API_KEYS)]
                 client = genai.Client(api_key=api_key)
@@ -87,7 +86,9 @@ async def invoke_llm(
                             temperature=0.2,
                             max_output_tokens=200000,
                             safety_settings=[],
-                            thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
+                            thinking_config=genai.types.ThinkingConfig(
+                                thinking_budget=0
+                            ),
                         )
                     else:
                         config = genai.types.GenerateContentConfig(
@@ -107,15 +108,17 @@ async def invoke_llm(
                         ),
                         timeout=80,
                     )
+
                     return response.parsed
 
                 except asyncio.TimeoutError:
-                    print("API timeout, switching key...")
+                    print("Gemini API timeout, switching key...")
                 except Exception as e:
-                    print(f"API error: {e}")
+                    print(f"Gemini API error: {e}")
                     await asyncio.sleep(0.1)
 
             # 3. Fallback to OpenAI
+        if SWITCHES["FALLBACK_TO_OPENAI"]:
             try:
                 print("Falling back to OpenAI...")
                 response = await openai_client.chat.completions.create(
@@ -141,4 +144,4 @@ async def invoke_llm(
         await asyncio.sleep(2)
 
     # If all attempts exhausted
-    raise RuntimeError(f"All {max_retries} LLM fallback attempts failed")
+    raise RuntimeError(f"All {MAX_RETRIES} LLM fallback attempts failed")

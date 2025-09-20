@@ -1,19 +1,3 @@
-"""
-POST /query/
--------------
-Handles user queries within a specific thread.
-
-Request Body (JSON):
-    - thread_id (str): The unique identifier of the thread to query.
-    - question (str): The user's question to be processed by the agent.
-
-Request Context:
-    - Expects an authenticated user, available as `request.state.user`.
-
-Returns (JSON):
-    - On success: The agent's response as a dictionary, containing the answer and relevant state fields, with all None values excluded.
-    - On error: A dictionary with an "error" key and a descriptive message, e.g., {"error": "User not authenticated"}, {"error": "User not found"}, or {"error": "Thread not found"}.
-"""
 import asyncio
 import json
 import time

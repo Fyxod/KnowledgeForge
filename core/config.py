@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     API_KEY_4: str
     API_KEY_5: str
     VISION_API: str
-    LLM_URL: str
+    QUERY_URL: str
+    VISION_URL: str
 
     class Config:
         env_file = ".env"

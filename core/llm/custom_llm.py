@@ -2,8 +2,9 @@ import requests
 from langchain.llms.base import LLM
 from typing import Optional, List
 import re
+from core.config import settings
 
-BASE_URL = "https://llm.katiyar.xyz/query"
+QUERY_URL = settings.QUERY_URL
 
 
 class MyServerLLM(LLM):
@@ -17,7 +18,9 @@ class MyServerLLM(LLM):
 
     def __init__(self, model: str, port: int = 11434, **kwargs):
         print(f"Initializing MyServerLLM with model={model} at port={port}")
-        super().__init__(model=model, url=f"{BASE_URL}?model={model}&port={port}", **kwargs)
+        super().__init__(
+            model=model, url=f"{QUERY_URL}?model={model}&port={port}", **kwargs
+        )
 
     @property
     def _llm_type(self) -> str:
@@ -37,7 +40,10 @@ class MyServerLLM(LLM):
             data = response.json()
             print(data)
             cleaned_text = re.sub(
-                r"<think>.*?</think>", "", data.get("response", ""), flags=re.DOTALL
+                r"<think>.*?</think>",
+                "",
+                data.get("response", ""),
+                flags=re.DOTALL,
                 # r"<think>.*?</think>", "", data.get("content", ""), flags=re.DOTALL
             )
             return cleaned_text

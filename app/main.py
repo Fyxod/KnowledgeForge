@@ -27,7 +27,7 @@ fastapi_app.add_middleware(
     allow_headers=["*"],
 )
 
-fastapi_app.mount("/static", StaticFiles(directory="app/public"), name="static")
+# fastapi_app.mount("/static", StaticFiles(directory="app/public"), name="static")
 
 
 fastapi_app.include_router(query.router)
