@@ -30,3 +30,4 @@ pydantic
 pydantic[email]
 sentence-transformers
 PyMuPDF
+python-pptx

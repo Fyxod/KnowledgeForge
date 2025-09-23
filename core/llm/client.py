@@ -6,6 +6,7 @@ import asyncio
 import time
 from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL
 from core.llm.custom_llm import MyServerLLM
+# from core.llm.custom_llm2 import MyServerLLM # Uncomment this line to use Nemotron Nano 2 as the llm
 
 API_KEYS = [
     settings.API_KEY_1,

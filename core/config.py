@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     VISION_API: str
     QUERY_URL: str
     VISION_URL: str
+    NVIDIA_URL: str
 
     class Config:
         env_file = ".env"
