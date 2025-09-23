@@ -53,13 +53,15 @@ export default function SafeMarkdownRenderer({ content, enableMarkdown = true })
           ),
           code: ({ node, inline, className, children, ...props }) => {
             return !inline ? (
-              <pre className="bg-gray-800 text-white p-3 rounded-lg overflow-x-auto my-2 text-sm">
+              // Multi-line code block
+              <pre className="bg-gray-600 text-white p-3 rounded-lg overflow-x-auto my-3 text-sm border border-gray-300 shadow-sm">
                 <code className={className} {...props}>
                   {children}
                 </code>
               </pre>
             ) : (
-              <code className="bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-sm font-mono" {...props}>
+              // Inline code
+              <code className="bg-gray-200 text-red-600 px-1.5 py-0.5 rounded-md text-sm font-mono border border-gray-300">
                 {children}
               </code>
             );
