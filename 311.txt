@@ -20,6 +20,7 @@ python-multipart
 python-socketio
 torch
 uvicorn
+aiofiles
 google-genai
 openai
 aiofiles
@@ -30,3 +31,7 @@ pydantic
 pydantic[email]
 sentence-transformers
 PyMuPDF
+python-pptx
+beautifulsoup4
+markdown
+lxml
