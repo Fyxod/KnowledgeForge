@@ -76,7 +76,8 @@ export default function ChatWindow({
           ".pptx",
           ".xlsx",
           ".xls",
-          ".html"
+          ".html",
+          ".md",
         ];
         const validFiles = files.filter((file) => {
           const extension = "." + file.name.split(".").pop().toLowerCase();
@@ -117,7 +118,7 @@ export default function ChatWindow({
                 Upload documents to create a new conversation
               </p>
               <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">
-                Supports: PDF, DOC, DOCX, TXT, PNG, JPG, JPEG, PPT, PPTX, XLSX, XLS, HTML
+                Supports: PDF, DOC, DOCX, TXT, PNG, JPG, JPEG, PPT, PPTX, XLSX, XLS, HTML, MD
               </p>
             </div>
           </div>

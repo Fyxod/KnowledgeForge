@@ -31,3 +31,6 @@ pydantic[email]
 sentence-transformers
 PyMuPDF
 python-pptx
+beautifulsoup4
+markdown
+lxml

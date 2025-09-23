@@ -5,10 +5,11 @@ from pathlib import Path
 import asyncio
 import fitz
 import time
-
+import markdown
+from bs4 import BeautifulSoup
 from PIL import Image
 import io
-
+import re
 from app.socket_handler import sio
 from core.parsers.image import image_parser
 from core.models.document import Document, Page
@@ -23,7 +24,7 @@ import traceback
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.bmp', '.gif'}
 SUPPORTED_EXTENSIONS = {
     '.pdf', '.docx', '.rtf', '.txt', '.epub', '.odt', '.ppt', '.pptx',
-    '.xls', '.xlsx', '.csv', '.html', '.xml', *IMAGE_EXTENSIONS
+    '.xls', '.xlsx', '.csv', '.html', '.xml', '.md', *IMAGE_EXTENSIONS
 }
 
 async def extract_document(path, title="Untitled", file_name=None, user_id=None, thread_id=None):
@@ -57,6 +58,79 @@ async def extract_document(path, title="Untitled", file_name=None, user_id=None,
             full_text=text
         )
 
+    # --- Handle Markdown files ---
+    if ext == ".md":
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                md_text = f.read()
+
+            # Convert markdown -> HTML -> plain text
+            html = markdown.markdown(md_text)
+            soup = BeautifulSoup(html, "html.parser")
+            plain_text = soup.get_text(separator="\n")
+
+            # Prepare image handling
+            image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+            os.makedirs(image_dir, exist_ok=True)
+
+            ocr_tasks = {}
+            image_names = []
+
+            # Regex to find Markdown image syntax: ![alt](path)
+            image_pattern = re.compile(r'!\[.*?\]\((.*?)\)')
+            matches = image_pattern.findall(md_text)
+
+            page_text = plain_text
+            for idx, img_path in enumerate(matches, start=1):
+                if not os.path.isabs(img_path):
+                    # make path relative to md file
+                    img_path = os.path.join(os.path.dirname(file_path), img_path)
+
+                if not os.path.exists(img_path):
+                    continue
+
+                ext_img = Path(img_path).suffix.lstrip(".")
+                image_name = f"md_img{idx}.{ext_img}"
+                dest_path = os.path.join(image_dir, image_name)
+
+                # Copy image into project folder
+                shutil.copy(img_path, dest_path)
+                image_names.append(image_name)
+
+                placeholder = f"{{PENDING_{image_name}}}"
+                page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
+
+                # Run OCR asynchronously
+                ocr_tasks[placeholder] = asyncio.create_task(image_parser(dest_path))
+
+            # Wait for OCR tasks
+            for placeholder, task in ocr_tasks.items():
+                try:
+                    image_text = await task
+                except Exception as e:
+                    print(f"Error parsing Markdown image: {e}")
+                    image_text = "[Image OCR failed]"
+
+                page_text = page_text.replace(placeholder, image_text, 1)
+
+            doc_id = str(uuid.uuid4())
+            await sio.emit(f"{user_id}/progress", {
+                "message": f"Processed {file_name} (Markdown) successfully"
+            })
+
+            return Document(
+                id=doc_id,
+                type="markdown",
+                file_name=file_name or os.path.basename(file_path),
+                content=[Page(number=1, text=page_text, images=image_names)],
+                title=title,
+                full_text=md_text  # preserve original markdown
+            )
+
+        except Exception as e:
+            print(f"Error processing Markdown file {file_name}: {str(e)}")
+            return None
+    
     # --- Handle PowerPoint files ---
     if ext in {".ppt", ".pptx"}:
         prs = Presentation(file_path)

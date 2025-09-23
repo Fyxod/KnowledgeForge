@@ -138,6 +138,7 @@ export default function ChatInput({
           ".xlsx",
           ".xls",
           ".html",
+          ".md",
         ];
         const validFiles = files.filter((file) => {
           const extension = "." + file.name.split(".").pop().toLowerCase();
@@ -239,7 +240,7 @@ export default function ChatInput({
             onChange={handleFileSelect}
             multiple
             className="hidden"
-            accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.ppt,.pptx,.xlsx,.xls,.html"
+            accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.ppt,.pptx,.xlsx,.xls,.html,.md"
           />
           <button
             onClick={() => fileInputRef.current?.click()}
