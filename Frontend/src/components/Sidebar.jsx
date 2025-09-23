@@ -257,6 +257,8 @@ export default function Sidebar({
                       <span
                         key={idx}
                         className="text-xs bg-black/20 px-2 py-1 rounded-md flex items-center gap-1"
+                        title={doc?.title || ""}
+                        aria-label={doc?.title || undefined}
                       >
                         <span className="text-xs font-mono">
                           {getFileIcon(doc.type)}
@@ -267,7 +269,21 @@ export default function Sidebar({
                       </span>
                     ))}
                     {documents.length > 3 && (
-                      <span className="text-xs text-gray-300">
+                      <span
+                        className="text-xs text-gray-300"
+                        title={documents
+                          .slice(3)
+                          .map((d) => d?.title)
+                          .filter(Boolean)
+                          .join(", ")}
+                        aria-label={
+                          documents
+                            .slice(3)
+                            .map((d) => d?.title)
+                            .filter(Boolean)
+                            .join(", ") || undefined
+                        }
+                      >
                         +{documents.length - 3} more
                       </span>
                     )}
