@@ -117,7 +117,20 @@ export default function ChatInput({
     try {
       const files = Array.from(e.dataTransfer?.files || []);
       if (files.length > 0) {
-        const allowedTypes = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.gif'];
+          const allowedTypes = [
+          ".pdf",
+          ".doc",
+          ".docx",
+          ".txt",
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".ppt",
+          ".pptx",
+          ".xlsx",
+          ".xls",
+          ".html"
+        ];
         const validFiles = files.filter(file => {
           const extension = '.' + file.name.split('.').pop().toLowerCase();
           return allowedTypes.includes(extension);
@@ -206,7 +219,7 @@ export default function ChatInput({
             onChange={handleFileSelect}
             multiple
             className="hidden"
-            accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif"
+            accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.ppt,.pptx,.xlsx,.xls,.html"
           />
           <button
             onClick={() => fileInputRef.current?.click()}
