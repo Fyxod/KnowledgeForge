@@ -44,7 +44,7 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
                 params = {"model": MODEL}
 
                 async with httpx.AsyncClient() as client:
-                    response = await client.post(URL, files=files, params=params)
+                    response = await client.post(VISION_URL, files=files, params=params)
 
                 end = time.time()
                 print(

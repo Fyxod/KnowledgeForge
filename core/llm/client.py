@@ -44,6 +44,7 @@ async def invoke_llm(
 
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
+
         # 1. Try GPU server first
         if gpu_model:
             try:
@@ -66,8 +67,9 @@ async def invoke_llm(
                 print("Success via GPU server")
                 return structured
             except Exception as e:
-                print(f"GPU server failed: {e}, ")
+                print(f"GPU server failed: {e}")
 
+        # 2. Loop through fallback API keys
         if SWITCHES["FALLBACK_TO_GEMINI"]:
             print("Falling back to Gemini API...")
             # 2. Loop through fallback API keys
@@ -115,7 +117,7 @@ async def invoke_llm(
                     print(f"Gemini API error: {e}")
                     await asyncio.sleep(0.1)
 
-        # 3. Fallback to OpenAI
+            # 3. Fallback to OpenAI
         if SWITCHES["FALLBACK_TO_OPENAI"]:
             try:
                 print("Falling back to OpenAI...")
