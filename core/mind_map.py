@@ -105,7 +105,7 @@ def load_document_from_json(path: str) -> Document:
 
 
 DESCRIPTION_PROCESSING_BATCH_SIZE = 4
-PARALLEL_LLM_CALLS = 3
+PARALLEL_LLM_CALLS = 1
 
 
 async def add_node_descriptions(
