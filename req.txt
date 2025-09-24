@@ -194,3 +194,9 @@ xxhash==3.5.0
 yarl==1.20.1
 zipp==3.23.0
 zstandard==0.23.0
+sentence-transformers
+PyMuPDF
+python-pptx
+beautifulsoup4
+markdown
+lxml
