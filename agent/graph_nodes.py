@@ -68,13 +68,15 @@ async def generate(state: AgentState) -> AgentState:
             print(f"LLM response time: {end_time - start_time:.2f} seconds")
             state.messages.append(HumanMessage(content=state.query))  # controversial
             state.messages.append(AIMessage(content=result.answer))
-            state.messages.append(AIMessage("Action taken: " + result.action))
+            # state.messages.append(AIMessage("Action taken: " + result.action))
             state.answer = result.answer
-            state.action = result.action
+            state.action = ANSWER
+            # state.action = result.action
             state.chunks_used = []  # only for cpu to decrease generation time
-            state.web_search_queries = getattr(result, "web_search_queries", []) or []
+            state.web_search_queries = []
+            # state.web_search_queries = getattr(result, "web_search_queries", []) or []
             state.attempts += 1
-            state.document_id = result.document_id or None
+            state.document_id =  None
             return state
         except Exception as e:
             print(f"Error in generate (attempt {attempt+1}/{max_retries}): {e}")

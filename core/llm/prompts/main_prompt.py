@@ -22,13 +22,14 @@ def main_prompt(
                     "Use the retrieved context to give the best possible answer. "
                     "Extract and use as much relevant information as possible from the documents. "
                     "If the question is answerable using the provided documents, provide a direct, specific and detailed answer using relevant details. "
-                    "Only if the question truly cannot be answered using the documents and your own knowledge, then ask for clarification or use summarizers accordingly. "
-                    "Do not default to asking for clarification if relevant information is available in the context.\n\n"
-                    "You also have access to these tools if needed:\n"
-                    "- `answer`: Use this if you can directly answer the question.\n"
-                    "- `document_summarizer`: Use this if you need the summary of a specific document for answering the user's question. You must provide the `document_id`.\n"
-                    "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question.\n"
-                    "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly.\n"
+                    # "Only if the question truly cannot be answered using the documents and your own knowledge, then ask for clarification or use summarizers accordingly. "
+                    # "Do not default to asking for clarification if relevant information is available in the context.\n\n"
+                    # "You also have access to these tools if needed:\n"
+                    # "- `answer`: Use this if you can directly answer the question.\n"
+                    # "- `document_summarizer`: Use this if you need the summary of a specific document for answering the user's question. You must provide the `document_id`.\n"
+                    # "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question.\n"
+                    # "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly.\n"
+                    "Give long detailed structured responses unless asked otherwise\n"
                     "Give your final answer in clear, structured Markdown format for readability.\n"
                 ),
             }
@@ -39,7 +40,7 @@ def main_prompt(
             contents.append(
                 {
                     "role": "system",
-                    "parts": f"Documents chunks from which you must try to answer the question:\n{chunks}\n",
+                    "parts": f"Documents chunks from which you must answer the question:\n{chunks}\n",
                 }
             )
 
@@ -71,14 +72,14 @@ def main_prompt(
                     "Use the retrieved context to give the best possible answer. "
                     "Extract and use as much relevant information as possible from the documents. "
                     "If the question is answerable using the provided documents, provide a direct, clear and detailed answer using relevant details. "
-                    "Only if the question truly cannot be answered using the documents and your own knowledge, then ask for clarification or suggest a web search or use summarizers accordingly. "
-                    "Do not default to asking for clarification if relevant information is available in the context.\n\n"
-                    "You also have access to these tools if needed:\n"
-                    "- `answer`: Use this if you can directly answer the question.\n"
-                    "- `web_search`: Use this if you need more recent or external information not available in the documents.\n"
-                    "- `document_summarizer`: Use this if you need the summary of a specific document for answering the user's question. You must provide the `document_id`.\n"
-                    "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question.\n"
-                    "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly.\n"
+                    # "Only if the question truly cannot be answered using the documents and your own knowledge, then ask for clarification or suggest a web search or use summarizers accordingly. "
+                    # "Do not default to asking for clarification if relevant information is available in the context.\n\n"
+                    # "You also have access to these tools if needed:\n"
+                    # "- `answer`: Use this if you can directly answer the question.\n"
+                    # "- `web_search`: Use this if you need more recent or external information not available in the documents.\n"
+                    # "- `document_summarizer`: Use this if you need the summary of a specific document for answering the user's question. You must provide the `document_id`.\n"
+                    # "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question.\n"
+                    # "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly.\n"
                     "Give long detailed structured responses unless asked otherwise\n"
                     "Give your final answer in clear, structured Markdown format for readability.\n"
                 ),
