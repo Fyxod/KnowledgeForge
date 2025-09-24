@@ -9,6 +9,7 @@ langchain-core
 langchain-google-genai
 langchain-huggingface
 tavily-python
+langchain-ollama
 langgraph
 langsmith
 PyJWT
