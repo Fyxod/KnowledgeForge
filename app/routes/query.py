@@ -58,6 +58,8 @@ async def query(request: Request, body: QueryRequest):
         elif message["type"] == "agent":
             messages.append(AIMessage(content=message["content"]))
     ds = time.time()
+
+
     if SWITCHES["DECOMPOSITION"]:
         decomposition_result: DecompositionLLMOutput = await decomposition_node(
             question, messages
@@ -92,7 +94,8 @@ async def query(request: Request, body: QueryRequest):
                         query=query_data["query"],
                         resolved_query=decomposition_result.resolved_query,
                         original_query=question,
-                        messages=[],
+                        messages=messages,
+                        # messages=[],
                         web_search=False,
                         llm=model,
                         initial_search_answer=query_data["answer"] or "",
@@ -224,7 +227,8 @@ async def query(request: Request, body: QueryRequest):
                 query=resolved_query,
                 resolved_query=resolved_query,
                 original_query=question,
-                messages=[],
+                messages=messages,
+                # messages=[],
                 web_search=False,
                 llm=GPU_QUERY_LLM,
                 mode=mode,
