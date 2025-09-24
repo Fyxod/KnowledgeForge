@@ -31,7 +31,7 @@ async def invoke_llm(
 ):
     """
     Structured LLM invocation with retries and fallbacks:
-    1. Custom GPU server (via MyServerLLM)
+    1. Custom CPU/GPU server (via MyServerLLM)
     2. Google API keys
     3. OpenAI
     Retries up to `max_retries` times across the whole chain.
@@ -45,11 +45,10 @@ async def invoke_llm(
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
 
-        # 1. Try GPU server first
+        # 1. Try CPU/GPU server first
         if gpu_model:
             try:
-                print("Trying GPU server first...")
-                print("client received gpu_model:", gpu_model, "port:", port)
+                print("client received model:", gpu_model, "port:", port)
                 gpu_llm = MyServerLLM(model=gpu_model, port=port)
                 prompt = f"""
                 Extract structured data according to this model:
@@ -61,13 +60,12 @@ async def invoke_llm(
                 s = time.time()
                 llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
                 e = time.time()
-                print(f"GPU LLM call took {e - s:.2f} seconds")
+                print(f"LLM call took {e - s:.2f} seconds")
                 print(llm_output)
                 structured = parser.parse(llm_output)
-                print("Success via GPU server")
                 return structured
             except Exception as e:
-                print(f"GPU server failed: {e}")
+                print(f"Ollama server failed: {e}")
 
         # 2. Loop through fallback API keys
         if SWITCHES["FALLBACK_TO_GEMINI"]:
