@@ -81,8 +81,8 @@ source venv/bin/activate
 Make sure you have `pip` updated, then install the required packages:
 
 ```bash
-pip install -r 311.txt   # windows
-pip install -r req.txt   # Linux
+pip install -r requirements.txt
+
 ```
 ### 3. Please paste .env file in project root 
 
