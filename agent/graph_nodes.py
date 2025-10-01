@@ -71,7 +71,8 @@ async def generate(state: AgentState) -> AgentState:
             state.messages.append(AIMessage("Action taken: " + result.action))
             state.answer = result.answer
             state.action = result.action
-            state.chunks_used = result.chunks_used or []
+            state.chunks_used = [] # temporary
+            # state.chunks_used = result.chunks_used or []
             state.web_search_queries = getattr(result, "web_search_queries", []) or []
             state.attempts += 1
             state.document_id = result.document_id or None
