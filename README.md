@@ -39,31 +39,10 @@ ollama pull qwen3:4b
 
 
 
-### 3. Create a Custom Model File
-Create a file named `Modelfile` in your working directory with the following content:
-
-```bash
-FROM qwen3:4b
-PARAMETER num_ctx 15000
-PARAMETER num_predict 8000
-PARAMETER stop []
-```
-
-Adjust the parameters depending on model size and available system resources.
-
-
-
-### 4. Build the Custom Model
-Run the following in the same directory as the `Modelfile`:
-
-```powershell
-ollama create new_model_name -f Path/to/Modelfile
-```
-> Remember this name we will need it later
 # Config
-> ***Please read core/constant.py***
+## *Please read core/constant.py*
 
-- In line no 4 Change the `OLLAMA_MODEL` name to the model we created using modefile 
+- In line no 4 Change the `OLLAMA_MODEL` name to the model you want to use.
 
 
 # Setting Up the Backend Server
@@ -99,7 +78,7 @@ Make sure you have `pip` updated, then install the required packages:
 pip install -r 311.txt   # windows
 pip install -r req.txt   # Linux
 ```
-### 3. Please past .env file in project root 
+### 3. Please paste .env file in project root 
 
 ### 4. Start the Server
 
