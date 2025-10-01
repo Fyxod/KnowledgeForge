@@ -10,7 +10,8 @@
 > - **Accuracy Issues:** Models may return incomplete, inconsistent, or incorrect results.  
 > - **Instruction Non-Compliance:** Responses may ignore formatting or structural requirements, causing failures in downstream processing.  
 > - **Resource Consumption:** CPU execution can be highly resource-intensive, leading to system slowdowns or instability during long runs.  
-> - **Limited Model Compatibility:** Some larger models may fail to load or run due to excessive CPU and memory requirements.  
+> - **Limited Model Compatibility:** Some larger models may fail to load or run due to excessive CPU and memory requirements. 
+> - **Python version:** Please use python 3.11 for this project 
 >
 > As a result of these constraints, certain features may be **downgraded, restricted, or disabled** when running in CPU-only mode.
 
@@ -50,13 +51,18 @@ ollama pull qwen3:4b
 Follow these steps to set up and run the backend server:
 
 
-### 1. Create a Python Virtual Environment
+### 1. Create a Python Virtual Environment (Please use python 3.11 for this)
 
 It's recommended to use a virtual environment to isolate dependencies:
 
 ```bash
 python -m venv venv
 ```
+     or
+```bash
+py 3.11 -m venv venv
+```
+
 
 Activate the virtual environment:
 
