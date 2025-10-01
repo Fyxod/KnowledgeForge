@@ -74,11 +74,9 @@ source venv/bin/activate    (linux)
 
 .\env\Scripts\activate      (windows)
 ```
-- install requirement.txt
+- install requirements.txt
 ```bash
-pip install -r req.txt     (linux)
-
-pip install -r 311.txt     (windows)
+pip install -r requirements.txt     (linux)
 ```
 
 - Start Backend 
