@@ -29,6 +29,7 @@ def main_prompt(
                     "- `document_summarizer`: Use this if you need the summary of a specific document for answering the user's question. You must provide the `document_id`.\n"
                     "- `global_summarizer`: Use this if you need a collective summary of all the documents for any question.\n"
                     "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly.\n"
+                    "Give long detailed structured responses unless asked otherwise\n"
                     "Give your final answer in clear, structured Markdown format for readability.\n"
                 ),
             }

@@ -1,7 +1,6 @@
 bcrypt
 chromadb
 fastapi
-kreuzberg
 langchain
 langchain-chroma
 langchain-community
