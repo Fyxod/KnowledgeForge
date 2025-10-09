@@ -1,12 +1,25 @@
+import json
+import asyncio
+import time
 from core.config import settings
 from google import genai
 from openai import AsyncOpenAI
 from langchain.output_parsers import PydanticOutputParser
-import asyncio
-import time
-from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL
+from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
 from core.llm.custom_llm import MyServerLLM
-# from core.llm.custom_llm2 import MyServerLLM # Uncomment this line to use Nemotron Nano 2 as the llm
+import copy
+
+
+def sanitize_schema(schema_dict):
+    if isinstance(schema_dict, dict):
+        schema_dict.pop("additionalProperties", None)
+        for v in schema_dict.values():
+            sanitize_schema(v)
+    elif isinstance(schema_dict, list):
+        for v in schema_dict:
+            sanitize_schema(v)
+    return schema_dict
+
 
 API_KEYS = [
     settings.API_KEY_1,
@@ -26,123 +39,115 @@ async def invoke_llm(
     gpu_model,
     response_schema,
     contents,
-    fallback_model,
     port=11434,
     remove_thinking=False,
 ):
     """
-    Structured LLM invocation with retries and fallbacks:
-    1. Custom GPU server (via MyServerLLM)
-    2. Google API keys
-    3. OpenAI
-    Retries up to `max_retries` times across the whole chain.
+    Unified structured LLM invocation with retries and fallbacks:
+    - GPU server
+    - Gemini API
+    - OpenAI API
+    Each returns parsed structured data using the same logic.
     """
-
     global count
-
-    # Initialize the parser for structured output
     parser = PydanticOutputParser(pydantic_object=response_schema)
+
+    prompt = f"""
+    Extract structured data according to this model:
+    {parser.get_format_instructions()}
+
+    Input:
+    {contents}
+    """
 
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
 
-        # 1. Try GPU server first
+        # === 1. GPU SERVER ===
         if gpu_model:
             try:
-                print("Trying GPU server first...")
-                print("client received gpu_model:", gpu_model, "port:", port)
+                print("Trying GPU server...")
                 gpu_llm = MyServerLLM(model=gpu_model, port=port)
-                prompt = f"""
-                Extract structured data according to this model:
-                {parser.get_format_instructions()}
-
-                Input:
-                {contents}
-                """
                 s = time.time()
                 llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
                 e = time.time()
-                print(f"GPU LLM call took {e - s:.2f} seconds")
-                print(llm_output)
+                print(f"GPU LLM call took {e - s:.2f}s")
                 structured = parser.parse(llm_output)
                 print("Success via GPU server")
                 return structured
             except Exception as e:
                 print(f"GPU server failed: {e}")
 
-        # 2. Loop through fallback API keys
+        # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
-            print("Falling back to Gemini API...")
-            # 2. Loop through fallback API keys
+            print("Falling back to Gemini...")
+            sanitized_schema = sanitize_schema(response_schema.model_json_schema())
+
             for _ in range(len(API_KEYS)):
                 api_key = API_KEYS[count % len(API_KEYS)]
-                client = genai.Client(api_key=api_key)
                 count = (count + 1) % len(API_KEYS)
+                client = genai.Client(api_key=api_key)
 
                 try:
+                    config = genai.types.GenerateContentConfig(
+                        temperature=0.2,
+                        max_output_tokens=200000,
+                        response_mime_type="text/plain",
+                        safety_settings=[],
+                    )
+
                     if remove_thinking:
-                        config = genai.types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=response_schema,
-                            temperature=0.2,
-                            max_output_tokens=200000,
-                            safety_settings=[],
-                            thinking_config=genai.types.ThinkingConfig(
-                                thinking_budget=0
-                            ),
-                        )
-                    else:
-                        config = genai.types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=response_schema,
-                            temperature=0.2,
-                            max_output_tokens=200000,
-                            safety_settings=[],
-                        )
+                        config.thinking_config = genai.types.ThinkingConfig(thinking_budget=0)
 
                     response = await asyncio.wait_for(
                         asyncio.to_thread(
                             client.models.generate_content,
-                            model=fallback_model,
-                            contents=str(contents),
+                            model=FALLBACK_GEMINI_MODEL,
+                            contents=prompt,
                             config=config,
                         ),
                         timeout=80,
                     )
 
-                    return response.parsed
+                    # Try to extract the raw text content
+                    raw_output = None
+                    try:
+                        raw_output = response.text or str(response)
+                    except Exception:
+                        raw_output = str(response)
+
+                    print("Gemini raw output:\n", raw_output[:500])
+                    structured = parser.parse(raw_output)
+                    print("Success via Gemini")
+                    return structured
 
                 except asyncio.TimeoutError:
-                    print("Gemini API timeout, switching key...")
+                    print("Gemini timeout — switching key...")
                 except Exception as e:
-                    print(f"Gemini API error: {e}")
-                    await asyncio.sleep(0.1)
+                    print(f"Gemini error: {e}")
+                    await asyncio.sleep(0.2)
 
-            # 3. Fallback to OpenAI
+        # === 3. OPENAI FALLBACK ===
         if SWITCHES["FALLBACK_TO_OPENAI"]:
             try:
                 print("Falling back to OpenAI...")
+
                 response = await openai_client.chat.completions.create(
                     model=FALLBACK_OPENAI_MODEL,
-                    messages=[{"role": "user", "content": str(contents)}],
-                    response_format={
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": response_schema.__name__,
-                            "schema": response_schema.model_json_schema(),
-                        },
-                    },
+                    messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                 )
 
-                raw_json = response.choices[0].message.content
-                structured = response_schema.model_validate_json(raw_json)
-                print(structured)
+                raw_output = response.choices[0].message.content
+                print("OpenAI raw output:\n", raw_output[:500])
+                structured = parser.parse(raw_output)
+                print("Success via OpenAI")
                 return structured
 
             except Exception as e:
                 print(f"OpenAI fallback error: {e}")
+
         await asyncio.sleep(2)
 
     # If all attempts exhausted
-    raise RuntimeError(f"All {MAX_RETRIES} LLM fallback attempts failed")
+    raise RuntimeError(f"All {MAX_RETRIES} fallback attempts failed.")

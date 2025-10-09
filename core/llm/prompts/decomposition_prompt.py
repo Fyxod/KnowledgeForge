@@ -1,21 +1,22 @@
 import json
 
-def decomposition_prompt(recent_history: list, question: str):
-  contents = []
-  for msg in recent_history:
-      if msg.type == "human":
-          contents.append({"role": "user", "parts": msg.content})
-      elif msg.type == "ai":
-          contents.append({"role": "assistant", "parts": msg.content})
 
-  system_prompt = """
+def decomposition_prompt(recent_history: list, question: str):
+    contents = []
+    for msg in recent_history:
+        if msg.type == "human":
+            contents.append({"role": "user", "parts": msg.content})
+        elif msg.type == "ai":
+            contents.append({"role": "assistant", "parts": msg.content})
+
+    system_prompt = """
 You are an expert at query decomposition for a Retrieval-Augmented Generation (RAG) system.
 
 Schema:
 {
   "requires_decomposition": <bool>,
   "resolved_query":         <string>,  // query after context resolution
-  "sub_queries":            <string[]> // 1–10 standalone sub queries
+  "sub_queries":            <string[]> // 1-10 standalone sub queries
 }
 
 ⸻
@@ -23,8 +24,8 @@ Schema:
 Context Resolution (perform FIRST)
 
 You will receive:
-    • query – the current user message
-    • chat_history – the most recent user turns (may be empty)
+    • query - the current user message
+    • chat_history - the most recent user turns (may be empty)
 
 If query contains pronouns, ellipsis, shorthand, or quantifiers like "this", "that", "these", "both", "each", "every", "all" that can be unambiguously linked to entities in chat_history, rewrite it to a fully self-contained question and place the result in resolved_query.
 Otherwise, copy query into resolved_query unchanged.
@@ -48,13 +49,12 @@ When is decomposition NOT REQUIRED?
 Output rules
     1. Use resolved_query—not the raw query—to decide on decomposition.
     2. If requires_decomposition is false, sub_queries must contain exactly resolved_query.
-    3. Otherwise, produce 2–10 self-contained questions; avoid pronouns and shared context.
+    3. Otherwise, produce 2-10 self-contained questions; avoid pronouns and shared context.
 
 ⸻
 """
 
-        
-  examples = """
+    examples = """
 
 Normalise pronouns and references: turn “this paper” into the explicit title if it can be inferred, otherwise leave as-is.
 chat_history: “What is the email address of the computer vision consultants?”
@@ -159,9 +159,9 @@ query: “What are the limitations of GPT-4o and what are the recommended mitiga
 Split into sub-questions
 chat_history: "RLC‑AM (Acknowledged Mode) mapping
 
-Signalling Radio Bearers (SRBs) – All SRBs except SRB0 are mapped to RLC‑AM. They use the DL/UL DCCH logical channels.
-Data Radio Bearers (DRBs) – DRBs can be mapped to either RLC‑UM or RLC‑AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
-Sidelink – The sidelink logical channels SCCH and STCH are also mapped to RLC‑AM."
+Signalling Radio Bearers (SRBs) - All SRBs except SRB0 are mapped to RLC‑AM. They use the DL/UL DCCH logical channels.
+Data Radio Bearers (DRBs) - DRBs can be mapped to either RLC‑UM or RLC‑AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
+Sidelink - The sidelink logical channels SCCH and STCH are also mapped to RLC‑AM."
 query: “SRBs and DRBs”
 
 {
@@ -176,9 +176,9 @@ query: “SRBs and DRBs”
 Expand terms if in previous chat history
 chat_history: "RLC‑AM (Acknowledged Mode) mapping
 
-Signalling Radio Bearers (SRBs) – All SRBs except SRB0 are mapped to RLC‑AM. They use the DL/UL DCCH logical channels.
-Data Radio Bearers (DRBs) – DRBs can be mapped to either RLC‑UM or RLC‑AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
-Sidelink – The sidelink logical channels SCCH and STCH are also mapped to RLC‑AM."
+Signalling Radio Bearers (SRBs) - All SRBs except SRB0 are mapped to RLC‑AM. They use the DL/UL DCCH logical channels.
+Data Radio Bearers (DRBs) - DRBs can be mapped to either RLC‑UM or RLC‑AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
+Sidelink - The sidelink logical channels SCCH and STCH are also mapped to RLC‑AM."
 query: "Explain SRBs in detail"
 
 {
@@ -205,10 +205,10 @@ Respond ONLY with valid JSON. Do not include explanations, reasoning, or extra t
 
 """
 
-  full_prompt = (
-            system_prompt
-            + examples
-            + """
+    full_prompt = (
+        system_prompt
+        + examples
+        + """
 
 ⸻
 
@@ -216,8 +216,10 @@ Now process
 
 Input payload:
 
-""" + json.dumps({"query": question, "chat_history": contents}, ensure_ascii=False) + """
 """
-        )
+        + json.dumps({"query": question, "chat_history": contents}, ensure_ascii=False)
+        + """
+"""
+    )
 
-  return full_prompt
+    return full_prompt

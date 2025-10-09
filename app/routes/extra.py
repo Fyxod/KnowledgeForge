@@ -20,6 +20,7 @@ class MindMapRequest(BaseModel):
     thread_id: str
     document_id: str
 
+
 class GlobalMindMapRequest(BaseModel):
     thread_id: str
     document_id: str
@@ -28,7 +29,7 @@ class GlobalMindMapRequest(BaseModel):
 @router.post("/wordcloud")
 async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
     payload = request.state.user
-    
+
     if not payload:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
@@ -37,7 +38,7 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
     max_words = body.max_words or 1000
 
     user_id = payload.userId
-    
+
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -48,27 +49,27 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
 
     parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
     stop_words_dir = f"data/{user_id}/threads/{thread_id}/stop_words"
-    
+
     combined_text = ""
     combined_stop_words = set()
 
     # Combine text from matching parsed files
     if os.path.exists(parsed_dir):
         files_in_dir = os.listdir(parsed_dir)
-        
+
         for file_name in files_in_dir:
             file_path = os.path.join(parsed_dir, file_name)
-            
+
             try:
-                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     content = await f.read()
                 data = json.loads(content)
                 # Get document_id from the file - try both 'id' and 'document_id' fields
-                file_document_id = data.get('id') or data.get('document_id')
-                
+                file_document_id = data.get("id") or data.get("document_id")
+
                 # Check if this document_id is in our requested list
                 if file_document_id in body.document_ids:
-                    text_content = data.get('full_text', '')
+                    text_content = data.get("full_text", "")
                     if text_content:
                         combined_text += text_content + " "
             except Exception as e:
@@ -77,12 +78,12 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
     # Combine stop words from matching files
     if os.path.exists(stop_words_dir):
         files_in_stop_dir = os.listdir(stop_words_dir)
-        
+
         for filename in files_in_stop_dir:
             if filename.endswith(".json"):
                 file_path = os.path.join(stop_words_dir, filename)
                 try:
-                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                         content = await f.read()
                     data = json.loads(content)
                     if isinstance(data, dict):
@@ -94,20 +95,24 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
                     continue
 
     if not combined_text.strip():
-        raise HTTPException(status_code=400, detail="No text found for the given document_ids")
+        raise HTTPException(
+            status_code=400, detail="No text found for the given document_ids"
+        )
 
     # Generate word cloud
     try:
         img_bytes = await generate_word_cloud(
             combined_text, stop_words=list(combined_stop_words), max_words=max_words
         )
-        
+
         from fastapi.responses import StreamingResponse
-        
+
         return StreamingResponse(img_bytes, media_type="image/png")
-        
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate word cloud: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate word cloud: {str(e)}"
+        )
 
 
 @router.post("/mindmap")
@@ -120,7 +125,7 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
 
     thread_id = body.thread_id
     document_id = body.document_id
-    
+
     # Get client socket ID from headers (if provided)
     client_socket_id = request.headers.get("x-socket-id")
 
@@ -134,34 +139,46 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
         return {"error": "Thread not found"}
 
     mind_map_dir = f"data/{user_id}/threads/{thread_id}/mind_maps"
-    
+
     # Emit progress update - Starting search
     if client_socket_id:
-        await sio.emit("mindmap_progress", {
-            "status": "searching",
-            "message": "Searching for existing mind map...",
-            "progress": 20
-        }, to=client_socket_id)
-    
+        await sio.emit(
+            "mindmap_progress",
+            {
+                "status": "searching",
+                "message": "Searching for existing mind map...",
+                "progress": 20,
+            },
+            to=client_socket_id,
+        )
+
     if not os.path.exists(mind_map_dir):
         # Emit progress update - No directory, mind map not generated yet
         if client_socket_id:
-            await sio.emit("mindmap_progress", {
-                "status": "not_found",
-                "message": "   ",
-                "progress": 100
-            }, to=client_socket_id)
-        
+            await sio.emit(
+                "mindmap_progress",
+                {"status": "not_found", "message": "   ", "progress": 100},
+                to=client_socket_id,
+            )
+
         # Return success status with not_found indicator to avoid API error handling
-        return {"status": True, "not_found": True, "message": "No mind map found for the given document_id"}
+        return {
+            "status": True,
+            "not_found": True,
+            "message": "No mind map found for the given document_id",
+        }
 
     # Emit progress update - Checking files
     if client_socket_id:
-        await sio.emit("mindmap_progress", {
-            "status": "checking",
-            "message": "Checking available mind maps...",
-            "progress": 50
-        }, to=client_socket_id)
+        await sio.emit(
+            "mindmap_progress",
+            {
+                "status": "checking",
+                "message": "Checking available mind maps...",
+                "progress": 50,
+            },
+            to=client_socket_id,
+        )
 
     for filename in os.listdir(mind_map_dir):
         if filename.endswith(".json"):
@@ -169,38 +186,50 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
             try:
                 # Emit progress update - Loading file
                 if client_socket_id:
-                    await sio.emit("mindmap_progress", {
-                        "status": "loading",
-                        "message": f"Loading mind map...",
-                        "progress": 80
-                    }, to=client_socket_id)
-                
-                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    await sio.emit(
+                        "mindmap_progress",
+                        {
+                            "status": "loading",
+                            "message": f"Loading mind map...",
+                            "progress": 80,
+                        },
+                        to=client_socket_id,
+                    )
+
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     content = await f.read()
                 data = json.loads(content)
                 if isinstance(data, dict) and data.get("document_id") == document_id:
                     # Emit success
                     if client_socket_id:
-                        await sio.emit("mindmap_progress", {
-                            "status": "success",
-                            "message": "Mind map loaded successfully!",
-                            "progress": 100
-                        }, to=client_socket_id)
-                    
+                        await sio.emit(
+                            "mindmap_progress",
+                            {
+                                "status": "success",
+                                "message": "Mind map loaded successfully!",
+                                "progress": 100,
+                            },
+                            to=client_socket_id,
+                        )
+
                     return {"status": True, "mind_map": data}
             except Exception as e:
                 continue
 
     # Mind map not found in any file
     if client_socket_id:
-        await sio.emit("mindmap_progress", {
-            "status": "not_found",
-            "message": "   ",
-            "progress": 100
-        }, to=client_socket_id)
-    
+        await sio.emit(
+            "mindmap_progress",
+            {"status": "not_found", "message": "   ", "progress": 100},
+            to=client_socket_id,
+        )
+
     # Return success status with not_found indicator to avoid API error handling
-    return {"status": True, "not_found": True, "message": "No mind map found for the given document_id"}
+    return {
+        "status": True,
+        "not_found": True,
+        "message": "No mind map found for the given document_id",
+    }
 
 
 @router.post("/mindmap/global")
@@ -212,7 +241,7 @@ async def get_mind_map(request: Request, body: GlobalMindMapRequest = Body(...))
         return {"error": "User not authenticated"}
 
     thread_id = body.thread_id
-    
+
     # Get client socket ID from headers (if provided)
     client_socket_id = request.headers.get("x-socket-id")
 
@@ -226,34 +255,46 @@ async def get_mind_map(request: Request, body: GlobalMindMapRequest = Body(...))
         return {"error": "Thread not found"}
 
     mind_map_dir = f"data/{user_id}/threads/{thread_id}/mind_maps"
-    
+
     # Emit progress update - Starting search
     if client_socket_id:
-        await sio.emit("mindmap_progress", {
-            "status": "searching",
-            "message": "Searching for existing mind map...",
-            "progress": 20
-        }, to=client_socket_id)
-    
+        await sio.emit(
+            "mindmap_progress",
+            {
+                "status": "searching",
+                "message": "Searching for existing mind map...",
+                "progress": 20,
+            },
+            to=client_socket_id,
+        )
+
     if not os.path.exists(mind_map_dir):
         # Emit progress update - No directory, mind map not generated yet
         if client_socket_id:
-            await sio.emit("mindmap_progress", {
-                "status": "not_found",
-                "message": "  ",
-                "progress": 100
-            }, to=client_socket_id)
-        
+            await sio.emit(
+                "mindmap_progress",
+                {"status": "not_found", "message": "  ", "progress": 100},
+                to=client_socket_id,
+            )
+
         # Return success status with not_found indicator to avoid API error handling
-        return {"status": True, "not_found": True, "message": "Global Mind Map not found"}
+        return {
+            "status": True,
+            "not_found": True,
+            "message": "Global Mind Map not found",
+        }
 
     # Emit progress update - Checking files
     if client_socket_id:
-        await sio.emit("mindmap_progress", {
-            "status": "checking",
-            "message": "Checking available mind maps...",
-            "progress": 50
-        }, to=client_socket_id)
+        await sio.emit(
+            "mindmap_progress",
+            {
+                "status": "checking",
+                "message": "Checking available mind maps...",
+                "progress": 50,
+            },
+            to=client_socket_id,
+        )
 
     name = f"{user_id}_{thread_id}_global_mind_map.json"
     file_path = os.path.join(mind_map_dir, name)
@@ -261,36 +302,48 @@ async def get_mind_map(request: Request, body: GlobalMindMapRequest = Body(...))
         try:
             # Emit progress update - Loading file
             if client_socket_id:
-                await sio.emit("mindmap_progress", {
-                    "status": "loading",
-                    "message": f"Loading global mind map...",
-                    "progress": 80
-                }, to=client_socket_id)
+                await sio.emit(
+                    "mindmap_progress",
+                    {
+                        "status": "loading",
+                        "message": f"Loading global mind map...",
+                        "progress": 80,
+                    },
+                    to=client_socket_id,
+                )
 
-            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
             data = json.loads(content)
             # Emit success
             if client_socket_id:
-                await sio.emit("mindmap_progress", {
-                    "status": "success",
-                    "message": "Global mind map loaded successfully!",
-                    "progress": 100
-                }, to=client_socket_id)
+                await sio.emit(
+                    "mindmap_progress",
+                    {
+                        "status": "success",
+                        "message": "Global mind map loaded successfully!",
+                        "progress": 100,
+                    },
+                    to=client_socket_id,
+                )
             return {"status": True, "mind_map": data}
         except Exception as e:
             pass
 
     # Mind map not found in any file
     if client_socket_id:
-        await sio.emit("mindmap_progress", {
-            "status": "not_found",
-            "message": "   ",
-            "progress": 100
-        }, to=client_socket_id)
-    
+        await sio.emit(
+            "mindmap_progress",
+            {"status": "not_found", "message": "   ", "progress": 100},
+            to=client_socket_id,
+        )
+
     # Return success status with not_found indicator to avoid API error handling
-    return {"status": True, "not_found": True, "message": "No mind map found for the given document_id"}
+    return {
+        "status": True,
+        "not_found": True,
+        "message": "No mind map found for the given document_id",
+    }
 
 
 @router.post("/summary")
@@ -321,7 +374,7 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
         if filename.endswith(".json"):
             file_path = os.path.join(parsed_dir, filename)
             try:
-                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     content = await f.read()
                 data = json.loads(content)
                 if isinstance(data, dict) and data.get("document_id") == document_id:

@@ -16,6 +16,8 @@ class Document(BaseModel):
     title: str
     full_text: str
     summary: Optional[str] = None
+
+
 class Documents(BaseModel):
     documents: List[Document] = Field(default_factory=list)
     thread_id: str

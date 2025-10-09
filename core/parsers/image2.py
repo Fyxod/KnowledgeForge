@@ -16,6 +16,7 @@ OPENAI_MODEL = "gpt-4o-mini"
 GEMMA_URL = "https://llm.katiyar.xyz/vision-query"
 GEMMA_MODEL = IMAGE_PARSER_LLM
 
+
 async def image_parser(image_path: str) -> str:
     """
     Parse image text using a fallback chain: OpenAI -> Gemma -> Tesseract.
@@ -37,8 +38,8 @@ async def image_parser(image_path: str) -> str:
 
                 async with aiofiles.open(image_path, "rb") as f:
                     image_data = await f.read()
-                base64_image = base64.b64encode(image_data).decode('utf-8')
-                
+                base64_image = base64.b64encode(image_data).decode("utf-8")
+
                 response = await client.chat.completions.create(
                     model=OPENAI_MODEL,
                     messages=[
@@ -56,20 +57,22 @@ async def image_parser(image_path: str) -> str:
                         }
                     ],
                 )
-                
+
                 end = time.time()
-                print(f"[VISION attempt {attempt}] Time taken: {end - start:.2f} seconds")
+                print(
+                    f"[VISION attempt {attempt}] Time taken: {end - start:.2f} seconds"
+                )
 
                 if response.choices and response.choices[0].message.content:
                     return response.choices[0].message.content
-                
+
                 print(f"[VISION attempt {attempt}] Failed: Empty response from API.")
 
             except Exception as e:
                 print(f"[VISION attempt {attempt}] failed")
 
             if attempt < retries:
-                await asyncio.sleep(0.1) # Wait before retrying
+                await asyncio.sleep(0.1)  # Wait before retrying
 
         return None
 
@@ -87,17 +90,21 @@ async def image_parser(image_path: str) -> str:
 
                 async with httpx.AsyncClient() as client:
                     response = await client.post(GEMMA_URL, files=files, params=params)
-                
+
                 end = time.time()
-                print(f"[Gemma attempt {attempt}] Time taken: {end - start:.2f} seconds")
+                print(
+                    f"[Gemma attempt {attempt}] Time taken: {end - start:.2f} seconds"
+                )
 
                 if response.status_code == 200:
                     data = response.json()
                     if isinstance(data, dict) and "text" in data:
                         return data["text"]
-                    return str(data) 
+                    return str(data)
 
-                print(f"[Gemma attempt {attempt}] Failed with status {response.status_code}: {response.text}")
+                print(
+                    f"[Gemma attempt {attempt}] Failed with status {response.status_code}: {response.text}"
+                )
 
             except Exception as e:
                 print(f"[Gemma attempt {attempt}] Exception: {e}")

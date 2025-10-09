@@ -4,14 +4,13 @@ import aiofiles
 import httpx
 from PIL import Image
 import pytesseract
-from core.constants import IMAGE_PARSER_LLM
 from core.config import settings
 
 # Optional for Windows if Tesseract throws errors:
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 VISION_URL = settings.VISION_URL
-MODEL = IMAGE_PARSER_LLM
+MODEL = "gemma3:12b"
 # gemma=True
 
 
@@ -76,7 +75,7 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
 
     # fallback to Tesseract
     try:
-        # print("processing via tesseract")
+        print("processing via tesseract")
         return (await asyncio.to_thread(tesseract_parse)).strip()
     except Exception as e:
         print(f"[Fallback Tesseract] Fatal exception: {e}")

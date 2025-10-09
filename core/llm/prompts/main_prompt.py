@@ -1,5 +1,7 @@
 from typing import Any, Dict, List
 from core.constants import INTERNAL, EXTERNAL
+
+
 def main_prompt(
     messages: list,
     chunks: str,
@@ -60,7 +62,6 @@ def main_prompt(
                 }
             )
 
-        
     elif mode == "External":
 
         # System instruction
@@ -140,13 +141,17 @@ def main_prompt(
                 "parts": "If conflicted information is present, prioritise the document information over web search results.",
             }
         )
-        
 
         # Final user question
     else:
         raise ValueError("Invalid mode. Mode must be either 'Internal' or 'External'.")
-    
+
     contents.append({"role": "user", "parts": f"Question: {question}\n"})
     # ask to return correct json
-    contents.append({"role": "user", "parts": "Please return the response in the correct JSON format."})
+    contents.append(
+        {
+            "role": "user",
+            "parts": "Please return the response in the correct JSON format.",
+        }
+    )
     return contents

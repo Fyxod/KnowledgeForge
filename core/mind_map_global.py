@@ -7,8 +7,6 @@ import aiofiles
 from typing import List
 
 from core.constants import (
-    NODE_DESCRIPTION_LLM,
-    NODE_GENERATION_LLM,
     GPU_NODE_DESCRIPTION_LLM,
     GPU_NODE_GENERATION_LLM,
 )
@@ -25,6 +23,7 @@ from app.socket_handler import sio
 from core.database import db
 from core.utils.extra_done_check import mark_extra_done
 from core.word_cloud import create_stop_words
+
 
 async def create_mind_map_global(parsed_data: Documents):
     """
@@ -55,7 +54,6 @@ async def create_mind_map_global(parsed_data: Documents):
                 contents=prompt,
                 gpu_model=GPU_NODE_GENERATION_LLM.model,
                 port=GPU_NODE_GENERATION_LLM.port,
-                fallback_model=NODE_GENERATION_LLM,
             )
             end = time.time()
             print(response)
@@ -166,7 +164,6 @@ async def add_node_descriptions_global(
                     response_schema=FlatNodeWithDescriptionOutput,
                     gpu_model=GPU_NODE_DESCRIPTION_LLM.model,
                     port=GPU_NODE_DESCRIPTION_LLM.port,
-                    fallback_model=NODE_DESCRIPTION_LLM,
                 )
                 llm_res_aft = time.time()
                 print(
@@ -254,6 +251,7 @@ async def add_node_descriptions_global(
         await f.write(json_content)
 
     asyncio.create_task(delayed_mark(parsed_data))
+
 
 async def delayed_mark(parsed_data: Documents):
     await asyncio.sleep(140)

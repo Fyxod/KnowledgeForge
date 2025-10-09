@@ -8,10 +8,11 @@ import aiofiles
 from pydantic import Field, BaseModel
 from wordcloud import WordCloud
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from nltk.corpus import stopwords
-from core.constants import STOP_WORDS_EXTRACTION_LLM, GPU_STOP_WORDS_EXTRACTION_LLM
+from core.constants import GPU_STOP_WORDS_EXTRACTION_LLM
 from core.models.document import Documents
 from app.socket_handler import sio
 
@@ -93,7 +94,7 @@ def clean_text(text: str) -> str:
         "svg",
         "[",
         "]",
-        "[]"
+        "[]",
     }
     stop_words.update(custom_stopwords)
 
@@ -124,7 +125,10 @@ async def create_stop_words(parsed_data: Documents):
         async def process_doc(doc):
             doc_text = doc.full_text
             doc_text = clean_text(doc_text)
-            await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Creating stop words for {doc.title}"})
+            await sio.emit(
+                f"{parsed_data.user_id}/progress",
+                {"message": f"Creating stop words for {doc.title}"},
+            )
             stop_words = await get_stop_words_llm(doc_text)
             save_dict = {
                 "user_id": parsed_data.user_id,
@@ -133,10 +137,17 @@ async def create_stop_words(parsed_data: Documents):
                 "stop_words": stop_words,
             }
             json_content = json.dumps(save_dict, ensure_ascii=False, indent=2)
-            async with aiofiles.open(f"{stop_words_dir}/{doc.file_name}_stop_words.json", "w", encoding="utf-8") as f:
+            async with aiofiles.open(
+                f"{stop_words_dir}/{doc.file_name}_stop_words.json",
+                "w",
+                encoding="utf-8",
+            ) as f:
                 await f.write(json_content)
-                
-            await sio.emit(f"{parsed_data.user_id}/progress", {"message": f"Stop words creation for {doc.title} completed"})
+
+            await sio.emit(
+                f"{parsed_data.user_id}/progress",
+                {"message": f"Stop words creation for {doc.title} completed"},
+            )
 
         # Run batch in parallel
         await asyncio.gather(*(process_doc(doc) for doc in batch_docs))
@@ -145,11 +156,13 @@ async def create_stop_words(parsed_data: Documents):
         )
     print(f"Stop words created and saved in {stop_words_dir}" * 10)
 
+
 def limit_words(text, max_words=5000):
     words = text.split()  # Split text into words (whitespace-based)
     if len(words) > max_words:
         words = words[:max_words]  # Cut off after max_words
     return " ".join(words)
+
 
 async def get_stop_words_llm(text: str) -> list[str]:
     words = text.split()
@@ -186,7 +199,6 @@ Guidelines:
 5. Return only the list of identified stop words, with no explanation or extra formatting.
 """
 
-
         for i in range(4):
             try:
                 start_time = time.time()
@@ -196,8 +208,8 @@ Guidelines:
                     remove_thinking=True,
                     gpu_model=GPU_STOP_WORDS_EXTRACTION_LLM.model,
                     port=GPU_STOP_WORDS_EXTRACTION_LLM.port,
-                    fallback_model=STOP_WORDS_EXTRACTION_LLM,
                 )
+
                 stopwords_set.update(response.stopwords)
                 print(f"Stop words extracted for batch {batch_idx+1}")
                 end_time = time.time()

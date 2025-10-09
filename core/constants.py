@@ -31,14 +31,7 @@ GPU_NODE_DESCRIPTION_LLM = GPULLMConfig(model=QWEN3_14B, port=PORT1)
 
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
-SUMMARIZER_LLM = "gemini-2.0-flash"
-QUERY_LLM = "gemini-2.5-flash"
-DECOMPOSITION_LLM = "gemini-2.0-flash"
-COMBINATION_LLM = "gemini-2.0-flash"
-NODE_GENERATION_LLM = "gemini-2.5-flash"
-NODE_DESCRIPTION_LLM = "gemini-2.0-flash"
-STOP_WORDS_EXTRACTION_LLM = "gemini-2.5-flash"
-IMAGE_PARSER_LLM = "gemma-lat:latest"
+FALLBACK_GEMINI_MODEL = "gemini-2.0-flash"
 
 # Used if SWITCHES["FALLBACK_TO_OPENAI"] = True
 FALLBACK_OPENAI_MODEL = "gpt-4o-mini"
