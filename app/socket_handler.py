@@ -17,7 +17,7 @@ async def connect(sid, environ, auth=None):
     print(f"[WebSocket] Client connecting: {sid}")
     if auth:
         print(f"[WebSocket] Auth data: {auth}")
-    
+
     active_connections.add(sid)
 
     async def send_heartbeat():
@@ -49,4 +49,3 @@ async def disconnect(sid):
 def is_client_connected(sid):
     """Check if a client is connected."""
     return sid in active_connections
- 

@@ -39,6 +39,7 @@ from core.summarizer import summarize_documents
 from core.word_cloud import create_stop_words
 from app.socket_handler import sio
 from core.utils.extra_done_check import mark_extra_done
+
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
@@ -113,12 +114,11 @@ async def upload_file(
     print(f"Raw file paths: {files_data}")
 
     parsed_data: Documents = await process_files(files_data, user_id, thread_id)
-    
+
     asyncio.create_task(summarize_documents(parsed_data.model_copy()))
     # Check if any documents were successfully parsed
     if not parsed_data.documents:
         return {"error": "No documents could be processed successfully"}
-
 
     # Build document objects for DB
     parsed_data_dict = parsed_data.model_dump()

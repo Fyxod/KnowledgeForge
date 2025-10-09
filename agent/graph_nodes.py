@@ -14,7 +14,6 @@ from core.constants import *
 from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
 from core.llm.outputs import MainLLMOutputExternal, MainLLMOutputInternal
-from core.constants import QUERY_LLM
 
 
 async def retriever(state: AgentState) -> AgentState:
@@ -54,13 +53,12 @@ async def generate(state: AgentState) -> AgentState:
                 response_schema = MainLLMOutputExternal
             else:
                 response_schema = MainLLMOutputInternal
-                
+
             result = await invoke_llm(
                 response_schema=response_schema,
                 contents=prompt,
-                gpu_model=state.llm.model,
+                ollama_model=state.llm.model,
                 port=state.llm.port,
-                fallback_model=QUERY_LLM,
             )
             result = response_schema.model_validate(result)
             end_time = time.time()
@@ -76,7 +74,7 @@ async def generate(state: AgentState) -> AgentState:
             state.web_search_queries = []
             # state.web_search_queries = getattr(result, "web_search_queries", []) or []
             state.attempts += 1
-            state.document_id =  None
+            state.document_id = None
             return state
         except Exception as e:
             print(f"Error in generate (attempt {attempt+1}/{max_retries}): {e}")

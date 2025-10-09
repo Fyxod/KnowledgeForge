@@ -10,6 +10,7 @@ from core.models.document import Documents
 from core.parsers.main import extract_document
 import time
 
+
 # ppt, pdf, xlsx, docx, txt, html, png, jpeg, jpg, md
 async def process_files(
     files_data: List[dict],
@@ -33,7 +34,9 @@ async def process_files(
 
     # Helper to process one file
     async def process_file(file_data):
-        await sio.emit(f"{user_id}/progress", {"message": f"Processing {file_data['title']}"})
+        await sio.emit(
+            f"{user_id}/progress", {"message": f"Processing {file_data['title']}"}
+        )
         parsed_data = await extract_document(
             path=file_data["path"],
             title=file_data["title"],
@@ -43,7 +46,9 @@ async def process_files(
         )
 
         if parsed_data is None:
-            print(f"Warning: Failed to parse file {file_data['file_name']}, skipping...")
+            print(
+                f"Warning: Failed to parse file {file_data['file_name']}, skipping..."
+            )
             return None
 
         parsed_dict = parsed_data.model_dump()
@@ -58,12 +63,14 @@ async def process_files(
             await f.write(parsed_json)
 
         return parsed_data
-    
+
     batch_size = 10
     # Process in batches
     for i in range(0, len(files_data), batch_size):
-        batch = files_data[i:i + batch_size]
-        results = await asyncio.gather(*(process_file(file_data) for file_data in batch))
+        batch = files_data[i : i + batch_size]
+        results = await asyncio.gather(
+            *(process_file(file_data) for file_data in batch)
+        )
         for result in results:
             if result:
                 documents.documents.append(result)

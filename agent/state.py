@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
-
+from core.models.ollama_config import OllamaLLMConfig
 from langchain_core.messages import BaseMessage
 from core.llm.outputs import ChunksUsed
 from core.constants import *
@@ -47,7 +47,7 @@ class AgentState(BaseModel):
 
     # Used to determine the next step in the state graph
     next: Optional[str] = None
-    llm: Optional[GPULLMConfig] = Field(
+    llm: Optional[OllamaLLMConfig] = Field(
         default=None, description="The model to be used for the agent."
     )  # add more validation
     mode: Literal[f"{INTERNAL}", f"{EXTERNAL}"] = Field(

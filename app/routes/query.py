@@ -12,7 +12,7 @@ from agent.decomposition import decomposition_node
 from agent.combination import combination_node
 from core.database import db
 from core.utils.extra_done_check import is_extra_done
-from core.constants import GPU_QUERY_LLM, GPU_QUERY_LLM2, INTERNAL, EXTERNAL, SWITCHES
+from core.constants import Ollama_QUERY_LLM, Ollama_QUERY_LLM2, INTERNAL, EXTERNAL, SWITCHES
 from agent.tools.search import search_tavily as search_tool
 from typing import Literal
 
@@ -58,7 +58,6 @@ async def query(request: Request, body: QueryRequest):
         elif message["type"] == "agent":
             messages.append(AIMessage(content=message["content"]))
     ds = time.time()
-
 
     if SWITCHES["DECOMPOSITION"]:
         decomposition_result: DecompositionLLMOutput = await decomposition_node(
@@ -180,15 +179,15 @@ async def query(request: Request, body: QueryRequest):
         results = [None] * len(cleaned_results)
 
         # Start with the first model
-        workers = [asyncio.create_task(run_worker(GPU_QUERY_LLM, task_queue, results))]
+        workers = [asyncio.create_task(run_worker(Ollama_QUERY_LLM, task_queue, results))]
 
-    # Can't use 2nd model as we are on cpu and theres not enough ram
-    # # Add the second model only if allowed
-    #     if can_use_second_model:
-    #         print("Using second model for parallel execution")
-    #         workers.append(asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results)))
-    #     else:
-    #         print("Second model disabled, running only on first model")
+        # Can't use 2nd model as we are on cpu and theres not enough ram
+        # # Add the second model only if allowed
+        #     if can_use_second_model:
+        #         print("Using second model for parallel execution")
+        #         workers.append(asyncio.create_task(run_worker(Ollama_QUERY_LLM2, task_queue, results)))
+        #     else:
+        #         print("Second model disabled, running only on first model")
 
         await asyncio.gather(*workers)
 
@@ -230,7 +229,7 @@ async def query(request: Request, body: QueryRequest):
                 messages=messages,
                 # messages=[],
                 web_search=False,
-                llm=GPU_QUERY_LLM,
+                llm=Ollama_QUERY_LLM,
                 mode=mode,
                 initial_search_answer=search_result.get("answer", ""),
                 initial_search_results=search_result.get("results", []),

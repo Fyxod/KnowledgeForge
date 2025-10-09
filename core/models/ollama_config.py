@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
 
-class GPULLMConfig(BaseModel):
+class OllamaLLMConfig(BaseModel):
     model: str
     port: int

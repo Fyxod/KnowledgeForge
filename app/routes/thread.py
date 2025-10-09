@@ -147,24 +147,25 @@ async def update_thread(
         "status": "success",
         "message": "Thread name updated successfully",
         "thread_id": thread_id,
-        "thread_name": thread_data.thread_name
+        "thread_name": thread_data.thread_name,
     }
+
 
 @router.delete("/{thread_id}")
 async def delete_thread(request: Request, thread_id: str):
     """Delete a thread for the authenticated user."""
-    
+
     print(f"DELETE /thread/{thread_id} called")
-    
+
     payload = request.state.user
     if not payload:
         print(f"DELETE /thread/{thread_id} - User not authenticated")
         return {"error": "User not authenticated"}
 
     user_id = payload.userId
-    
+
     print(f"DELETE /thread/{thread_id} - User ID: {user_id}")
-    
+
     if not thread_id:
         print(f"DELETE /thread/{thread_id} - Thread ID is required")
         return {"error": "Thread ID is required"}
@@ -183,25 +184,26 @@ async def delete_thread(request: Request, thread_id: str):
     try:
         # Remove thread from user
         result = db.users.update_one(
-            {"userId": user_id},
-            {"$unset": {f"threads.{thread_id}": ""}}
+            {"userId": user_id}, {"$unset": {f"threads.{thread_id}": ""}}
         )
-        
-        print(f"DELETE /thread/{thread_id} - MongoDB result: {result.modified_count} documents modified")
-        
+
+        print(
+            f"DELETE /thread/{thread_id} - MongoDB result: {result.modified_count} documents modified"
+        )
+
         if result.modified_count > 0:
             print(f"DELETE /thread/{thread_id} - Thread deleted successfully")
             return {
                 "status": "success",
                 "message": "Thread deleted successfully",
-                "thread_id": thread_id
+                "thread_id": thread_id,
             }
         else:
             print(f"DELETE /thread/{thread_id} - No documents modified")
             return {
                 "status": "error",
                 "message": "Failed to delete thread - no documents modified",
-                "thread_id": thread_id
+                "thread_id": thread_id,
             }
     except Exception as e:
         print(f"DELETE /thread/{thread_id} - Error deleting thread: {str(e)}")

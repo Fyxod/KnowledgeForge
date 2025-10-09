@@ -8,17 +8,19 @@ from starlette.responses import JSONResponse
 from core.config import Settings
 from core.models.user import UserJwtPayload
 
+
 def normalize_path(path: str) -> str:
     if path != "/" and path.endswith("/"):
         return path.rstrip("/")
     return path
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
         included_paths: list[str] = None,
-        excluded_routes: list[tuple[str, str]] = None
+        excluded_routes: list[tuple[str, str]] = None,
     ):
         super().__init__(app)
         self.included_paths = included_paths or []
@@ -64,7 +66,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         except ExpiredSignatureError:
             return JSONResponse({"error": "JWT token has expired"}, status_code=401)
         except InvalidTokenError as e:
-            return JSONResponse({"error": f"Invalid JWT token: {str(e)}"}, status_code=401)
+            return JSONResponse(
+                {"error": f"Invalid JWT token: {str(e)}"}, status_code=401
+            )
         except Exception as e:
             return JSONResponse(
                 {"error": f"Failed to decode JWT token: {str(e)}"}, status_code=400

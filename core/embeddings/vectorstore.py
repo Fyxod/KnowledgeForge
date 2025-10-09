@@ -13,7 +13,9 @@ embedding_function = get_embedding_function()
 
 
 def chunk_page_text(page_text: str) -> List[str]:
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150) # try different chunk sizes
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000, chunk_overlap=150
+    )  # try different chunk sizes
     return splitter.split_text(page_text)
 
 
@@ -30,6 +32,7 @@ def get_vectorstore(user_id: str, thread_id: str) -> Chroma:
 
 
 import math
+
 
 async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
     print("inside save_documents_to_store")
@@ -69,10 +72,12 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
     total_batches = math.ceil(len(chunk_data) / batch_size)
 
     for batch_idx in range(total_batches):
-        batch = chunk_data[batch_idx * batch_size: (batch_idx + 1) * batch_size]
+        batch = chunk_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
         batch_ids, batch_texts, batch_metadatas = zip(*batch)
 
-        print(f"Embedding batch {batch_idx + 1}/{total_batches} with {len(batch_ids)} chunks")
+        print(
+            f"Embedding batch {batch_idx + 1}/{total_batches} with {len(batch_ids)} chunks"
+        )
         start_time = time.time()
         embeddings = await asyncio.to_thread(
             vectorstore.embeddings.embed_documents, list(batch_texts)
@@ -93,8 +98,6 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
             ids=list(batch_ids),
         )
         end_time = time.time()
-        print(
-            f"Upserted batch {batch_idx + 1} in {end_time - start_time:.2f} seconds"
-        )
+        print(f"Upserted batch {batch_idx + 1} in {end_time - start_time:.2f} seconds")
 
     print(f"Saved {len(chunk_data)} chunks to Chroma for user {user_id}")

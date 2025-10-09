@@ -1,4 +1,4 @@
-from core.models.gpu_config import GPULLMConfig
+from core.models.ollama_config import OllamaLLMConfig
 
 # Ollama model name for local deployment
 OLLAMA_MODEL = "qwen3:4b"
@@ -16,27 +16,20 @@ SWITCHES = {
 PORT = 11434  # Default port for Ollama API
 
 
-# GPU LLM configurations
-GPU_QUERY_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
-GPU_QUERY_LLM2 = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
-GPU_DECOMPOSITION_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
-GPU_COMBINATION_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
-GPU_DOC_SUMMARIZER_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
-GPU_GLOBAL_SUMMARIZER_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
-GPU_STOP_WORDS_EXTRACTION_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
-GPU_NODE_GENERATION_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
-GPU_NODE_DESCRIPTION_LLM = GPULLMConfig(model=OLLAMA_MODEL, port=PORT)
+# Ollama LLM configurations
+Ollama_QUERY_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
+Ollama_QUERY_LLM2 = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
+Ollama_DECOMPOSITION_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
+Ollama_COMBINATION_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
+Ollama_DOC_SUMMARIZER_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
+Ollama_GLOBAL_SUMMARIZER_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
+Ollama_STOP_WORDS_EXTRACTION_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
+Ollama_NODE_GENERATION_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
+Ollama_NODE_DESCRIPTION_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
 
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
-SUMMARIZER_LLM = "gemini-2.0-flash"
-QUERY_LLM = "gemini-2.5-flash"
-DECOMPOSITION_LLM = "gemini-2.0-flash"
-COMBINATION_LLM = "gemini-2.0-flash"
-NODE_GENERATION_LLM = "gemini-2.5-flash"
-NODE_DESCRIPTION_LLM = "gemini-2.0-flash"
-STOP_WORDS_EXTRACTION_LLM = "gemini-2.5-flash"
-IMAGE_PARSER_LLM = "gemma-lat:latest"
+FALLBACK_GEMINI_MODEL = "gemini-2.0-flash"
 
 # Used if SWITCHES["FALLBACK_TO_OPENAI"] = True
 FALLBACK_OPENAI_MODEL = "gpt-4o-mini"

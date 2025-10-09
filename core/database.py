@@ -7,7 +7,6 @@ client = MongoClient(MONGO_URI)
 db = client["bedrock"]
 
 
-# Remove the required fields from the schema as we'll go forward to make it more flexible - fyxod
 user_schema = {
     "$jsonSchema": {
         "bsonType": "object",
@@ -22,22 +21,34 @@ user_schema = {
                 "bsonType": "object",
                 "additionalProperties": {
                     "bsonType": "object",
-                    "required": ["documents", "chats", "createdAt", "updatedAt", "extra_done"],
+                    "required": [
+                        "documents",
+                        "chats",
+                        "createdAt",
+                        "updatedAt",
+                        "extra_done",
+                    ],
                     "properties": {
                         "thread_name": {"bsonType": "string"},
                         "documents": {
                             "bsonType": "array",
                             "items": {
                                 "bsonType": "object",
-                                "required": ["docId", "title", "type", "time_uploaded", "file_name"],
+                                "required": [
+                                    "docId",
+                                    "title",
+                                    "type",
+                                    "time_uploaded",
+                                    "file_name",
+                                ],
                                 "properties": {
                                     "docId": {"bsonType": "string"},
                                     "title": {"bsonType": "string"},
                                     "type": {"bsonType": "string"},
                                     "file_name": {"bsonType": "string"},
-                                    "time_uploaded": {"bsonType": "date"}
-                                }
-                            }
+                                    "time_uploaded": {"bsonType": "date"},
+                                },
+                            },
                         },
                         "chats": {
                             "bsonType": "array",
@@ -48,19 +59,19 @@ user_schema = {
                                     "type": {"enum": ["agent", "user"]},
                                     "content": {"bsonType": "string"},
                                     "timestamp": {"bsonType": "date"},
-                                }
-                            }
+                                },
+                            },
                         },
                         "createdAt": {"bsonType": "date"},
                         "updatedAt": {"bsonType": "date"},
                         "extra_done": {
                             "bsonType": "bool",
                             "description": "Indicates if extra task is done",
-                        }
-                    }
-                }
-            }
-        }
+                        },
+                    },
+                },
+            },
+        },
     }
 }
 

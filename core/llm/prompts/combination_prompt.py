@@ -1,16 +1,5 @@
 import json
 
-
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
 def combination_prompt(query: str, sub_answers: list) -> str:
     sub_answers_json = json.dumps(sub_answers, indent=2, ensure_ascii=False)
     prompt = f"""
