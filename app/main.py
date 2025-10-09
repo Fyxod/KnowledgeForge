@@ -11,10 +11,7 @@ from app.socket_handler import sio
 fastapi_app = FastAPI()
 
 included_paths = ["/user", "/upload", "/query", "/thread", "/extra"]
-excluded_routes = [
-    ("POST", "/user"),
-    ("POST", "/user/login")
-]
+excluded_routes = [("POST", "/user"), ("POST", "/user/login")]
 fastapi_app.add_middleware(
     AuthMiddleware, included_paths=included_paths, excluded_routes=excluded_routes
 )

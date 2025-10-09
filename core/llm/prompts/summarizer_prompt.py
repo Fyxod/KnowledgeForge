@@ -47,6 +47,7 @@ from langchain_core.prompts import (
 #     ]
 # )
 
+
 def summarize_documents_prompt(document: str):
 
     contents = [
@@ -65,7 +66,7 @@ def summarize_documents_prompt(document: str):
         # },
         {
             "role": "user",
-            "parts": f"Document to summarize:\n\n{document} Please summarize in 300-1000 words:"
+            "parts": f"Document to summarize:\n\n{document} Please summarize in 300-1000 words:",
         },
         {
             "role": "system",
@@ -78,11 +79,12 @@ def summarize_documents_prompt(document: str):
                 "Use multiple paragraphs and preserve important details. "
                 "Also give a 3-7 words concise title for the summary."
                 "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
-            )
+            ),
         },
     ]
 
     return contents
+
 
 # summarize_documents_prompt = ChatPromptTemplate.from_messages(
 #     [
@@ -103,6 +105,7 @@ def summarize_documents_prompt(document: str):
 #     ]
 # )
 
+
 def global_summarization_prompt(summaries: str):
     contents = [
         {
@@ -110,14 +113,14 @@ def global_summarization_prompt(summaries: str):
             "parts": (
                 "You are a helpful assistant tasked with synthesizing multiple summaries into one cohesive and insightful summary. "
                 "Your goal is to capture the most important and recurring themes, key points, and insights that appear across all the provided summaries."
-            )
+            ),
         },
         {
             "role": "system",
             "parts": (
                 "Ensure the synthesized summary is clear, concise, and representative of the collective content. "
                 "Group similar ideas, highlight common findings, and present overarching insights without adding your own interpretation."
-            )
+            ),
         },
         {
             "role": "system",
@@ -127,7 +130,7 @@ def global_summarization_prompt(summaries: str):
                 "- Escape any quotes, newlines, or special characters inside strings.\n"
                 "- Do not add commentary or text outside the JSON.\n"
                 "- Make sure the JSON is complete and closed properly with curly braces."
-            )
+            ),
         },
         {
             "role": "user",
@@ -137,12 +140,11 @@ def global_summarization_prompt(summaries: str):
                 "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
                 f"Summaries:\n{summaries}\n\n"
                 "Summary (500 - 1000 words):"
-            )
-        }
+            ),
+        },
     ]
 
     return contents
-
 
 
 multi_document_summarization_prompt = ChatPromptTemplate.from_messages(
@@ -175,94 +177,3 @@ multi_document_summarization_prompt = ChatPromptTemplate.from_messages(
         ),
     ]
 )
-
-# global_summarization_prompt = ChatPromptTemplate.from_messages(
-#     [
-#         SystemMessage(
-#             content=(
-#                 "You are a helpful assistant tasked with synthesizing multiple summaries into one cohesive and insightful summary. "
-#                 "Your goal is to capture the most important and recurring themes, key points, and insights that appear across all the provided summaries."
-#             )
-#         ),
-#         SystemMessage(
-#             content=(
-#                 "Ensure the synthesized summary is clear, concise, and representative of the collective content. "
-#                 "Group similar ideas, highlight common findings, and present overarching insights without adding your own interpretation."
-#             )
-#         ),
-#         SystemMessage(
-#             content=(
-#                 "IMPORTANT INSTRUCTIONS FOR OUTPUT:\n"
-#                 "- Return output **only as a valid JSON object** matching the schema.\n"
-#                 "- Escape any quotes, newlines, or special characters inside strings.\n"
-#                 "- Do not add commentary or text outside the JSON.\n"
-#                 "- Make sure the JSON is complete and closed properly with curly braces."
-#             )
-#         ),
-#         HumanMessagePromptTemplate.from_template(
-#             "You will be provided with a list of document summaries. Generate a single, coherent summary that captures the recurring and most important ideas across them.\n\n"
-#             "Return proper JSON "
-#             "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
-#             "Summaries:\n{summaries}\n\n"
-#             "Summary(500 - 1000 words):"
-#         ),
-#     ]
-# )
-
-
-# global_summarization_prompt = ChatPromptTemplate.from_messages(
-#     [
-#         SystemMessage(
-#             content=(
-#                 "You are a helpful assistant tasked with synthesizing multiple summaries into one cohesive and insightful summary. "
-#                 "Your goal is to capture the most important and recurring themes, key points, and insights that appear across all the provided summaries."
-#             )
-#         ),
-#         SystemMessage(
-#             content=(
-#                 "Ensure the synthesized summary is clear, concise, and representative of the collective content. "
-#                 "Try to capture all major themes and insights without introducing new information or interpretations."
-#                 "Group similar ideas, highlight common findings, and present overarching insights without adding your own interpretation."
-#             )
-#         ),
-#         SystemMessage(
-#             content=(
-#                 "The final output should serve as a high-level overview of the set of documents, suitable for understanding shared themes or guiding further exploration."
-#             )
-#         ),
-#         HumanMessagePromptTemplate.from_template(
-#             "You will be provided with a list of document summaries. Generate a single, coherent summary that captures the recurring and most important ideas across them.\n\n"
-#             "Summaries:\n{summaries}\n\n"
-#             "Return:\n"
-#             "- `Summary`: a comprehensive, concise summary of the insights, themes, and key points across all provided summaries."
-#         ),
-#     ]
-# )
-# global_summarization_prompt = ChatPromptTemplate.from_messages(
-#     [
-#         SystemMessage(
-#             content=(
-#                 "You are a helpful assistant tasked with synthesizing multiple summaries into one cohesive and insightful summary. "
-#                 "Your goal is to capture the most important and recurring themes, key points, and insights that appear across all the provided summaries."
-#             )
-#         ),
-#         SystemMessage(
-#             content=(
-#                 "Ensure the synthesized summary is clear, structured, and representative of the collective content. "
-#                 "Group similar ideas, highlight common findings, and present overarching insights without introducing new information or interpretations."
-#             )
-#         ),
-#         SystemMessage(
-#             content=(
-#                 "The final output should serve as a high-level overview of the set of documents, suitable for understanding shared themes or guiding further exploration. "
-#                 "The summary must be between 700 and 1000 words."
-#             )
-#         ),
-#         HumanMessagePromptTemplate.from_template(
-#             "You will be provided with a list of document summaries. Generate a single, coherent summary that captures the recurring and most important ideas across them.\n\n"
-#             "Summaries:\n{summaries}\n\n"
-#             "Return:\n"
-#             "- `Summary`: a comprehensive, well-structured synthesis (700–1000 words) of the insights, themes, and key points across all provided summaries."
-#         ),
-#     ]
-# )

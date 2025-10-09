@@ -76,7 +76,7 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
 
     # fallback to Tesseract
     try:
-        # print("processing via tesseract")
+        print("processing via tesseract")
         return (await asyncio.to_thread(tesseract_parse)).strip()
     except Exception as e:
         print(f"[Fallback Tesseract] Fatal exception: {e}")

@@ -14,6 +14,5 @@ async def decomposition_node(question: str, messages: list) -> DecompositionLLMO
         gpu_model=GPU_DECOMPOSITION_LLM.model,
         port=GPU_DECOMPOSITION_LLM.port,
         response_schema=DecompositionLLMOutput,
-        fallback_model=DECOMPOSITION_LLM,
     )
     return result

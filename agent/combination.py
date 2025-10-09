@@ -14,7 +14,6 @@ async def combination_node(
         gpu_model=GPU_COMBINATION_LLM.model,
         port=GPU_COMBINATION_LLM.port,
         response_schema=CombinationLLMOutput,
-        fallback_model=COMBINATION_LLM,
     )
 
     return result.answer

@@ -76,7 +76,6 @@ async def process_document_with_chunks(document, user_id: str, thread_id: str):
                     contents=prompt,
                     gpu_model=GPU_DOC_SUMMARIZER_LLM.model,
                     port=GPU_DOC_SUMMARIZER_LLM.port,
-                    fallback_model=SUMMARIZER_LLM,
                 )
                 if result and result.summary and len(result.summary.split()) >= 5:
                     document.summary = result.summary
@@ -100,7 +99,6 @@ async def process_document_with_chunks(document, user_id: str, thread_id: str):
                     contents=prompt,
                     gpu_model=GPU_DOC_SUMMARIZER_LLM.model,
                     port=GPU_DOC_SUMMARIZER_LLM.port,
-                    fallback_model=SUMMARIZER_LLM,
                 )
                 if result and result.summary and len(result.summary.split()) >= 5:
                     partial_summaries.append(result.summary)
@@ -139,7 +137,6 @@ Here are the section summaries: {partial_summaries}. Please return the final com
                 contents=combine_prompt,
                 gpu_model=GPU_DOC_SUMMARIZER_LLM.model,
                 port=GPU_DOC_SUMMARIZER_LLM.port,
-                fallback_model=SUMMARIZER_LLM,
             )
             if combined_result and combined_result.summary:
                 document.summary = combined_result.summary
@@ -181,7 +178,9 @@ async def summarize_documents(parsed_data: Documents):
             for batch_start in range(0, total_docs, batch_size):
                 batch = [
                     (i, documents[i])
-                    for i in range(batch_start, min(batch_start + batch_size, total_docs))
+                    for i in range(
+                        batch_start, min(batch_start + batch_size, total_docs)
+                    )
                 ]
                 await asyncio.gather(*(process_document(i, doc) for i, doc in batch))
 
@@ -206,7 +205,6 @@ async def summarize_documents(parsed_data: Documents):
     if SWITCHES["SUMMARIZATION"]:
         print("Starting global summarization...")
         await global_summarizer(parsed_data.user_id, parsed_data.thread_id)
-
 
 
 async def global_summarizer(user_id: str, thread_id: str):
@@ -275,7 +273,6 @@ async def global_summarizer(user_id: str, thread_id: str):
             contents=summary_prompt,
             gpu_model=GPU_GLOBAL_SUMMARIZER_LLM.model,
             port=GPU_GLOBAL_SUMMARIZER_LLM.port,
-            fallback_model=SUMMARIZER_LLM,
         )
 
         end_time = time.time()

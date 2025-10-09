@@ -84,9 +84,6 @@ def create_user(user_input: UserCreateModel, background_tasks: BackgroundTasks):
     print("Creating user with input:", user_dict)
     name_filtered = user_dict["name"].strip().lower().replace(" ", "_")
     user_dict["name"] = user_dict["name"].strip().title()
-    user_name_d=user_dict["name"]
-    user_pass_d=user_dict["password"]
-    user_email_d=user_dict["email"]
     user_dict["password"] = hash_password(user_dict["password"])
     user_dict["userId"] = f"{name_filtered}_{uuid.uuid4().hex[:6]}"
     user_dict["is_active"] = True

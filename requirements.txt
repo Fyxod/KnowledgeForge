@@ -5,12 +5,10 @@ langchain
 langchain-chroma
 langchain-community
 langchain-core
-langchain-google-genai
 langchain-huggingface
 tavily-python
 langchain-ollama
 langgraph
-langsmith
 PyJWT
 pymongo
 pytesseract

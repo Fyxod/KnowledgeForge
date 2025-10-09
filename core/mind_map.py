@@ -6,7 +6,12 @@ import asyncio
 import aiofiles
 from typing import List
 
-from core.constants import NODE_DESCRIPTION_LLM, NODE_GENERATION_LLM, GPU_NODE_GENERATION_LLM, GPU_NODE_DESCRIPTION_LLM
+from core.constants import (
+    NODE_DESCRIPTION_LLM,
+    NODE_GENERATION_LLM,
+    GPU_NODE_GENERATION_LLM,
+    GPU_NODE_DESCRIPTION_LLM,
+)
 from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
 from core.llm.outputs import FlatNodeWithDescriptionOutput, MindMapOutput, Node, MindMap
@@ -43,7 +48,6 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
                 contents=prompt,
                 gpu_model=GPU_NODE_GENERATION_LLM.model,
                 port=GPU_NODE_GENERATION_LLM.port,
-                fallback_model=NODE_GENERATION_LLM,
             )
             end = time.time()
             print(response)
@@ -53,7 +57,7 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
 
             data_dict = response.model_dump()
             json_content = json.dumps(data_dict, indent=2, ensure_ascii=False)
-            
+
             async with aiofiles.open(
                 f"{incomplete_mind_map_dir}/{document.file_name}_mind_map.json",
                 "w",
@@ -137,6 +141,7 @@ async def add_node_descriptions(
     ]
 
     doc_retriever = get_user_retriever(user_id, thread_id, document.id, k=8)
+
     async def process_batch(batch_nodes, batch_idx):
         batch_relevant_texts = []
         for node in batch_nodes:
@@ -161,7 +166,6 @@ async def add_node_descriptions(
                     response_schema=FlatNodeWithDescriptionOutput,
                     gpu_model=GPU_NODE_DESCRIPTION_LLM.model,
                     port=GPU_NODE_DESCRIPTION_LLM.port,
-                    fallback_model=NODE_DESCRIPTION_LLM,
                 )
                 llm_res_aft = time.time()
                 print(
@@ -175,7 +179,9 @@ async def add_node_descriptions(
                 )
 
                 for i, node in enumerate(batch_nodes):
-                    resp_node = response.mind_map[i] if i < len(response.mind_map) else None
+                    resp_node = (
+                        response.mind_map[i] if i < len(response.mind_map) else None
+                    )
                     if resp_node and node["id"] == resp_node.id:
                         node["description"] = resp_node.description
                         print(f"Updated description for node {node['id']}")
@@ -268,6 +274,8 @@ Text: {text}
 Do not exceed the max limit of 50 nodes.
 
 """
+
+
 # Return valid json as told
 
 
