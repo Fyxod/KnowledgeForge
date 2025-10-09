@@ -14,7 +14,6 @@ from core.constants import *
 from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
 from core.llm.outputs import MainLLMOutputExternal, MainLLMOutputInternal
-from core.constants import QUERY_LLM
 
 
 async def retriever(state: AgentState) -> AgentState:

@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from nltk.corpus import stopwords
-from core.constants import STOP_WORDS_EXTRACTION_LLM, GPU_STOP_WORDS_EXTRACTION_LLM
+from core.constants import GPU_STOP_WORDS_EXTRACTION_LLM
 from core.models.document import Documents
 from app.socket_handler import sio
 

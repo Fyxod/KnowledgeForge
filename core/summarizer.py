@@ -21,7 +21,6 @@ from core.mind_map import create_mind_map
 from core.mind_map_global import create_mind_map_global
 from core.database import db
 from core.constants import (
-    SUMMARIZER_LLM,
     GPU_DOC_SUMMARIZER_LLM,
     GPU_GLOBAL_SUMMARIZER_LLM,
 )

@@ -1,7 +1,7 @@
 from core.llm.client import invoke_llm
 from core.llm.outputs import CombinationLLMOutput
 from core.llm.prompts.combination_prompt import combination_prompt
-from core.constants import COMBINATION_LLM, GPU_COMBINATION_LLM
+from core.constants import GPU_COMBINATION_LLM
 
 
 async def combination_node(

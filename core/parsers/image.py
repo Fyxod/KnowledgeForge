@@ -4,14 +4,13 @@ import aiofiles
 import httpx
 from PIL import Image
 import pytesseract
-from core.constants import IMAGE_PARSER_LLM
 from core.config import settings
 
 # Optional for Windows if Tesseract throws errors:
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 VISION_URL = settings.VISION_URL
-MODEL = IMAGE_PARSER_LLM
+MODEL = "gemma3:12b"
 # gemma=True
 
 

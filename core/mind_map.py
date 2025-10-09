@@ -7,8 +7,6 @@ import aiofiles
 from typing import List
 
 from core.constants import (
-    NODE_DESCRIPTION_LLM,
-    NODE_GENERATION_LLM,
     GPU_NODE_GENERATION_LLM,
     GPU_NODE_DESCRIPTION_LLM,
 )

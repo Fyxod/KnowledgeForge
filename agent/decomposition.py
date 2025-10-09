@@ -2,7 +2,7 @@ from core.llm.prompts.decomposition_prompt import decomposition_prompt
 from agent.graph_helpers import get_recent_history
 from core.llm.outputs import DecompositionLLMOutput
 from core.llm.client import invoke_llm
-from core.constants import GPU_DECOMPOSITION_LLM, DECOMPOSITION_LLM
+from core.constants import GPU_DECOMPOSITION_LLM
 
 
 async def decomposition_node(question: str, messages: list) -> DecompositionLLMOutput:
