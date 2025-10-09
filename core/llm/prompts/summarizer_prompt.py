@@ -66,7 +66,7 @@ def summarize_documents_prompt(document: str):
         # },
         {
             "role": "user",
-            "parts": f"Document to summarize:\n\n{document} Please summarize in 300-1000 words:",
+            "parts": f"Document to summarize:\n\n{document} Please summarize in 300-1000 words:dont just write a para use proper text formatting make bullet points ,sub-headings and headings where necessary.",
         },
         {
             "role": "system",
@@ -79,7 +79,12 @@ def summarize_documents_prompt(document: str):
                 "Use multiple paragraphs and preserve important details. "
                 "Also give a 3-7 words concise title for the summary."
                 "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
-            ),
+                "dont just write a para use proper text formatting make bullet points ,sub-headings and headings where necessary."
+                "while summarizing the document make sure to include all the important points and data present in the document."
+                "highlight important points using bullet points and sub-headings."
+                "mention any statistics or data present in the document."
+                "if you encounter any key word highlight them using markdown bold format."
+            ), 
         },
     ]
 

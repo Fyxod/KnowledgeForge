@@ -372,7 +372,7 @@ export default function ChatWindow({
                 <div className="flex items-center gap-3 mb-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                   <span className="text-sm font-medium text-blue-800">
-                    Uploading {uploadingFiles.length} file
+                    Processing {uploadingFiles.length} file
                     {uploadingFiles.length > 1 ? "s" : ""}...
                   </span>
                 </div>

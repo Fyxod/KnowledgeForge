@@ -33,6 +33,7 @@ def main_prompt(
                     "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly.\n"
                     "Give long detailed structured responses unless asked otherwise\n"
                     "Give your final answer in clear, structured Markdown format for readability.\n"
+                    "dont just write a para use proper text formatting make bullet points ,sub-headings and headings where necessary."
                 ),
             }
         )
@@ -83,6 +84,7 @@ def main_prompt(
                     "If the user asks for a summary, give `document_summarizer` or `global_summarizer` as action accordingly.\n"
                     "Give long detailed structured responses unless asked otherwise\n"
                     "Give your final answer in clear, structured Markdown format for readability.\n"
+                    "dont just write a para use proper text formatting make bullet points ,sub-headings and headings where necessary."
                 ),
             }
         )
