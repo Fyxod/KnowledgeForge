@@ -19,7 +19,7 @@ def summarize_documents_prompt(document: str):
                 "- Avoid long paragraphs; keep content concise and easy to read.\n\n"
                 "###  Structure Example\n"
                 "```\n"
-                "# [Concise 3 7 word Title]\n\n"
+                "# [Concise 3-7 word Title]\n\n"
                 "## Overview\n"
                 "(Brief overview of document purpose or theme)\n\n"
                 "## Key Sections or Themes\n"
@@ -32,14 +32,14 @@ def summarize_documents_prompt(document: str):
                 "(Concise recap or implications)\n"
                 "```\n\n"
                 "### Output Requirements\n"
-                "- Summary length: **300 1000 words**\n"
+                "- Summary length: **300-1000 words**\n"
                 "- Do **not** omit significant details.\n"
                 "- Escape any quotes, newlines, or special characters that could break JSON formatting.\n"
             ),
         },
         {
             "role": "user",
-            "parts": f" **Document to Summarize:**\n\n{document}\n\nPlease summarize in 300 1000 words following the structure above.",
+            "parts": f" **Document to Summarize:**\n\n{document}\n\nPlease summarize in 300-1000 words following the structure above.",
         },
     ]
     return contents
@@ -100,7 +100,7 @@ multi_document_summarization_prompt = ChatPromptTemplate.from_messages(
                 "- Use **Markdown structure** with headings and bullets.\n"
                 "- Avoid copying large text blocks; rephrase while preserving meaning.\n"
                 "- If a document has multiple topics, reflect that clearly with subheadings.\n"
-                "- Keep each summary **concise and factual**, between 200 800 words.\n"
+                "- Keep each summary **concise and factual**, between 200-800 words.\n"
             )
         ),
         SystemMessage(
