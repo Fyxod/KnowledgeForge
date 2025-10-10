@@ -1,7 +1,7 @@
 from core.models.ollama_config import OllamaLLMConfig
 
 # Ollama model name for local deployment
-OLLAMA_MODEL = "qwen3:4b"
+OLLAMA_MODEL = "qwen3:8b"
 
 # SETTINGS
 SWITCHES = {
