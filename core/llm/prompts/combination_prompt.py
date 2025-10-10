@@ -1,16 +1,5 @@
 import json
 
-
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
-# maybe not call it resolved query?
 def combination_prompt(query: str, sub_answers: list) -> str:
     sub_answers_json = json.dumps(sub_answers, indent=2, ensure_ascii=False)
     prompt = f"""
@@ -33,7 +22,6 @@ Instructions:
 7. Maintain clarity, conciseness, and factual tone.
 8. Retain the formatting of any lists/headings/bullets etc from Sub_answers.
 9. Ensure the final answer is in **clear, structured Markdown** with good headings, bullet points, bold text etc wherever applicable for readability.
-10.Dont just write a para use proper text formatting make bullet points ,sub-headings and headings where necessary.
 Output:
 Return only the final synthesized answer, written for the end user, without repeating the Resolved_query.
 """

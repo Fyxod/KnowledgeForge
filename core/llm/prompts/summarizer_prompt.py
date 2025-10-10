@@ -4,111 +4,46 @@ from langchain_core.prompts import (
     HumanMessagePromptTemplate,
 )
 
-# summarize_documents_prompt = ChatPromptTemplate.from_messages(
-#     [
-#         SystemMessage(
-#             content=(
-#                 "You are a helpful assistant tasked with summarizing documents for efficient understanding and retrieval. "
-#                 "Your job is to read the provided document or text and produce a clear, concise summary of 600 - 800 words that captures the main ideas without losing critical details."
-#             )
-#         ),
-#         SystemMessage(
-#             content=(
-#                 "If the document contains multiple sections or themes, organize the summary accordingly. "
-#                 "Be objective and do not add your own interpretations or information not present in the original content. "
-#                 "Focus on clarity, coherence, and informativeness."
-#             )
-#         ),
-#         SystemMessage(
-#             content=(
-#                 "The goal is to provide a useful and accurate summary that reflects the content and intent of the original document, suitable for downstream tasks like search or knowledge retrieval."
-#             )
-#         ),
-#         HumanMessagePromptTemplate.from_template(
-#             "Document to summarize:\n\n{document}\n\nSummary:"
-#         ),
-#     ]
-# )
-# summarize_documents_prompt = ChatPromptTemplate.from_messages(
-#     [
-#         SystemMessage(
-#             content=(
-#                 "Write a summary of the document that is between 500-700 words.\n"
-#                 "- Structure it in multiple paragraphs.\n"
-#                 "- Expand on key events, characters, and themes.\n"
-#                 "- Do not skip over important details, even if they seem minor.\n"
-#                 "- Avoid single-paragraph answers."
-#                 # "If your output is shorter than 500 words, continue writing until you reach the target length."
-#             )
-#         ),
-#         HumanMessagePromptTemplate.from_template(
-#             "Document to summarize:\n\n{document}\n\nSummary:"
-#         ),
-#     ]
-# )
-
 
 def summarize_documents_prompt(document: str):
-
     contents = [
-        # {
-        #     "role": "system",
-        #     "parts": (
-        #         "You are a helpful assistant tasked with summarizing documents. "
-        #         "Write a comprehensive summary between 300-1000 words. "
-        #         "The summary should not exceed 1000 words. "
-        #         "Do not skip over important details, even if they seem minor. "
-        #         "If the document contains multiple sections or themes, organize the summary accordingly. "
-        #         "Use multiple paragraphs and preserve important details. "
-        #         "Also give a 3-7 words concise title for the summary."
-        #         "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
-        #     )
-        # },
-        {
-            "role": "user",
-            "parts": f"Document to summarize:\n\n{document} Please summarize in 300-1000 words:dont just write a para use proper text formatting make bullet points ,sub-headings and headings where necessary.",
-        },
         {
             "role": "system",
             "parts": (
-                "You are a helpful assistant tasked with summarizing documents. "
-                "Write a comprehensive summary between 300-1000 words. "
-                "The summary should not exceed 1000 words. "
-                "Do not skip over important details, even if they seem minor. "
-                "If the document contains multiple sections or themes, organize the summary accordingly. "
-                "Use multiple paragraphs and preserve important details. "
-                "Also give a 3-7 words concise title for the summary."
-                "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
-                "dont just write a para use proper text formatting make bullet points ,sub-headings and headings where necessary."
-                "while summarizing the document make sure to include all the important points and data present in the document."
-                "highlight important points using bullet points and sub-headings."
-                "mention any statistics or data present in the document."
-                "if you encounter any key word highlight them using markdown bold format."
-            ), 
+                "You are an expert assistant specialized in **structured document summarization**.\n"
+                "Your goal is to create a **clear, modular, Markdown-formatted summary** of the given document.\n\n"
+                "### Formatting & Style Guidelines\n"
+                "- Use **headings (`##`, `###`)** for logical sections.\n"
+                "- Use **bullet points** to list facts or details.\n"
+                "- Highlight key terms in **bold** and examples in *italics*.\n"
+                "- Avoid long paragraphs; keep content concise and easy to read.\n\n"
+                "###  Structure Example\n"
+                "```\n"
+                "# [Concise 3 7 word Title]\n\n"
+                "## Overview\n"
+                "(Brief overview of document purpose or theme)\n\n"
+                "## Key Sections or Themes\n"
+                "- **Section 1:** Main ideas or findings\n"
+                "- **Section 2:** Supporting details or analysis\n\n"
+                "## Important Details\n"
+                "- **Fact 1:** ...\n"
+                "- **Fact 2:** ...\n\n"
+                "## Summary\n"
+                "(Concise recap or implications)\n"
+                "```\n\n"
+                "### Output Requirements\n"
+                "- Summary length: **300 1000 words**\n"
+                "- Do **not** omit significant details.\n"
+                "- Escape any quotes, newlines, or special characters that could break JSON formatting.\n"
+            ),
+        },
+        {
+            "role": "user",
+            "parts": f" **Document to Summarize:**\n\n{document}\n\nPlease summarize in 300 1000 words following the structure above.",
         },
     ]
-
     return contents
 
-
-# summarize_documents_prompt = ChatPromptTemplate.from_messages(
-#     [
-#         SystemMessage(
-#             content=(
-#                 "You are a helpful assistant tasked with summarizing documents. "
-#                 "Write a comprehensive summary between 500-700 words. "
-#                 "The summary should not exceed 700 words."
-#                 "Do not skip over important details, even if they seem minor. "
-#                 "If the document contains multiple sections or themes, organize the summary accordingly. "
-#                 "Use multiple paragraphs and preserve important details."
-#                 "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
-#             )
-#         ),
-#         HumanMessagePromptTemplate.from_template(
-#             "Document to summarize:\n\n{document}\n\nSummary (500-700 words):"
-#         ),
-#     ]
-# )
 
 
 def global_summarization_prompt(summaries: str):
@@ -116,69 +51,77 @@ def global_summarization_prompt(summaries: str):
         {
             "role": "system",
             "parts": (
-                "You are a helpful assistant tasked with synthesizing multiple summaries into one cohesive and insightful summary. "
-                "Your goal is to capture the most important and recurring themes, key points, and insights that appear across all the provided summaries."
-            ),
-        },
-        {
-            "role": "system",
-            "parts": (
-                "Ensure the synthesized summary is clear, concise, and representative of the collective content. "
-                "Group similar ideas, highlight common findings, and present overarching insights without adding your own interpretation."
-            ),
-        },
-        {
-            "role": "system",
-            "parts": (
-                "IMPORTANT INSTRUCTIONS FOR OUTPUT:\n"
-                "- Return output **only as a valid JSON object** matching the schema.\n"
-                "- Escape any quotes, newlines, or special characters inside strings.\n"
-                "- Do not add commentary or text outside the JSON.\n"
-                "- Make sure the JSON is complete and closed properly with curly braces."
+                "You are an expert assistant that **synthesizes multiple summaries** into one coherent, modular, and structured Markdown summary.\n\n"
+                "### Objectives\n"
+                "- Capture recurring **themes**, **key points**, and **insights** across summaries.\n"
+                "- Group similar ideas together logically.\n"
+                "- Avoid personal interpretation — focus on **common findings**.\n"
+                "- Ensure readability using Markdown structure.\n\n"
+                "###  Recommended Structure\n"
+                "```\n"
+                "# [Concise Combined Title]\n\n"
+                "## Common Themes\n"
+                "- **Theme 1:** Explanation...\n"
+                "- **Theme 2:** Explanation...\n\n"
+                "## Shared Insights\n"
+                "- **Insight 1:** ...\n"
+                "- **Insight 2:** ...\n\n"
+                "## Notable Variations\n"
+                "- *Some sources differ on...*\n\n"
+                "## Overall Summary\n"
+                "(Unified conclusion)\n"
+                "```\n\n"
+                "###  Output Requirements\n"
+                "- Summary length: **500-1000 words**\n"
+                "- Output **only** a valid JSON object containing the Markdown summary.\n"
+                "- Escape quotes, newlines, or special characters.\n"
+                "- Do **not** add commentary outside the JSON.\n"
             ),
         },
         {
             "role": "user",
             "parts": (
-                "You will be provided with a list of document summaries. Generate a single, coherent summary that captures the recurring and most important ideas across them.\n\n"
-                "Return proper JSON. "
-                "Escape any quotes, newlines, or special characters inside strings that might affect json formatting.\n"
-                f"Summaries:\n{summaries}\n\n"
-                "Summary (500 - 1000 words):"
+                f" **Summaries to Combine:**\n{summaries}\n\n"
+                "Generate a single, coherent, Markdown-formatted summary (500-1000 words) that merges recurring and essential ideas.\n\n"
+                "Return a valid JSON object containing your final synthesized summary."
             ),
         },
     ]
-
     return contents
-
 
 multi_document_summarization_prompt = ChatPromptTemplate.from_messages(
     [
         SystemMessage(
             content=(
-                "You are a helpful assistant tasked with summarizing multiple documents for efficient understanding and downstream use. "
-                "Each document you receive should be summarized independently. Your summary should capture the key ideas, themes, and essential information from the document, without adding your own interpretation."
+                "You are an expert assistant for **multi-document summarization**.\n"
+                "Each document should be summarized **independently** in a modular Markdown format.\n\n"
+                "###  Summary Guidelines\n"
+                "- Capture **key ideas, themes, and essential points** from each document.\n"
+                "- Use **Markdown structure** with headings and bullets.\n"
+                "- Avoid copying large text blocks; rephrase while preserving meaning.\n"
+                "- If a document has multiple topics, reflect that clearly with subheadings.\n"
+                "- Keep each summary **concise and factual**, between 200 800 words.\n"
             )
         ),
         SystemMessage(
             content=(
-                "Ensure summaries are clear, concise, and accurate. "
-                "Escape any quotes, newlines, or special characters inside strings.\n"
-                "If a document contains multiple sections or topics, reflect that in the summary. "
-                "Do not copy large blocks of text; rephrase in your own words while preserving the original meaning."
+                "###  Output Requirements\n"
+                "- Escape any quotes, newlines, or special characters inside strings.\n"
+                "- Return output **as a list of JSON objects**, where each object includes:\n"
+                "  - `document_id`: (unique identifier)\n"
+                "  - `summary`: (Markdown-formatted structured summary)\n"
             )
         ),
         SystemMessage(
             content=(
-                "The goal is to generate structured, high-quality summaries for each input document, suitable for semantic search, retrieval, or analysis."
+                "Your goal is to generate **high-quality, structured summaries** suitable for semantic search, retrieval, or further AI processing."
             )
         ),
         HumanMessagePromptTemplate.from_template(
-            "You will be provided with a list of documents. For each document, return a summary following the structure below.\n\n"
-            "Documents:\n{documents}\n\n"
-            "Return a list of objects where each object contains:\n"
-            "- `document_id`: a unique identifier for the document (provided in input)\n"
-            "- `summary`: a concise and complete summary of the document's content"
+            " **Documents to Summarize:**\n\n{documents}\n\n"
+            "Please return a **JSON list** where each item has this structure:\n"
+            "- `document_id`: unique identifier of the document\n"
+            "- `summary`: Markdown-formatted summary with sections and bullet points"
         ),
     ]
 )

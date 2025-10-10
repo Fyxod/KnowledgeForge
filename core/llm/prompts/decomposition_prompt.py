@@ -157,11 +157,11 @@ query: “What are the limitations of GPT-4o and what are the recommended mitiga
 }
 
 Split into sub-questions
-chat_history: "RLC‑AM (Acknowledged Mode) mapping
+chat_history: "RLC-AM (Acknowledged Mode) mapping
 
-Signalling Radio Bearers (SRBs) - All SRBs except SRB0 are mapped to RLC‑AM. They use the DL/UL DCCH logical channels.
-Data Radio Bearers (DRBs) - DRBs can be mapped to either RLC‑UM or RLC‑AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
-Sidelink - The sidelink logical channels SCCH and STCH are also mapped to RLC‑AM."
+Signalling Radio Bearers (SRBs) - All SRBs except SRB0 are mapped to RLC-AM. They use the DL/UL DCCH logical channels.
+Data Radio Bearers (DRBs) - DRBs can be mapped to either RLC-UM or RLC-AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
+Sidelink - The sidelink logical channels SCCH and STCH are also mapped to RLC-AM."
 query: “SRBs and DRBs”
 
 {
@@ -174,11 +174,11 @@ query: “SRBs and DRBs”
 }
 
 Expand terms if in previous chat history
-chat_history: "RLC‑AM (Acknowledged Mode) mapping
+chat_history: "RLC-AM (Acknowledged Mode) mapping
 
-Signalling Radio Bearers (SRBs) - All SRBs except SRB0 are mapped to RLC‑AM. They use the DL/UL DCCH logical channels.
-Data Radio Bearers (DRBs) - DRBs can be mapped to either RLC‑UM or RLC‑AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
-Sidelink - The sidelink logical channels SCCH and STCH are also mapped to RLC‑AM."
+Signalling Radio Bearers (SRBs) - All SRBs except SRB0 are mapped to RLC-AM. They use the DL/UL DCCH logical channels.
+Data Radio Bearers (DRBs) - DRBs can be mapped to either RLC-UM or RLC-AM. The choice is made by RRC and the bearer is carried on the DL/UL DTCH logical channels.
+Sidelink - The sidelink logical channels SCCH and STCH are also mapped to RLC-AM."
 query: "Explain SRBs in detail"
 
 {
