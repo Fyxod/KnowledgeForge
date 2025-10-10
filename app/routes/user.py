@@ -96,7 +96,6 @@ def create_user(user_input: UserCreateModel, background_tasks: BackgroundTasks):
     created_user = db.users.find_one(
         {"_id": result.inserted_id}, {"password": 0, "_id": 0}
     )
-    print("Created user:", created_user)
     return {
         "status": "success",
         "message": "User created successfully",
@@ -148,7 +147,7 @@ def login_user(user_input: UserLoginModel, background_tasks: BackgroundTasks):
     )
 
     user.pop("password", None)
-
+    print("User logged in successfully:", user["userId"])
     return {
         "status": "success",
         "message": "User logged in successfully",

@@ -40,7 +40,6 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
             )
             start = time.time()
             print(f"invoking mind map node creation llm (attempt {attempt + 1})")
-            print(prompt)
             response: MindMapOutput = await invoke_llm(
                 response_schema=MindMapOutput,
                 contents=prompt,
@@ -48,10 +47,8 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
                 port=Ollama_NODE_GENERATION_LLM.port,
             )
             end = time.time()
-            print(response)
-            print(f"Mind map generation took {end - start} seconds.")
+            print(f"Mind map node titles generation completed in {end - start} seconds.")
 
-            print("mind map saved")
 
             data_dict = response.model_dump()
             json_content = json.dumps(data_dict, indent=2, ensure_ascii=False)
@@ -63,7 +60,6 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
             ) as f:
                 await f.write(json_content)
 
-            print("entering description function")
             await sio.emit(
                 f"{user_id}/progress",
                 {"message": f"Mind map nodes creation completed for {document.title}"},
@@ -93,7 +89,7 @@ async def create_mind_map(document: Document, user_id: str, thread_id: str):
                 )
         total_end = time.time()
         print(
-            f"Total time taken for mind map generation: {total_end - total_start} seconds"
+            f"Total time taken for mind map generation for {document.title}: {total_end - total_start} seconds"
         )
 
 
@@ -127,7 +123,6 @@ async def add_node_descriptions(
 
     data = mind_map.model_dump()
 
-    print("**" * 20)
     before_for = time.time()
     output_nodes = data["mind_map"]
     total_nodes = len(output_nodes)
@@ -223,7 +218,6 @@ async def add_node_descriptions(
     ) as f:
         await f.write(json.dumps(data, indent=2, ensure_ascii=False))
 
-    print("building proper mind map now")
     mind_map: MindMap = build_mindmap(data["mind_map"], user_id, thread_id, document.id)
     await sio.emit(
         f"{user_id}/progress",

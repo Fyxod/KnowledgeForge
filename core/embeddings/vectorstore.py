@@ -35,7 +35,6 @@ import math
 
 
 async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
-    print("inside save_documents_to_store")
     start_time = time.time()
     vectorstore = await asyncio.to_thread(get_vectorstore, user_id, thread_id)
     end_time = time.time()
@@ -75,9 +74,6 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
         batch = chunk_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
         batch_ids, batch_texts, batch_metadatas = zip(*batch)
 
-        print(
-            f"Embedding batch {batch_idx + 1}/{total_batches} with {len(batch_ids)} chunks"
-        )
         start_time = time.time()
         embeddings = await asyncio.to_thread(
             vectorstore.embeddings.embed_documents, list(batch_texts)

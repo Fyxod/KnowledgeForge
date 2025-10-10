@@ -63,7 +63,6 @@ async def generate(state: AgentState) -> AgentState:
             result = response_schema.model_validate(result)
             end_time = time.time()
             print("LLM result: ", result)
-            print(f"LLM response time: {end_time - start_time:.2f} seconds")
             state.messages.append(HumanMessage(content=state.query))  # controversial
             state.messages.append(AIMessage(content=result.answer))
             # state.messages.append(AIMessage("Action taken: " + result.action))
@@ -206,20 +205,20 @@ async def global_summarizer(state: AgentState) -> AgentState:
 
 def main_router(state: AgentState) -> str:
     if state.action == ANSWER:
-        print("Answering the question")
+        print("Router -> Answering the question")
         return ANSWER
 
     elif state.action == WEB_SEARCH:
-        print("Initiating web search")
+        print("Router -> Initiating web search")
         if state.web_search_attempts < MAX_WEB_SEARCH:
             return WEB_SEARCH
         else:
             return FAILURE
     elif state.action == DOCUMENT_SUMMARIZER:
-        print("Summarizing document")
+        print("Router -> Summarizing document")
         return DOCUMENT_SUMMARIZER
     elif state.action == GLOBAL_SUMMARIZER:
-        print("Summarizing global context")
+        print("Router -> Summarizing global context")
         return GLOBAL_SUMMARIZER
 
     return ANSWER

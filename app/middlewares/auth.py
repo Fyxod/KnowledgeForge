@@ -31,7 +31,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
         method = request.method.upper()
 
         print(f"Request path: {path}, method: {method}")
-        print((method, path) in self.excluded_routes)
 
         # Skip auth if (method, path) is excluded
         if (method, path) in self.excluded_routes:

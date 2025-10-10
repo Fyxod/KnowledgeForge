@@ -155,8 +155,6 @@ async def update_thread(
 async def delete_thread(request: Request, thread_id: str):
     """Delete a thread for the authenticated user."""
 
-    print(f"DELETE /thread/{thread_id} called")
-
     payload = request.state.user
     if not payload:
         print(f"DELETE /thread/{thread_id} - User not authenticated")
@@ -185,10 +183,6 @@ async def delete_thread(request: Request, thread_id: str):
         # Remove thread from user
         result = db.users.update_one(
             {"userId": user_id}, {"$unset": {f"threads.{thread_id}": ""}}
-        )
-
-        print(
-            f"DELETE /thread/{thread_id} - MongoDB result: {result.modified_count} documents modified"
         )
 
         if result.modified_count > 0:
