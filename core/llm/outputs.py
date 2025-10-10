@@ -19,10 +19,10 @@ class MainLLMOutputInternal(BaseModel):
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
     ] = Field(description="The action to take based on the answer.")
-    # chunks_used: Optional[List[ChunksUsed]] = Field(
-    #     default=None,
-    #     description="List of chunks used to generate the answer, if applicable.",
-    # )
+    chunks_used: Optional[List[ChunksUsed]] = Field(
+        default=None,
+        description="List of chunks used to generate the answer, if applicable.",
+    )
     document_id: Optional[str] = Field(
         description="The ID of the document to summarize if using document_summarizer, if applicable."
     )
@@ -36,10 +36,10 @@ class MainLLMOutputExternal(BaseModel):
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
     ] = Field(description="The action to take based on the answer.")
-    # chunks_used: Optional[List[ChunksUsed]] = Field(
-    #     default=None,
-    #     description="List of chunks used to generate the answer, if applicable.",
-    # )
+    chunks_used: Optional[List[ChunksUsed]] = Field(
+        default=None,
+        description="List of chunks used to generate the answer, if applicable.",
+    )
     web_search_queries: Optional[List[str]] = Field(
         default=None,
         description="List of 2-3 web search queries used to generate the answer, if applicable.",

@@ -1,4 +1,3 @@
-import json
 import asyncio
 import time
 from core.config import settings
@@ -50,6 +49,8 @@ async def invoke_llm(
     Each returns parsed structured data using the same logic.
     """
     global count
+
+    # Initialize the parser for structured output
     parser = PydanticOutputParser(pydantic_object=response_schema)
 
     prompt = f"""

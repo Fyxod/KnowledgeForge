@@ -51,6 +51,8 @@ async def query(request: Request, body: QueryRequest):
         return {"error": "Thread not found"}
 
     messages = []
+    chunks = []
+    chunks_used = []
 
     for message in thread.get("chats", []):
         if message["type"] == "user":
@@ -103,6 +105,8 @@ async def query(request: Request, body: QueryRequest):
 
                 state = AgentState(**state)
                 qe = time.time() - qs
+                chunks.extend(state.chunks)
+                chunks_used.extend(state.chunks_used)
                 print(
                     f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {model}"
                 )
@@ -241,6 +245,8 @@ async def query(request: Request, body: QueryRequest):
 
         state = AgentState(**state)
         answer = state.answer
+        chunks.extend(state.chunks)
+        chunks_used.extend(state.chunks_used)
     end_time = time.time()
 
     print("I actually reached here" * 10)
@@ -261,11 +267,43 @@ async def query(request: Request, body: QueryRequest):
         },
     )
 
+    documents_used = []
+    if chunks_used:
+        print(f"Processing {len(chunks_used)} citations...")
+
+        for doc_i in chunks_used:
+            for doc_j in chunks:
+                meta = doc_j.get("metadata", {})
+                if (
+                    doc_i.document_id == meta.get("document_id")
+                    and doc_i.page_no == meta.get("page_no")
+                    and doc_i.chunk_index == meta.get("chunk_index")
+                ):
+                    documents_used.append(doc_j)
+                    break
+
+    print(f"Found {len(documents_used)} citation matches")
+
+    # Update the agent message with citations
+    if documents_used:
+        user = db.users.find_one({"userId": user_id})
+        if user and thread_id in user.get("threads", {}):
+            chats = user["threads"][thread_id]["chats"]
+
+            if chats and chats[-1]["type"] == "agent":
+                chats[-1]["documents_used"] = documents_used
+
+                db.users.update_one(
+                    {"userId": user_id},
+                    {"$set": {f"threads.{thread_id}.chats": chats}}
+                )
+
     response = {
         "thread_id": thread_id,
         "user_id": user_id,
         "question": question,
         "answer": answer,
+        "documents_used": documents_used,
     }
 
     return response
