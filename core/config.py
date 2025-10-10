@@ -13,8 +13,7 @@ class Settings(BaseSettings):
     API_KEY_3: str
     API_KEY_4: str
     API_KEY_5: str
-    VISION_API: str
-    VISION_URL: str
+    OPENAI_API: str
 
     class Config:
         env_file = ".env"

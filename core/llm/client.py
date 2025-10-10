@@ -28,7 +28,7 @@ API_KEYS = [
     settings.API_KEY_5,
 ]
 
-openai_client = AsyncOpenAI(api_key=settings.VISION_API)
+openai_client = AsyncOpenAI(api_key=settings.OPENAI_API)
 MAX_RETRIES = 8  # Total attempts across all LLMs
 
 count = 0
