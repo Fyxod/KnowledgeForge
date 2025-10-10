@@ -72,9 +72,8 @@ async def invoke_llm(
                 s = time.time()
                 llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
                 e = time.time()
-                print(f"GPU LLM call took {e - s:.2f}s")
+                print(f"Success via GPU server, LLM call took {e - s:.2f}s")
                 structured = parser.parse(llm_output)
-                print("Success via GPU server")
                 return structured
             except Exception as e:
                 print(f"GPU server failed: {e}")
@@ -82,13 +81,12 @@ async def invoke_llm(
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
             print("Falling back to Gemini...")
-            sanitized_schema = sanitize_schema(response_schema.model_json_schema())
 
             for _ in range(len(API_KEYS)):
                 api_key = API_KEYS[count % len(API_KEYS)]
                 count = (count + 1) % len(API_KEYS)
                 client = genai.Client(api_key=api_key)
-
+                s = time.time()
                 try:
                     config = genai.types.GenerateContentConfig(
                         temperature=0.2,
@@ -98,7 +96,9 @@ async def invoke_llm(
                     )
 
                     if remove_thinking:
-                        config.thinking_config = genai.types.ThinkingConfig(thinking_budget=0)
+                        config.thinking_config = genai.types.ThinkingConfig(
+                            thinking_budget=0
+                        )
 
                     response = await asyncio.wait_for(
                         asyncio.to_thread(
@@ -117,9 +117,9 @@ async def invoke_llm(
                     except Exception:
                         raw_output = str(response)
 
-                    print("Gemini raw output:\n", raw_output[:500])
                     structured = parser.parse(raw_output)
-                    print("Success via Gemini")
+                    e = time.time()
+                    print(f"Success via Gemini, LLM call took {e - s:.2f}s")
                     return structured
 
                 except asyncio.TimeoutError:
@@ -132,7 +132,7 @@ async def invoke_llm(
         if SWITCHES["FALLBACK_TO_OPENAI"]:
             try:
                 print("Falling back to OpenAI...")
-
+                s = time.time()
                 response = await openai_client.chat.completions.create(
                     model=FALLBACK_OPENAI_MODEL,
                     messages=[{"role": "user", "content": prompt}],
@@ -140,9 +140,9 @@ async def invoke_llm(
                 )
 
                 raw_output = response.choices[0].message.content
-                print("OpenAI raw output:\n", raw_output[:500])
                 structured = parser.parse(raw_output)
-                print("Success via OpenAI")
+                e = time.time()
+                print(f"Success via OpenAI, LLM call took {e - s:.2f}s")
                 return structured
 
             except Exception as e:

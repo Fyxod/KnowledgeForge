@@ -41,7 +41,6 @@ async def query(request: Request, body: QueryRequest):
     )
 
     user_id = payload.userId
-    print(f"User ID from payload: {user_id}")
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
         return {"error": "User not found"}
@@ -76,7 +75,7 @@ async def query(request: Request, body: QueryRequest):
     start_time = time.time()
     if decomposed:
         can_use_second_model = is_extra_done(user_id, thread_id)
-        print("TO BE DECOMPOSED")
+        print("Query to be decomposed")
         print("No of sub-queries:", len(decomposition_result.sub_queries))
 
         async def run_worker(model, task_queue, results):
@@ -204,9 +203,9 @@ async def query(request: Request, body: QueryRequest):
             results, decomposition_result.resolved_query, question
         )
         ce = time.time() - cs
-        print(f"Combination time: {ce:.2f} seconds")
+        print(f"Subqueries combination time: {ce:.2f} seconds")
     else:
-        print("NO DECOMPOSITION REQUIRED")
+        print("Query not being decomposed")
         if mode == EXTERNAL:
             search_result = await search_tool(
                 decomposition_result.resolved_query or question
@@ -249,8 +248,7 @@ async def query(request: Request, body: QueryRequest):
         chunks_used.extend(state.chunks_used)
     end_time = time.time()
 
-    print("I actually reached here" * 10)
-    print(f"Agent response time: {end_time - start_time:.2f} seconds")
+    print(f"Total Agent response time: {end_time - start_time:.2f} seconds")
 
     # Update the thread with the new messages
     now = datetime.now(timezone.utc)

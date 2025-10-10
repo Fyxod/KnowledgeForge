@@ -39,6 +39,7 @@ from core.summarizer import summarize_documents
 from core.word_cloud import create_stop_words
 from app.socket_handler import sio
 from core.utils.extra_done_check import mark_extra_done
+
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
@@ -50,16 +51,15 @@ async def upload_file(
     thread_name: Optional[str] = Form(None),
 ):
     """Handle multiple file uploads."""
-
-    print(f"Thread name: {thread_name}")
-    print(f"Thread ID: {thread_id}")
-    print(f"Files: {files}")
+    print(f"Received upload request with {len(files)} files")
 
     if not files:
+        print("No files uploaded")
         return {"error": "No files uploaded"}
 
     payload = request.state.user
     if not payload:
+        print("User not authenticated")
         return {"error": "User not authenticated"}
 
     user_id = payload.userId
@@ -67,10 +67,9 @@ async def upload_file(
     # Find user in DB
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
+        print(f"User {user_id} not found in database")
         await sio.emit(f"{user_id}/progress", {"message": "User not found"})
         return {"error": "User not found"}
-
-    print(f"User found: {user.get('name', 'Unknown')}")
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -97,7 +96,6 @@ async def upload_file(
         user_threads = user.get("threads", {})
         if thread_id not in user_threads:
             print(f"Thread {thread_id} not found for user {user_id}")
-            print(f"Available threads: {list(user_threads.keys())}")
             return {"error": "Thread not found for the user"}
 
         db.users.update_one(
@@ -110,15 +108,12 @@ async def upload_file(
     if not files_data:
         return {"error": "No files uploaded or failed to upload files"}
 
-    print(f"Raw file paths: {files_data}")
-
     parsed_data: Documents = await process_files(files_data, user_id, thread_id)
-    
+
     asyncio.create_task(summarize_documents(parsed_data.model_copy()))
     # Check if any documents were successfully parsed
     if not parsed_data.documents:
         return {"error": "No documents could be processed successfully"}
-
 
     # Build document objects for DB
     parsed_data_dict = parsed_data.model_dump()

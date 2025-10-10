@@ -20,7 +20,6 @@ from core.llm.outputs import (
 )
 from core.models.document import Document, Documents
 from app.socket_handler import sio
-from core.database import db
 from core.utils.extra_done_check import mark_extra_done
 from core.word_cloud import create_stop_words
 
@@ -47,7 +46,6 @@ async def create_mind_map_global(parsed_data: Documents):
             )
             start = time.time()
             print(f"invoking GLOBAL mind map node creation llm (attempt {attempt + 1})")
-            print(prompt)
 
             response: MindMapOutput = await invoke_llm(
                 response_schema=MindMapOutput,
@@ -56,10 +54,7 @@ async def create_mind_map_global(parsed_data: Documents):
                 port=GPU_NODE_GENERATION_LLM.port,
             )
             end = time.time()
-            print(response)
-            print(f"GLOBAL Mind map generation took {end - start} seconds.")
-
-            print("GLOBAL mind map nodes saved")
+            print(f"Global Mind map node titles generation completed in {end - start} seconds.")
 
             data_dict = response.model_dump()
             json_content = json.dumps(data_dict, indent=2, ensure_ascii=False)
@@ -71,7 +66,7 @@ async def create_mind_map_global(parsed_data: Documents):
             ) as f:
                 await f.write(json_content)
 
-            print("entering description function for GLOBAL mind map")
+            print("Starting to add node descriptions for Global mind map...")
             await sio.emit(
                 f"{parsed_data.user_id}/progress",
                 {"message": f"Global mind map nodes generation complete"},
@@ -127,7 +122,6 @@ async def add_node_descriptions_global(
 
     data = mind_map.model_dump()
 
-    print("**" * 20)
     before_for = time.time()
     output_nodes = data["mind_map"]
     total_nodes = len(output_nodes)
@@ -167,7 +161,7 @@ async def add_node_descriptions_global(
                 )
                 llm_res_aft = time.time()
                 print(
-                    f"LLM response time: {llm_res_aft - llm_res_bef} seconds for batch {batch_idx} (attempt {batch_attempt + 1})"
+                    f"LLM response time: {llm_res_aft - llm_res_bef} seconds for mind map batch {batch_idx} (attempt {batch_attempt + 1})"
                 )
                 await sio.emit(
                     f"{parsed_data.user_id}/progress",
@@ -218,7 +212,6 @@ async def add_node_descriptions_global(
         batch_idx += PARALLEL_LLM_CALLS
 
     after_for = time.time()
-    print("Total time taken:", after_for - before_for)
 
     async with aiofiles.open(
         f"{mind_map_dir}/{parsed_data.user_id}_{parsed_data.thread_id}_global_mind_map.json",
@@ -227,7 +220,6 @@ async def add_node_descriptions_global(
     ) as f:
         await f.write(json.dumps(data, indent=2, ensure_ascii=False))
 
-    print("building proper mind map now")
     mind_map: GlobalMindMap = build_mindmap_global(
         data["mind_map"], parsed_data.user_id, parsed_data.thread_id
     )
