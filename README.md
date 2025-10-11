@@ -92,13 +92,13 @@ pip install -r requirements.txt
 Use **Uvicorn** to run the FastAPI server:
 
 ```bash
-uvicorn app.main:app --reload --port 3000 
+python run.py
 ```
 
 The server will start at:
 
 ```
-http://127.0.0.1:8000
+http://127.0.0.1:3000
 ```
 
 # Frontend Setup
@@ -126,7 +126,7 @@ cd Frontend
 ## 3. Install Dependencies
 
 ```bash
-npm install
+npm i
 ```
 
 
@@ -137,4 +137,3 @@ npm run dev
 ```
 
 
-You are now ready to use the frontend application!
