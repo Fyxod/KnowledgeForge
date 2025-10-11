@@ -89,7 +89,7 @@ pip install -r requirements.txt
 
 ### 4. Start the Server
 
-Use **Uvicorn** to run the FastAPI server:
+run the FastAPI server:
 
 ```bash
 python run.py
