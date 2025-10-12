@@ -33,17 +33,18 @@ ollama --version
 
 
 ### 2. Pull a Base Model
-Example: pulling **Qwen 3 (4B parameters)**  
+Example: pulling **Qwen 3 (8B parameters)**  
 ```powershell
-ollama pull qwen3:4b
+ollama pull qwen3:8b
 ```
 
+> - default model is set to qwen3:8b in core/constant.py
+>If you hardware is not supporting it try a smaller model 
+> - you might need to re run ollama application in windows after restarting system
 
-
-# Config
 ## *Please read core/constant.py*
 
-- In line no 4 Change the `OLLAMA_MODEL` name to the model you want to use.
+> In line no 4 Change the `OLLAMA_MODEL` name to the model you want to use.
 
 
 # Setting Up the Backend Server
@@ -56,23 +57,23 @@ Follow these steps to set up and run the backend server:
 It's recommended to use a virtual environment to isolate dependencies:
 
 ```bash
-python -m venv venv
-```
-     or
-```bash
-py 3.11 -m venv venv
+python -m venv virtualEnv
 ```
 
 
-Activate the virtual environment:
+#### Activate the virtual environment:
 
-- **Windows (PowerShell):**
+  - **Windows (PowerShell):**
 ```powershell
-.\venv\Scripts\Activate.ps1
+.\virtualEnv\Scripts\activate.ps1
 ```
-- **Linux / macOS:**
+- **Windows (Terminal):**
+```powershell
+.\virtualEnv\Scripts\activate
+```
+- **Linux / macOS:**(depend on your shell)
 ```bash
-source venv/bin/activate
+source virtualEnv/bin/activate
 ```
 
 
@@ -88,16 +89,16 @@ pip install -r requirements.txt
 
 ### 4. Start the Server
 
-Use **Uvicorn** to run the FastAPI server:
+run the FastAPI server:
 
 ```bash
-uvicorn app.main:app --reload
+python run.py
 ```
 
 The server will start at:
 
 ```
-http://127.0.0.1:8000
+http://127.0.0.1:3000
 ```
 
 # Frontend Setup
@@ -119,13 +120,13 @@ npm -v
 ## 2. Navigate to the Frontend Directory
 
 ```bash
-cd frontend
+cd Frontend
 ```
 
 ## 3. Install Dependencies
 
 ```bash
-npm install
+npm i
 ```
 
 
@@ -136,4 +137,3 @@ npm run dev
 ```
 
 
-You are now ready to use the frontend application!
