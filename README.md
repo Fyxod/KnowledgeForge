@@ -1,90 +1,94 @@
 # Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
 
-# Build And run loacly 
-- docker  (only to be followed on linux operating system )
-  <!-- - build image yourself -->
-  <!-- - pull from docker hub (--preferred) -->
+>  - In `Frontend/url.js`  change url to local host for testing
+> - assuming that Tesseract ocr is already installed  install from https://github.com/tesseract-ocr/tesseract/releases/download/5.5.0/tesseract-ocr-w64-setup-5.5.0.20241111.exe
+# Setting Up the Backend Server
 
-- Build manually (preferred tor local testing) 
+Follow these steps to set up and run the backend server:
 
 
-## Docker 
+### 1. Create a Python Virtual Environment (Please use python 3.11 for this)
 
-``` bash
-git clone https://github.ecodesamsung.com/SRIB-PRISM/TU_25TS14TU_Multi-Modal_Enterprise_Knowledge_Synthesis_Platform.git
-```
+It's recommended to use a virtual environment to isolate dependencies:
 
 ```bash
-cd Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
+python -m venv virtualEnv
 ```
 
 
-- **make .env file and populate it**
+#### Activate the virtual environment:
 
-- set backend url to Local
-  - ***Navigate*** to Frontend/url.js  and ***uncomment***   export const API_BASE_URL = 'http://localhost:8000';   for local testing 
+  - **Windows (PowerShell):**
+```powershell
+.\virtualEnv\Scripts\activate.ps1
+```
+- **Windows (Terminal):**
+```powershell
+.\virtualEnv\Scripts\activate
+```
+- **Linux / macOS:**(depend on your shell)
+```bash
+source virtualEnv/bin/activate
+```
+
+
+### 2. Install Dependencies
+
+Make sure you have `pip` updated, then install the required packages:
 
 ```bash
-docker build -t samsung .
+pip install -r requirements.txt
+
 ```
+### 3. Please paste .env file in project root 
+
+### 4. Start the Server
+
+run the FastAPI server:
 
 ```bash
-docker run -it \
-           --env-file .env \
-           --dns=8.8.8.8 \
-           -p 3000:8080 \
-         -p 8000:8000\
-       -v $(pwd)d/data:/data \
-           samsung
+python run.py
 ```
 
+The server will start at:
 
-## Build from code
-``` bash
-git clone https://github.ecodesamsung.com/SRIB-PRISM/TU_25TS14TU_Multi-Modal_Enterprise_Knowledge_Synthesis_Platform.git
 ```
+http://127.0.0.1:3000
+```
+
+# Frontend Setup
+
+Follow these steps to set up and run the frontend server:
+
+
+## 1. Prerequisites
+
+- **Node.js** must be installed on your system.  
+- Verify installation:
 
 ```bash
-cd Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
+node -v
+npm -v
 ```
 
-- install tesseract ocr 
 
-  - Linux
-    ```bash 
-    sudo pacman -S tesseract tesseract-data-eng      # for arch only  please find alternative command for your system
-    ```
-  - Windows
-
-    from `https://github.com/UB-Mannheim/tesseract/wiki`  install via `tesseract-ocr-w64-setup-5.5.0.20241111.exe` file 
-
-- **make .env file and populate it**
-
-- set backend url to Local
-  - ***Navigate*** to `Frontend/url.js`  and ***uncomment***   `export const API_BASE_URL = 'http://localhost:8000';`   for local testing 
-
-- Make a python venv
-```python
-python -m venv venv
-```
-- activate venv
+## 2. Navigate to the Frontend Directory
 
 ```bash
-source venv/bin/activate    (linux)
-
-.\env\Scripts\activate      (windows)
-```
-- install requirements.txt
-```bash
-pip install -r requirements.txt     (linux)
+cd Frontend
 ```
 
-- Start Backend 
+## 3. Install Dependencies
+
 ```bash
-uvicorn app.main:app
+npm i
 ```
 
-- Start Frontend 
+
+## 4. Start the Development Server
+
 ```bash
-cd Frontend && npm install && npm run dev
+npm run dev
 ```
+
+
