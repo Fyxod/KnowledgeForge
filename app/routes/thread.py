@@ -41,6 +41,7 @@ async def create_thread(request: Request, thread_data: ThreadCreateRequest):
             "chats": [],
             "createdAt": now,
             "updatedAt": now,
+            "extra_done": False,
         }
     }
 
