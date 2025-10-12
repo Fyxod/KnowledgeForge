@@ -22,7 +22,6 @@
 - **Tesseract**
 - **MongoDB**
 - **Python**
-- **Ollama**
 
 ## Node.js
 
@@ -76,28 +75,6 @@ if `npm -v` error's out try restarting your terminal / pc / vscode
 ![alt text](assistance/python.png)
 
 
-# Ollama Setup
-
-### 1. Ollama
-- Download the Windows installer from [Ollama Downloads](https://ollama.com/download).  
-- After installation, Ollama runs as a background service and exposes a local server at:  
-  **http://localhost:11434**  
-
-Verify the installation:
-```powershell
-ollama --version
-```
-
-
-### 2. Pull a Base Model
-Example: pulling **Qwen 3 (8B parameters)**  
-```powershell
-ollama pull qwen3:8b
-```
-
-> - default model is set to qwen3:8b in `core/constant.py`
->If you hardware is not supporting it try a smaller model 
-> - you might need to re run ollama application in windows after restarting system
 
 ## *Please read core/constant.py*
 
