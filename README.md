@@ -164,7 +164,8 @@ pip install -r requirements.txt
 
 ### 4. Start the Server
 
-run the FastAPI server:
+run the FastAPI server: 
+make sure that virtual environment is activated
 
 ```bash
 python backend.py
