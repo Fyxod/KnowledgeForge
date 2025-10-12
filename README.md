@@ -1,21 +1,5 @@
 # Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
 
-![Callout](https://img.shields.io/badge/Warning-CPU%20Only%20Testing-red)
-
-## For Local Testing on CPU
-
-> Running models via Ollama on CPU introduces several **limitations** and potential **failure modes**:  
->
-> - **Performance Degradation:** Inference speed will be significantly slower than on GPU.  
-> - **Accuracy Issues:** Models may return incomplete, inconsistent, or incorrect results.  
-> - **Instruction Non-Compliance:** Responses may ignore formatting or structural requirements, causing failures in downstream processing.  
-> - **Resource Consumption:** CPU execution can be highly resource-intensive, leading to system slowdowns or instability during long runs.  
-> - **Limited Model Compatibility:** Some larger models may fail to load or run due to excessive CPU and memory requirements. 
-> - **Python version:** Please use python 3.11 for this project 
->
-> As a result of these constraints, certain features may be **downgraded, restricted, or disabled** when running in CPU-only mode.
-
----
 # Prerequisites
 
 - **Node.js**
