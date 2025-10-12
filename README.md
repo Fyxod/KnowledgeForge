@@ -69,8 +69,9 @@ if `npm -v` error's out try restarting your terminal / pc / vscode
 
 ### run this script if you are in samsung's virtual machine 
  - please use power shell to run this script (right side terminal in vscode)
- 
+ - it handels error related to ssl certification in node, git, python and huggingface
 ![alt text](assistance/ter.png)
+
 ```powershell
 prism_vm.ps1
 ```
@@ -84,11 +85,14 @@ navigate into the project directory:
 ```bash
 cd Knowledge-Synthesis-Platform
 ```
-
+```bash
+git checkout cpu-version
+```
 Follow these steps to set up and run the backend server:
 
 
 ### 2. Create a Python Virtual Environment (Please use python 3.11 for this)
+
 
 It's recommended to use a virtual environment to isolate dependencies:
 

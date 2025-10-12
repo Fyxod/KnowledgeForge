@@ -20,9 +20,8 @@ def find_npm() -> str | None:
 
 
 def main() -> None:
-    # Resolve project directory relative to this file, not current working dir
     project_path = os.path.dirname(os.path.abspath(__file__))
-    frontend_path = os.path.join(project_path, "Frontend")
+    frontend_path = os.path.join(project_path, "frontend")
 
     if not os.path.isdir(frontend_path):
         print(f"Error: Frontend directory not found at: {frontend_path}")
@@ -32,7 +31,7 @@ def main() -> None:
     if not os.path.isfile(pkg_json):
         print(
             "Error: package.json not found in the Frontend folder. "
-            "Did you initialize the frontend (e.g., via Vite/Create React App)?"
+            
         )
         sys.exit(1)
 
