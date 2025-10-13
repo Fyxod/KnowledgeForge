@@ -75,7 +75,7 @@ router = APIRouter(prefix="/user", tags=["user"])
 
 
 @router.post("/")
-def create_user(user_input: UserCreateModel, background_tasks: BackgroundTasks):
+def create_user(user_input: UserCreateModel):
     print("Creating user with input:", user_input.model_dump())
     if db.users.find_one({"email": user_input.email}):
         raise HTTPException(status_code=400, detail="Email already exists")
@@ -129,11 +129,8 @@ def login_user(user_input: UserLoginModel, background_tasks: BackgroundTasks):
     print("Login attempt with input:", user_data)
 
     user = db.users.find_one({"email": user_data["email"]}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if not verify_password(user_data["password"], user["password"]):
-        raise HTTPException(status_code=400, detail="Invalid password")
+    if not user or not verify_password(user_data["password"], user["password"]):
+        raise HTTPException(status_code=400, detail="Invalid email or password")
 
     token = jwt.encode(
         UserJwtPayload(

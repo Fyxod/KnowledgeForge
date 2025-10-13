@@ -71,7 +71,7 @@ async def query(request: Request, body: QueryRequest):
     de = time.time() - ds
     print(f"Rewrite query time: {de:.2f} seconds")
     decomposed = decomposition_result.requires_decomposition
-
+    all_favicons = []
     start_time = time.time()
     if decomposed:
         can_use_second_model = is_extra_done(user_id, thread_id)
@@ -103,6 +103,14 @@ async def query(request: Request, body: QueryRequest):
                 )
 
                 state = AgentState(**state)
+
+                if getattr(state, "web_search_queries", None):
+                    for res in state.web_search_queries:
+                        favicons = [
+                            r.get("favicon") for r in res["results"] if r.get("favicon")
+                        ]
+                        all_favicons.extend(favicons)
+
                 qe = time.time() - qs
                 chunks.extend(state.chunks)
                 chunks_used.extend(state.chunks_used)
@@ -124,7 +132,6 @@ async def query(request: Request, body: QueryRequest):
                 )
             )
 
-            all_favicons = []
             cleaned_results = []
 
             for idx, sub_query in enumerate(decomposition_result.sub_queries):
@@ -132,9 +139,12 @@ async def query(request: Request, body: QueryRequest):
                     res = search_results[idx]
 
                     favicons = [
-                        r.get("favicon")
+                        {
+                            "favicon": r.get("favicon", None),
+                            "url": r.get("url", None),
+                            "title": r.get("title", None),
+                        }
                         for r in res.get("results", [])
-                        if r.get("favicon")
                     ]
                     all_favicons.extend(favicons)
 
@@ -162,7 +172,6 @@ async def query(request: Request, body: QueryRequest):
                     )
 
         else:
-            all_favicons = []
             cleaned_results = [
                 {
                     "query": sub_query,
@@ -206,17 +215,24 @@ async def query(request: Request, body: QueryRequest):
         print(f"Subqueries combination time: {ce:.2f} seconds")
     else:
         print("Query not being decomposed")
+
         if mode == EXTERNAL:
             search_result = await search_tool(
                 decomposition_result.resolved_query or question
             )
         else:
             search_result = {}
-        all_favicons = [
-            r.get("favicon")
-            for r in search_result.get("results", [])
-            if r.get("favicon")
-        ]
+
+        all_favicons.extend(
+            [
+                {
+                    "favicon": r.get("favicon", None),
+                    "url": r.get("url", None),
+                    "title": r.get("title", None),
+                }
+                for r in search_result.get("results", [])
+            ]
+        )
 
         for r in search_result.get("results", []):
             r.pop("raw_content", None)
@@ -243,6 +259,18 @@ async def query(request: Request, body: QueryRequest):
         )
 
         state = AgentState(**state)
+        if getattr(state, "web_search_queries", None):
+            for res in state.web_search_queries:
+                favicons = [
+                    {
+                        "favicon": r.get("favicon", None),
+                        "url": r.get("url", None),
+                        "title": r.get("title", None),
+                    }
+                    for r in res["results"]
+                ]
+                all_favicons.extend(favicons)
+
         answer = state.answer
         chunks.extend(state.chunks)
         chunks_used.extend(state.chunks_used)
@@ -292,16 +320,44 @@ async def query(request: Request, body: QueryRequest):
                 chats[-1]["documents_used"] = documents_used
 
                 db.users.update_one(
-                    {"userId": user_id},
-                    {"$set": {f"threads.{thread_id}.chats": chats}}
+                    {"userId": user_id}, {"$set": {f"threads.{thread_id}.chats": chats}}
                 )
+    with open("debug_agent_response.json", "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "question": question,
+                "answer": answer,
+                "documents_used": documents_used,
+                "all_favicons": all_favicons,
+                "decomposed": decomposed,
+                "decomposition_result": decomposition_result.dict(),
+                "chunks": chunks,
+                "chunks_used": [doc.dict() for doc in chunks_used],
+            },
+            f,
+            ensure_ascii=False,
+            indent=4,
+        )
 
+    modified_used = []
+    for doc in documents_used:
+        modified_used.append(
+            {
+                "title": doc.get("metadata", {}).get("title"),
+                "document_id": doc.get("metadata", {}).get("document_id"),
+                "page_no": doc.get("metadata", {}).get("page_no"),
+            }
+        )
     response = {
         "thread_id": thread_id,
         "user_id": user_id,
         "question": question,
         "answer": answer,
         "documents_used": documents_used,
+        "docs_used": modified_used,
+        "web_used": all_favicons,
     }
 
     return response

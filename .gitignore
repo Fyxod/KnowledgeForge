@@ -21,6 +21,7 @@ parthenv
 .v
 data
 .json
+test
 .pdf
 images/
 # Project specific files
@@ -30,7 +31,6 @@ parsed_data_*.json
 retrieved_docs_*.json
 rewrite_query.txt
 rewrite_result.json
-
 # Frontend build artifacts
 Frontend/dist/
 Frontend/node_modules/
