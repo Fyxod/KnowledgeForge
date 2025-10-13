@@ -95,24 +95,18 @@ async def get_threads(request: Request):
 
     return {"status": "success", "threads": user.get("threads", {})}
 
-
-class ThreadDeleteRequest(BaseModel):
-    thread_id: str
-
-
 class ThreadUpdateRequest(BaseModel):
     thread_name: str
 
 
-@router.delete("/delete")
-async def delete_thread(request: Request, thread_data: ThreadDeleteRequest):
+@router.delete("/delete/{thread_id}")
+async def delete_thread(request: Request, thread_id: str):
     """Delete a thread for the authenticated user."""
     payload = request.state.user
     if not payload:
         return {"status": False, "error": "User not authenticated"}
 
     user_id = payload.userId
-    thread_id = thread_data.thread_id
 
     # Find user in DB
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})

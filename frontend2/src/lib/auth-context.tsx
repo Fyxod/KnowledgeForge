@@ -6,18 +6,21 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUserState] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const storedUser = getCurrentUser();
     if (storedUser) {
       setUserState(storedUser);
     }
+    setIsLoading(false);
   }, []);
 
   const setUser = (newUser: User | null) => {
@@ -35,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, setUser, logout, isAuthenticated: !!user, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

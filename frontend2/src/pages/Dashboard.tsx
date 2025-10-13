@@ -14,16 +14,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const Dashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
+    if (isLoading) return; // wait for auth hydration
     if (!user) {
       navigate('/login');
     }
-  }, [user, navigate]);
+  }, [user, navigate, isLoading]);
 
   const handleLogout = () => {
     removeAuthToken();
@@ -31,6 +32,10 @@ const Dashboard = () => {
     navigate('/');
   };
 
+  if (isLoading) {
+    // lightweight placeholder during hydration to prevent flicker
+    return <div className="h-screen flex items-center justify-center">Loading…</div>;
+  }
   if (!user) return null;
 
   return (

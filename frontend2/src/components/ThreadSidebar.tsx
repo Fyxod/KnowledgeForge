@@ -2,10 +2,22 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Thread } from '@/lib/api';
-import { Plus, FileText, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Thread, api } from '@/lib/api';
+import { Plus, FileText, MessageSquare, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/lib/auth-context';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ThreadSidebarProps {
   threads: Record<string, Thread>;
@@ -19,6 +31,34 @@ type SortOption = 'updatedAt' | 'createdAt' | 'alphabetically';
 export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleCollapse }: ThreadSidebarProps) => {
   const [sortBy, setSortBy] = useState<SortOption>('updatedAt');
   const navigate = useNavigate();
+  const { user, setUser } = useAuth();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const handleDelete = async (threadId: string, threadName: string) => {
+    try {
+      
+      const prevUser = user;
+      if (!prevUser) return;
+      const updatedThreads = { ...prevUser.threads };
+      delete updatedThreads[threadId];
+      setUser({ ...prevUser, threads: updatedThreads });
+
+      const res = await api.deleteThread(threadId);
+      if (!res.status) {
+        setUser(prevUser);
+        toast({ title: 'Failed to delete thread', description: `"${threadName}" could not be deleted.`, variant: 'destructive' as any });
+        return;
+      }
+
+      if (activeThreadId === threadId) {
+        navigate('/dashboard');
+      }
+      toast({ title: 'Thread deleted', description: `"${threadName}" was removed.` });
+    } catch (e) {
+      toast({ title: 'Error deleting thread', description: (e as Error).message, variant: 'destructive' as any });
+    }
+  };
 
   const sortedThreads = useMemo(() => {
     const threadEntries = Object.entries(threads);
@@ -71,30 +111,45 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
           <ScrollArea className="flex-1">
             <div className="p-2 space-y-2">
               {sortedThreads.map(([id, thread]) => (
-                <button
-                  key={id}
-                  onClick={() => navigate(`/dashboard/threads/${id}`)}
-                  className={`w-full text-left p-3 rounded-lg transition-colors ${
-                    activeThreadId === id 
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground' 
-                      : 'hover:bg-sidebar-accent/50'
-                  }`}
-                >
-                  <div className="font-medium truncate mb-1">{thread.thread_name}</div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <FileText className="w-3 h-3" />
-                      {thread.documents?.length || 0}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MessageSquare className="w-3 h-3" />
-                      {thread.chats?.length || 0}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true })}
-                  </div>
-                </button>
+                <div key={id} className={`group relative rounded-lg ${activeThreadId === id ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''}`}>
+                  <button
+                    onClick={() => navigate(`/dashboard/threads/${id}`)}
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                      activeThreadId === id 
+                        ? 'bg-transparent' 
+                        : 'hover:bg-sidebar-accent/50'
+                    }`}
+                  >
+                    <div className="font-medium whitespace-normal break-words mb-1 pr-8">
+                      {thread.thread_name}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        {thread.documents?.length || 0}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" />
+                        {thread.chats?.length || 0}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true })}
+                    </div>
+                  </button>
+                  <button
+                    aria-label="Delete thread"
+                    className="absolute top-2 right-2 z-10 flex items-center justify-center w-5 h-5 rounded hover:bg-destructive/10 text-muted-foreground/80 hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDelete({ id, name: thread.thread_name });
+                      setConfirmOpen(true);
+                    }}
+                    title="Delete"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               ))}
               
               {sortedThreads.length === 0 && (
@@ -118,6 +173,48 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
           </Button>
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={confirmOpen} onOpenChange={(open) => {
+        if (!open) {
+          setConfirmOpen(false);
+        } else {
+          setConfirmOpen(true);
+        }
+      }}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this thread?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.name ? (
+                <>
+                  You’re about to delete “{pendingDelete.name}”. This action cannot be undone.
+                </>
+              ) : (
+                'This action cannot be undone.'
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setConfirmOpen(false);
+              setPendingDelete(null);
+            }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (pendingDelete) {
+                  await handleDelete(pendingDelete.id, pendingDelete.name);
+                }
+                setConfirmOpen(false);
+                setPendingDelete(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

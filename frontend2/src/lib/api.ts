@@ -90,11 +90,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    
+
     if (!response.ok) {
       throw new Error('Invalid email or password');
     }
-    
+
     return response.json();
   },
 
@@ -109,7 +109,7 @@ export const api = {
   async uploadFiles(data: { thread_name?: string; thread_id?: string; files: File[] }): Promise<UploadResponse> {
     const token = getAuthToken();
     const formData = new FormData();
-    
+
     if (data.thread_name) formData.append('thread_name', data.thread_name);
     if (data.thread_id) formData.append('thread_id', data.thread_id);
     data.files.forEach(file => formData.append('files', file));
@@ -127,7 +127,8 @@ export const api = {
     const response = await fetch(`${API_URL}/thread/${threadId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    return response.json();
+    const data = await response.json();
+    return data.thread;
   },
 
   async query(threadId: string, question: string, mode: 'Internal' | 'External'): Promise<QueryResponse> {
@@ -140,6 +141,18 @@ export const api = {
       },
       body: JSON.stringify({ thread_id: threadId, question, mode }),
     });
+    return response.json();
+  },
+
+  async deleteThread(threadId: string): Promise<{ status: boolean }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/thread/delete/${threadId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
     return response.json();
   },
 };
