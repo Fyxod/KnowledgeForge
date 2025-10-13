@@ -3,7 +3,7 @@ export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 // Types
 export interface User {
-  userid: string;
+  userId: string;
   name: string;
   email: string;
   threads: Record<string, Thread>;
@@ -100,10 +100,13 @@ export const api = {
 
   async getUser(userId: string): Promise<User> {
     const token = getAuthToken();
+    console.log("Using token:", token);
+    console.log("Fetching user with ID:", userId);
     const response = await fetch(`${API_URL}/user/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    return response.json();
+    const data = await response.json();
+    return data.user;
   },
 
   async uploadFiles(data: { thread_name?: string; thread_id?: string; files: File[] }): Promise<UploadResponse> {

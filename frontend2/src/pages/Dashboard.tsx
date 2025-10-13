@@ -5,7 +5,7 @@ import { Brain, LogOut, User, Moon, Sun } from 'lucide-react';
 import { ThreadSidebar } from '@/components/ThreadSidebar';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
-import { removeAuthToken } from '@/lib/api';
+import { removeAuthToken, removeCurrentUser } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +20,7 @@ const Dashboard = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    if (isLoading) return; // wait for auth hydration
+    if (isLoading) return;
     if (!user) {
       navigate('/login');
     }
@@ -28,12 +28,12 @@ const Dashboard = () => {
 
   const handleLogout = () => {
     removeAuthToken();
+    removeCurrentUser();
     logout();
     navigate('/');
   };
 
   if (isLoading) {
-    // lightweight placeholder during hydration to prevent flicker
     return <div className="h-screen flex items-center justify-center">Loading…</div>;
   }
   if (!user) return null;

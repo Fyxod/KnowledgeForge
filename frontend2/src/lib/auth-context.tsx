@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, getCurrentUser, setCurrentUser, removeCurrentUser } from './api';
+import { User, getCurrentUser, setCurrentUser, removeCurrentUser, api, getAuthToken } from './api';
 
 interface AuthContextType {
   user: User | null;
@@ -7,6 +7,7 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,11 +17,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = getCurrentUser();
-    if (storedUser) {
-      setUserState(storedUser);
-    }
-    setIsLoading(false);
+    let cancelled = false;
+    const init = async () => {
+      setIsLoading(true);
+      const storedUser = getCurrentUser();
+      if (storedUser) {
+        setUserState(storedUser);
+      }
+
+      const token = getAuthToken();
+      if (token && storedUser) {
+        try {
+          console.log("Fetching fresh user data...");
+          console.log(storedUser);
+          console.log("printing id", storedUser.userId);
+          const fresh = await api.getUser(storedUser.userId);
+          if (!cancelled) {
+            setUserState(fresh);
+            setCurrentUser(fresh);
+          }
+        } catch (_) {
+        }
+      }
+      if (!cancelled) setIsLoading(false);
+    };
+    void init();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const setUser = (newUser: User | null) => {
@@ -37,8 +61,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     removeCurrentUser();
   };
 
+  const refreshUser = async () => {
+    const current = getCurrentUser();
+    const token = getAuthToken();
+    if (!current || !token) return;
+    try {
+      setIsLoading(true);
+      const fresh = await api.getUser(current.userId);
+      setUserState(fresh);
+      setCurrentUser(fresh);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, setUser, logout, isAuthenticated: !!user, isLoading }}>
+    <AuthContext.Provider value={{ user, setUser, logout, isAuthenticated: !!user, isLoading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
