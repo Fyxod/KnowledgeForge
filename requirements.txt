@@ -27,10 +27,11 @@ wordcloud
 nltk
 pydantic
 pydantic[email]
-pydantic-settings
 sentence-transformers
 PyMuPDF
 python-pptx
 beautifulsoup4
 markdown
 lxml
+pandas
+xlrd
