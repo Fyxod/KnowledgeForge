@@ -125,6 +125,99 @@ export const api = {
     return response.json();
   },
 
+
+  async uploadFilesWithProgress(params: {
+    thread_name?: string;
+    thread_id?: string;
+    files: File[];
+    onProgress?: (args: { fileIndex: number; loaded: number; total: number; percent: number }) => void;
+  }): Promise<UploadResponse> {
+    const token = getAuthToken();
+
+    const uploadSingle = (file: File): Promise<UploadResponse> => {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_URL}/upload`, true);
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText);
+            resolve(json);
+          } catch (e) {
+            reject(e);
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+
+        const formData = new FormData();
+        if (params.thread_name) formData.append('thread_name', params.thread_name);
+        if (params.thread_id) formData.append('thread_id', params.thread_id);
+        formData.append('files', file);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && params.onProgress) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+          }
+        };
+
+        xhr.send(formData);
+      });
+    };
+
+    const results: UploadResponse = {
+      status: 'success',
+      message: 'Uploaded',
+      thread_id: params.thread_id || '',
+      documents: [],
+    };
+
+    for (let i = 0; i < params.files.length; i++) {
+      const file = params.files[i];
+      await new Promise<UploadResponse>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_URL}/upload`, true);
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+
+        xhr.onload = () => {
+          try {
+            const json: UploadResponse = JSON.parse(xhr.responseText);
+            if (!results.thread_id && json.thread_id) {
+              results.thread_id = json.thread_id;
+            }
+            results.documents = [...results.documents, ...json.documents];
+            resolve(json);
+          } catch (e) {
+            reject(e);
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+
+        const formData = new FormData();
+        if (params.thread_name) formData.append('thread_name', params.thread_name);
+        if (params.thread_id) formData.append('thread_id', params.thread_id);
+        formData.append('files', file);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && params.onProgress) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            params.onProgress({ fileIndex: i, loaded: event.loaded, total: event.total, percent });
+          }
+        };
+
+        xhr.send(formData);
+      });
+    }
+
+    return results;
+  },
+
   async getThread(threadId: string): Promise<Thread> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/thread/${threadId}`, {

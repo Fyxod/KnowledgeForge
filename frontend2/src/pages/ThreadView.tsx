@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Upload, Send, FileText, Brain, Globe, Loader2 } from 'lucide-react';
+import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check } from 'lucide-react';
 import { api, Chat } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { ChatMessage } from '@/components/ChatMessage';
@@ -26,11 +26,17 @@ const ThreadView = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [webEnhanced, setWebEnhanced] = useState(false);
   const [documents, setDocuments] = useState<any[]>([]);
   const [lastSources, setLastSources] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [fileNames, setFileNames] = useState<Record<number, string>>({});
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [progressMap, setProgressMap] = useState<Record<number, number>>({});
 
   useEffect(() => {
     if (threadId && user) {
@@ -60,26 +66,64 @@ const ThreadView = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !threadId) return;
-
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
     const files = Array.from(e.target.files);
-    setLoading(true);
+    setPendingFiles(prev => [...prev, ...files]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+    setFileNames(prev => {
+      const updated = { ...prev };
+      delete updated[index];
+      return updated;
+    });
+    setProgressMap(prev => {
+      const updated = { ...prev };
+      delete updated[index];
+      return updated;
+    });
+    if (editingIndex === index) setEditingIndex(null);
+  };
+
+  const updateFileName = (index: number, newName: string) => {
+    setFileNames(prev => ({ ...prev, [index]: newName }));
+  };
+
+  const uploadPendingFiles = async () => {
+    if (!threadId || pendingFiles.length === 0) return;
+
+    const processed = pendingFiles.map((file, idx) => {
+      const name = fileNames[idx];
+      return name ? new File([file], name, { type: file.type }) : file;
+    });
+
+    setUploading(true);
+    setProgressMap({});
 
     try {
-      const response = await api.uploadFiles({
+      const response = await api.uploadFilesWithProgress({
         thread_id: threadId,
-        files,
+        files: processed,
+        onProgress: ({ fileIndex, percent }) => {
+          setProgressMap(prev => ({ ...prev, [fileIndex]: percent }));
+        },
       });
       setDocuments(prev => [...prev, ...response.documents]);
       toast.success('Files uploaded successfully!');
+      
+      setPendingFiles([]);
+      setFileNames({});
+      setProgressMap({});
+      setEditingIndex(null);
     } catch (error) {
       toast.error('Failed to upload files');
     } finally {
-      setLoading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setUploading(false);
     }
   };
 
@@ -240,7 +284,7 @@ const ThreadView = () => {
             ref={fileInputRef}
             type="file"
             multiple
-            onChange={handleFileUpload}
+            onChange={handleFileSelect}
             className="hidden"
             accept=".pdf,.docx,.rtf,.txt,.epub,.odt,.ppt,.pptx,.xls,.xlsx,.csv,.html,.xml,.md,.jpg,.jpeg,.png,.tiff,.bmp,.gif"
           />
@@ -252,6 +296,45 @@ const ThreadView = () => {
           >
             <Upload className="w-4 h-4" />
           </Button>
+          {/* Pending attachments list with rename/remove and progress */}
+          {pendingFiles.length > 0 && (
+            <div className="flex-1 flex flex-col gap-2 max-h-40 overflow-y-auto p-2 border rounded-md">
+              <p className="text-xs text-muted-foreground">Attachments ready to upload:</p>
+              {pendingFiles.map((file, index) => (
+                <div key={index} className="flex items-center gap-2 bg-muted/50 p-2 rounded">
+                  {editingIndex === index ? (
+                    <Input
+                      value={fileNames[index] || file.name}
+                      onChange={(e) => updateFileName(index, e.target.value)}
+                      className="flex-1 h-8"
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="flex-1 text-sm truncate">{fileNames[index] || file.name}</span>
+                  )}
+                  {typeof progressMap[index] === 'number' && (
+                    <span className="text-xs text-muted-foreground w-12 text-right">{progressMap[index]}%</span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setEditingIndex(editingIndex === index ? null : index)}
+                    disabled={uploading}
+                  >
+                    {editingIndex === index ? <Check className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePendingFile(index)}
+                    disabled={uploading}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
           <Input
             placeholder="Ask a question..."
             value={input}
@@ -260,13 +343,24 @@ const ThreadView = () => {
             disabled={loading}
             className="flex-1"
           />
-          <Button 
-            onClick={handleSend} 
-            disabled={loading || !input.trim()}
-            className="bg-gradient-primary"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {pendingFiles.length > 0 && (
+              <Button
+                onClick={uploadPendingFiles}
+                disabled={uploading}
+                variant="secondary"
+              >
+                {uploading ? 'Uploading…' : 'Upload'}
+              </Button>
+            )}
+            <Button 
+              onClick={handleSend} 
+              disabled={loading || !input.trim()}
+              className="bg-gradient-primary"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>

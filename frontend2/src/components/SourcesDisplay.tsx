@@ -58,7 +58,7 @@ export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
                   <div key={docId} className="text-xs">
                     <span className="font-medium">{doc.title}</span>
                     <span className="text-muted-foreground ml-2">
-                      (Pages: {doc.pages.sort((a, b) => a - b).join(', ')})
+                      (Pages: {Array.from(new Set(doc.pages)).sort((a, b) => a - b).join(', ')})
                     </span>
                   </div>
                 ))}
