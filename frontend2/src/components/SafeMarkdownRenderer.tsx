@@ -2,8 +2,7 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-// Use a dark-friendly highlight.js theme to keep code tokens readable in dark mode
-import "highlight.js/styles/github-dark-dimmed.css";
+import "highlight.js/styles/github-dark.css";
 
 type Props = {
   content: string;
@@ -16,7 +15,7 @@ export default function SafeMarkdownRenderer({ content, enableMarkdown = true }:
   }
 
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+  <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed dark:text-zinc-100 text-zinc-800">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight as any]}
