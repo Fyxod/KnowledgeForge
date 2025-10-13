@@ -4,6 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Thread, api } from '@/lib/api';
 import { Plus, FileText, MessageSquare, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/components/ui/use-toast';
@@ -164,13 +165,19 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
 
       {collapsed && (
         <div className="flex-1 flex flex-col items-center py-4 gap-2">
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => navigate('/dashboard/new')}
-          >
-            <Plus className="w-5 h-5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate('/dashboard/new')}
+                aria-label="New thread"
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="center">New thread</TooltipContent>
+          </Tooltip>
         </div>
       )}
 

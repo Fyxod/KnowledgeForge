@@ -50,7 +50,21 @@ const ThreadView = () => {
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const rootEl = scrollRef.current as HTMLElement;
+      const viewport = rootEl.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+      if (viewport) {
+        try {
+          viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+        } catch {
+          viewport.scrollTop = viewport.scrollHeight;
+        }
+      } else {
+        try {
+          rootEl.scrollTo({ top: rootEl.scrollHeight, behavior: 'smooth' });
+        } catch {
+          rootEl.scrollTop = rootEl.scrollHeight;
+        }
+      }
     }
   };
 
