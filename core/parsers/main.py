@@ -1,3 +1,4 @@
+import pandas as pd
 import uuid
 import os
 import shutil
@@ -156,6 +157,37 @@ async def extract_document(
             print(f"Error processing Markdown file {file_name}: {str(e)}")
             return None
 
+    if ext in {".xls", ".csv"}:
+        try:
+
+            # Read Excel or CSV file
+            if ext == ".csv":
+                df = pd.read_csv(file_path)
+            else:
+                df = pd.read_excel(file_path)
+
+            # Convert to plain text
+            text = df.to_string(index=False)
+
+            doc_id = str(uuid.uuid4())
+            await sio.emit(
+                f"{user_id}/progress",
+                {"message": f"Processed {file_name} (Excel/CSV) successfully"},
+            )
+
+            return Document(
+                id=doc_id,
+                type="spreadsheet",
+                file_name=file_name or os.path.basename(file_path),
+                content=[Page(number=1, text=text)],
+                title=title,
+                full_text=text,
+            )
+
+        except Exception as e:
+            print(f"Error processing Excel/CSV file {file_name}: {str(e)}")
+            return None
+    
     # --- Handle PowerPoint files ---
     if ext in {".ppt", ".pptx"}:
         prs = Presentation(file_path)
