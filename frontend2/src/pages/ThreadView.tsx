@@ -251,19 +251,31 @@ const ThreadView = () => {
       {/* Chat Area */}
       <ScrollArea ref={scrollRef} className="flex-1 p-4">
         <div className="max-w-4xl mx-auto space-y-4">
-          {chats.map((chat, index) => (
-            <div key={index}>
-              <ChatMessage chat={chat} />
-              {chat.type === 'agent' && index === chats.length - 1 && lastSources && (
-                <div className="ml-11">
-                  <SourcesDisplay 
-                    docsUsed={lastSources.docsUsed} 
-                    webUsed={lastSources.webUsed} 
-                  />
-                </div>
-              )}
-            </div>
-          ))}
+          {(() => {
+            const lastCompletedAgentIndex = (() => {
+              for (let i = chats.length - 1; i >= 0; i--) {
+                const msg = chats[i];
+                if (msg.type === 'agent' && msg.content && msg.content.trim().length > 0) {
+                  return i;
+                }
+              }
+              return -1;
+            })();
+
+            return chats.map((chat, index) => (
+              <div key={index}>
+                <ChatMessage chat={chat} />
+                {chat.type === 'agent' && index === lastCompletedAgentIndex && lastSources && (
+                  <div className="ml-11">
+                    <SourcesDisplay
+                      docsUsed={lastSources.docsUsed}
+                      webUsed={lastSources.webUsed}
+                    />
+                  </div>
+                )}
+              </div>
+            ));
+          })()}
           {loading && chats[chats.length - 1]?.type === 'agent' && chats[chats.length - 1]?.content === '' && (
             <div className="flex gap-3 p-4">
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
