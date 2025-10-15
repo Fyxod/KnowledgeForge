@@ -22,7 +22,7 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
     <div
       className={`p-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-105 relative ${
         isExpanded ? 'ring-2 ring-violet-300 ring-opacity-60' : ''
-      }`}
+      } ${isExpanded && description ? 'block' : 'flex items-center'}`}
       onClick={(e) => {
         e.stopPropagation();
         if (description && onToggle) onToggle();
@@ -62,7 +62,7 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
         </div>
       )}
 
-      <div className={`font-semibold text-sm leading-tight break-words ${description ? 'pr-8' : 'pr-2'} ${
+      <div className={`w-full text-center font-semibold text-sm leading-tight break-words ${description ? 'pr-6' : ''} ${
         level <= 2 ? 'text-white' : 'text-gray-800'
       }`}>
         {title}
@@ -103,6 +103,18 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<any>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<any>>([]);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+
+  // Calculate bounding box for translate extent
+  const translateExtent = useMemo(() => {
+    if (!nodes.length) return undefined;
+    const xs = nodes.map(n => n.position.x);
+    const ys = nodes.map(n => n.position.y);
+    const minX = Math.min(...xs) - 300;
+    const maxX = Math.max(...xs) + 800;
+    const minY = Math.min(...ys) - 300;
+    const maxY = Math.max(...ys) + 300;
+    return [[minX, minY], [maxX, maxY]] as [[number, number], [number, number]];
+  }, [nodes]);
 
   // Convert GlobalMindMap into positioned nodes/edges using a bottom-up layout
   const convertMindMapToFlow = useCallback((mindMap: GlobalMindMap) => {
@@ -439,7 +451,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
     if (status) {
       // show map + messages below from websocket
       return (
-        <div className="h-[70vh] grid grid-rows-[1fr_auto] gap-3">
+        <div className="h-full grid grid-rows-[1fr_auto] gap-3">
           <div className="min-h-0 border rounded-md overflow-hidden">
             <ReactFlow
               nodes={nodes}
@@ -448,11 +460,18 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               fitView
-              fitViewOptions={{ padding: 0.3, maxZoom: 0.9, minZoom: 0.1 }}
-              defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
+              fitViewOptions={{ padding: 0.05, maxZoom: 1.0, minZoom: 0.01 }}
+              defaultViewport={{ x: 0, y: 0, zoom: 0.4 }}
               nodesDraggable={false}
               nodesConnectable={false}
               elementsSelectable={false}
+              panOnDrag={true}
+              zoomOnScroll={true}
+              zoomOnPinch={true}
+              panOnScroll={false}
+              preventScrolling={true}
+              translateExtent={translateExtent}
+              nodeExtent={undefined}
               onNodeClick={(_, node) => {
                 setExpandedNodes((prev) => {
                   const ns = new Set(prev);
@@ -461,13 +480,13 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
                 });
               }}
             >
-              <Controls position="bottom-left" />
+              <Controls position="bottom-left" showInteractive={false} />
               <MiniMap position="bottom-right" style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: '1px solid #e2e8f0', borderRadius: 8 }} />
               <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#bdbdbd" />
             </ReactFlow>
           </div>
-          <div className="border rounded-md p-3 bg-muted/30">
-            <p className="text-sm whitespace-pre-wrap">{message}</p>
+          <div className="border rounded-md p-2 bg-muted/30">
+            <p className="text-xs whitespace-pre-wrap">{message}</p>
           </div>
         </div>
       );
@@ -489,15 +508,12 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       if (!v) closeEverything();
       onOpenChange(v);
     }}>
-      <DialogContent className="max-w-5xl w-[90vw]">
-        <DialogHeader>
+      <DialogContent className="max-w-[98vw] w-[98vw] h-[98vh] max-h-[98vh] p-4 flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Mind Map</DialogTitle>
         </DialogHeader>
-        <div className="mt-2">
+        <div className="flex-1 min-h-0 mt-2">
           {body}
-        </div>
-        <div className="mt-4 flex justify-end">
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>Close</Button>
         </div>
       </DialogContent>
     </Dialog>
