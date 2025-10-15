@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import ReactFlow, { Background, Controls, MiniMap, Node, Edge, Position } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, Controls, Node, Edge, Position, NodeProps, MarkerType, Handle, MiniMap, useNodesState, useEdgesState, addEdge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { api, getAuthToken, API_URL, GlobalMindMap, MindMapNode, MindMapResponse } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
@@ -14,61 +14,69 @@ type Props = {
   threadId: string;
 };
 
-// Convert hierarchical nodes to React Flow nodes/edges with simple top-down layout
-const useFlowGraph = (data?: GlobalMindMap) => {
-  return useMemo(() => {
-    if (!data) return { nodes: [] as Node[], edges: [] as Edge[] };
+// Custom expandable node styled like the reference
+const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: string; level: number; isExpanded: boolean; onToggle?: () => void }>> = ({ data }) => {
+  const { title, description, level, isExpanded, onToggle } = data;
+  return (
+    <div
+      className={`p-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-105 relative ${
+        isExpanded ? 'ring-2 ring-violet-300 ring-opacity-60' : ''
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (description && onToggle) onToggle();
+      }}
+      style={{
+        minWidth: isExpanded ? '320px' : '220px',
+        maxWidth: isExpanded ? '420px' : '280px',
+        minHeight: '50px',
+        background:
+          level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb',
+        color: level <= 2 ? 'white' : 'black',
+        border: `2px solid ${level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : level === 2 ? '#7c3aed' : '#9ca3af'}`,
+        borderRadius: '12px',
+        fontSize: '12px',
+        boxShadow: isExpanded ? '0 8px 16px rgba(0,0,0,0.15)' : '0 4px 8px rgba(0,0,0,0.1)',
+        overflow: 'hidden',
+        wordWrap: 'break-word',
+      }}
+    >
+      {/* connection handles */}
+      <Handle type="target" position={Position.Left} style={{ background: 'transparent', border: 'none', width: 8, height: 8, left: -4 }} />
+      <Handle type="source" position={Position.Right} style={{ background: 'transparent', border: 'none', width: 8, height: 8, right: -4 }} />
 
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
+      {/* expand indicator */}
+      {description && (
+        <div className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center">
+          <svg
+            className={`w-4 h-4 transition-transform duration-200 ${level <= 2 ? 'text-white/80' : 'text-gray-500'} ${
+              isExpanded ? 'rotate-180' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      )}
 
-    // simple DFS with coordinates
-    const xSpacing = 260;
-    const ySpacing = 140;
+      <div className={`font-semibold text-sm leading-tight break-words ${description ? 'pr-8' : 'pr-2'} ${
+        level <= 2 ? 'text-white' : 'text-gray-800'
+      }`}>
+        {title}
+      </div>
 
-  const nextXByDepth: Record<number, number> = {};
-
-    const ensureDepthX = (depth: number) => {
-      if (nextXByDepth[depth] == null) nextXByDepth[depth] = 0;
-      return nextXByDepth[depth];
-    };
-
-    const addNode = (n: MindMapNode, depth: number) => {
-      const x = ensureDepthX(depth);
-      const y = depth * ySpacing;
-      const id = n.id;
-      nodes.push({
-        id,
-        position: { x, y },
-        data: { label: (
-          <div className="px-3 py-2 rounded-md border bg-background shadow-sm max-w-[220px]">
-            <p className="font-medium text-sm leading-tight">{n.title}</p>
-            {n.description && (
-              <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">
-                {n.description}
-              </p>
-            )}
-          </div>
-        ) },
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top,
-        type: 'default',
-      });
-
-      // increment X for this depth for siblings
-      nextXByDepth[depth] = x + xSpacing;
-
-      for (const child of n.children || []) {
-        edges.push({ id: `${id}-${child.id}`, source: id, target: child.id, animated: false });
-        addNode(child, depth + 1);
-      }
-    };
-
-    for (const root of data.roots || []) addNode(root, 0);
-
-    return { nodes, edges };
-  }, [data]);
+      {isExpanded && description && (
+        <div className={`text-xs leading-relaxed mt-3 break-words pr-8 ${level <= 2 ? 'text-white/90' : 'text-gray-600'}`}>
+          {description}
+        </div>
+      )}
+    </div>
+  );
 };
+
+const nodeTypes = { mindMapNode: CustomMindMapNode } as const;
 
 export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) => {
   const [initialFetch, setInitialFetch] = useState<MindMapResponse | null>(null);
@@ -87,7 +95,106 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
     data?: GlobalMindMap;
   };
 
-  const { nodes, edges } = useFlowGraph(mapData);
+  // React Flow nodes/edges state + expansion state
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<any>>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<any>>([]);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+
+  // Convert GlobalMindMap into positioned nodes/edges using a bottom-up layout
+  const convertMindMapToFlow = useCallback((mindMap: GlobalMindMap) => {
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
+
+    const calcHeight = (n: MindMapNode): number => {
+      if (!n.children || n.children.length === 0) {
+        // base height for leaves
+        (n as any)._requiredHeight = 100;
+        return 100;
+      }
+      let total = 0;
+      for (const c of n.children) total += calcHeight(c);
+      const minGap = 20;
+      (n as any)._requiredHeight = Math.max(100, total + n.children.length * minGap);
+      return (n as any)._requiredHeight;
+    };
+
+    (mindMap.roots || []).forEach(calcHeight);
+
+    const horizontalSpacing = 450;
+    const baseX = 200;
+
+    const add = (n: MindMapNode, parentId: string | null, level: number, allocatedY: number, allocatedH: number) => {
+      const id = n.id; // keep original ids for stability
+      const x = baseX + level * horizontalSpacing;
+      const y = allocatedY + allocatedH / 2;
+      const isExpanded = expandedNodes.has(id);
+
+      newNodes.push({
+        id,
+        type: 'mindMapNode',
+        position: { x, y },
+        data: {
+          title: n.title || 'Untitled',
+          description: n.description || '',
+          level,
+          isExpanded,
+          onToggle: () => {
+            setExpandedNodes((prev) => {
+              const ns = new Set(prev);
+              if (ns.has(id)) ns.delete(id); else ns.add(id);
+              return ns;
+            });
+          },
+        },
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+      });
+
+      if (parentId) {
+        const stroke = level === 1 ? '#3b82f6' : level === 2 ? '#6366f1' : level === 3 ? '#8b5cf6' : '#8b5cf6';
+        const width = level === 1 ? 3 : level === 2 ? 2.5 : 2;
+        newEdges.push({
+          id: `e-${parentId}-${id}`,
+          source: parentId,
+          target: id,
+          type: 'bezier',
+          animated: level === 1,
+          style: { stroke, strokeWidth: width },
+          markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
+        });
+      }
+
+      if (n.children && n.children.length) {
+        let childY = allocatedY;
+        for (const c of n.children) {
+          const h = (c as any)._requiredHeight || 100;
+          add(c, id, level + 1, childY, h);
+          childY += h;
+        }
+      }
+    };
+
+    // lay out each root one below another
+    let rootY = 50;
+    for (const r of mindMap.roots || []) {
+      const rh = (r as any)._requiredHeight || 200;
+      add(r, null, 0, rootY, rh);
+      rootY += rh + 50;
+    }
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+  }, [expandedNodes, setNodes, setEdges]);
+
+  // Rebuild graph when fresh data arrives
+  useEffect(() => {
+    if (mapData) convertMindMapToFlow(mapData);
+  }, [mapData, convertMindMapToFlow]);
+
+  // Update nodes' expanded state efficiently
+  useEffect(() => {
+    setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, isExpanded: expandedNodes.has(n.id) } })));
+  }, [expandedNodes, setNodes]);
 
   const closeEverything = useCallback(() => {
     // Stop polling loop
@@ -224,10 +331,29 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       return (
         <div className="h-[70vh] grid grid-rows-[1fr_auto] gap-3">
           <div className="min-h-0 border rounded-md overflow-hidden">
-            <ReactFlow nodes={nodes} edges={edges} fitView>
-              <MiniMap pannable zoomable />
-              <Controls />
-              <Background gap={16} />
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              fitView
+              fitViewOptions={{ padding: 0.3, maxZoom: 0.9, minZoom: 0.1 }}
+              defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              elementsSelectable={false}
+              onNodeClick={(_, node) => {
+                setExpandedNodes((prev) => {
+                  const ns = new Set(prev);
+                  if (ns.has(node.id)) ns.delete(node.id); else ns.add(node.id);
+                  return ns;
+                });
+              }}
+            >
+              <Controls position="bottom-left" />
+              <MiniMap position="bottom-right" style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: '1px solid #e2e8f0', borderRadius: 8 }} />
+              <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#bdbdbd" />
             </ReactFlow>
           </div>
           <div className="border rounded-md p-3 bg-muted/30">
