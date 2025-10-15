@@ -22,6 +22,7 @@ from core.models.document import Documents
 from app.socket_handler import sio
 from core.utils.extra_done_check import mark_extra_done
 from core.word_cloud import create_stop_words
+from core.llm.unload_ollama_model import unload_ollama_model
 
 
 async def create_mind_map_global(parsed_data: Documents):
@@ -248,7 +249,9 @@ async def add_node_descriptions_global(
 
 
 async def delayed_mark(parsed_data: Documents):
-    await asyncio.sleep(240)
+    await asyncio.sleep(60)
+    await unload_ollama_model(GPU_NODE_DESCRIPTION_LLM.model, GPU_NODE_DESCRIPTION_LLM.port)
+    await asyncio.sleep(20)
     modified = mark_extra_done(parsed_data.user_id, parsed_data.thread_id, True)
     if modified:
         print("Marked thread as extra_done")
