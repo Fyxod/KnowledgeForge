@@ -17,6 +17,7 @@ type Props = {
 // Custom expandable node styled like the reference
 const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: string; level: number; isExpanded: boolean; onToggle?: () => void }>> = ({ data }) => {
   const { title, description, level, isExpanded, onToggle } = data;
+  const MAX_DESC_HEIGHT = 220; // px, keep in sync with estimator below
   return (
     <div
       className={`p-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-105 relative ${
@@ -29,7 +30,7 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
       style={{
         minWidth: isExpanded ? '320px' : '220px',
         maxWidth: isExpanded ? '420px' : '280px',
-        minHeight: '50px',
+  minHeight: '64px',
         background:
           level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb',
         color: level <= 2 ? 'white' : 'black',
@@ -68,7 +69,10 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
       </div>
 
       {isExpanded && description && (
-        <div className={`text-xs leading-relaxed mt-3 break-words pr-8 ${level <= 2 ? 'text-white/90' : 'text-gray-600'}`}>
+        <div
+          className={`text-xs leading-relaxed mt-3 break-words pr-8 ${level <= 2 ? 'text-white/90' : 'text-gray-600'}`}
+          style={{ maxHeight: MAX_DESC_HEIGHT, overflowY: 'auto' }}
+        >
           {description}
         </div>
       )}
@@ -105,29 +109,61 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
 
+    // Estimate height based on expansion and description length to avoid overlap
+    const estimateSelfHeight = (n: MindMapNode): number => {
+      const baseCollapsed = 72; // closer to visual min height + padding
+      const isExpanded = expandedNodes.has(n.id);
+      if (!isExpanded || !n.description) return baseCollapsed;
+      // Roughly estimate lines at ~70 chars per line for 420px width and xs font
+      const charsPerLine = 80;
+      const text = n.description || '';
+      const lines = Math.ceil(text.length / charsPerLine);
+      const lineHeight = 18; // px per line (approx for text-xs)
+      const padding = 36; // top/bottom + gaps
+      const SAFETY = 28; // extra safety to ensure no overlap
+      const raw = baseCollapsed + padding + lines * lineHeight + SAFETY;
+      const MAX_HEIGHT = baseCollapsed + padding + 220; // sync with MAX_DESC_HEIGHT
+      return Math.min(raw, MAX_HEIGHT);
+    };
+
     const calcHeight = (n: MindMapNode): number => {
       if (!n.children || n.children.length === 0) {
-        // base height for leaves
-        (n as any)._requiredHeight = 100;
-        return 100;
+        const h = Math.max(100, estimateSelfHeight(n));
+        (n as any)._requiredHeight = h;
+        return h;
       }
       let total = 0;
       for (const c of n.children) total += calcHeight(c);
-      const minGap = 20;
-      (n as any)._requiredHeight = Math.max(100, total + n.children.length * minGap);
-      return (n as any)._requiredHeight;
+  const minGap = 48; // more space between siblings
+      const self = estimateSelfHeight(n);
+      const childrenSpace = Math.max(total + n.children.length * minGap, 100);
+      const h = Math.max(self, childrenSpace);
+      (n as any)._requiredHeight = h;
+      return h;
     };
 
     (mindMap.roots || []).forEach(calcHeight);
 
-    const horizontalSpacing = 450;
+  const horizontalSpacing = 520; // more spacing to avoid lateral overlap when expanded
     const baseX = 200;
+
+    // Helpers to support collision resolution
+    const levelMap = new Map<number, string[]>();
+    const childrenMap = new Map<string, string[]>();
+    const parentMap = new Map<string, string | null>();
+    const idToMindNode = new Map<string, MindMapNode>();
 
     const add = (n: MindMapNode, parentId: string | null, level: number, allocatedY: number, allocatedH: number) => {
       const id = n.id; // keep original ids for stability
       const x = baseX + level * horizontalSpacing;
       const y = allocatedY + allocatedH / 2;
       const isExpanded = expandedNodes.has(id);
+
+      idToMindNode.set(id, n);
+      parentMap.set(id, parentId);
+      childrenMap.set(id, (n.children || []).map((c) => c.id));
+      if (!levelMap.has(level)) levelMap.set(level, []);
+      levelMap.get(level)!.push(id);
 
       newNodes.push({
         id,
@@ -182,6 +218,75 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       rootY += rh + 50;
     }
 
+    // Post-process: avoid vertical overlap per column by pushing subtrees down
+    const idToIndex = new Map<string, number>();
+    newNodes.forEach((n, idx) => idToIndex.set(n.id, idx));
+
+    const heightOf = (id: string) => {
+      const m = idToMindNode.get(id);
+      const est = m ? estimateSelfHeight(m) : 100;
+      return Math.max(100, est);
+    };
+
+    const applyShiftRec = (id: string, dy: number) => {
+      const idx = idToIndex.get(id);
+      if (idx != null) {
+        newNodes[idx] = {
+          ...newNodes[idx],
+          position: { ...newNodes[idx].position, y: newNodes[idx].position.y + dy },
+        };
+      }
+      const kids = childrenMap.get(id) || [];
+      for (const k of kids) applyShiftRec(k, dy);
+    };
+
+    const levels = Array.from(levelMap.keys()).sort((a, b) => a - b);
+    const minVerticalGap = 52; // ensure spacing between boxes
+    const runCollisionPass = () => {
+      for (const lvl of levels) {
+        const ids = (levelMap.get(lvl) || []).slice().sort((a, b) => {
+          const ya = newNodes[idToIndex.get(a)!].position.y;
+          const yb = newNodes[idToIndex.get(b)!].position.y;
+          return ya - yb;
+        });
+        let prevBottom = -Infinity;
+        for (const id of ids) {
+          const idx = idToIndex.get(id)!;
+          const h = heightOf(id);
+          const y = newNodes[idx].position.y;
+          let top = y - h / 2;
+          const requiredTop = prevBottom + minVerticalGap;
+          if (top < requiredTop) {
+            const dy = requiredTop - top;
+            applyShiftRec(id, dy);
+            top += dy;
+          }
+          prevBottom = top + h;
+        }
+      }
+    };
+
+    // First collision pass (before parent centering)
+    runCollisionPass();
+
+    // Re-center parents based on children positions (bottom-up)
+    const maxLevel = levels.length ? Math.max(...levels) : 0;
+    for (let lvl = maxLevel - 1; lvl >= 0; lvl--) {
+      const ids = levelMap.get(lvl) || [];
+      for (const id of ids) {
+        const kids = childrenMap.get(id) || [];
+        if (kids.length) {
+          const ys = kids.map((cid) => newNodes[idToIndex.get(cid)!].position.y);
+          const avg = ys.reduce((a, b) => a + b, 0) / ys.length;
+          const idx = idToIndex.get(id)!;
+      newNodes[idx] = { ...newNodes[idx], position: { ...newNodes[idx].position, y: avg } };
+        }
+      }
+    }
+
+    // Second collision pass to fix any overlaps introduced by centering
+    runCollisionPass();
+
     setNodes(newNodes);
     setEdges(newEdges);
   }, [expandedNodes, setNodes, setEdges]);
@@ -193,7 +298,12 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
 
   // Update nodes' expanded state efficiently
   useEffect(() => {
-    setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, isExpanded: expandedNodes.has(n.id) } })));
+    // Rebuild layout to accommodate expanded heights and prevent overlaps
+    if (mapData) {
+      convertMindMapToFlow(mapData);
+    } else {
+      setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, isExpanded: expandedNodes.has(n.id) } })));
+    }
   }, [expandedNodes, setNodes]);
 
   const closeEverything = useCallback(() => {
