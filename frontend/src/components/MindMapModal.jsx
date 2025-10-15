@@ -567,19 +567,19 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
           return;
         }
         
-        console.log('Setting mind map data:', response.mind_map);
+        console.log('Setting mind map data:', response.data);
         
         // Check if the mind map data has the expected structure
-        if (!response.mind_map || !response.mind_map.roots || !Array.isArray(response.mind_map.roots)) {
-          console.error('Invalid mind map data structure:', response.mind_map);
+        if (!response.data || !response.data.roots || !Array.isArray(response.data.roots)) {
+          console.error('Invalid mind map data structure:', response.data);
           setError('Invalid mind map data structure received from server.');
           setLoading(false);
           return;
         }
         
         // Set the mind map data and convert to flow format
-        setMindMapData(response.mind_map);
-        convertMindMapToFlow(response.mind_map);
+        setMindMapData(response.data);
+        convertMindMapToFlow(response.data);
         setProgressInfo({ status: 'complete', message: 'Global mind map loaded successfully!', progress: 100 });
         
         // Always force loading to false after data is processed
@@ -658,8 +658,8 @@ const MindMapModal = ({ isOpen, onClose, thread }) => {
           return;
         }
         
-        setMindMapData(response.mind_map);
-        convertMindMapToFlow(response.mind_map);
+        setMindMapData(response.data);
+        convertMindMapToFlow(response.data);
         setProgressInfo({ status: 'complete', message: 'Mind map loaded successfully!', progress: 100 });
         
         // Only control loading if socket hasn't handled it

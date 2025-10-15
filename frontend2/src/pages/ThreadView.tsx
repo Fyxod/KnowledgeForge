@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import MindMapModal from '@/components/MindMapModal';
 
 const ThreadView = () => {
   const { threadId } = useParams();
@@ -37,6 +38,7 @@ const ThreadView = () => {
   const [fileNames, setFileNames] = useState<Record<number, string>>({});
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [progressMap, setProgressMap] = useState<Record<number, number>>({});
+  const [mindMapOpen, setMindMapOpen] = useState(false);
 
   useEffect(() => {
     if (threadId && user) {
@@ -177,9 +179,12 @@ const ThreadView = () => {
         return updated;
       });
 
+      // Support both legacy shape and new `sources` wrapper; default to empty arrays
+      const docsUsed = response.sources?.documents_used ?? response.docs_used ?? [];
+      const webUsed = response.sources?.web_used ?? response.web_used ?? [];
       setLastSources({
-        docsUsed: response.docs_used,
-        webUsed: response.web_used,
+        docsUsed,
+        webUsed,
       });
     } catch (error) {
       toast.error('Failed to get response');
@@ -252,8 +257,7 @@ const ThreadView = () => {
               </ScrollArea>
             </DialogContent>
           </Dialog>
-
-          <Button variant="outline" size="sm" disabled>
+          <Button variant="outline" size="sm" onClick={() => setMindMapOpen(true)} disabled={!threadId}>
             Mind Map
           </Button>
           <Button variant="outline" size="sm" disabled>
@@ -389,6 +393,10 @@ const ThreadView = () => {
           </div>
         </div>
       </div>
+      {/* Mind Map Modal */}
+      {threadId && (
+        <MindMapModal open={mindMapOpen} onOpenChange={setMindMapOpen} threadId={threadId} />
+      )}
     </div>
   );
 };

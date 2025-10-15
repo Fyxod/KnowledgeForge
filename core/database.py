@@ -27,6 +27,7 @@ user_schema = {
                         "createdAt",
                         "updatedAt",
                         "extra_done",
+                        "mindmap_enabled",
                     ],
                     "properties": {
                         "thread_name": {"bsonType": "string"},
@@ -59,6 +60,49 @@ user_schema = {
                                     "type": {"enum": ["agent", "user"]},
                                     "content": {"bsonType": "string"},
                                     "timestamp": {"bsonType": "date"},
+                                    "sources": {
+                                        "bsonType": "object",
+                                        "properties": {
+                                            "documents_used": {
+                                                "bsonType": "array",
+                                                "items": {
+                                                    "bsonType": "object",
+                                                    "required": [
+                                                        "title",
+                                                        "document_id",
+                                                        "page_no",
+                                                    ],
+                                                    "properties": {
+                                                        "title": {"bsonType": "string"},
+                                                        "document_id": {
+                                                            "bsonType": "string"
+                                                        },
+                                                        "page_no": {
+                                                            "bsonType": ["int", "long"]
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                            "web_used": {
+                                                "bsonType": "array",
+                                                "items": {
+                                                    "bsonType": "object",
+                                                    "required": [
+                                                        "title",
+                                                        "url",
+                                                        "favicon",
+                                                    ],
+                                                    "properties": {
+                                                        "title": {"bsonType": "string"},
+                                                        "url": {"bsonType": "string"},
+                                                        "favicon": {
+                                                            "bsonType": "string"
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
                                 },
                             },
                         },
@@ -67,6 +111,10 @@ user_schema = {
                         "extra_done": {
                             "bsonType": "bool",
                             "description": "Indicates if extra task is done",
+                        },
+                        "mindmap_enabled": {
+                            "bsonType": "bool",
+                            "description": "Mindmap feature enabled for this thread",
                         },
                     },
                 },

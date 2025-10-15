@@ -19,8 +19,26 @@ interface SourcesDisplayProps {
 export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
+  // Defensive: ensure arrays
+  const safeDocs = Array.isArray(docsUsed) ? docsUsed : [];
+  const safeWeb = Array.isArray(webUsed) ? webUsed : [];
+
+  // Optional: dedupe identical doc entries (same doc id and page)
+  const dedupedDocs = (() => {
+    const seen = new Set<string>();
+    const out: typeof safeDocs = [];
+    for (const d of safeDocs) {
+      const key = `${d.document_id}:${d.page_no}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(d);
+      }
+    }
+    return out;
+  })();
+
   // Group documents by document_id
-  const groupedDocs = docsUsed.reduce((acc, doc) => {
+  const groupedDocs = dedupedDocs.reduce((acc, doc) => {
     if (!acc[doc.document_id]) {
       acc[doc.document_id] = {
         title: doc.title,
@@ -31,7 +49,7 @@ export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
     return acc;
   }, {} as Record<string, { title: string; pages: number[] }>);
 
-  if (docsUsed.length === 0 && webUsed.length === 0) return null;
+  if (safeDocs.length === 0 && safeWeb.length === 0) return null;
 
   return (
     <div className="mt-2">
@@ -42,7 +60,7 @@ export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
         className="text-xs"
       >
         {isOpen ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
-        View Sources ({docsUsed.length + webUsed.length})
+  View Sources ({safeDocs.length + safeWeb.length})
       </Button>
 
       {isOpen && (
@@ -66,14 +84,14 @@ export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
             </div>
           )}
 
-          {webUsed.length > 0 && (
+          {safeWeb.length > 0 && (
             <div>
               <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
                 <ExternalLink className="w-3 h-3" />
                 Web Sources
               </h4>
               <div className="space-y-1">
-                {webUsed.map((web, index) => (
+                {safeWeb.map((web, index) => (
                   <a
                     key={index}
                     href={web.url}

@@ -43,6 +43,7 @@ from core.summarizer import summarize_documents
 from core.word_cloud import create_stop_words
 from app.socket_handler import sio
 from core.utils.extra_done_check import mark_extra_done
+from core.constants import SWITCHES
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -107,6 +108,7 @@ async def upload_file(
                         "createdAt": now,
                         "updatedAt": now,
                         "extra_done": False,
+                        "mindmap_enabled": SWITCHES["MIND_MAP"],
                     }
                 }
                 db.users.update_one({"userId": user_id}, {"$set": new_thread})
@@ -135,6 +137,7 @@ async def upload_file(
                 "createdAt": now,
                 "updatedAt": now,
                 "extra_done": False,
+                "mindmap_enabled": SWITCHES["MIND_MAP"],
             }
         }
         db.users.update_one({"userId": user_id}, {"$set": new_thread})
@@ -149,7 +152,12 @@ async def upload_file(
 
         db.users.update_one(
             {"userId": user_id},
-            {"$set": {f"threads.{thread_id}.updatedAt": now}},
+            {
+                "$set": {
+                    f"threads.{thread_id}.updatedAt": now,
+                    f"threads.{thread_id}.mindmap_enabled": SWITCHES["MIND_MAP"],
+                }
+            },
         )
 
     # Upload and parse files

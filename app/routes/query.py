@@ -192,7 +192,11 @@ async def query(request: Request, body: QueryRequest):
         workers = [asyncio.create_task(run_worker(GPU_QUERY_LLM, task_queue, results))]
 
         # Add the second model only if allowed
-        if len(thread.documents) == 0 or not SWITCHES["MIND_MAP"] or can_use_second_model:
+        if (
+            len(thread.documents) == 0
+            or not SWITCHES["MIND_MAP"]
+            or can_use_second_model
+        ):
             print("Using second model for parallel execution")
             workers.append(
                 asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results))
@@ -356,9 +360,11 @@ async def query(request: Request, body: QueryRequest):
         "user_id": user_id,
         "question": question,
         "answer": answer,
-        "documents_used": documents_used,
-        "docs_used": modified_used,
-        "web_used": all_favicons,
+        "sources": {
+            "documents_used": modified_used,
+            "web_used": all_favicons,
+        },
     }
 
     return response
+

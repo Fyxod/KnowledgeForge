@@ -50,16 +50,52 @@ export interface QueryResponse {
   user_id: string;
   question: string;
   answer: string;
-  docs_used: Array<{
+  // Original shape (legacy)
+  docs_used?: Array<{
     title: string;
     document_id: string;
     page_no: number;
   }>;
-  web_used: Array<{
+  web_used?: Array<{
     title: string;
     url: string;
     favicon: string | null;
   }>;
+  // Newer shape returned by backend under a `sources` object
+  sources?: {
+    documents_used?: Array<{
+      title: string;
+      document_id: string;
+      page_no: number;
+    }>;
+    web_used?: Array<{
+      title: string;
+      url: string;
+      favicon: string | null;
+    }>;
+  };
+}
+
+// Mind map types
+export interface MindMapNode {
+  id: string;
+  title: string;
+  description?: string | null;
+  parent_id?: string | null;
+  children: MindMapNode[];
+}
+
+export interface GlobalMindMap {
+  user_id: string;
+  thread_id: string;
+  roots: MindMapNode[];
+}
+
+export interface MindMapResponse {
+  mind_map: boolean;
+  status?: boolean; // only present when mind_map is true
+  message: string;
+  data?: GlobalMindMap; // present when mind_map && status
 }
 
 // Auth helpers
@@ -251,4 +287,29 @@ export const api = {
 
     return response.json();
   },
+
+  async getMindMap(threadId: string): Promise<MindMapResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/mindmap/${threadId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      // Fallback shape with mind_map=false so UI can display error message
+      return { mind_map: false, message: `Failed to fetch mind map (${response.status})` };
+    }
+    return response.json();
+  },
+};
+
+// WebSocket helper
+export const getWebSocketUrl = (path: string) => {
+  // Allow explicit WS base via env, otherwise derive from API_URL
+  const base = (import.meta.env.VITE_WS_URL as string | undefined) || API_URL;
+  const url = new URL(base);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Ensure we don't double up slashes
+  const joined = `${url.origin}${path.startsWith('/') ? '' : '/'}${path}`;
+  return joined;
 };

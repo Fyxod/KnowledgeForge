@@ -78,7 +78,7 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
   }, [threads, sortBy]);
 
   return (
-    <div className={`border-r bg-sidebar transition-all duration-300 ${collapsed ? 'w-16' : 'w-72'} flex flex-col`}>
+    <div className={`border-r bg-sidebar transition-all duration-300 flex flex-col w-full min-w-16 min-h-0 h-full`}>
       <div className="p-4 border-b flex items-center justify-between">
         {!collapsed && <h2 className="font-semibold">Threads</h2>}
         <Button variant="ghost" size="icon" onClick={onToggleCollapse}>
@@ -109,12 +109,12 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
             </Select>
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="p-2 space-y-2">
               {sortedThreads.map(([id, thread]) => (
                 <div
                   key={id}
-                  className={`group relative rounded-lg overflow-hidden ${
+                  className={`group relative rounded-lg overflow-hidden min-w-0 ${
                     activeThreadId === id ? 'bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-primary/20' : ''
                   }`}
                   aria-current={activeThreadId === id ? 'page' : undefined}
@@ -128,13 +128,13 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
                   />
                   <button
                     onClick={() => navigate(`/dashboard/threads/${id}`)}
-                    className={`w-full text-left p-3 pl-4 rounded-lg transition-colors ${
+                    className={`w-full text-left p-3 pl-4 rounded-lg transition-colors min-w-0 ${
                       activeThreadId === id 
                         ? 'bg-transparent' 
                         : 'hover:bg-sidebar-accent/50'
                     }`}
                   >
-                    <div className="font-medium whitespace-normal break-words mb-1 pr-8">
+                    <div className="font-medium whitespace-normal break-words break-all mb-1 pr-8">
                       {thread.thread_name}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
