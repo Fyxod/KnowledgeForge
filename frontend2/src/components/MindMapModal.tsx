@@ -36,7 +36,7 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
         color: level <= 2 ? 'white' : 'black',
         border: `2px solid ${level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : level === 2 ? '#7c3aed' : '#9ca3af'}`,
         borderRadius: '12px',
-        fontSize: '12px',
+        fontSize: '16px',
         boxShadow: isExpanded ? '0 8px 16px rgba(0,0,0,0.15)' : '0 4px 8px rgba(0,0,0,0.1)',
         overflow: 'hidden',
         wordWrap: 'break-word',
@@ -62,7 +62,7 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
         </div>
       )}
 
-      <div className={`w-full text-center font-semibold text-sm leading-tight break-words ${description ? 'pr-6' : ''} ${
+      <div className={`w-full text-center font-semibold text-base leading-tight break-words ${
         level <= 2 ? 'text-white' : 'text-gray-800'
       }`}>
         {title}
@@ -70,7 +70,7 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
 
       {isExpanded && description && (
         <div
-          className={`text-xs leading-relaxed mt-3 break-words pr-8 ${level <= 2 ? 'text-white/90' : 'text-gray-600'}`}
+          className={`text-sm leading-relaxed mt-3 break-words text-justify ${level <= 2 ? 'text-white/90' : 'text-gray-600'}`}
           style={{ maxHeight: MAX_DESC_HEIGHT, overflowY: 'auto' }}
         >
           {description}
@@ -87,11 +87,13 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
   const [mapData, setMapData] = useState<GlobalMindMap | undefined>(undefined);
   const [status, setStatus] = useState<boolean | undefined>(undefined);
   const [message, setMessage] = useState<string>('');
+  const [showMessage, setShowMessage] = useState<boolean>(true);
   // Using manual timeout loop to prevent overlapping requests
   const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollingActiveRef = useRef<boolean>(false);
   const socketRef = useRef<Socket | null>(null);
   const lastPayloadRef = useRef<string>('');
+  const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   type ProgressPayload = {
     message?: string;
@@ -326,6 +328,12 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
     pollingTimeoutRef.current = null;
     pollingActiveRef.current = false;
 
+    // Clear message timeout
+    if (messageTimeoutRef.current) {
+      clearTimeout(messageTimeoutRef.current);
+    }
+    messageTimeoutRef.current = null;
+
     // Disconnect socket
     if (socketRef.current) {
       try { socketRef.current.disconnect(); } catch (e) {
@@ -426,6 +434,34 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
     }
   }, [open, closeEverything]);
 
+  // Hide message after 5 seconds when mind_map is true and status is true
+  useEffect(() => {
+    if (initialFetch?.mind_map && status) {
+      // Show message initially
+      setShowMessage(true);
+      
+      // Clear any existing timeout
+      if (messageTimeoutRef.current) {
+        clearTimeout(messageTimeoutRef.current);
+      }
+      
+      // Set timeout to hide message after 5 seconds
+      messageTimeoutRef.current = setTimeout(() => {
+        setShowMessage(false);
+      }, 5000);
+      
+      // Cleanup on unmount or when dependencies change
+      return () => {
+        if (messageTimeoutRef.current) {
+          clearTimeout(messageTimeoutRef.current);
+        }
+      };
+    } else {
+      // Always show message when conditions don't match
+      setShowMessage(true);
+    }
+  }, [initialFetch?.mind_map, status, message]);
+
   const body = useMemo(() => {
     const mm = initialFetch;
     if (!mm) {
@@ -487,9 +523,11 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
               <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#bdbdbd" />
             </ReactFlow>
           </div>
-          <div className="border rounded-md p-2 bg-muted/30">
-            <p className="text-xs whitespace-pre-wrap">{message}</p>
-          </div>
+          {showMessage && (
+            <div className="border rounded-md p-2 bg-muted/30">
+              <p className="text-xs whitespace-pre-wrap">{message}</p>
+            </div>
+          )}
         </div>
       );
     }
@@ -503,7 +541,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
         </div>
       </div>
     );
-  }, [initialFetch, status, nodes, edges, message]);
+  }, [initialFetch, status, nodes, edges, message, showMessage]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => {

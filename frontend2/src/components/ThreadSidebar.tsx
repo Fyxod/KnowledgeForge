@@ -134,7 +134,7 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
                         : 'hover:bg-sidebar-accent/50'
                     }`}
                   >
-                    <div className="font-medium whitespace-normal break-words break-all mb-1 pr-8">
+                    <div className="font-medium whitespace-normal break-words mb-1 pr-8">
                       {thread.thread_name}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
