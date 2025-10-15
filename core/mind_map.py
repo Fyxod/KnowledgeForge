@@ -248,7 +248,7 @@ async def add_node_descriptions_global(
 
 
 async def delayed_mark(parsed_data: Documents):
-    await asyncio.sleep(140)
+    await asyncio.sleep(240)
     modified = mark_extra_done(parsed_data.user_id, parsed_data.thread_id, True)
     if modified:
         print("Marked thread as extra_done")
