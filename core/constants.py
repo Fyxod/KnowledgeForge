@@ -9,6 +9,8 @@ SWITCHES = {
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
+
+    "REMOTE_GPU": True,  # Use remote GPU LLMs
 }
 
 
@@ -29,6 +31,7 @@ GPU_STOP_WORDS_EXTRACTION_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
 GPU_NODE_GENERATION_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
 GPU_NODE_DESCRIPTION_LLM = GPULLMConfig(model=QWEN3_14B, port=PORT1)
 
+IMAGE_PARSER_LLM = "gemma3:12b"
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
 FALLBACK_GEMINI_MODEL = "gemini-2.0-flash"
