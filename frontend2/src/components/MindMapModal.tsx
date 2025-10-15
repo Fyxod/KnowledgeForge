@@ -461,7 +461,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
               onEdgesChange={onEdgesChange}
               fitView
               fitViewOptions={{ padding: 0.05, maxZoom: 1.2, minZoom: 0.005 }}
-              minZoom={0.005}
+              minZoom={0.05}
               maxZoom={1.5}
               defaultViewport={{ x: 0, y: 0, zoom: 0.3 }}
               nodesDraggable={false}
