@@ -9,6 +9,8 @@ SWITCHES = {
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
+
+    "REMOTE_GPU": True,  # Use remote GPU LLMs
 }
 
 

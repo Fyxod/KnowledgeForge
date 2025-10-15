@@ -5,8 +5,13 @@ from google import genai
 from openai import AsyncOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
-from core.llm.custom_llm import MyServerLLM
-import copy
+
+if SWITCHES["REMOTE_GPU"]:
+    import core.llm.remote_llm as llm_module
+else:
+    import core.llm.local_llm as llm_module
+
+MyServerLLM = llm_module.MyServerLLM
 
 
 def sanitize_schema(schema_dict):
@@ -76,7 +81,21 @@ async def invoke_llm(
                 structured = parser.parse(llm_output)
                 return structured
             except Exception as e:
-                print(f"GPU server failed: {e}")
+                print(f"GPU server failed failed at port {port}: {e}")
+
+            if port == 11435:
+                temp_port = 11434
+                try:
+                    print(f"Retrying GPU server on alternate port {temp_port}...")
+                    gpu_llm = MyServerLLM(model=gpu_model, port=temp_port)
+                    s = time.time()
+                    llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
+                    e = time.time()
+                    print(f"Success via GPU server, LLM call took {e - s:.2f}s")
+                    structured = parser.parse(llm_output)
+                    return structured
+                except Exception as e:
+                    print(f"GPU server failed at alternate port {temp_port}: {e}")
 
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
