@@ -10,7 +10,8 @@ from core.config import settings
 # Optional for Windows if Tesseract throws errors:
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-VISION_URL = settings.VISION_URL
+# VISION_URL = settings.VISION_URL
+VISION_URL = "https://llm.katiyar.xyz/vision"
 MODEL = IMAGE_PARSER_LLM
 gemma = False
 
