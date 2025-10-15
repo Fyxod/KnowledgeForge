@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
-import ReactFlow, { Background, BackgroundVariant, Controls, Node, Edge, Position, NodeProps, MarkerType, Handle, MiniMap, useNodesState, useEdgesState, addEdge } from 'reactflow';
+import { Loader2, Maximize2 } from 'lucide-react';
+import ReactFlow, { Background, BackgroundVariant, Controls, Node, Edge, Position, NodeProps, MarkerType, Handle, MiniMap, useNodesState, useEdgesState, addEdge, useReactFlow } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { api, getAuthToken, API_URL, GlobalMindMap, MindMapNode, MindMapResponse } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
@@ -460,8 +460,10 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               fitView
-              fitViewOptions={{ padding: 0.05, maxZoom: 1.0, minZoom: 0.01 }}
-              defaultViewport={{ x: 0, y: 0, zoom: 0.4 }}
+              fitViewOptions={{ padding: 0.05, maxZoom: 1.2, minZoom: 0.005 }}
+              minZoom={0.005}
+              maxZoom={1.5}
+              defaultViewport={{ x: 0, y: 0, zoom: 0.3 }}
               nodesDraggable={false}
               nodesConnectable={false}
               elementsSelectable={false}
@@ -480,7 +482,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
                 });
               }}
             >
-              <Controls position="bottom-left" showInteractive={false} />
+              <Controls position="bottom-left" showInteractive={false} showFitView={true} fitViewOptions={{ padding: 0.05, maxZoom: 1.2, minZoom: 0.005 }} />
               <MiniMap position="bottom-right" style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: '1px solid #e2e8f0', borderRadius: 8 }} />
               <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#bdbdbd" />
             </ReactFlow>
