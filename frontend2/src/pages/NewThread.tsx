@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload, X, Edit2, Check } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { toast } from 'sonner';
 
 const NewThread = () => {
@@ -15,6 +16,7 @@ const NewThread = () => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { refreshUser, user, setUser } = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -58,6 +60,28 @@ const NewThread = () => {
       });
 
       toast.success('Thread created successfully!');
+      // Ensure sidebar reflects the new thread before navigating
+      try {
+        await refreshUser();
+      } catch (_) {
+        // Optimistic fallback: add the new thread locally if refresh fails
+        const now = new Date().toISOString();
+        if (user) {
+          setUser({
+            ...user,
+            threads: {
+              ...(user.threads || {}),
+              [response.thread_id]: {
+                thread_name: threadName,
+                createdAt: now,
+                updatedAt: now,
+                documents: [],
+                chats: [],
+              },
+            },
+          });
+        }
+      }
       navigate(`/dashboard/threads/${response.thread_id}`);
     } catch (error) {
       toast.error('Failed to create thread');

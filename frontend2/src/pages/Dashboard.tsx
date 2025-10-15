@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useMatch } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Brain, LogOut, User, Moon, Sun } from 'lucide-react';
 import { ThreadSidebar } from '@/components/ThreadSidebar';
@@ -18,6 +18,8 @@ const Dashboard = () => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const match = useMatch('/dashboard/threads/:threadId');
+  const activeThreadId = match?.params.threadId;
 
   useEffect(() => {
     if (isLoading) return;
@@ -82,6 +84,7 @@ const Dashboard = () => {
       <div className="flex-1 flex overflow-hidden">
         <ThreadSidebar 
           threads={user.threads || {}} 
+          activeThreadId={activeThreadId}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />

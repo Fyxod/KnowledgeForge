@@ -112,10 +112,23 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
           <ScrollArea className="flex-1">
             <div className="p-2 space-y-2">
               {sortedThreads.map(([id, thread]) => (
-                <div key={id} className={`group relative rounded-lg ${activeThreadId === id ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''}`}>
+                <div
+                  key={id}
+                  className={`group relative rounded-lg overflow-hidden ${
+                    activeThreadId === id ? 'bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-primary/20' : ''
+                  }`}
+                  aria-current={activeThreadId === id ? 'page' : undefined}
+                >
+                  {/* Selected indicator bar */}
+                  <div
+                    className={`absolute left-0 top-0 h-full w-1 rounded-r ${
+                      activeThreadId === id ? 'bg-primary' : 'bg-transparent'
+                    }`}
+                    aria-hidden
+                  />
                   <button
                     onClick={() => navigate(`/dashboard/threads/${id}`)}
-                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                    className={`w-full text-left p-3 pl-4 rounded-lg transition-colors ${
                       activeThreadId === id 
                         ? 'bg-transparent' 
                         : 'hover:bg-sidebar-accent/50'
