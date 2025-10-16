@@ -417,7 +417,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
           }
           // schedule next run in 5 seconds
           if (pollingActiveRef.current) {
-            pollingTimeoutRef.current = setTimeout(pollOnce, 5000);
+            pollingTimeoutRef.current = setTimeout(pollOnce, 10000);
           }
         };
         // kick off loop

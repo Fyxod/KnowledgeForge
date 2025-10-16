@@ -29,6 +29,18 @@ export interface Chat {
   type: 'user' | 'agent';
   content: string;
   timestamp: string;
+  sources?: {
+    documents_used: Array<{
+      title: string;
+      document_id: string;
+      page_no: number;
+    }>;
+    web_used: Array<{
+      title: string;
+      url: string;
+      favicon: string | null;
+    }>;
+  };
 }
 
 export interface LoginResponse {

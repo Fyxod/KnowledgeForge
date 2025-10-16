@@ -170,18 +170,23 @@ const ThreadView = () => {
         webEnhanced ? 'External' : 'Internal'
       );
 
+      // Support both legacy shape and new `sources` wrapper; default to empty arrays
+      const docsUsed = response.sources?.documents_used ?? response.docs_used ?? [];
+      const webUsed = response.sources?.web_used ?? response.web_used ?? [];
+      
       setChats(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = {
           ...updated[updated.length - 1],
           content: response.answer,
+          sources: {
+            documents_used: docsUsed,
+            web_used: webUsed,
+          },
         };
         return updated;
       });
 
-      // Support both legacy shape and new `sources` wrapper; default to empty arrays
-      const docsUsed = response.sources?.documents_used ?? response.docs_used ?? [];
-      const webUsed = response.sources?.web_used ?? response.web_used ?? [];
       setLastSources({
         docsUsed,
         webUsed,
@@ -269,31 +274,27 @@ const ThreadView = () => {
       {/* Chat Area */}
       <ScrollArea ref={scrollRef} className="flex-1 p-4">
         <div className="max-w-4xl mx-auto space-y-4">
-          {(() => {
-            const lastCompletedAgentIndex = (() => {
-              for (let i = chats.length - 1; i >= 0; i--) {
-                const msg = chats[i];
-                if (msg.type === 'agent' && msg.content && msg.content.trim().length > 0) {
-                  return i;
-                }
-              }
-              return -1;
-            })();
+          {chats.map((chat, index) => {
+            // Check if this agent message has sources and at least one source array is non-empty
+            const shouldShowSources =
+              chat.type === 'agent' &&
+              chat.sources &&
+              (chat.sources.documents_used.length > 0 || chat.sources.web_used.length > 0);
 
-            return chats.map((chat, index) => (
+            return (
               <div key={index}>
                 <ChatMessage chat={chat} />
-                {chat.type === 'agent' && index === lastCompletedAgentIndex && lastSources && (
+                {shouldShowSources && (
                   <div className="ml-11">
                     <SourcesDisplay
-                      docsUsed={lastSources.docsUsed}
-                      webUsed={lastSources.webUsed}
+                      docsUsed={chat.sources!.documents_used}
+                      webUsed={chat.sources!.web_used}
                     />
                   </div>
                 )}
               </div>
-            ));
-          })()}
+            );
+          })}
           {loading && chats[chats.length - 1]?.type === 'agent' && chats[chats.length - 1]?.content === '' && (
             <div className="flex gap-3 p-4">
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">

@@ -283,21 +283,6 @@ async def query(request: Request, body: QueryRequest):
 
     print(f"Total Agent response time: {end_time - start_time:.2f} seconds")
 
-    # Update the thread with the new messages
-    now = datetime.now(timezone.utc)
-    new_messages = [
-        {"type": "user", "content": question, "timestamp": now},
-        {"type": "agent", "content": answer, "timestamp": now},
-    ]
-
-    db.users.update_one(
-        {"userId": user_id},
-        {
-            "$push": {f"threads.{thread_id}.chats": {"$each": new_messages}},
-            "$set": {f"threads.{thread_id}.updatedAt": now},
-        },
-    )
-
     documents_used = []
     if chunks_used:
         print(f"Processing {len(chunks_used)} citations...")
@@ -313,20 +298,17 @@ async def query(request: Request, body: QueryRequest):
                     documents_used.append(doc_j)
                     break
 
+    modified_used = []
+    for doc in documents_used:
+        modified_used.append(
+            {
+                "title": doc.get("metadata", {}).get("title"),
+                "document_id": doc.get("metadata", {}).get("document_id"),
+                "page_no": doc.get("metadata", {}).get("page_no"),
+            }
+        )
     print(f"Found {len(documents_used)} citation matches")
 
-    # Update the agent message with citations
-    if documents_used:
-        user = db.users.find_one({"userId": user_id})
-        if user and thread_id in user.get("threads", {}):
-            chats = user["threads"][thread_id]["chats"]
-
-            if chats and chats[-1]["type"] == "agent":
-                chats[-1]["documents_used"] = documents_used
-
-                db.users.update_one(
-                    {"userId": user_id}, {"$set": {f"threads.{thread_id}.chats": chats}}
-                )
     with open("debug_agent_response.json", "w", encoding="utf-8") as f:
         json.dump(
             {
@@ -346,15 +328,26 @@ async def query(request: Request, body: QueryRequest):
             indent=4,
         )
 
-    modified_used = []
-    for doc in documents_used:
-        modified_used.append(
-            {
-                "title": doc.get("metadata", {}).get("title"),
-                "document_id": doc.get("metadata", {}).get("document_id"),
-                "page_no": doc.get("metadata", {}).get("page_no"),
-            }
-        )
+    # Update the thread with the new messages
+    now = datetime.now(timezone.utc)
+    new_messages = [
+        {"type": "user", "content": question, "timestamp": now},
+        {
+            "type": "agent",
+            "content": answer,
+            "timestamp": now,
+            "sources": {"documents_used": modified_used, "web_used": all_favicons},
+        },
+    ]
+
+    db.users.update_one(
+        {"userId": user_id},
+        {
+            "$push": {f"threads.{thread_id}.chats": {"$each": new_messages}},
+            "$set": {f"threads.{thread_id}.updatedAt": now},
+        },
+    )
+
     response = {
         "thread_id": thread_id,
         "user_id": user_id,
@@ -367,4 +360,3 @@ async def query(request: Request, body: QueryRequest):
     }
 
     return response
-
