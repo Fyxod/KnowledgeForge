@@ -545,6 +545,8 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
               <Controls position="bottom-left" showInteractive={false} showFitView={true} fitViewOptions={{ padding: 0.05, maxZoom: 1.2, minZoom: 0.005 }} />
               <MiniMap 
                 position="bottom-right" 
+                pannable
+                zoomable
                 className="!bg-background/90 dark:!bg-background/80 !border !border-border dark:!border-gray-700 !rounded-lg" 
                 nodeColor={(node) => {
                   const level = node.data.level;
