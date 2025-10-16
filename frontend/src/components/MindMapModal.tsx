@@ -8,6 +8,7 @@ import 'reactflow/dist/style.css';
 import { api, getAuthToken, API_URL, GlobalMindMap, MindMapNode, MindMapResponse } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 
 type Props = {
   open: boolean;
@@ -16,13 +17,38 @@ type Props = {
 };
 
 // Custom expandable node styled like the reference
-const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: string; level: number; isExpanded: boolean; onToggle?: () => void }>> = ({ data }) => {
-  const { title, description, level, isExpanded, onToggle } = data;
+const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: string; level: number; isExpanded: boolean; onToggle?: () => void; isDark?: boolean }>> = ({ data }) => {
+  const { title, description, level, isExpanded, onToggle, isDark = false } = data;
   const MAX_DESC_HEIGHT = 220; // px, keep in sync with estimator below
+  
+  const getNodeColors = () => {
+    if (isDark) {
+      // Dark mode colors - richer, more saturated colors with better contrast
+      return {
+        background: level === 0 ? '#2563eb' : level === 1 ? '#4f46e5' : level === 2 ? '#7c3aed' : '#374151',
+        border: level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : level === 2 ? '#6d28d9' : '#4b5563',
+        textColor: 'white',
+        descColor: level <= 2 ? 'text-white/90' : 'text-gray-200',
+        iconColor: level <= 2 ? 'text-white/80' : 'text-gray-300',
+      };
+    } else {
+      // Light mode colors
+      return {
+        background: level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb',
+        border: level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : level === 2 ? '#7c3aed' : '#9ca3af',
+        textColor: level <= 2 ? 'white' : 'black',
+        descColor: level <= 2 ? 'text-white/90' : 'text-gray-600',
+        iconColor: level <= 2 ? 'text-white/80' : 'text-gray-500',
+      };
+    }
+  };
+  
+  const colors = getNodeColors();
+  
   return (
     <div
       className={`p-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-105 relative ${
-        isExpanded ? 'ring-2 ring-violet-300 ring-opacity-60' : ''
+        isExpanded ? 'ring-2 ring-violet-400 dark:ring-violet-500 ring-opacity-60' : ''
       } ${isExpanded && description ? 'block' : 'flex items-center'}`}
       onClick={(e) => {
         e.stopPropagation();
@@ -31,14 +57,15 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
       style={{
         minWidth: isExpanded ? '320px' : '220px',
         maxWidth: isExpanded ? '420px' : '280px',
-  minHeight: '64px',
-        background:
-          level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb',
-        color: level <= 2 ? 'white' : 'black',
-        border: `2px solid ${level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : level === 2 ? '#7c3aed' : '#9ca3af'}`,
+        minHeight: '64px',
+        background: colors.background,
+        color: colors.textColor,
+        border: `2px solid ${colors.border}`,
         borderRadius: '12px',
         fontSize: '16px',
-        boxShadow: isExpanded ? '0 8px 16px rgba(0,0,0,0.15)' : '0 4px 8px rgba(0,0,0,0.1)',
+        boxShadow: isExpanded 
+          ? (isDark ? '0 8px 16px rgba(0,0,0,0.4)' : '0 8px 16px rgba(0,0,0,0.15)')
+          : (isDark ? '0 4px 8px rgba(0,0,0,0.3)' : '0 4px 8px rgba(0,0,0,0.1)'),
         overflow: 'hidden',
         wordWrap: 'break-word',
       }}
@@ -51,7 +78,7 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
       {description && (
         <div className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center">
           <svg
-            className={`w-4 h-4 transition-transform duration-200 ${level <= 2 ? 'text-white/80' : 'text-gray-500'} ${
+            className={`w-4 h-4 transition-transform duration-200 ${colors.iconColor} ${
               isExpanded ? 'rotate-180' : ''
             }`}
             fill="none"
@@ -63,15 +90,13 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
         </div>
       )}
 
-      <div className={`w-full text-center font-semibold text-base leading-tight break-words ${
-        level <= 2 ? 'text-white' : 'text-gray-800'
-      }`}>
+      <div className="w-full text-center font-semibold text-base leading-tight break-words">
         {title}
       </div>
 
       {isExpanded && description && (
         <div
-          className={`text-sm leading-relaxed mt-3 break-words text-justify ${level <= 2 ? 'text-white/90' : 'text-gray-600'}`}
+          className={`text-sm leading-relaxed mt-3 break-words text-justify ${colors.descColor}`}
           style={{ maxHeight: MAX_DESC_HEIGHT, overflowY: 'auto' }}
         >
           {description}
@@ -85,6 +110,7 @@ const nodeTypes = { mindMapNode: CustomMindMapNode } as const;
 
 export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) => {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const [initialFetch, setInitialFetch] = useState<MindMapResponse | null>(null);
   const [mapData, setMapData] = useState<GlobalMindMap | undefined>(undefined);
   const [status, setStatus] = useState<boolean | undefined>(undefined);
@@ -124,6 +150,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
   const convertMindMapToFlow = useCallback((mindMap: GlobalMindMap) => {
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
+    const isDark = theme === 'dark';
 
     // Estimate height based on expansion and description length to avoid overlap
     const estimateSelfHeight = (n: MindMapNode): number => {
@@ -190,6 +217,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
           description: n.description || '',
           level,
           isExpanded,
+          isDark,
           onToggle: () => {
             setExpandedNodes((prev) => {
               const ns = new Set(prev);
@@ -203,7 +231,9 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       });
 
       if (parentId) {
-        const stroke = level === 1 ? '#3b82f6' : level === 2 ? '#6366f1' : level === 3 ? '#8b5cf6' : '#8b5cf6';
+        const stroke = isDark 
+          ? (level === 1 ? '#60a5fa' : level === 2 ? '#818cf8' : level === 3 ? '#a78bfa' : '#a78bfa')
+          : (level === 1 ? '#3b82f6' : level === 2 ? '#6366f1' : level === 3 ? '#8b5cf6' : '#8b5cf6');
         const width = level === 1 ? 3 : level === 2 ? 2.5 : 2;
         newEdges.push({
           id: `e-${parentId}-${id}`,
@@ -212,7 +242,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
           type: 'bezier',
           animated: level === 1,
           style: { stroke, strokeWidth: width },
-          markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
+          markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15, color: stroke },
         });
       }
 
@@ -305,7 +335,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
 
     setNodes(newNodes);
     setEdges(newEdges);
-  }, [expandedNodes, setNodes, setEdges]);
+  }, [expandedNodes, setNodes, setEdges, theme]);
 
   // Rebuild graph when fresh data arrives
   useEffect(() => {
@@ -482,7 +512,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       // show map + messages below from websocket
       return (
         <div className="h-full grid grid-rows-[1fr_auto] gap-3">
-          <div className="min-h-0 border rounded-md overflow-hidden">
+          <div className="min-h-0 border rounded-md overflow-hidden bg-white dark:bg-gray-900">
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -513,8 +543,24 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
               }}
             >
               <Controls position="bottom-left" showInteractive={false} showFitView={true} fitViewOptions={{ padding: 0.05, maxZoom: 1.2, minZoom: 0.005 }} />
-              <MiniMap position="bottom-right" style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: '1px solid #e2e8f0', borderRadius: 8 }} />
-              <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#bdbdbd" />
+              <MiniMap 
+                position="bottom-right" 
+                className="!bg-background/90 dark:!bg-background/80 !border !border-border dark:!border-gray-700 !rounded-lg" 
+                nodeColor={(node) => {
+                  const level = node.data.level;
+                  if (theme === 'dark') {
+                    return level === 0 ? '#2563eb' : level === 1 ? '#4f46e5' : level === 2 ? '#7c3aed' : '#374151';
+                  }
+                  return level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb';
+                }}
+              />
+              <Background 
+                variant={BackgroundVariant.Dots} 
+                gap={18} 
+                size={1} 
+                className="dark:!bg-gray-900"
+                color={theme === 'dark' ? '#4b5563' : '#bdbdbd'} 
+              />
             </ReactFlow>
           </div>
           {showMessage && message && (
