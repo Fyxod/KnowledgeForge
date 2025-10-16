@@ -23,19 +23,19 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
   
   const getNodeColors = () => {
     if (isDark) {
-      // Dark mode colors - richer, more saturated colors with better contrast
+      // Dark mode colors - teal/cyan gradient with better contrast
       return {
-        background: level === 0 ? '#2563eb' : level === 1 ? '#4f46e5' : level === 2 ? '#7c3aed' : '#374151',
-        border: level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : level === 2 ? '#6d28d9' : '#4b5563',
+        background: level === 0 ? '#0891b2' : level === 1 ? '#06b6d4' : level === 2 ? '#14b8a6' : '#374151',
+        border: level === 0 ? '#0e7490' : level === 1 ? '#0891b2' : level === 2 ? '#0d9488' : '#4b5563',
         textColor: 'white',
         descColor: level <= 2 ? 'text-white/90' : 'text-gray-200',
         iconColor: level <= 2 ? 'text-white/80' : 'text-gray-300',
       };
     } else {
-      // Light mode colors - improved contrast and vibrant colors
+      // Light mode colors - teal/cyan gradient with vibrant colors
       return {
-        background: level === 0 ? '#2563eb' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#f3f4f6',
-        border: level === 0 ? '#1d4ed8' : level === 1 ? '#4f46e5' : level === 2 ? '#7c3aed' : '#d1d5db',
+        background: level === 0 ? '#0891b2' : level === 1 ? '#06b6d4' : level === 2 ? '#14b8a6' : '#f3f4f6',
+        border: level === 0 ? '#0e7490' : level === 1 ? '#0891b2' : level === 2 ? '#0d9488' : '#d1d5db',
         textColor: level <= 2 ? 'white' : '#111827',
         descColor: level <= 2 ? 'text-white/90' : 'text-gray-700',
         iconColor: level <= 2 ? 'text-white/80' : 'text-gray-600',
@@ -232,8 +232,8 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
 
       if (parentId) {
         const stroke = isDark 
-          ? (level === 1 ? '#60a5fa' : level === 2 ? '#818cf8' : level === 3 ? '#a78bfa' : '#a78bfa')
-          : (level === 1 ? '#2563eb' : level === 2 ? '#6366f1' : level === 3 ? '#8b5cf6' : '#9ca3af');
+          ? (level === 1 ? '#22d3ee' : level === 2 ? '#2dd4bf' : level === 3 ? '#5eead4' : '#5eead4')
+          : (level === 1 ? '#0891b2' : level === 2 ? '#06b6d4' : level === 3 ? '#14b8a6' : '#9ca3af');
         const width = level === 1 ? 3 : level === 2 ? 2.5 : 2;
         newEdges.push({
           id: `e-${parentId}-${id}`,
@@ -551,9 +551,9 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
                 nodeColor={(node) => {
                   const level = node.data.level;
                   if (theme === 'dark') {
-                    return level === 0 ? '#2563eb' : level === 1 ? '#4f46e5' : level === 2 ? '#7c3aed' : '#374151';
+                    return level === 0 ? '#0891b2' : level === 1 ? '#06b6d4' : level === 2 ? '#14b8a6' : '#374151';
                   }
-                  return level === 0 ? '#2563eb' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#d1d5db';
+                  return level === 0 ? '#0891b2' : level === 1 ? '#06b6d4' : level === 2 ? '#14b8a6' : '#d1d5db';
                 }}
               />
               <Background 
