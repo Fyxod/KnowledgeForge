@@ -353,26 +353,47 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
   }, [expandedNodes, setNodes]);
 
   const closeEverything = useCallback(() => {
-    // Stop polling loop
+    // Stop polling loop FIRST
+    pollingActiveRef.current = false;
     if (pollingTimeoutRef.current) {
       clearTimeout(pollingTimeoutRef.current);
+      pollingTimeoutRef.current = null;
     }
-    pollingTimeoutRef.current = null;
-    pollingActiveRef.current = false;
 
     // Disconnect socket
     if (socketRef.current) {
-      try { socketRef.current.disconnect(); } catch (e) {
+      try { 
+        socketRef.current.off(); // Remove all listeners
+        socketRef.current.disconnect(); 
+      } catch (e) {
         if (import.meta.env.DEV) console.debug('socket disconnect error', e);
       }
+      socketRef.current = null;
     }
-    socketRef.current = null;
+    
+    if (import.meta.env.DEV) console.debug('mind map cleanup: polling and socket stopped');
   }, []);
 
   // Kick off initial fetch when modal opens
   useEffect(() => {
     if (!open) {
-      closeEverything();
+      // Immediately stop polling when modal closes
+      pollingActiveRef.current = false;
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = null;
+      }
+      // Disconnect socket
+      if (socketRef.current) {
+        try { 
+          socketRef.current.off(); // Remove all listeners
+          socketRef.current.disconnect(); 
+        } catch (e) {
+          if (import.meta.env.DEV) console.debug('socket disconnect error', e);
+        }
+        socketRef.current = null;
+      }
+      if (import.meta.env.DEV) console.debug('mind map modal closed: stopped all requests');
       return;
     }
     let cancelled = false;
@@ -444,9 +465,18 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
         // start polling every 10 seconds to get status and data (not message)
         pollingActiveRef.current = true;
         const pollOnce = async () => {
-          if (!pollingActiveRef.current) return;
+          // Double-check that polling is still active before making request
+          if (!pollingActiveRef.current) {
+            if (import.meta.env.DEV) console.debug('polling stopped - skipping request');
+            return;
+          }
           try {
             const r = await api.getMindMap(threadId);
+            // Check again after async operation completes
+            if (!pollingActiveRef.current) {
+              if (import.meta.env.DEV) console.debug('polling stopped during request - ignoring response');
+              return;
+            }
             const payload = JSON.stringify(r);
             if (payload !== lastPayloadRef.current) {
               lastPayloadRef.current = payload;
@@ -457,14 +487,16 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
             if (!r.mind_map) {
               // stop polling if server reports no mind map flow
               pollingActiveRef.current = false;
-              if (pollingTimeoutRef.current) clearTimeout(pollingTimeoutRef.current);
-              pollingTimeoutRef.current = null;
+              if (pollingTimeoutRef.current) {
+                clearTimeout(pollingTimeoutRef.current);
+                pollingTimeoutRef.current = null;
+              }
               return;
             }
           } catch (e) {
             if (import.meta.env.DEV) console.debug('mind map poll error', e);
           }
-          // schedule next run in 10 seconds
+          // schedule next run in 10 seconds only if still active
           if (pollingActiveRef.current) {
             pollingTimeoutRef.current = setTimeout(pollOnce, 10000);
           }
@@ -473,15 +505,25 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
         pollOnce();
       }
     })();
-    return () => { cancelled = true; };
-  }, [open, threadId, closeEverything]);
-
-  // Cleanup when closing modal
-  useEffect(() => {
-    if (!open) {
-      closeEverything();
-    }
-  }, [open, closeEverything]);
+    return () => { 
+      cancelled = true;
+      // Cleanup on unmount or when dependencies change
+      pollingActiveRef.current = false;
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+        pollingTimeoutRef.current = null;
+      }
+      if (socketRef.current) {
+        try {
+          socketRef.current.off();
+          socketRef.current.disconnect();
+        } catch (e) {
+          if (import.meta.env.DEV) console.debug('socket cleanup error', e);
+        }
+        socketRef.current = null;
+      }
+    };
+  }, [open, threadId]); // Removed closeEverything from dependencies to prevent re-runs
 
   // Keep showing messages until WebSocket sends completed: true
   // No auto-hide logic needed - messages will be hidden only when completed is received
