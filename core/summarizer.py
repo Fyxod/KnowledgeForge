@@ -303,7 +303,7 @@ async def updateThread(user_id: str, thread_id: str, updated_title: str):
         },
     )
 
-    event_name = f"{user_id}/{thread_id}/thread_update"
-    event_data = {"threadId": thread_id, "newTitle": updated_title}
+    event_name = f"{user_id}/title_update"
+    event_data = {"thread_id": thread_id, "new_title": updated_title}
 
     await sio.emit(event_name, event_data)

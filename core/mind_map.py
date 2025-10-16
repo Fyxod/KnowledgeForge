@@ -229,22 +229,26 @@ async def add_node_descriptions_global(
     doc_retriever = get_user_retriever(parsed_data.user_id, parsed_data.thread_id, k=8)
 
     async def update_mind_map(data):
-        for node in data["mind_map"]:
-            if not node["description"]:
-                node["description"] = ""
+        try:
+            for node in data["mind_map"]:
+                if "description" not in node or not node["description"]:
+                    node["description"] = ""
 
-        mind_map: GlobalMindMap = build_mindmap_global(
-            data["mind_map"], parsed_data.user_id, parsed_data.thread_id
-        )
+            mind_map_obj: GlobalMindMap = build_mindmap_global(
+                data["mind_map"], parsed_data.user_id, parsed_data.thread_id
+            )
 
-        data_dict = mind_map.model_dump()
+            data_dict = mind_map_obj.model_dump()
 
-        async with aiofiles.open(
-            f"{proper_mind_map_dir}/{parsed_data.user_id}_{parsed_data.thread_id}_global_mind_map.json",
-            "w",
-            encoding="utf-8",
-        ) as f:
-            await f.write(json.dumps(data_dict, indent=2, ensure_ascii=False))
+            async with aiofiles.open(
+                f"{proper_mind_map_dir}/{parsed_data.user_id}_{parsed_data.thread_id}_global_mind_map.json",
+                "w",
+                encoding="utf-8",
+            ) as f:
+                await f.write(json.dumps(data_dict, indent=2, ensure_ascii=False))
+        except Exception as e:
+            print(f"Error in update_mind_map: {e}")
+            raise
 
     async def process_batch(batch_nodes, batch_idx):
         if update_message_callback:

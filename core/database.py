@@ -68,9 +68,7 @@ user_schema = {
                                                 "items": {
                                                     "bsonType": "object",
                                                     "required": [
-                                                        "title",
                                                         "document_id",
-                                                        "page_no",
                                                     ],
                                                     "properties": {
                                                         "title": {"bsonType": "string"},
@@ -87,16 +85,24 @@ user_schema = {
                                                 "bsonType": "array",
                                                 "items": {
                                                     "bsonType": "object",
-                                                    "required": [
-                                                        "title",
-                                                        "url",
-                                                        "favicon",
-                                                    ],
                                                     "properties": {
-                                                        "title": {"bsonType": "string"},
-                                                        "url": {"bsonType": "string"},
+                                                        "title": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
+                                                        "url": {
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
+                                                        },
                                                         "favicon": {
-                                                            "bsonType": "string"
+                                                            "bsonType": [
+                                                                "string",
+                                                                "null",
+                                                            ]
                                                         },
                                                     },
                                                 },

@@ -5,7 +5,8 @@ import { Brain, LogOut, User, Moon, Sun } from 'lucide-react';
 import { ThreadSidebar } from '@/components/ThreadSidebar';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
-import { removeAuthToken, removeCurrentUser } from '@/lib/api';
+import { removeAuthToken, removeCurrentUser, API_URL, getAuthToken } from '@/lib/api';
+import { io, Socket } from 'socket.io-client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import {
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 
 const Dashboard = () => {
-  const { user, logout, isLoading } = useAuth();
+  const { user, logout, isLoading, setUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -32,10 +33,13 @@ const Dashboard = () => {
     return [22, 78] as number[]; // percentage widths
   }, []);
   const [layout, setLayout] = useState<number[]>(defaultLayout);
-  const [groupKey, setGroupKey] = useState(0);
   const prevSidebarSizeRef = useRef<number>(layout[0]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [collapsedPercent, setCollapsedPercent] = useState<number>(6);
+  const panelRef = useRef<any>(null);
+  const titleSocketRef = useRef<Socket | null>(null);
+  const latestUserRef = useRef(user);
+  useEffect(() => { latestUserRef.current = user; }, [user]);
 
   // Keep collapsed width ~64px regardless of screen size
   useEffect(() => {
@@ -52,12 +56,94 @@ const Dashboard = () => {
   const match = useMatch('/dashboard/threads/:threadId');
   const activeThreadId = match?.params.threadId;
 
+  // Handle sidebar collapse/expand by resizing the panel
+  useEffect(() => {
+    if (panelRef.current && panelRef.current.resize) {
+      if (sidebarCollapsed) {
+        // Collapsing: save current size and resize to collapsed width
+        const currentSize = layout[0];
+        if (currentSize > collapsedPercent) {
+          prevSidebarSizeRef.current = currentSize;
+        }
+        panelRef.current.resize(collapsedPercent);
+      } else {
+        // Expanding: restore previous size
+        const restoredSize = prevSidebarSizeRef.current || defaultLayout[0];
+        const targetSize = Math.min(40, Math.max(12, restoredSize));
+        panelRef.current.resize(targetSize);
+      }
+    }
+  }, [sidebarCollapsed, collapsedPercent]);
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
       navigate('/login');
     }
   }, [user, navigate, isLoading]);
+
+  // Listen for server-driven title updates and update sidebar threads
+  useEffect(() => {
+    // Clean up any previous socket when user changes or component unmounts
+    const cleanup = () => {
+      if (titleSocketRef.current) {
+        try { titleSocketRef.current.disconnect(); } catch {}
+      }
+      titleSocketRef.current = null;
+    };
+
+    if (!user) {
+      cleanup();
+      return;
+    }
+
+    const token = getAuthToken();
+    try {
+      const socket = io(API_URL, {
+        path: '/socket.io',
+        transports: ['websocket'],
+        auth: token ? { token } : undefined,
+      });
+      titleSocketRef.current = socket;
+
+      const eventName = `${user.userId}/title_update`;
+      const onTitleUpdate = (payload: { thread_id?: string; new_title?: string } | undefined) => {
+        if (!payload || !payload.thread_id || typeof payload.new_title !== 'string') return;
+        const { thread_id, new_title } = payload;
+        // Update local user state so ThreadSidebar re-renders with the new title
+        const prev = latestUserRef.current;
+        if (!prev) return;
+        const existing = prev.threads?.[thread_id];
+        if (!existing) return; // Unknown thread, ignore
+        const next = {
+          ...prev,
+          threads: {
+            ...prev.threads,
+            [thread_id]: { ...existing, thread_name: new_title },
+          },
+        };
+        setUser(next);
+      };
+
+      socket.on('connect_error', (err) => {
+        if (import.meta.env.DEV) console.debug('title_update socket connect_error', err);
+      });
+      socket.on(eventName, onTitleUpdate);
+
+      return () => {
+        try {
+          socket.off(eventName, onTitleUpdate);
+          socket.disconnect();
+        } catch {}
+        if (titleSocketRef.current === socket) {
+          titleSocketRef.current = null;
+        }
+      };
+    } catch {
+      // If socket init fails, ensure ref is cleared
+      titleSocketRef.current = null;
+    }
+  }, [user?.userId]);
 
   const handleLogout = () => {
     removeAuthToken();
@@ -114,7 +200,6 @@ const Dashboard = () => {
       {/* Main Content */}
       <div ref={containerRef} className="flex-1 flex overflow-hidden min-h-0 min-w-0">
         <ResizablePanelGroup
-          key={groupKey}
           direction="horizontal"
           className="w-full min-h-0 min-w-0"
           onLayout={(sizes) => {
@@ -125,9 +210,11 @@ const Dashboard = () => {
           }}
         >
           <ResizablePanel
+            ref={panelRef}
             defaultSize={sidebarCollapsed ? collapsedPercent : layout[0]}
             minSize={sidebarCollapsed ? collapsedPercent : 12}
             maxSize={sidebarCollapsed ? collapsedPercent : 40}
+            collapsible={false}
           >
             <div className="h-full min-h-0 min-w-0">
               <ThreadSidebar
@@ -135,27 +222,7 @@ const Dashboard = () => {
                 activeThreadId={activeThreadId}
                 collapsed={sidebarCollapsed}
                 onToggleCollapse={() => {
-                  setSidebarCollapsed((prev) => {
-                    const next = !prev;
-                    if (next) {
-                      // collapsing: remember current size and snap to fixed collapsed width
-                      const currentSize = layout[0];
-                      if (currentSize) prevSidebarSizeRef.current = currentSize;
-                      const nextLayout: number[] = [collapsedPercent, 100 - collapsedPercent];
-                      setLayout(nextLayout);
-                      localStorage.setItem(storageKey, JSON.stringify(nextLayout));
-                      setGroupKey((k) => k + 1);
-                    } else {
-                      // expanding: restore previous size or default
-                      const restoredRaw = prevSidebarSizeRef.current || defaultLayout[0];
-                      const restored = Math.min(40, Math.max(12, restoredRaw));
-                      const nextLayout: number[] = [restored, 100 - restored];
-                      setLayout(nextLayout);
-                      localStorage.setItem(storageKey, JSON.stringify(nextLayout));
-                      setGroupKey((k) => k + 1);
-                    }
-                    return next;
-                  });
+                  setSidebarCollapsed((prev) => !prev);
                 }}
               />
             </div>
