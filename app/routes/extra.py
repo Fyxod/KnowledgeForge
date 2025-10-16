@@ -11,7 +11,6 @@ router = APIRouter(prefix="", tags=["extra"])
 
 
 class WordCloudRequest(BaseModel):
-    thread_id: str
     document_ids: list[str]
     max_words: int | None = None
 
@@ -21,14 +20,15 @@ class MindMapRequest(BaseModel):
     document_id: str
 
 
-@router.post("/wordcloud")
-async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
+@router.post("/wordcloud/{thread_id}")
+async def get_word_cloud(
+    request: Request, thread_id: str, body: WordCloudRequest = Body(...)
+):
     payload = request.state.user
 
     if not payload:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
-    thread_id = body.thread_id
     document_ids = body.document_ids
     max_words = body.max_words or 1000
 

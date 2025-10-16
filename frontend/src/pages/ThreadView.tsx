@@ -20,6 +20,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import MindMapModal from '@/components/MindMapModal';
+import WordCloudModal from '@/components/WordCloudModal';
 
 const ThreadView = () => {
   const { threadId } = useParams();
@@ -39,6 +40,7 @@ const ThreadView = () => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [progressMap, setProgressMap] = useState<Record<number, number>>({});
   const [mindMapOpen, setMindMapOpen] = useState(false);
+  const [wordCloudOpen, setWordCloudOpen] = useState(false);
 
   useEffect(() => {
     if (threadId && user) {
@@ -265,7 +267,7 @@ const ThreadView = () => {
           <Button variant="outline" size="sm" onClick={() => setMindMapOpen(true)} disabled={!threadId}>
             Mind Map
           </Button>
-          <Button variant="outline" size="sm" disabled>
+          <Button variant="outline" size="sm" onClick={() => setWordCloudOpen(true)} disabled={!threadId}>
             Word Cloud
           </Button>
         </div>
@@ -397,6 +399,15 @@ const ThreadView = () => {
       {/* Mind Map Modal */}
       {threadId && (
         <MindMapModal open={mindMapOpen} onOpenChange={setMindMapOpen} threadId={threadId} />
+      )}
+      {/* Word Cloud Modal */}
+      {threadId && (
+        <WordCloudModal 
+          open={wordCloudOpen} 
+          onOpenChange={setWordCloudOpen} 
+          threadId={threadId}
+          documents={documents}
+        />
       )}
     </div>
   );
