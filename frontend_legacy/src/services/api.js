@@ -248,7 +248,7 @@ export const getGlobalMindMap = async (threadId, socketId = null) => {
     }
     
     console.log('Global MindMap request:', payload);
-    const response = await api.post('/extra/mindmap/global', payload, { headers });
+    const response = await api.get(`/mindmap/${threadId}`, { headers });
     
     return response.data;
   } catch (error) {
