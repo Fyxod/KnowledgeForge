@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, getCurrentUser, setCurrentUser, removeCurrentUser, api, getAuthToken } from './api';
 
 interface AuthContextType {
@@ -61,19 +61,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     removeCurrentUser();
   };
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     const current = getCurrentUser();
     const token = getAuthToken();
     if (!current || !token) return;
     try {
-      setIsLoading(true);
       const fresh = await api.getUser(current.userId);
       setUserState(fresh);
       setCurrentUser(fresh);
-    } finally {
-      setIsLoading(false);
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
     }
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, setUser, logout, isAuthenticated: !!user, isLoading, refreshUser }}>

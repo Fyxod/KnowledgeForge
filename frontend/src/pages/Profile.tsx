@@ -2,9 +2,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth-context';
 import { User, Mail, MessageSquare, FileText } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    // Fetch fresh user data only once when component mounts
+    const fetchData = async () => {
+      setIsRefreshing(true);
+      await refreshUser();
+      setIsRefreshing(false);
+    };
+    fetchData();
+  }, [refreshUser]);
+
+  if (isRefreshing && !user) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Loading profile...</p>
+      </div>
+    );
+  }
 
   if (!user) return null;
 
