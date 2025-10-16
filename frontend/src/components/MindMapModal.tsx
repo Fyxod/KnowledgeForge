@@ -7,6 +7,7 @@ import ReactFlow, { Background, BackgroundVariant, Controls, Node, Edge, Positio
 import 'reactflow/dist/style.css';
 import { api, getAuthToken, API_URL, GlobalMindMap, MindMapNode, MindMapResponse } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
+import { useAuth } from '@/lib/auth-context';
 
 type Props = {
   open: boolean;
@@ -83,6 +84,7 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
 const nodeTypes = { mindMapNode: CustomMindMapNode } as const;
 
 export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) => {
+  const { user } = useAuth();
   const [initialFetch, setInitialFetch] = useState<MindMapResponse | null>(null);
   const [mapData, setMapData] = useState<GlobalMindMap | undefined>(undefined);
   const [status, setStatus] = useState<boolean | undefined>(undefined);
@@ -93,12 +95,12 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
   const pollingActiveRef = useRef<boolean>(false);
   const socketRef = useRef<Socket | null>(null);
   const lastPayloadRef = useRef<string>('');
-  const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   type ProgressPayload = {
     message?: string;
     status?: boolean;
     data?: GlobalMindMap;
+    completed?: boolean;
   };
 
   // React Flow nodes/edges state + expansion state
@@ -328,12 +330,6 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
     pollingTimeoutRef.current = null;
     pollingActiveRef.current = false;
 
-    // Clear message timeout
-    if (messageTimeoutRef.current) {
-      clearTimeout(messageTimeoutRef.current);
-    }
-    messageTimeoutRef.current = null;
-
     // Disconnect socket
     if (socketRef.current) {
       try { socketRef.current.disconnect(); } catch (e) {
@@ -371,10 +367,32 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
           socketRef.current = socket;
 
           const onProgress = (data: ProgressPayload) => {
-            // data expected to be same shape as previous ws payload
-            if (typeof data.message === 'string') setMessage(data.message);
-            if (typeof data.status === 'boolean') setStatus(data.status);
-            if (data.status && data.data) setMapData(data.data);
+            // Only update message from WebSocket
+            if (typeof data.message === 'string') {
+              setMessage(data.message);
+              setShowMessage(true); // Show message when received
+            }
+            
+            // Check if completed, then stop everything
+            if (data.completed === true) {
+              if (import.meta.env.DEV) console.debug('mind map completed, stopping WebSocket and polling');
+              
+              // Stop polling
+              pollingActiveRef.current = false;
+              if (pollingTimeoutRef.current) {
+                clearTimeout(pollingTimeoutRef.current);
+                pollingTimeoutRef.current = null;
+              }
+              
+              // Disconnect WebSocket
+              if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current = null;
+              }
+              
+              // Hide message after completion
+              setShowMessage(false);
+            }
           };
 
           socket.on('connect', () => {
@@ -383,8 +401,9 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
           socket.on('connect_error', (err) => {
             if (import.meta.env.DEV) console.debug('mind map socket connect_error', err);
           });
-          // Primary event name
-          socket.on('mind_map/progress', onProgress);
+          // Primary event name with user_id and thread_id
+          const progressEvent = user?.userId ? `${user.userId}/${threadId}/mind_map/progress` : 'mind_map/progress';
+          socket.on(progressEvent, onProgress);
           // Fallback aliases if backend uses different naming
           socket.on('mind_map_progress', onProgress);
           socket.on('progress', onProgress);
@@ -392,7 +411,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
           if (import.meta.env.DEV) console.debug('socket init error', e);
         }
 
-        // start polling every 5 seconds while mind_map is true, without overlapping
+        // start polling every 10 seconds to get status and data (not message)
         pollingActiveRef.current = true;
         const pollOnce = async () => {
           if (!pollingActiveRef.current) return;
@@ -401,7 +420,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
             const payload = JSON.stringify(r);
             if (payload !== lastPayloadRef.current) {
               lastPayloadRef.current = payload;
-              setMessage(r.message || '');
+              // Only update status and data from polling, NOT message
               setStatus(r.status);
               if (r.status && r.data) setMapData(r.data);
             }
@@ -415,7 +434,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
           } catch (e) {
             if (import.meta.env.DEV) console.debug('mind map poll error', e);
           }
-          // schedule next run in 5 seconds
+          // schedule next run in 10 seconds
           if (pollingActiveRef.current) {
             pollingTimeoutRef.current = setTimeout(pollOnce, 10000);
           }
@@ -434,33 +453,8 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
     }
   }, [open, closeEverything]);
 
-  // Hide message after 5 seconds when mind_map is true and status is true
-  useEffect(() => {
-    if (initialFetch?.mind_map && status) {
-      // Show message initially
-      setShowMessage(true);
-      
-      // Clear any existing timeout
-      if (messageTimeoutRef.current) {
-        clearTimeout(messageTimeoutRef.current);
-      }
-      
-      // Set timeout to hide message after 5 seconds
-      messageTimeoutRef.current = setTimeout(() => {
-        setShowMessage(false);
-      }, 5000);
-      
-      // Cleanup on unmount or when dependencies change
-      return () => {
-        if (messageTimeoutRef.current) {
-          clearTimeout(messageTimeoutRef.current);
-        }
-      };
-    } else {
-      // Always show message when conditions don't match
-      setShowMessage(true);
-    }
-  }, [initialFetch?.mind_map, status, message]);
+  // Keep showing messages until WebSocket sends completed: true
+  // No auto-hide logic needed - messages will be hidden only when completed is received
 
   const body = useMemo(() => {
     const mm = initialFetch;
@@ -523,7 +517,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
               <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#bdbdbd" />
             </ReactFlow>
           </div>
-          {showMessage && (
+          {showMessage && message && (
             <div className="border rounded-md p-2 bg-muted/30">
               <p className="text-xs whitespace-pre-wrap">{message}</p>
             </div>
@@ -532,12 +526,12 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       );
     }
 
-    // status is false: center message with loading state
+    // status is false: center message with loading state (make text larger)
     return (
       <div className="h-[60vh] flex items-center justify-center">
         <div className="flex flex-col items-center gap-2 text-center">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          <p className="text-sm whitespace-pre-wrap max-w-xl">{message || 'Generating mind map…'}</p>
+          <p className="text-2xl font-semibold whitespace-pre-wrap max-w-2xl">{message || 'Generating mind map…'}</p>
         </div>
       </div>
     );

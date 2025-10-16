@@ -140,7 +140,7 @@ async def get_mind_map(request: Request, thread_id: str):
                 content = await f.read()
             data = json.loads(content)
 
-            return {"mind_map": True, "status": True, "data": data, "message": "Mind map retrieved successfully"}
+            return {"mind_map": True, "status": True, "data": data, "message": ""}
         except Exception as e:
             pass
 
