@@ -2,9 +2,9 @@ import os
 import time
 import json
 import asyncio
+from typing import List
 
 import aiofiles
-from typing import List
 
 from core.constants import (
     GPU_NODE_DESCRIPTION_LLM,
@@ -21,21 +21,32 @@ from core.llm.outputs import (
 from core.models.document import Documents
 from app.socket_handler import sio
 from core.utils.extra_done_check import mark_extra_done
-from core.word_cloud import create_stop_words
 from core.llm.unload_ollama_model import unload_ollama_model
+
+
+# Constants
+DESCRIPTION_PROCESSING_BATCH_SIZE = 4
+PARALLEL_LLM_CALLS = 2
 
 
 async def create_mind_map_global(parsed_data: Documents):
     """
-    Function to invoke the LLM for generating a mind map.
-    Retries the LLM call up to 8 times if an error occurs.
+    Generate a global mind map for the given parsed data.
+
+    Invokes the LLM to create mind map nodes and descriptions.
+    Retries up to 8 times on error. Emits progress updates via socket.
+
+    Args:
+        parsed_data: Documents object containing user data and thread information
     """
     await sio.emit(
         f"{parsed_data.user_id}/progress",
-        {"message": f"Started global mind map generation"},
+        {"message": "Started global mind map generation"},
     )
+
     incomplete_mind_map_dir = f"data/{parsed_data.user_id}/threads/{parsed_data.thread_id}/incomplete_mind_maps"
     os.makedirs(incomplete_mind_map_dir, exist_ok=True)
+
     prompt = build_mind_maps_node_prompt_global(parsed_data)
     total_start = time.time()
     max_retries = 8
@@ -49,7 +60,7 @@ async def create_mind_map_global(parsed_data: Documents):
     stop_broadcast = asyncio.Event()
 
     async def broadcast_message():
-        """Continuously broadcast the current message every 1 second"""
+        """Continuously broadcast the current message every 1 second."""
         while not stop_broadcast.is_set():
             await sio.emit(mind_map_emit_topic, current_message)
             try:
@@ -58,7 +69,7 @@ async def create_mind_map_global(parsed_data: Documents):
                 pass
 
     async def update_message(new_message: dict):
-        """Update the current message and restart broadcasting"""
+        """Update the current message and restart broadcasting."""
         nonlocal current_message, broadcast_task
         current_message = new_message
         if broadcast_task and not broadcast_task.done():
@@ -69,15 +80,17 @@ async def create_mind_map_global(parsed_data: Documents):
 
     # Start initial broadcast
     broadcast_task = asyncio.create_task(broadcast_message())
+
     for attempt in range(max_retries):
         try:
             await update_message(
                 {"message": f"Attempt {attempt + 1} of creating mind map"}
             )
-            start = time.time()
-            print(f"invoking mind map node creation llm (attempt {attempt + 1})")
 
-            await update_message({"message": f"Nodes creation in progress..."})
+            start = time.time()
+            print(f"Invoking mind map node creation LLM (attempt {attempt + 1})")
+
+            await update_message({"message": "Nodes creation in progress..."})
 
             response: MindMapOutput = await invoke_llm(
                 response_schema=MindMapOutput,
@@ -87,16 +100,18 @@ async def create_mind_map_global(parsed_data: Documents):
             )
 
             end = time.time()
+            elapsed_time = end - start
             print(
-                f"Mind map node titles generation completed in {end - start} seconds."
+                f"Mind map node titles generation completed in {elapsed_time:.2f} seconds"
             )
 
             await update_message(
                 {
-                    "message": f"Mind map node titles generation completed in {end - start} seconds."
+                    "message": f"Mind map node titles generation completed in {elapsed_time:.2f} seconds"
                 }
             )
 
+            # Prepare mind map data
             data_dict = response.model_dump()
             json_content = json.dumps(data_dict, indent=2, ensure_ascii=False)
 
@@ -105,15 +120,16 @@ async def create_mind_map_global(parsed_data: Documents):
             )
             os.makedirs(proper_mind_map_dir, exist_ok=True)
 
+            # Initialize empty descriptions
             for node in data_dict["mind_map"]:
                 node["description"] = ""
 
             mind_map_incomplete: GlobalMindMap = build_mindmap_global(
                 data_dict["mind_map"], parsed_data.user_id, parsed_data.thread_id
             )
-
             mind_map_incomplete_dict = mind_map_incomplete.model_dump()
 
+            # Save incomplete mind map files
             async with aiofiles.open(
                 f"{proper_mind_map_dir}/{parsed_data.user_id}_{parsed_data.thread_id}_global_mind_map.json",
                 "w",
@@ -130,32 +146,36 @@ async def create_mind_map_global(parsed_data: Documents):
             ) as f:
                 await f.write(json_content)
 
-            print("Starting to add node descriptions for Global mind map...")
+            # Add node descriptions
+            print("Starting to add node descriptions for global mind map...")
             await sio.emit(
                 f"{parsed_data.user_id}/progress",
-                {"message": f"Global mind map nodes generation complete"},
+                {"message": "Global mind map nodes generation complete"},
             )
             await sio.emit(
                 f"{parsed_data.user_id}/progress",
-                {"message": f"Creating node descriptions for GLOBAL mind map"},
+                {"message": "Creating node descriptions for GLOBAL mind map"},
             )
             await update_message(
-                {"message": f"Node descriptions creation in progress..."}
+                {"message": "Node descriptions creation in progress..."}
             )
+
             await add_node_descriptions_global(response, parsed_data, update_message)
-            # asyncio.create_task(create_stop_words(parsed_data.model_copy()))
+
             await sio.emit(
                 f"{parsed_data.user_id}/progress",
-                {"message": f"Created node descriptions for GLOBAL mind map"},
+                {"message": "Created node descriptions for GLOBAL mind map"},
             )
-            total_end = time.time()
 
+            total_end = time.time()
+            total_elapsed = total_end - total_start
             print(
-                f"Total time taken for mind map generation: {total_end - total_start} seconds"
+                f"Total time taken for mind map generation: {total_elapsed:.2f} seconds"
             )
+
             await update_message(
                 {
-                    "message": f"Total time taken for mind map generation: {total_end - total_start} seconds"
+                    "message": f"Total time taken for mind map generation: {total_elapsed:.2f} seconds"
                 }
             )
             await asyncio.sleep(5)
@@ -167,11 +187,10 @@ async def create_mind_map_global(parsed_data: Documents):
 
             await sio.emit(
                 mind_map_emit_topic,
-                {
-                    "completed": True,
-                },
+                {"completed": True},
             )
             break
+
         except Exception as e:
             print(f"Error during mind map generation (attempt {attempt + 1}): {e}")
             await update_message(
@@ -180,23 +199,20 @@ async def create_mind_map_global(parsed_data: Documents):
                 }
             )
             await asyncio.sleep(5)
+
             if attempt == max_retries - 1:
                 print("Max retries reached. Mind map generation failed.")
                 await update_message(
-                    {"message": f"Max retries reached. Mind map generation failed."}
+                    {"message": "Max retries reached. Mind map generation failed."}
                 )
                 await sio.emit(
                     f"{parsed_data.user_id}/progress",
-                    {"message": f"Failed to create GLOBAL mind map"},
+                    {"message": "Failed to create GLOBAL mind map"},
                 )
                 await sio.emit(
                     f"{parsed_data.user_id}/{parsed_data.thread_id}/global_mind_map",
                     {"document_id": parsed_data.id, "status": False},
                 )
-
-
-DESCRIPTION_PROCESSING_BATCH_SIZE = 4
-PARALLEL_LLM_CALLS = 2
 
 
 async def add_node_descriptions_global(
@@ -205,8 +221,17 @@ async def add_node_descriptions_global(
     update_message_callback=None,
 ):
     """
-    Processes node descriptions in batches, with each batch of 4 nodes, and up to `PARALLEL_LLM_CALLS` batches processed in parallel.
+    Add descriptions to mind map nodes in batches.
+
+    Processes node descriptions in batches of DESCRIPTION_PROCESSING_BATCH_SIZE nodes,
+    with up to PARALLEL_LLM_CALLS batches processed in parallel.
+
+    Args:
+        mind_map: MindMapOutput containing nodes to process
+        parsed_data: Documents object with user and thread information
+        update_message_callback: Optional callback for progress updates
     """
+    # Setup directories
     mind_map_dir = f"data/{parsed_data.user_id}/threads/{parsed_data.thread_id}/descriptions_mind_maps"
     os.makedirs(mind_map_dir, exist_ok=True)
 
@@ -215,12 +240,11 @@ async def add_node_descriptions_global(
     )
     os.makedirs(proper_mind_map_dir, exist_ok=True)
 
+    # Prepare data and batches
     data = mind_map.model_dump()
-
     output_nodes = data["mind_map"]
     total_nodes = len(output_nodes)
 
-    # Prepare batches
     batches = [
         output_nodes[i : i + DESCRIPTION_PROCESSING_BATCH_SIZE]
         for i in range(0, total_nodes, DESCRIPTION_PROCESSING_BATCH_SIZE)
@@ -229,7 +253,9 @@ async def add_node_descriptions_global(
     doc_retriever = get_user_retriever(parsed_data.user_id, parsed_data.thread_id, k=8)
 
     async def update_mind_map(data):
+        """Update and save the mind map to file."""
         try:
+            # Ensure all nodes have description field
             for node in data["mind_map"]:
                 if "description" not in node or not node["description"]:
                     node["description"] = ""
@@ -237,7 +263,6 @@ async def add_node_descriptions_global(
             mind_map_obj: GlobalMindMap = build_mindmap_global(
                 data["mind_map"], parsed_data.user_id, parsed_data.thread_id
             )
-
             data_dict = mind_map_obj.model_dump()
 
             async with aiofiles.open(
@@ -251,12 +276,15 @@ async def add_node_descriptions_global(
             raise
 
     async def process_batch(batch_nodes, batch_idx):
+        """Process a batch of nodes to generate descriptions."""
         if update_message_callback:
             await update_message_callback(
                 {
                     "message": f"Creating descriptions for batch {batch_idx + 1} of {len(batches)}"
                 }
             )
+
+        # Retrieve relevant text for each node in batch
         batch_relevant_texts = []
         for node in batch_nodes:
             start_time = time.time()
@@ -264,16 +292,18 @@ async def add_node_descriptions_global(
             relevant_str = "\n\n".join([doc.page_content for doc in relevant_text])
             end_time = time.time()
             print(
-                f"Retrieval time: {end_time - start_time} seconds for node {node['id']} of GLOBAL mind map"
+                f"Retrieval time: {end_time - start_time:.2f}s for node {node['id']} of GLOBAL mind map"
             )
             batch_relevant_texts.append(relevant_str)
 
+        # Attempt to generate descriptions with retries
         max_batch_retries = 4
         for batch_attempt in range(max_batch_retries):
             try:
                 prompt = build_mind_maps_description_prompt(
                     batch_nodes, batch_relevant_texts
                 )
+
                 llm_res_bef = time.time()
                 response: FlatNodeWithDescriptionOutput = await invoke_llm(
                     contents=prompt,
@@ -282,8 +312,9 @@ async def add_node_descriptions_global(
                     port=GPU_NODE_DESCRIPTION_LLM.port,
                 )
                 llm_res_aft = time.time()
+
                 print(
-                    f"LLM response time: {llm_res_aft - llm_res_bef} seconds for mind map batch {batch_idx} (attempt {batch_attempt + 1})"
+                    f"LLM response time: {llm_res_aft - llm_res_bef:.2f}s for mind map batch {batch_idx} (attempt {batch_attempt + 1})"
                 )
                 await sio.emit(
                     f"{parsed_data.user_id}/progress",
@@ -292,6 +323,7 @@ async def add_node_descriptions_global(
                     },
                 )
 
+                # Update node descriptions
                 for i, node in enumerate(batch_nodes):
                     resp_node = (
                         response.mind_map[i] if i < len(response.mind_map) else None
@@ -303,13 +335,16 @@ async def add_node_descriptions_global(
                         print(f"Failed to update description for node {node['id']}")
                         if resp_node:
                             print(f"Expected ID: {node['id']}, but got: {resp_node.id}")
+
                 await update_mind_map(data)
                 break
+
             except Exception as e:
                 print(
                     f"Error during description generation for batch {batch_idx} - GLOBAL MIND MAP (attempt {batch_attempt + 1}): {e}"
                 )
                 await asyncio.sleep(2)
+
                 if batch_attempt == max_batch_retries - 1:
                     print(
                         f"Max retries reached for batch {batch_idx} - GLOBAL MIND MAP. Skipping batch."
@@ -321,6 +356,7 @@ async def add_node_descriptions_global(
                         },
                     )
 
+    # Process batches in parallel groups
     batch_count = len(batches)
     batch_idx = 0
     while batch_idx < batch_count:
@@ -334,6 +370,7 @@ async def add_node_descriptions_global(
             await asyncio.gather(*current_group)
         batch_idx += PARALLEL_LLM_CALLS
 
+    # Save final mind map with descriptions
     async with aiofiles.open(
         f"{mind_map_dir}/{parsed_data.user_id}_{parsed_data.thread_id}_global_mind_map.json",
         "w",
@@ -344,7 +381,7 @@ async def add_node_descriptions_global(
     print("Mind map built successfully")
     await sio.emit(
         f"{parsed_data.user_id}/progress",
-        {"message": f"GLOBAL Mind map built successfully"},
+        {"message": "GLOBAL Mind map built successfully"},
     )
 
     await update_mind_map(data)
@@ -352,11 +389,20 @@ async def add_node_descriptions_global(
 
 
 async def delayed_mark(parsed_data: Documents):
+    """
+    Delayed cleanup task after mind map generation.
+
+    Waits 60 seconds, unloads the Ollama model, then marks the thread as complete.
+
+    Args:
+        parsed_data: Documents object with user and thread information
+    """
     await asyncio.sleep(60)
     await unload_ollama_model(
         GPU_NODE_DESCRIPTION_LLM.model, GPU_NODE_DESCRIPTION_LLM.port
     )
     await asyncio.sleep(20)
+
     modified = mark_extra_done(parsed_data.user_id, parsed_data.thread_id, True)
     if modified:
         print("Marked thread as extra_done")
@@ -364,13 +410,25 @@ async def delayed_mark(parsed_data: Documents):
         print("Failed to mark thread as extra_done")
 
 
-def build_mind_maps_node_prompt_global(parsed_data: Documents):
+def build_mind_maps_node_prompt_global(parsed_data: Documents) -> str:
+    """
+    Build the prompt for LLM to generate mind map nodes.
+
+    Selects appropriate text (full text, summary, or truncated) for each document
+    based on word count, then constructs a prompt for the LLM.
+
+    Args:
+        parsed_data: Documents object containing documents to process
+
+    Returns:
+        str: Formatted prompt for LLM
+    """
+
     def word_count(text: str) -> int:
         return len(text.split())
 
     final_text = ""
     for document in parsed_data.documents:
-
         if hasattr(document, "full_text") and word_count(document.full_text) < 1000:
             print("Using full text for mind map creation")
             text = document.full_text
@@ -378,7 +436,7 @@ def build_mind_maps_node_prompt_global(parsed_data: Documents):
             print("Using summary for mind map creation")
             text = document.summary
         else:
-            print("Using title for mind map creation")
+            print("Using truncated text for mind map creation")
             words = document.full_text.split()[:15000]
             text = " ".join(words)
         final_text += f"\n{document.title}\n\n{text}\n\n"
@@ -404,12 +462,24 @@ Text: {final_text}
 """
 
 
-def build_mind_maps_description_prompt(nodes, relevant_texts):
-    prompt = f"""
-        You are to write clear, concise, and informative descriptions of 40-50 words for each of the following mind map nodes.
-        For each node, the description should explain what the concept means. It should be useful to the user, no blabbering about anything else.
-        Take reference and help from the provided source text for each node but don't reference them in the description itself.
+def build_mind_maps_description_prompt(
+    nodes: List[dict], relevant_texts: List[str]
+) -> str:
     """
+    Build the prompt for LLM to generate node descriptions.
+
+    Args:
+        nodes: List of node dictionaries with 'id' and 'title'
+        relevant_texts: List of relevant source texts for each node
+
+    Returns:
+        str: Formatted prompt for LLM
+    """
+    prompt = """
+You are to write clear, concise, and informative descriptions of 40-50 words for each of the following mind map nodes.
+For each node, the description should explain what the concept means. It should be useful to the user, no blabbering about anything else.
+Take reference and help from the provided source text for each node but don't reference them in the description itself.
+"""
     for i, node in enumerate(nodes):
         prompt += f"\nNode {i+1}:\n  Node id: {node['id']}\n  Node title: {node['title']}\n  Source text: {relevant_texts[i]}\n"
     return prompt
@@ -420,9 +490,22 @@ def build_mindmap_global(
     user_id: str,
     thread_id: str,
 ) -> GlobalMindMap:
+    """
+    Build a hierarchical mind map structure from flat node list.
+
+    Converts flat node dictionaries into a tree structure by linking
+    children to their parents via parent_id.
+
+    Args:
+        flat_nodes: List of node dictionaries with 'id', 'parent_id', etc.
+        user_id: User identifier
+        thread_id: Thread identifier
+
+    Returns:
+        GlobalMindMap: Hierarchical mind map with root nodes
+    """
     # Convert dicts into Node objects
     nodes = {n["id"]: Node(**n, children=[]) for n in flat_nodes}
-
     roots = []
 
     # Assign children to parents
