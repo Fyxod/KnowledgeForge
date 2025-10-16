@@ -49,6 +49,9 @@ export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
     return acc;
   }, {} as Record<string, { title: string; pages: number[] }>);
 
+  // Count unique sources: number of unique documents + number of web sources
+  const uniqueSourceCount = Object.keys(groupedDocs).length + safeWeb.length;
+
   if (safeDocs.length === 0 && safeWeb.length === 0) return null;
 
   return (
@@ -60,7 +63,7 @@ export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
         className="text-xs"
       >
         {isOpen ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
-  View Sources ({safeDocs.length + safeWeb.length})
+        View Sources ({uniqueSourceCount})
       </Button>
 
       {isOpen && (
