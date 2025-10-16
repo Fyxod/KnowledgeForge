@@ -32,13 +32,13 @@ const CustomMindMapNode: React.FC<NodeProps<{ title: string; description?: strin
         iconColor: level <= 2 ? 'text-white/80' : 'text-gray-300',
       };
     } else {
-      // Light mode colors
+      // Light mode colors - improved contrast and vibrant colors
       return {
-        background: level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb',
-        border: level === 0 ? '#1e40af' : level === 1 ? '#4338ca' : level === 2 ? '#7c3aed' : '#9ca3af',
-        textColor: level <= 2 ? 'white' : 'black',
-        descColor: level <= 2 ? 'text-white/90' : 'text-gray-600',
-        iconColor: level <= 2 ? 'text-white/80' : 'text-gray-500',
+        background: level === 0 ? '#2563eb' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#f3f4f6',
+        border: level === 0 ? '#1d4ed8' : level === 1 ? '#4f46e5' : level === 2 ? '#7c3aed' : '#d1d5db',
+        textColor: level <= 2 ? 'white' : '#111827',
+        descColor: level <= 2 ? 'text-white/90' : 'text-gray-700',
+        iconColor: level <= 2 ? 'text-white/80' : 'text-gray-600',
       };
     }
   };
@@ -233,7 +233,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       if (parentId) {
         const stroke = isDark 
           ? (level === 1 ? '#60a5fa' : level === 2 ? '#818cf8' : level === 3 ? '#a78bfa' : '#a78bfa')
-          : (level === 1 ? '#3b82f6' : level === 2 ? '#6366f1' : level === 3 ? '#8b5cf6' : '#8b5cf6');
+          : (level === 1 ? '#2563eb' : level === 2 ? '#6366f1' : level === 3 ? '#8b5cf6' : '#9ca3af');
         const width = level === 1 ? 3 : level === 2 ? 2.5 : 2;
         newEdges.push({
           id: `e-${parentId}-${id}`,
@@ -512,7 +512,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       // show map + messages below from websocket
       return (
         <div className="h-full grid grid-rows-[1fr_auto] gap-3">
-          <div className="min-h-0 border rounded-md overflow-hidden bg-white dark:bg-gray-900">
+          <div className="min-h-0 border rounded-md overflow-hidden bg-gray-50 dark:bg-gray-900">
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -547,21 +547,21 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
                 position="bottom-right" 
                 pannable
                 zoomable
-                className="!bg-background/90 dark:!bg-background/80 !border !border-border dark:!border-gray-700 !rounded-lg" 
+                className="!bg-white/95 dark:!bg-gray-800/90 !border-2 !border-gray-300 dark:!border-gray-600 !rounded-lg !shadow-lg" 
                 nodeColor={(node) => {
                   const level = node.data.level;
                   if (theme === 'dark') {
                     return level === 0 ? '#2563eb' : level === 1 ? '#4f46e5' : level === 2 ? '#7c3aed' : '#374151';
                   }
-                  return level === 0 ? '#3b82f6' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#e5e7eb';
+                  return level === 0 ? '#2563eb' : level === 1 ? '#6366f1' : level === 2 ? '#8b5cf6' : '#d1d5db';
                 }}
               />
               <Background 
                 variant={BackgroundVariant.Dots} 
                 gap={18} 
                 size={1} 
-                className="dark:!bg-gray-900"
-                color={theme === 'dark' ? '#4b5563' : '#bdbdbd'} 
+                className="!bg-gray-50 dark:!bg-gray-900"
+                color={theme === 'dark' ? '#4b5563' : '#d1d5db'} 
               />
             </ReactFlow>
           </div>
