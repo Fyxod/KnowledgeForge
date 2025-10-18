@@ -7,9 +7,9 @@ from langchain.output_parsers import PydanticOutputParser
 from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
 
 if SWITCHES["REMOTE_GPU"]:
-    import core.llm.remote_llm as llm_module
+    import core.llm.configurations.remote_llm as llm_module
 else:
-    import core.llm.local_llm as llm_module
+    import core.llm.configurations.local_llm as llm_module
 
 MyServerLLM = llm_module.MyServerLLM
 
