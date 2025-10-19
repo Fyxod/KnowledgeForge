@@ -1,0 +1,6 @@
+# Use the appropriate base image
+FROM qwen3:4b
+# Context length - input
+PARAMETER num_ctx 15000
+# Output tokens
+PARAMETER num_predict 8000
