@@ -8,7 +8,8 @@ import aiofiles
 from pydantic import Field, BaseModel
 from wordcloud import WordCloud
 import matplotlib
-
+from core.config import settings
+import nltk
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from nltk.corpus import stopwords
@@ -18,6 +19,8 @@ from app.socket_handler import sio
 
 from core.llm.client import invoke_llm
 
+if settings.MODE == "development":
+    nltk.download("stopwords")
 
 async def generate_word_cloud(text: str, stop_words: list[str], max_words: int = 1000):
     """
@@ -209,6 +212,7 @@ Guidelines:
                     ollama_model=Ollama_STOP_WORDS_EXTRACTION_LLM.model,
                     port=Ollama_STOP_WORDS_EXTRACTION_LLM.port,
                 )
+
                 stopwords_set.update(response.stopwords)
                 print(f"Stop words extracted for batch {batch_idx+1}")
                 end_time = time.time()
@@ -224,3 +228,4 @@ Guidelines:
                 continue
 
     return list(stopwords_set)
+

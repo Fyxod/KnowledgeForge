@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
     DATABASE_NAME: str = "bedrock"
+    MODE: str = "development"
     API_KEY_1: str
     API_KEY_2: str
     API_KEY_3: str
