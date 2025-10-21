@@ -1,5 +1,5 @@
 import requests
-from langchain.llms.base import LLM
+from langchain_core.language_models import LLM
 from typing import Optional, List
 import re
 from core.config import settings
