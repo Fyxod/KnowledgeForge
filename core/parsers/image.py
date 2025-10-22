@@ -6,7 +6,7 @@ from PIL import Image
 import pytesseract
 from core.constants import IMAGE_PARSER_LLM
 from core.config import settings
-
+import os
 # Optional for Windows if Tesseract throws errors:
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
@@ -77,7 +77,7 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
 
     # fallback to Tesseract
     try:
-        # print("processing via tesseract")
+        print(f"processing image: {os.path.basename(image_path)} with Tesseract")
         return (await asyncio.to_thread(tesseract_parse)).strip()
     except Exception as e:
         print(f"[Fallback Tesseract] Fatal exception: {e}")

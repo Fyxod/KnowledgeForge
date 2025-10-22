@@ -145,7 +145,7 @@ async def extract_document(
                     image_names.append(image_name)
 
                     placeholder = f"{{PENDING_{image_name}}}"
-                    page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
+                    page_text += f"\n\n{placeholder}"
 
                     # Run OCR asynchronously
                     ocr_tasks[placeholder] = asyncio.create_task(
@@ -287,7 +287,7 @@ async def extract_document(
                                 continue
 
                             placeholder = f"{{PENDING_{image_name}}}"
-                            page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
+                            page_text += f"\n\n{placeholder}"
                             image_names.append(image_name)
 
                             ocr_tasks[placeholder] = asyncio.create_task(
@@ -388,7 +388,7 @@ async def extract_document(
                         continue
 
                     placeholder = f"{{PENDING_{image_name}}}"
-                    page_text += f"\n\n[Image: {image_name}]\n{placeholder}"
+                    page_text += f"\n\n{placeholder}"
                     image_names.append(image_name)
 
                     ocr_tasks[placeholder] = asyncio.create_task(
@@ -409,7 +409,7 @@ async def extract_document(
                     traceback.print_exc()
 
                 placeholder = f"{{VECTOR_{svg_name}}}"
-                page_text += f"\n\n[VectorDiagram: {svg_name}]\n{placeholder}"
+                page_text += f"\n\n{placeholder}"
 
                 png_name = f"page{page_number + 1}_vector.png"
                 png_path = os.path.join(image_dir, png_name)
