@@ -27,6 +27,7 @@ Ollama_STOP_WORDS_EXTRACTION_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT
 Ollama_NODE_GENERATION_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
 Ollama_NODE_DESCRIPTION_LLM = OllamaLLMConfig(model=OLLAMA_MODEL, port=PORT)
 
+IMAGE_PARSER_LLM = "gemma3:12b"
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
 FALLBACK_GEMINI_MODEL = "gemini-2.0-flash"

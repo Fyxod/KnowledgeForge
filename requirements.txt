@@ -35,3 +35,5 @@ markdown
 lxml
 pandas
 xlrd
+openpyxl
+tabulate
