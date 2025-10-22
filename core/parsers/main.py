@@ -208,6 +208,7 @@ async def extract_document(
             return None
 
     if ext in {".xls", ".csv"}:
+        print("in excel/csv parser" * 100)
         try:
             # Read Excel or CSV file
             if ext == ".csv":
@@ -218,6 +219,7 @@ async def extract_document(
             # Convert to plain text
             try:
                 text = df.to_string(index=False)
+                print(text)
             except Exception:
                 traceback.print_exc()
                 text = str(df)
@@ -347,6 +349,7 @@ async def extract_document(
 
     # --- Handle PDFs ---
     if ext in [".pdf", ".xlsx", ".epub", ".odt", ".txt", ".rtf", ".docx", ".html", ".xml"]:
+        print("in pdf parser" * 100)
         try:
             doc = fitz.open(file_path)
         except Exception as e:
