@@ -22,7 +22,7 @@ async def retriever(state: AgentState) -> AgentState:
     """
     start_time = time.time()
     doc_retriever = get_user_retriever(
-        state.user_id, state.thread_id, k=6
+        state.user_id, state.thread_id, k=CHUNK_COUNT
     )  # try different k values
     end_time = time.time()
     print(
@@ -63,6 +63,7 @@ async def generate(state: AgentState) -> AgentState:
             result = response_schema.model_validate(result)
             end_time = time.time()
             print("LLM result: ", result)
+            print(f"LLM response time: {end_time - start_time:.2f} seconds")
             state.messages.append(HumanMessage(content=state.query))  # controversial
             state.messages.append(AIMessage(content=result.answer))
             # state.messages.append(AIMessage("Action taken: " + result.action))

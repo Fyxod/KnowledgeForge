@@ -27,54 +27,93 @@ async def process_files(
         Documents: A structured object containing parsed documents.
     """
     parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
-    os.makedirs(parsed_dir, exist_ok=True)
+    try:
+        os.makedirs(parsed_dir, exist_ok=True)
+    except Exception as e:
+        print(f"[init] Failed to create parsed dir {parsed_dir}: {e}")
 
     documents = Documents(documents=[], thread_id=thread_id, user_id=user_id)
     start_time = time.time()
 
     # Helper to process one file
     async def process_file(file_data):
-        await sio.emit(
-            f"{user_id}/progress", {"message": f"Processing {file_data['title']}"}
-        )
-        parsed_data = await extract_document(
-            path=file_data["path"],
-            title=file_data["title"],
-            file_name=file_data["file_name"],
-            user_id=user_id,
-            thread_id=thread_id,
-        )
+        try:
+            try:
+                await sio.emit(
+                    f"{user_id}/progress",
+                    {"message": f"Processing {file_data.get('title', 'Untitled')}"},
+                )
+            except Exception as e:
+                print(f"[emit-error] progress emit failed: {e}")
 
-        if parsed_data is None:
+            parsed_data = None
+            try:
+                parsed_data = await extract_document(
+                    path=file_data.get("path"),
+                    title=file_data.get("title", "Untitled"),
+                    file_name=file_data.get("file_name"),
+                    user_id=user_id,
+                    thread_id=thread_id,
+                )
+            except Exception as e:
+                print(f"[parse-error] {file_data.get('file_name')}: {e}")
+                return None
+
+            if parsed_data is None:
+                print(
+                    f"Warning: Failed to parse file {file_data.get('file_name')}, skipping..."
+                )
+                return None
+
+            parsed_dict = parsed_data.model_dump()
+            parsed_dict["thread_id"] = thread_id
+            parsed_dict["user_id"] = user_id
+
+            try:
+                parsed_json = json.dumps(parsed_dict, indent=2, ensure_ascii=False)
+            except Exception as e:
+                print(f"[json-error] Failed to serialize parsed data: {e}")
+                return parsed_data
+
+            try:
+                name, _ = os.path.splitext(file_data.get("file_name", "document"))
+                json_file_path = os.path.join(parsed_dir, f"{name}.json")
+                async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
+                    await f.write(parsed_json)
+            except Exception as e:
+                print(f"[write-error] Failed to write {json_file_path}: {e}")
+
+            return parsed_data
+        except Exception as e:
             print(
-                f"Warning: Failed to parse file {file_data['file_name']}, skipping..."
+                f"[unexpected] process_file crashed for {file_data.get('file_name')}: {e}"
             )
             return None
-
-        parsed_dict = parsed_data.model_dump()
-        parsed_dict["thread_id"] = thread_id
-        parsed_dict["user_id"] = user_id
-        parsed_json = json.dumps(parsed_dict, indent=2, ensure_ascii=False)
-
-        name, _ = os.path.splitext(file_data["file_name"])
-        json_file_path = os.path.join(parsed_dir, f"{name}.json")
-
-        async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
-            await f.write(parsed_json)
-
-        return parsed_data
 
     batch_size = 10
     # Process in batches
     for i in range(0, len(files_data), batch_size):
         batch = files_data[i : i + batch_size]
-        results = await asyncio.gather(
-            *(process_file(file_data) for file_data in batch)
-        )
+        try:
+            results = await asyncio.gather(
+                *(process_file(file_data) for file_data in batch),
+                return_exceptions=True,
+            )
+        except Exception as e:
+            print(f"[batch-error] Failed batch starting at {i}: {e}")
+            results = []
         for result in results:
+            if isinstance(result, Exception):
+                print(f"[task-exception] {result}")
+                continue
             if result:
                 documents.documents.append(result)
 
     end_time = time.time()
-    print(f"Processed {len(files_data)} files in {end_time - start_time:.2f} seconds")
+    try:
+        print(
+            f"Processed {len(files_data)} files in {end_time - start_time:.2f} seconds"
+        )
+    except Exception as e:
+        print(f"[summary-error] {e}")
     return documents

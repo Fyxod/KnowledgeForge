@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 from tavily import TavilyClient
 import os
 import asyncio
-import time
 
 load_dotenv()
 tavily_api_key = os.getenv("TAVILY_API_KEY")

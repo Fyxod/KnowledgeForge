@@ -56,6 +56,30 @@ async def create_thread(request: Request, thread_data: ThreadCreateRequest):
     }
 
 
+@router.get("/{thread_id}")
+async def get_thread(request: Request, thread_id: str):
+    """Get a specific thread for the authenticated user."""
+    payload = request.state.user
+    if not payload:
+        return {"error": "User not authenticated"}
+
+    user_id = payload.userId
+
+    # Find user in DB
+    user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
+    if not user:
+        return {"error": "User not found"}
+
+    # Check if thread exists
+    if thread_id not in user.get("threads", {}):
+        return {"error": "Thread not found"}
+
+    return {
+        "status": "success",
+        "thread": user["threads"][thread_id],
+    }
+
+
 @router.get("/")
 async def get_threads(request: Request):
     """Get all threads for the authenticated user."""
@@ -74,23 +98,18 @@ async def get_threads(request: Request):
     return {"status": "success", "threads": user.get("threads", {})}
 
 
-class ThreadDeleteRequest(BaseModel):
-    thread_id: str
-
-
 class ThreadUpdateRequest(BaseModel):
     thread_name: str
 
 
-@router.delete("/delete")
-async def delete_thread(request: Request, thread_data: ThreadDeleteRequest):
+@router.delete("/delete/{thread_id}")
+async def delete_thread(request: Request, thread_id: str):
     """Delete a thread for the authenticated user."""
     payload = request.state.user
     if not payload:
         return {"status": False, "error": "User not authenticated"}
 
     user_id = payload.userId
-    thread_id = thread_data.thread_id
 
     # Find user in DB
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})

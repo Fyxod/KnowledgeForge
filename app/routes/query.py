@@ -50,6 +50,8 @@ async def query(request: Request, body: QueryRequest):
         return {"error": "Thread not found"}
 
     messages = []
+    chunks = []
+    chunks_used = []
 
     for message in thread.get("chats", []):
         if message["type"] == "user":
@@ -57,7 +59,6 @@ async def query(request: Request, body: QueryRequest):
         elif message["type"] == "agent":
             messages.append(AIMessage(content=message["content"]))
     ds = time.time()
-
     if SWITCHES["DECOMPOSITION"]:
         decomposition_result: DecompositionLLMOutput = await decomposition_node(
             question, messages
@@ -70,7 +71,7 @@ async def query(request: Request, body: QueryRequest):
     de = time.time() - ds
     print(f"Rewrite query time: {de:.2f} seconds")
     decomposed = decomposition_result.requires_decomposition
-
+    all_favicons = []
     start_time = time.time()
     if decomposed:
         can_use_second_model = is_extra_done(user_id, thread_id)
@@ -103,7 +104,17 @@ async def query(request: Request, body: QueryRequest):
                 )
 
                 state = AgentState(**state)
+
+                if getattr(state, "web_search_queries", None):
+                    for res in state.web_search_queries:
+                        favicons = [
+                            r.get("favicon") for r in res["results"] if r.get("favicon")
+                        ]
+                        all_favicons.extend(favicons)
+
                 qe = time.time() - qs
+                chunks.extend(state.chunks)
+                chunks_used.extend(state.chunks_used)
                 print(
                     f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {model}"
                 )
@@ -122,7 +133,6 @@ async def query(request: Request, body: QueryRequest):
                 )
             )
 
-            all_favicons = []
             cleaned_results = []
 
             for idx, sub_query in enumerate(decomposition_result.sub_queries):
@@ -130,9 +140,12 @@ async def query(request: Request, body: QueryRequest):
                     res = search_results[idx]
 
                     favicons = [
-                        r.get("favicon")
+                        {
+                            "favicon": r.get("favicon", None),
+                            "url": r.get("url", None),
+                            "title": r.get("title", None),
+                        }
                         for r in res.get("results", [])
-                        if r.get("favicon")
                     ]
                     all_favicons.extend(favicons)
 
@@ -160,7 +173,6 @@ async def query(request: Request, body: QueryRequest):
                     )
 
         else:
-            all_favicons = []
             cleaned_results = [
                 {
                     "query": sub_query,
@@ -182,11 +194,11 @@ async def query(request: Request, body: QueryRequest):
 
         # Can't use 2nd model as we are on cpu and theres not enough ram
         # # Add the second model only if allowed
-        #     if can_use_second_model:
-        #         print("Using second model for parallel execution")
-        #         workers.append(asyncio.create_task(run_worker(Ollama_QUERY_LLM2, task_queue, results)))
-        #     else:
-        #         print("Second model disabled, running only on first model")
+        # if can_use_second_model:
+        #     print("Using second model for parallel execution")
+        #     workers.append(asyncio.create_task(run_worker(Ollama_QUERY_LLM2, task_queue, results)))
+        # else:
+        #     print("Second model disabled, running only on first model")
 
         await asyncio.gather(*workers)
 
@@ -198,17 +210,24 @@ async def query(request: Request, body: QueryRequest):
         print(f"Subqueries combination time: {ce:.2f} seconds")
     else:
         print("Query not being decomposed")
+
         if mode == EXTERNAL:
             search_result = await search_tool(
                 decomposition_result.resolved_query or question
             )
         else:
             search_result = {}
-        all_favicons = [
-            r.get("favicon")
-            for r in search_result.get("results", [])
-            if r.get("favicon")
-        ]
+
+        all_favicons.extend(
+            [
+                {
+                    "favicon": r.get("favicon", None),
+                    "url": r.get("url", None),
+                    "title": r.get("title", None),
+                }
+                for r in search_result.get("results", [])
+            ]
+        )
 
         for r in search_result.get("results", []):
             r.pop("raw_content", None)
@@ -236,16 +255,80 @@ async def query(request: Request, body: QueryRequest):
         )
 
         state = AgentState(**state)
+        if getattr(state, "web_search_queries", None):
+            for res in state.web_search_queries:
+                favicons = [
+                    {
+                        "favicon": r.get("favicon", None),
+                        "url": r.get("url", None),
+                        "title": r.get("title", None),
+                    }
+                    for r in res["results"]
+                ]
+                all_favicons.extend(favicons)
+
         answer = state.answer
+        chunks.extend(state.chunks)
+        chunks_used.extend(state.chunks_used)
     end_time = time.time()
 
     print(f"Total Agent response time: {end_time - start_time:.2f} seconds")
+
+    documents_used = []
+    if chunks_used:
+        print(f"Processing {len(chunks_used)} citations...")
+
+        for doc_i in chunks_used:
+            for doc_j in chunks:
+                meta = doc_j.get("metadata", {})
+                if (
+                    doc_i.document_id == meta.get("document_id")
+                    and doc_i.page_no == meta.get("page_no")
+                    and doc_i.chunk_index == meta.get("chunk_index")
+                ):
+                    documents_used.append(doc_j)
+                    break
+
+    modified_used = []
+    for doc in documents_used:
+        modified_used.append(
+            {
+                "title": doc.get("metadata", {}).get("title"),
+                "document_id": doc.get("metadata", {}).get("document_id"),
+                "page_no": doc.get("metadata", {}).get("page_no"),
+            }
+        )
+    print(f"Found {len(documents_used)} citation matches")
+
+    with open("debug_agent_response.json", "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "question": question,
+                "answer": answer,
+                "documents_used": documents_used,
+                "all_favicons": all_favicons,
+                "decomposed": decomposed,
+                "decomposition_result": decomposition_result.dict(),
+                "chunks": chunks,
+                "chunks_used": [doc.dict() for doc in chunks_used],
+            },
+            f,
+            ensure_ascii=False,
+            indent=4,
+        )
 
     # Update the thread with the new messages
     now = datetime.now(timezone.utc)
     new_messages = [
         {"type": "user", "content": question, "timestamp": now},
-        {"type": "agent", "content": answer, "timestamp": now},
+        {
+            "type": "agent",
+            "content": answer,
+            "timestamp": now,
+            "sources": {"documents_used": modified_used, "web_used": all_favicons},
+        },
     ]
 
     db.users.update_one(
@@ -261,6 +344,10 @@ async def query(request: Request, body: QueryRequest):
         "user_id": user_id,
         "question": question,
         "answer": answer,
+        "sources": {
+            "documents_used": modified_used,
+            "web_used": all_favicons,
+        },
     }
 
     return response

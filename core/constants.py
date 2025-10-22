@@ -12,6 +12,7 @@ SWITCHES = {
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": False,  # Decomposition of query into sub-queries if applicable.
 }
+CHUNK_COUNT = 6 # Number of chunks to retrieve from vector DB for each query
 
 PORT = 11434  # Default port for Ollama API
 

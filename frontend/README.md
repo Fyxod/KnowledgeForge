@@ -1,0 +1,1 @@
+# Knowledge Synthesis Platform - Frontend

@@ -17,8 +17,7 @@ from core.llm.prompts.summarizer_prompt import (
 )
 import time
 from app.socket_handler import sio
-from core.mind_map import create_mind_map
-from core.mind_map_global import create_mind_map_global
+from core.mind_map import create_mind_map_global
 from core.database import db
 from core.constants import (
     Ollama_DOC_SUMMARIZER_LLM,
@@ -304,7 +303,7 @@ async def updateThread(user_id: str, thread_id: str, updated_title: str):
         },
     )
 
-    event_name = f"{user_id}/{thread_id}/thread_update"
-    event_data = {"threadId": thread_id, "newTitle": updated_title}
+    event_name = f"{user_id}/title_update"
+    event_data = {"thread_id": thread_id, "new_title": updated_title}
 
     await sio.emit(event_name, event_data)

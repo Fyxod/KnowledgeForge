@@ -1,66 +1,7 @@
-"""
-Create a new user.
-
-**Input (from frontend):**
-    - JSON body matching `UserCreateModel`:
-        - name (str): The user's full name.
-        - email (str): The user's email address.
-        - password (str): The user's password.
-
-**Returns:**
-    - JSON object:
-        - status (str): "success" if user is created.
-        - message (str): Success message.
-        - user (UserResponseModel): The created user's data (excluding password and internal IDs).
-
-**Errors:**
-    - 400: If the email already exists.
-"""
-
-"""
-Retrieve a user's information by user ID.
-
-**Input (from frontend):**
-    - Path parameter:
-        - user_id (str): The unique user ID.
-    - Authenticated request (JWT token in headers).
-
-**Returns:**
-    - JSON object:
-        - status (str): "success" if user is found.
-        - message (str): Success message.
-        - user (dict): The user's data (excluding password and internal IDs).
-
-**Errors:**
-    - 401: If the user is not authenticated.
-    - 403: If the authenticated user does not match the requested user_id.
-    - 404: If the user is not found.
-"""
-
-"""
-Authenticate a user and return a JWT token.
-
-**Input (from frontend):**
-    - JSON body matching `UserLoginModel`:
-        - email (str): The user's email address.
-        - password (str): The user's password.
-
-**Returns:**
-    - JSON object:
-        - status (str): "success" if login is successful.
-        - message (str): Success message.
-        - user (dict): The user's data (excluding password).
-        - token (str): JWT token for authentication.
-
-**Errors:**
-    - 404: If the user is not found.
-    - 400: If the password is invalid.
-"""
-
 import jwt
 import uuid
 
-from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request
 from core.config import settings
 from core.database import db
 from core.models.user import (
@@ -123,16 +64,13 @@ def get_user(request: Request, user_id: str):
 
 
 @router.post("/login")
-def login_user(user_input: UserLoginModel, background_tasks: BackgroundTasks):
+def login_user(user_input: UserLoginModel):
     user_data = user_input.model_dump()
     print("Login attempt with input:", user_data)
 
     user = db.users.find_one({"email": user_data["email"]}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if not verify_password(user_data["password"], user["password"]):
-        raise HTTPException(status_code=400, detail="Invalid password")
+    if not user or not verify_password(user_data["password"], user["password"]):
+        raise HTTPException(status_code=400, detail="Invalid email or password")
 
     token = jwt.encode(
         UserJwtPayload(

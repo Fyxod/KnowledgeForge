@@ -4,20 +4,24 @@ Routes:
 -------
 POST /upload/
     Handle multiple file uploads for a user, optionally associating them with a thread.
+    Also supports creating a thread without files.
     Input (from frontend):
-        - files: List of files to upload (multipart/form-data, required)
+        - files: Optional list of files to upload (multipart/form-data)
         - thread_id: Optional string, existing thread ID to associate files with (form field)
         - thread_name: Optional string, name for a new thread if thread_id is not provided (form field)
         - User authentication must be present in request.state.user
+    Behavior:
+        - If no files are provided and thread_name is provided (and no thread_id): create a new thread and return it with empty documents.
+        - If thread_id is provided and no files are provided: do nothing and return the thread_id with empty documents.
     Returns (JSON):
         - On success:
                 "thread_id": <thread_id>,
                 "documents": [
-                        "docId": <document_id>,
-                        "title": <document_title>,
-                        "type": <document_type>,
-                        "time_uploaded": <datetime>,
-                        "file_name": <file_name>
+                        {"docId": <document_id>,
+                         "title": <document_title>,
+                         "type": <document_type>,
+                         "time_uploaded": <datetime>,
+                         "file_name": <file_name>}
                     ...
         - On error:
                 "error": <error_message>
@@ -39,6 +43,7 @@ from core.summarizer import summarize_documents
 from core.word_cloud import create_stop_words
 from app.socket_handler import sio
 from core.utils.extra_done_check import mark_extra_done
+from core.constants import SWITCHES
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -46,16 +51,13 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 @router.post("/")
 async def upload_file(
     request: Request,
-    files: List[UploadFile] = File(...),
+    files: Optional[List[UploadFile]] = File(None),
     thread_id: Optional[str] = Form(None),
     thread_name: Optional[str] = Form(None),
 ):
     """Handle multiple file uploads."""
-    print(f"Received upload request with {len(files)} files")
-
-    if not files:
-        print("No files uploaded")
-        return {"error": "No files uploaded"}
+    file_count = len(files) if files else 0
+    print(f"Received upload request with {file_count} files")
 
     payload = request.state.user
     if not payload:
@@ -73,8 +75,57 @@ async def upload_file(
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # Create new thread if thread_id not provided
+    # Determine if we have files to process
+    has_files = bool(files) and len(files) > 0
 
+    # If no files provided
+    if not has_files:
+        if thread_id:
+            # Validate the thread belongs to user, but make no modifications
+            print(f"No files provided. Returning existing thread_id: {thread_id}")
+            user_threads = user.get("threads", {})
+            if thread_id not in user_threads:
+                print(f"Thread {thread_id} not found for user {user_id}")
+                await sio.emit(f"{user_id}/progress", {"message": "Thread not found"})
+                return {"error": "Thread not found for the user"}
+
+            return {
+                "status": "success",
+                "message": "No files provided; returning existing thread",
+                "thread_id": thread_id,
+                "documents": [],
+            }
+        else:
+            # Create a new empty thread only if thread_name is provided
+            if thread_name:
+                print("No files provided. Creating a new thread only.")
+                thread_id = str(uuid.uuid4())
+                new_thread = {
+                    f"threads.{thread_id}": {
+                        "thread_name": thread_name or "New Thread",
+                        "documents": [],
+                        "chats": [],
+                        "createdAt": now,
+                        "updatedAt": now,
+                        "extra_done": False,
+                        "mindmap_enabled": SWITCHES["MIND_MAP"],
+                    }
+                }
+                db.users.update_one({"userId": user_id}, {"$set": new_thread})
+                return {
+                    "status": "success",
+                    "message": "Thread created with no files",
+                    "thread_id": thread_id,
+                    "documents": [],
+                }
+            else:
+                print("No files and no thread_name provided")
+                return {
+                    "error": "No files provided. Provide thread_name to create a new thread or thread_id to use an existing one.",
+                }
+
+    # Files are provided; proceed with normal flow
+    # Create new thread if thread_id not provided
     if not thread_id:
         print("Creating a new thread")
         thread_id = str(uuid.uuid4())
@@ -86,6 +137,7 @@ async def upload_file(
                 "createdAt": now,
                 "updatedAt": now,
                 "extra_done": False,
+                "mindmap_enabled": SWITCHES["MIND_MAP"],
             }
         }
         db.users.update_one({"userId": user_id}, {"$set": new_thread})
@@ -100,7 +152,12 @@ async def upload_file(
 
         db.users.update_one(
             {"userId": user_id},
-            {"$set": {f"threads.{thread_id}.updatedAt": now}},
+            {
+                "$set": {
+                    f"threads.{thread_id}.updatedAt": now,
+                    f"threads.{thread_id}.mindmap_enabled": SWITCHES["MIND_MAP"],
+                }
+            },
         )
 
     # Upload and parse files

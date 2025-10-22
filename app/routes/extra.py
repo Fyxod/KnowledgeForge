@@ -7,11 +7,10 @@ from core.database import db
 from core.word_cloud import generate_word_cloud
 from app.socket_handler import sio
 
-router = APIRouter(prefix="/extra", tags=["extra"])
+router = APIRouter(prefix="", tags=["extra"])
 
 
 class WordCloudRequest(BaseModel):
-    thread_id: str
     document_ids: list[str]
     max_words: int | None = None
 
@@ -21,19 +20,15 @@ class MindMapRequest(BaseModel):
     document_id: str
 
 
-class GlobalMindMapRequest(BaseModel):
-    thread_id: str
-    document_id: str
-
-
-@router.post("/wordcloud")
-async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
+@router.post("/wordcloud/{thread_id}")
+async def get_word_cloud(
+    request: Request, thread_id: str, body: WordCloudRequest = Body(...)
+):
     payload = request.state.user
 
     if not payload:
         raise HTTPException(status_code=401, detail="User not authenticated")
 
-    thread_id = body.thread_id
     document_ids = body.document_ids
     max_words = body.max_words or 1000
 
@@ -115,19 +110,13 @@ async def get_word_cloud(request: Request, body: WordCloudRequest = Body(...)):
         )
 
 
-@router.post("/mindmap")
-async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
+@router.get("/mindmap/{thread_id}")
+async def get_mind_map(request: Request, thread_id: str):
 
     payload = request.state.user
 
     if not payload:
         return {"error": "User not authenticated"}
-
-    thread_id = body.thread_id
-    document_id = body.document_id
-
-    # Get client socket ID from headers (if provided)
-    client_socket_id = request.headers.get("x-socket-id")
 
     user_id = payload.userId
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
@@ -138,212 +127,31 @@ async def get_mind_map(request: Request, body: MindMapRequest = Body(...)):
     if not thread:
         return {"error": "Thread not found"}
 
-    mind_map_dir = f"data/{user_id}/threads/{thread_id}/mind_maps"
-
-    # Emit progress update - Starting search
-    if client_socket_id:
-        await sio.emit(
-            "mindmap_progress",
-            {
-                "status": "searching",
-                "message": "Searching for existing mind map...",
-                "progress": 20,
-            },
-            to=client_socket_id,
-        )
-
-    if not os.path.exists(mind_map_dir):
-        # Emit progress update - No directory, mind map not generated yet
-        if client_socket_id:
-            await sio.emit(
-                "mindmap_progress",
-                {"status": "not_found", "message": "   ", "progress": 100},
-                to=client_socket_id,
-            )
-
-        # Return success status with not_found indicator to avoid API error handling
-        return {
-            "status": True,
-            "not_found": True,
-            "message": "No mind map found for the given document_id",
-        }
-
-    # Emit progress update - Checking files
-    if client_socket_id:
-        await sio.emit(
-            "mindmap_progress",
-            {
-                "status": "checking",
-                "message": "Checking available mind maps...",
-                "progress": 50,
-            },
-            to=client_socket_id,
-        )
-
-    for filename in os.listdir(mind_map_dir):
-        if filename.endswith(".json"):
-            file_path = os.path.join(mind_map_dir, filename)
-            try:
-                # Emit progress update - Loading file
-                if client_socket_id:
-                    await sio.emit(
-                        "mindmap_progress",
-                        {
-                            "status": "loading",
-                            "message": f"Loading mind map...",
-                            "progress": 80,
-                        },
-                        to=client_socket_id,
-                    )
-
-                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                    content = await f.read()
-                data = json.loads(content)
-                if isinstance(data, dict) and data.get("document_id") == document_id:
-                    # Emit success
-                    if client_socket_id:
-                        await sio.emit(
-                            "mindmap_progress",
-                            {
-                                "status": "success",
-                                "message": "Mind map loaded successfully!",
-                                "progress": 100,
-                            },
-                            to=client_socket_id,
-                        )
-
-                    return {"status": True, "mind_map": data}
-            except Exception as e:
-                continue
-
-    # Mind map not found in any file
-    if client_socket_id:
-        await sio.emit(
-            "mindmap_progress",
-            {"status": "not_found", "message": "   ", "progress": 100},
-            to=client_socket_id,
-        )
-
-    # Return success status with not_found indicator to avoid API error handling
-    return {
-        "status": True,
-        "not_found": True,
-        "message": "No mind map found for the given document_id",
-    }
-
-
-@router.post("/mindmap/global")
-async def get_mind_map(request: Request, body: GlobalMindMapRequest = Body(...)):
-
-    payload = request.state.user
-
-    if not payload:
-        return {"error": "User not authenticated"}
-
-    thread_id = body.thread_id
-
-    # Get client socket ID from headers (if provided)
-    client_socket_id = request.headers.get("x-socket-id")
-
-    user_id = payload.userId
-    user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
-    if not user:
-        return {"error": "User not found"}
-
-    thread = user["threads"].get(thread_id)
-    if not thread:
-        return {"error": "Thread not found"}
+    if len(thread.get("documents", [])) == 0:
+        return {"mind_map": False, "message": "No documents found in the thread"}
 
     mind_map_dir = f"data/{user_id}/threads/{thread_id}/mind_maps"
-
-    # Emit progress update - Starting search
-    if client_socket_id:
-        await sio.emit(
-            "mindmap_progress",
-            {
-                "status": "searching",
-                "message": "Searching for existing mind map...",
-                "progress": 20,
-            },
-            to=client_socket_id,
-        )
-
-    if not os.path.exists(mind_map_dir):
-        # Emit progress update - No directory, mind map not generated yet
-        if client_socket_id:
-            await sio.emit(
-                "mindmap_progress",
-                {"status": "not_found", "message": "  ", "progress": 100},
-                to=client_socket_id,
-            )
-
-        # Return success status with not_found indicator to avoid API error handling
-        return {
-            "status": True,
-            "not_found": True,
-            "message": "Global Mind Map not found",
-        }
-
-    # Emit progress update - Checking files
-    if client_socket_id:
-        await sio.emit(
-            "mindmap_progress",
-            {
-                "status": "checking",
-                "message": "Checking available mind maps...",
-                "progress": 50,
-            },
-            to=client_socket_id,
-        )
-
     name = f"{user_id}_{thread_id}_global_mind_map.json"
     file_path = os.path.join(mind_map_dir, name)
     if os.path.exists(file_path):
         try:
-            # Emit progress update - Loading file
-            if client_socket_id:
-                await sio.emit(
-                    "mindmap_progress",
-                    {
-                        "status": "loading",
-                        "message": f"Loading global mind map...",
-                        "progress": 80,
-                    },
-                    to=client_socket_id,
-                )
 
             async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                 content = await f.read()
             data = json.loads(content)
-            # Emit success
-            if client_socket_id:
-                await sio.emit(
-                    "mindmap_progress",
-                    {
-                        "status": "success",
-                        "message": "Global mind map loaded successfully!",
-                        "progress": 100,
-                    },
-                    to=client_socket_id,
-                )
-            return {"status": True, "mind_map": data}
+
+            return {"mind_map": True, "status": True, "data": data, "message": ""}
         except Exception as e:
             pass
 
-    # Mind map not found in any file
-    if client_socket_id:
-        await sio.emit(
-            "mindmap_progress",
-            {"status": "not_found", "message": "   ", "progress": 100},
-            to=client_socket_id,
-        )
-
-    # Return success status with not_found indicator to avoid API error handling
-    return {
-        "status": True,
-        "not_found": True,
-        "message": "No mind map found for the given document_id",
-    }
+    if not thread.get("mindmap_enabled", False):
+        return {"mind_map": False, "message": "Mind map generation not enabled"}
+    else:
+        return {
+            "mind_map": True,
+            "status": False,
+            "message": "Mind map creation under progress...",
+        }
 
 
 @router.post("/summary")
