@@ -3,22 +3,9 @@ import time
 from core.config import settings
 from google import genai
 from openai import AsyncOpenAI
-from langchain.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import PydanticOutputParser
 from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
 from core.llm.custom_llm import MyServerLLM
-import copy
-
-
-def sanitize_schema(schema_dict):
-    if isinstance(schema_dict, dict):
-        schema_dict.pop("additionalProperties", None)
-        for v in schema_dict.values():
-            sanitize_schema(v)
-    elif isinstance(schema_dict, list):
-        for v in schema_dict:
-            sanitize_schema(v)
-    return schema_dict
-
 
 API_KEYS = [
     settings.API_KEY_1,
