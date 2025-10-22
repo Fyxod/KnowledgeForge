@@ -20,8 +20,6 @@ from pptx import Presentation
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 
-import traceback
-
 # Extensions
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"}
 SUPPORTED_EXTENSIONS = {
@@ -159,6 +157,7 @@ async def extract_document(
 
     if ext in {".xls", ".csv"}:
         try:
+            print("inside csv"*100)
 
             # Read Excel or CSV file
             if ext == ".csv":
@@ -168,6 +167,7 @@ async def extract_document(
 
             # Convert to plain text
             text = df.to_string(index=False)
+            print(text)
 
             doc_id = str(uuid.uuid4())
             await sio.emit(
@@ -263,6 +263,7 @@ async def extract_document(
         )
 
     # --- Handle PDFs ---
+    print("Processing PDF file..."*100)
     doc = fitz.open(file_path)
     pages = []
     combined_texts = []
