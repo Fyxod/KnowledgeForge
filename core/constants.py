@@ -12,7 +12,7 @@ SWITCHES = {
 
     "REMOTE_GPU": True,  # Use remote GPU LLMs
 }
-
+CHUNK_COUNT = 12 # Number of chunks to retrieve from vector DB for each query
 
 PORT1 = 11434
 PORT2 = 11435

@@ -193,7 +193,7 @@ async def query(request: Request, body: QueryRequest):
 
         # Add the second model only if allowed
         if (
-            len(thread.documents) == 0
+            len(thread.get("documents", [])) == 0
             or not SWITCHES["MIND_MAP"]
             or can_use_second_model
         ):

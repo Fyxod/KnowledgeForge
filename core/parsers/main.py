@@ -14,34 +14,12 @@ import re
 from app.socket_handler import sio
 from core.parsers.image import image_parser
 from core.models.document import Document, Page
-
+from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from pptx import Presentation
+import traceback
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
-
-import traceback
-
-# Extensions
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"}
-SUPPORTED_EXTENSIONS = {
-    ".pdf",
-    ".docx",
-    ".rtf",
-    ".txt",
-    ".epub",
-    ".odt",
-    ".ppt",
-    ".pptx",
-    ".xls",
-    ".xlsx",
-    ".csv",
-    ".html",
-    ".xml",
-    ".md",
-    *IMAGE_EXTENSIONS,
-}
-
 
 async def extract_document(
     path, title="Untitled", file_name=None, user_id=None, thread_id=None
@@ -207,22 +185,33 @@ async def extract_document(
             traceback.print_exc()
             return None
 
-    if ext in {".xls", ".csv"}:
-        print("in excel/csv parser" * 100)
+    if ext in {".xls", ".xlsx", ".csv"}:
         try:
             # Read Excel or CSV file
-            if ext == ".csv":
-                df = pd.read_csv(file_path)
+            if ext == ".xlsx":
+                df = pd.read_excel(file_path, engine='openpyxl')                
+            elif ext == ".xls":
+                df = pd.read_excel(file_path, engine='xlrd')
             else:
-                df = pd.read_excel(file_path)
+                df = pd.read_csv(file_path)
 
-            # Convert to plain text
+            # Clean merged cells & empty rows
+            # df = df.ffill().dropna(how='all')
+
+            # Normalize newlines inside cells
+            df = df.applymap(lambda x: str(x).replace("\n", " ") if isinstance(x, str) else x)
+
             try:
-                text = df.to_string(index=False)
-                print(text)
+                text = df.to_json(orient="records", lines=True)
+                # text = df.to_markdown(index=False)
+
             except Exception:
+                print("Error converting DataFrame to string")
                 traceback.print_exc()
                 text = str(df)
+
+            # Optional: compact whitespace
+            text = re.sub(r'\s{2,}', ' ', text).strip()
 
             doc_id = str(uuid.uuid4())
             await safe_emit(
@@ -349,7 +338,6 @@ async def extract_document(
 
     # --- Handle PDFs ---
     if ext in [".pdf", ".xlsx", ".epub", ".odt", ".txt", ".rtf", ".docx", ".html", ".xml"]:
-        print("in pdf parser" * 100)
         try:
             doc = fitz.open(file_path)
         except Exception as e:
