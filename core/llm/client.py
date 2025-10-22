@@ -3,7 +3,7 @@ import time
 from core.config import settings
 from google import genai
 from openai import AsyncOpenAI
-from langchain.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import PydanticOutputParser
 from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
 
 if SWITCHES["REMOTE_GPU"]:
