@@ -11,11 +11,12 @@ SWITCHES = {
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
 
     "REMOTE_GPU": True,  # Use remote GPU LLMs
+    # please refer to core/Setup_Local_ollama.md for setting up local LLM server
 }
 CHUNK_COUNT = 12 # Number of chunks to retrieve from vector DB for each query
 
-PORT1 = 11434
-PORT2 = 11435
+PORT1 = 11434   # port where ollama is running
+PORT2 = 11435   # port where second ollama instance is running
 
 GPT_OSS_20B = "gpt-oss:20b-50k-8k"
 QWEN3_14B = "qwen3:14b-39500-8k"
