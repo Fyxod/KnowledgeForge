@@ -491,22 +491,6 @@ async def extract_document(
                 txt.replace(placeholder, image_text, 1) for txt in combined_texts
             ]
 
-        # Wait for OCR tasks
-        for placeholder, task in ocr_tasks.items():
-            try:
-                image_text = await task
-            except Exception as e:
-                print(f"Error parsing image: {e}")
-                traceback.print_exc()
-                image_text = "[Image OCR failed]"
-
-            for page in pages:
-                if placeholder in page.text:
-                    page.text = page.text.replace(placeholder, image_text, 1)
-            combined_texts = [
-                txt.replace(placeholder, image_text, 1) for txt in combined_texts
-            ]
-
         doc_id = str(uuid.uuid4())
         await safe_emit(
             f"{user_id}/progress", {"message": f"Processing {title} successfully..."}
