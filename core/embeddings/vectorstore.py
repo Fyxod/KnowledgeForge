@@ -2,12 +2,8 @@ import asyncio
 import os
 import time
 from typing import List
-
-# from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 from langchain_chroma import Chroma
-
 from core.embeddings.embeddings import get_embedding_function
 from core.models.document import Documents
 
