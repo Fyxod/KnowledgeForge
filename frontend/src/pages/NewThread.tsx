@@ -122,7 +122,7 @@ const NewThread = () => {
                 multiple
                 onChange={handleFileChange}
                 className="cursor-pointer"
-                accept=".pdf,.docx,.rtf,.txt,.epub,.odt,.ppt,.pptx,.xls,.xlsx,.csv,.html,.xml,.md,.jpg,.jpeg,.png,.tiff,.bmp,.gif"
+                accept=".pdf,.doc,.docx,.rtf,.txt,.epub,.odt,.ppt,.pptx,.xls,.xlsx,.csv,.html,.xml,.md,.jpg,.jpeg,.png,.tiff,.bmp,.gif"
               />
             </div>
 
