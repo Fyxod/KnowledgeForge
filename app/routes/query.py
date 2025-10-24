@@ -5,7 +5,9 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
-from langchain.schema import AIMessage, HumanMessage
+# from langchain.schema import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
+
 from core.llm.outputs import DecompositionLLMOutput
 from agent.builder import Agent, AgentState
 from agent.decomposition import decomposition_node
