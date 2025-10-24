@@ -17,9 +17,33 @@ from core.models.document import Document, Page
 from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from pptx import Presentation
 import traceback
+import olefile
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+
+def extract_text_from_doc(path: str) -> str:
+    """Extract readable text from a legacy .doc file (pure Python)."""
+    if not olefile.isOleFile(path):
+        raise ValueError(f"{path} is not a valid .doc file")
+
+    with olefile.OleFileIO(path) as ole:
+        if not ole.exists("WordDocument"):
+            raise ValueError("No WordDocument stream found")
+        stream = ole.openstream("WordDocument")
+        data = stream.read()
+
+    # Decode binary to text (best effort)
+    text = data.decode("latin-1", errors="ignore")
+    # Remove control characters
+    text = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]+", " ", text)
+    # Collapse extra whitespace
+    text = re.sub(r"\s{2,}", " ", text)
+    # Keep only readable ASCII chunks
+    text = "\n".join(re.findall(r"[ -~]{5,}", text))
+    return text.strip()
+
 
 async def extract_document(
     path, title="Untitled", file_name=None, user_id=None, thread_id=None
@@ -189,9 +213,9 @@ async def extract_document(
         try:
             # Read Excel or CSV file
             if ext == ".xlsx":
-                df = pd.read_excel(file_path, engine='openpyxl')                
+                df = pd.read_excel(file_path, engine="openpyxl")
             elif ext == ".xls":
-                df = pd.read_excel(file_path, engine='xlrd')
+                df = pd.read_excel(file_path, engine="xlrd")
             else:
                 df = pd.read_csv(file_path)
 
@@ -199,7 +223,9 @@ async def extract_document(
             # df = df.ffill().dropna(how='all')
 
             # Normalize newlines inside cells
-            df = df.applymap(lambda x: str(x).replace("\n", " ") if isinstance(x, str) else x)
+            df = df.applymap(
+                lambda x: str(x).replace("\n", " ") if isinstance(x, str) else x
+            )
 
             try:
                 text = df.to_json(orient="records", lines=True)
@@ -211,7 +237,7 @@ async def extract_document(
                 text = str(df)
 
             # Optional: compact whitespace
-            text = re.sub(r'\s{2,}', ' ', text).strip()
+            text = re.sub(r"\s{2,}", " ", text).strip()
 
             doc_id = str(uuid.uuid4())
             await safe_emit(
@@ -232,6 +258,37 @@ async def extract_document(
             print(f"Error processing Excel/CSV file {safe_file_name}: {str(e)}")
             traceback.print_exc()
             return None
+
+    # --- Handle legacy Word .doc files (single page, no image parsing) ---
+    if ext == ".doc":
+        try:
+            await safe_emit(
+                f"{user_id}/progress",
+                {"message": f"{title} is a legacy .doc, extracting text..."},
+            )
+            text = extract_text_from_doc(file_path)
+        except Exception as e:
+            print(f"Error processing .doc file {safe_file_name}: {str(e)}")
+            traceback.print_exc()
+            return None
+
+        doc_id = str(uuid.uuid4())
+        await safe_emit(
+            f"{user_id}/progress",
+            {"message": f"Processed {safe_file_name} (.doc) successfully"},
+        )
+        end_time = time.time()
+        print(
+            f"Time taken to process {safe_file_name} (.doc): {end_time - start_time} seconds"
+        )
+        return Document(
+            id=doc_id,
+            type=ext[1:],
+            file_name=safe_file_name,
+            content=[Page(number=1, text=text)],
+            title=title,
+            full_text=text,
+        )
 
     # --- Handle PowerPoint files ---
     if ext in {".ppt", ".pptx"}:
@@ -337,7 +394,17 @@ async def extract_document(
         )
 
     # --- Handle PDFs ---
-    if ext in [".pdf", ".xlsx", ".epub", ".odt", ".txt", ".rtf", ".docx", ".html", ".xml"]:
+    if ext in [
+        ".pdf",
+        ".xlsx",
+        ".epub",
+        ".odt",
+        ".txt",
+        ".rtf",
+        ".docx",
+        ".html",
+        ".xml",
+    ]:
         try:
             doc = fitz.open(file_path)
         except Exception as e:
@@ -348,6 +415,8 @@ async def extract_document(
         combined_texts = []
         ocr_tasks = {}
 
+        image_dir_base = f"data/{user_id}/threads/{thread_id}/images/{name}"
+
         for page_number in range(len(doc)):
             try:
                 page = doc.load_page(page_number)
@@ -357,18 +426,19 @@ async def extract_document(
                 page_text = ""
 
             image_names = []
-            image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+            image_dir = image_dir_base
             try:
                 os.makedirs(image_dir, exist_ok=True)
             except Exception:
                 traceback.print_exc()
 
-            # Extract embedded raster images
+            # Extract embedded raster images and schedule OCR only for these images
             try:
                 image_list = page.get_images(full=True)
             except Exception:
                 traceback.print_exc()
                 image_list = []
+
             for img_index, img in enumerate(image_list):
                 try:
                     xref = img[0]
@@ -387,47 +457,39 @@ async def extract_document(
                         traceback.print_exc()
                         continue
 
+                    # Put placeholder where the image OCR result should go
                     placeholder = f"{{PENDING_{image_name}}}"
                     page_text += f"\n\n{placeholder}"
                     image_names.append(image_name)
 
+                    # OCR only raster image files
                     ocr_tasks[placeholder] = asyncio.create_task(
                         image_parser(image_path)
                     )
                 except Exception:
                     traceback.print_exc()
 
-            # Extract vector diagrams (save as SVG)
-            svg_name = f"page{page_number + 1}.svg"
-            svg_path = os.path.join(image_dir, svg_name)
-            try:
-                svg = page.get_svg_image()
-                try:
-                    with open(svg_path, "w", encoding="utf-8") as f:
-                        f.write(svg)
-                except Exception:
-                    traceback.print_exc()
-
-                placeholder = f"{{VECTOR_{svg_name}}}"
-                page_text += f"\n\n{placeholder}"
-
-                png_name = f"page{page_number + 1}_vector.png"
-                png_path = os.path.join(image_dir, png_name)
-                try:
-                    pix = page.get_pixmap(dpi=300)
-                    pix.save(png_path)
-                    ocr_tasks[placeholder] = asyncio.create_task(image_parser(png_path))
-                    image_names.append(svg_name)
-                    image_names.append(png_name)
-                except Exception:
-                    traceback.print_exc()
-            except Exception as e:
-                print(f"No vector export available on page {page_number+1}: {e}")
-
             combined_texts.append(page_text)
             pages.append(
                 Page(number=page_number + 1, text=page_text, images=image_names)
             )
+
+        # Wait for OCR tasks from the embedded raster images only
+        for placeholder, task in ocr_tasks.items():
+            try:
+                image_text = await task
+            except Exception as e:
+                print(f"Error parsing image: {e}")
+                traceback.print_exc()
+                image_text = "[Image OCR failed]"
+
+            # Replace placeholder once per occurrence (should be exactly 1)
+            for page in pages:
+                if placeholder in page.text:
+                    page.text = page.text.replace(placeholder, image_text, 1)
+            combined_texts = [
+                txt.replace(placeholder, image_text, 1) for txt in combined_texts
+            ]
 
         # Wait for OCR tasks
         for placeholder, task in ocr_tasks.items():

@@ -4,7 +4,7 @@ from core.config import settings
 
 MONGO_URI = settings.DATABASE_URL
 client = MongoClient(MONGO_URI)
-db = client["bedrock"]
+db = client[settings.DATABASE_NAME]
 
 
 user_schema = {

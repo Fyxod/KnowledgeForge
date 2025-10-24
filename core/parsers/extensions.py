@@ -2,6 +2,7 @@
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".gif"}
 SUPPORTED_EXTENSIONS = {
     ".pdf",
+    ".doc",
     ".docx",
     ".rtf",
     ".txt",
