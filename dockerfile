@@ -1,6 +1,6 @@
 FROM node AS frontend-builder
 WORKDIR /frontend
-COPY Frontend/ ./
+COPY frontend/ ./
 RUN npm install && npm run build
 
 FROM python:3.11-slim
