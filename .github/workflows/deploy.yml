@@ -1,0 +1,73 @@
+name: CI/CD with Local Docker and SSH Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build Docker Image Locally
+    runs-on: self-hosted
+
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate timestamp
+        id: vars
+        run: echo "tag=$(date +'%Y-%m-%d-%H-%M')" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image (locally cached)
+        run: |
+          docker build -t samsung:latest -t samsung:${{ steps.vars.outputs.tag }} .
+
+  deploy:
+    name: Deploy Locally Built Image
+    runs-on: self-hosted
+    needs: build
+
+    steps:
+      - name: Stop and Remove old container if exists
+        run: |
+          docker stop samsung || true
+          docker rm samsung || true
+
+      - name: Run updated container
+        run: |
+          cd /home/kerito/
+          docker run -d \
+            --name samsung \
+            --env-file .env \
+            --dns=8.8.8.8 \
+            -p 8080:8080 -p 8000:8000 \
+            -v $(pwd)/data:/backend/data \
+            samsung:latest
+
+  push:
+    name: Push Image to Docker Hub
+    runs-on: self-hosted
+    needs: build
+
+    steps:
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin  
+
+      - name: Tag image for Docker Hub
+        run: |
+          docker tag samsung:latest ${{ secrets.DOCKER_USERNAME }}/samsung:latest
+          docker tag samsung:${{ needs.build.outputs.tag }} ${{ secrets.DOCKER_USERNAME }}/samsung:${{ needs.build.outputs.tag }}
+
+      - name: Push image to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/samsung:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/samsung:${{ needs.build.outputs.tag }}
