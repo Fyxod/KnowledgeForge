@@ -1,13 +1,14 @@
 FROM node AS frontend-builder
 WORKDIR /frontend
 COPY frontend/ ./
-RUN npm install && npm run build
+RUN npm install --verbose && npm run build --verbose
 
-FROM python:3.11-slim
+FROM python:3.11
 
 WORKDIR /backend 
 
 COPY requirements.txt .
+RUN python -m pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN apt-get update && apt-get install -y \
