@@ -1,6 +1,6 @@
-// API Configuration
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
+// // API Configuration
+// export const API_URL = 'http://localhost:3000';
+export const API_URL = 'http://172.16.218.27:3000';
 // Types
 export interface User {
   userId: string;
