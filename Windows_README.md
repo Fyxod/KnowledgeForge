@@ -121,7 +121,7 @@ source virtualEnv/bin/activate
 ### 2. Install Dependencies
 
 Make sure you have `pip` updated, then install the required packages:
-  
+   
 ```bash
 pip install -r requirements.txt
 
