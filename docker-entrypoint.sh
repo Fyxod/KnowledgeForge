@@ -8,4 +8,4 @@ gunicorn app.main:app \
     --bind 0.0.0.0:8000  &
 
 # Start nginx in foreground
-nginx -g "daemon off;"
+nginx -g "daemon off;" # used to serve frontend

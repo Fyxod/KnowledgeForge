@@ -55,14 +55,17 @@ if `npm -v` error's out try restarting your terminal / pc / vscode
 
 - run the installer and follow check the following option when prompted
 - check both options, in image one is unchecked
+- please make sure you installl python from the given link to avoid clashes with other versions of python
 
 ![alt text](assistance/python.png)
 
 
 
-## *Please read core/constant.py*
-
-> In line no 4 Change the `OLLAMA_MODEL` name to the model you want to use.
+## *Please read `core/constant.py`*
+- line no 13
+  - REMOTE_GPU = True,  # Use remote GPU LLMs
+  - default value is true set it to false to use local gpu servers
+  - set it to False to use local ollama servers
 
 
 # Setting Up the  Server's
@@ -85,9 +88,7 @@ navigate into the project directory:
 ```bash
 cd Knowledge-Synthesis-Platform
 ```
-```bash
-git checkout cpu-version
-```
+
 Follow these steps to set up and run the backend server:
 
 
@@ -126,7 +127,27 @@ pip install -r requirements.txt
 
 ```
 ### 3. Please rename .env.example to .env file in project root
-
+### 4. create models and run 2 instances of ollama for parallel processing
+ - Open Terminal 
+   ```bash
+   OLLAMA_HOST=0.0.0.0:11435 OLLAMA_KEEP_ALIVE=-1 ollama serve
+   ```
+- Open new terminal 
+  ```bash
+   OLLAMA_HOST=0.0.0.0:11434 OLLAMA_KEEP_ALIVE=3m ollama serve
+   ```
+- load and make custome models
+    - if you are running this for the first time please run the following command to setup the models
+    ```bash
+    ./setmodel.sh
+    ```
+ - to change parameters of models plese edit these files  
+    - for gpt oss 
+    - for qwen3
+    - run this to apply changes
+      ```bash
+      ./setmodel.sh
+      ```
 ### 4. Start the Server
 
 run the FastAPI server: 
@@ -139,7 +160,7 @@ python backend.py
 The server will start at:
 
 ```
-http://127.0.0.1:3000
+http://0.0.0.0:3000
 ```
 
 # Frontend Setup
