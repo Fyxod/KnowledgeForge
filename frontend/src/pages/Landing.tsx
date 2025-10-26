@@ -26,7 +26,7 @@ const Landing = () => {
             {/* <Brain className="w-8 h-8 text-primary" /> */}
             <div>
               <h1 className="text-xl font-bold">Knowledge Synthesis</h1>
-              <p className="text-xs text-muted-foreground">GPU Version</p>
+              <p className="text-xs text-muted-foreground">CPU Version</p>
             </div>
           </div>
           <Button variant="ghost" size="icon" onClick={toggleTheme}>
