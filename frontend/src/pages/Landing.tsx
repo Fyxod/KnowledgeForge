@@ -23,7 +23,7 @@ const Landing = () => {
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Brain className="w-8 h-8 text-primary" />
+            {/* <Brain className="w-8 h-8 text-primary" /> */}
             <div>
               <h1 className="text-xl font-bold">Knowledge Synthesis</h1>
               <p className="text-xs text-muted-foreground">GPU Version</p>

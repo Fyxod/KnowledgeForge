@@ -45,9 +45,9 @@ const Login = () => {
       
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-4">
-          <div className="flex items-center justify-center gap-2">
-            <Brain className="w-10 h-10 text-primary" />
-          </div>
+          {/* <div className="flex items-center justify-center gap-2"> */}
+            {/* <Brain className="w-10 h-10 text-primary" /> */}
+          {/* </div> */}
           <CardTitle className="text-2xl text-center">Welcome Back</CardTitle>
           <CardDescription className="text-center">
             Sign in to continue to Knowledge Synthesis

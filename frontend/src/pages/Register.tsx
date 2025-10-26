@@ -46,9 +46,9 @@ const Register = () => {
       
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-4">
-          <div className="flex items-center justify-center gap-2">
+          {/* <div className="flex items-center justify-center gap-2">
             <Brain className="w-10 h-10 text-primary" />
-          </div>
+          </div> */}
           <CardTitle className="text-2xl text-center">Create Account</CardTitle>
           <CardDescription className="text-center">
             Sign up to start chatting with your documents
