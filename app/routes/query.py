@@ -103,8 +103,8 @@ async def query(request: Request, body: QueryRequest):
 
                 state = AgentState(**state)
 
-                if getattr(state, "web_search_queries", None):
-                    for res in state.web_search_queries:
+                if getattr(state, "web_search_results", None):
+                    for res in state.web_search_results:
                         favicons = [
                             r.get("favicon") for r in res["results"] if r.get("favicon")
                         ]
@@ -263,8 +263,8 @@ async def query(request: Request, body: QueryRequest):
         )
 
         state = AgentState(**state)
-        if getattr(state, "web_search_queries", None):
-            for res in state.web_search_queries:
+        if getattr(state, "web_search_results", None):
+            for res in state.web_search_results:
                 favicons = [
                     {
                         "favicon": r.get("favicon", None),
