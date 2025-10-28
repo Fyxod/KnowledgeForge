@@ -33,8 +33,9 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
 
   return (
     <div className="h-full min-h-0 min-w-0 flex flex-col">
+      {/* Match the header sizing/style used in `ThreadSidebar` so the collapse control lines up visually */}
       <div
-        className="w-full h-16 flex items-center justify-center border-l bg-sidebar p-3 cursor-pointer"
+        className="w-full flex items-center justify-center border-l bg-sidebar p-4 border-b cursor-pointer"
         role="button"
         tabIndex={0}
         aria-label={collapsed ? 'Expand right sidebar' : 'Collapse right sidebar'}
@@ -46,8 +47,8 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
           }
         }}
       >
-        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onToggleCollapse && onToggleCollapse(); }} aria-label={collapsed ? 'Expand' : 'Collapse'}>
-          {collapsed ? <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 19l-7-7 7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+        <Button variant="ghost" className="h-10 w-10" onClick={(e) => { e.stopPropagation(); onToggleCollapse && onToggleCollapse(); }} aria-label={collapsed ? 'Expand' : 'Collapse'}>
+          {collapsed ? <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 19l-7-7 7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
         </Button>
       </div>
 
