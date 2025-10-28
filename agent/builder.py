@@ -9,6 +9,7 @@ from agent.graph_nodes import (
     web_search,
     document_summarizer,
     global_summarizer,
+    self_knowledge,
 )
 from agent.state import AgentState
 from core.constants import *
@@ -26,6 +27,7 @@ graph_builder.add_node(ANSWER, lambda state: END)
 graph_builder.add_node(FAILURE, failure)
 graph_builder.add_node(DOCUMENT_SUMMARIZER, document_summarizer)
 graph_builder.add_node(GLOBAL_SUMMARIZER, global_summarizer)
+graph_builder.add_node(SELF_KNOWLEDGE, self_knowledge)
 
 # Set the entry point
 graph_builder.set_entry_point(RETRIEVER)
@@ -42,7 +44,7 @@ graph_builder.add_conditional_edges(
         WEB_SEARCH: WEB_SEARCH,
         DOCUMENT_SUMMARIZER: DOCUMENT_SUMMARIZER,
         GLOBAL_SUMMARIZER: GLOBAL_SUMMARIZER,
-        FAILURE: FAILURE,
+        FAILURE: SELF_KNOWLEDGE,
     },
 )
 
@@ -52,21 +54,24 @@ graph_builder.add_conditional_edges(
     {
         ANSWER: END,
         GENERATE: GENERATE,
+        FAILURE: SELF_KNOWLEDGE,
     },
 )
+
 graph_builder.add_conditional_edges(
     GLOBAL_SUMMARIZER,
     summary_router,
     {
         ANSWER: END,
         GENERATE: GENERATE,
+        FAILURE: SELF_KNOWLEDGE,
     },
 )
 
 # Web search loops back to GENERATE
 graph_builder.add_edge(WEB_SEARCH, GENERATE)
 
-graph_builder.add_edge(FAILURE, END)
+graph_builder.add_edge(SELF_KNOWLEDGE, END)
 
 # Compile the agent
 Agent = graph_builder.compile()

@@ -9,7 +9,6 @@ class ChunksUsed(BaseModel):
     )
     # title: str = Field(description="The title of the document used.")
     page_no: int = Field(description="The page_no of the document used.")
-    chunk_index: int = Field(description="The chunk_index used from the document.")
 
 
 class MainLLMOutputInternal(BaseModel):
@@ -18,6 +17,7 @@ class MainLLMOutputInternal(BaseModel):
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
+        "failure",
     ] = Field(description="The action to take based on the answer.")
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -35,6 +35,7 @@ class MainLLMOutputExternal(BaseModel):
         "web_search",
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
+        "failure",
     ] = Field(description="The action to take based on the answer.")
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -47,6 +48,10 @@ class MainLLMOutputExternal(BaseModel):
     document_id: Optional[str] = Field(
         description="The ID of the document to summarize if using document_summarizer, if applicable."
     )
+
+
+class SelfKnowledgeLLMOutput(BaseModel):
+    answer: str = Field(description="The answer to the user's question.")
 
 
 class DecompositionLLMOutput(BaseModel):

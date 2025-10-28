@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 from core.constants import INTERNAL, EXTERNAL
 
+
 def main_prompt(
     messages: list,
     chunks: str,
@@ -25,7 +26,6 @@ def main_prompt(
                     "- Highlight important terms in **bold** and examples in *italics*.\n"
                     "- Avoid long paragraphs — keep each idea short and readable.\n"
                     "- Merge overlapping ideas and remove redundancy.\n"
-                    "- If any information is missing, state:  *Information not found in available documents.*\n\n"
                     "###  Context Handling\n"
                     "- Extract and use as much relevant information as possible from the documents.\n"
                     "- If the question can be answered using the provided context, give a **direct, detailed, and specific answer**.\n"
@@ -161,6 +161,29 @@ def main_prompt(
         # Final user question
     else:
         raise ValueError("Invalid mode. Mode must be either 'INTERNAL' or 'EXTERNAL'.")
+
+    # Defining actions
+    contents.append(
+        {
+            "role": "system",
+            "parts": (
+                "You can perform the following actions:\n"
+                "- **answer**: Directly answer the question using available information.\n"
+                + (
+                    "- **web_search**: Search for recent or external information not in the documents.\n"
+                    if mode == EXTERNAL
+                    else ""
+                )
+                + "- **document_summarizer**: Request a summary of a specific document (requires `document_id`).\n"
+                "- **global_summarizer**: Request a collective summary of all documents.\n"
+                + (
+                    "- **failure**: Indicate inability to answer with available information.\n"
+                    if mode == INTERNAL
+                    else ""
+                )
+            ),
+        }
+    )
 
     # Final user question
     contents.append({"role": "user", "parts": f" **Question:** {question}\n"})

@@ -288,12 +288,9 @@ async def query(request: Request, body: QueryRequest):
 
         for doc_i in chunks_used:
             for doc_j in chunks:
-                meta = doc_j.get("metadata", {})
-                if (
-                    doc_i.document_id == meta.get("document_id")
-                    and doc_i.page_no == meta.get("page_no")
-                    and doc_i.chunk_index == meta.get("chunk_index")
-                ):
+                if doc_i.document_id == doc_j.get(
+                    "document_id"
+                ) and doc_i.page_no == doc_j.get("page_no"):
                     documents_used.append(doc_j)
                     break
 
@@ -301,11 +298,12 @@ async def query(request: Request, body: QueryRequest):
     for doc in documents_used:
         modified_used.append(
             {
-                "title": doc.get("metadata", {}).get("title"),
-                "document_id": doc.get("metadata", {}).get("document_id"),
-                "page_no": doc.get("metadata", {}).get("page_no"),
+                "title": doc.get("title", "Untitled Document"),
+                "document_id": doc.get("document_id", "unknown"),
+                "page_no": doc.get("page_no", 1),
             }
         )
+
     print(f"Found {len(documents_used)} citation matches")
 
     with open("debug_agent_response.json", "w", encoding="utf-8") as f:
@@ -321,6 +319,7 @@ async def query(request: Request, body: QueryRequest):
                 "decomposition_result": decomposition_result.dict(),
                 "chunks": chunks,
                 "chunks_used": [doc.dict() for doc in chunks_used],
+                "modified_used": modified_used,
             },
             f,
             ensure_ascii=False,

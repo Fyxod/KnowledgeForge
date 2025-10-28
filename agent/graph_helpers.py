@@ -3,6 +3,7 @@ from typing import Dict, List
 
 from agent.state import AgentState
 from core.llm.prompts.main_prompt import main_prompt
+from core.llm.prompts.self_knowledge_prompt import self_knowledge_prompt
 
 
 def get_recent_history(
@@ -44,4 +45,21 @@ def build_main_prompt(state: AgentState):
         initial_search_answer=state.initial_search_answer or None,
         initial_search_results=state.initial_search_results or None,
         mode=state.mode,
+    )
+
+
+def build_self_knowledge_prompt(
+    state: AgentState,
+):
+    """
+    Builds the self-knowledge prompt for the agent based on the current state.
+    """
+
+    recent_chats = get_recent_history(
+        state.messages, turns=5
+    )  # fine tune the no of turns
+
+    return self_knowledge_prompt(
+        messages=recent_chats,
+        question=state.query or state.resolved_query or state.original_query,
     )

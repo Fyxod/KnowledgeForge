@@ -63,6 +63,7 @@ async def extract_document(
     # Normalize user/thread to avoid crashing on None
     user_id = user_id or "unknown_user"
     thread_id = thread_id or "unknown_thread"
+    doc_id = str(uuid.uuid4())[:5]
 
     async def safe_emit(channel: str, payload: dict):
         try:
@@ -91,7 +92,6 @@ async def extract_document(
             traceback.print_exc()
             return None
 
-        doc_id = str(uuid.uuid4())
         await safe_emit(
             f"{user_id}/progress",
             {"message": f"processed {safe_file_name} successfully"},
@@ -189,7 +189,6 @@ async def extract_document(
 
                 page_text = page_text.replace(placeholder, image_text, 1)
 
-            doc_id = str(uuid.uuid4())
             await safe_emit(
                 f"{user_id}/progress",
                 {"message": f"Processed {safe_file_name} (Markdown) successfully"},
@@ -239,7 +238,6 @@ async def extract_document(
             # Optional: compact whitespace
             text = re.sub(r"\s{2,}", " ", text).strip()
 
-            doc_id = str(uuid.uuid4())
             await safe_emit(
                 f"{user_id}/progress",
                 {"message": f"Processed {safe_file_name} (Excel/CSV) successfully"},
@@ -272,7 +270,6 @@ async def extract_document(
             traceback.print_exc()
             return None
 
-        doc_id = str(uuid.uuid4())
         await safe_emit(
             f"{user_id}/progress",
             {"message": f"Processed {safe_file_name} (.doc) successfully"},
@@ -376,7 +373,6 @@ async def extract_document(
         except Exception:
             traceback.print_exc()
 
-        doc_id = str(uuid.uuid4())
         await safe_emit(
             f"{user_id}/progress", {"message": f"Processing {title} successfully..."}
         )
@@ -491,7 +487,6 @@ async def extract_document(
                 txt.replace(placeholder, image_text, 1) for txt in combined_texts
             ]
 
-        doc_id = str(uuid.uuid4())
         await safe_emit(
             f"{user_id}/progress", {"message": f"Processing {title} successfully..."}
         )

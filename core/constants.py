@@ -49,6 +49,7 @@ ROUTER = "router"
 FAILURE = "failure"
 GLOBAL_SUMMARIZER = "global_summarizer"
 DOCUMENT_SUMMARIZER = "document_summarizer"
+SELF_KNOWLEDGE = "self_knowledge"
 MAX_WEB_SEARCH = 2
 INTERNAL = "Internal"
 EXTERNAL = "External"

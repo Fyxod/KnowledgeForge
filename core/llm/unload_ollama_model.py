@@ -1,6 +1,6 @@
 import httpx
 import asyncio
-
+from core.constants import SWITCHES
 
 async def unload_ollama_model(model: str, port: int = 11434):
     """
@@ -29,10 +29,11 @@ async def unload_ollama_model(model: str, port: int = 11434):
                 print(f"Successfully requested unload for model '{model}'.")
 
     except httpx.ConnectError:
-        print(
-            f"Failed to connect to Ollama API at {url}. "
-            "Is the Ollama service running?"
-        )
+        if not SWITCHES["REMOTE_GPU"]:
+            print(
+                f"Failed to connect to Ollama API at {url}. "
+                "Is the Ollama service running?"
+            )
     except httpx.TimeoutException:
         print("Request to Ollama API timed out.")
     except httpx.HTTPStatusError as e:

@@ -6,14 +6,24 @@ import asyncio
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from agent.graph_helpers import build_main_prompt, parallel_search
+from agent.graph_helpers import (
+    build_main_prompt,
+    parallel_search,
+    build_self_knowledge_prompt,
+)
 from agent.state import AgentState
 from agent.tools.search import search_tavily as search_tool
 
 from core.constants import *
 from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
-from core.llm.outputs import MainLLMOutputExternal, MainLLMOutputInternal
+from core.llm.outputs import (
+    MainLLMOutputExternal,
+    MainLLMOutputInternal,
+    SelfKnowledgeLLMOutput,
+)
+
+os.makedirs("DEBUG", exist_ok=True)
 
 
 async def retriever(state: AgentState) -> AgentState:
@@ -38,7 +48,22 @@ async def retriever(state: AgentState) -> AgentState:
         f"Retrieved {len(retrieved_docs)} documents in {end_time - start_time:.2f} seconds for user {state.user_id}"
     )
     retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
-    state.chunks = retrieved_docs
+    modified_docs = []
+    for doc in retrieved_docs:
+        metadata = doc.get("metadata", {}) or {}
+        modified_docs.append(
+            {
+                "document_id": metadata.get("document_id", ""),
+                "title": metadata.get("title", "Unknown Title"),
+                "page_no": metadata.get("page_no", 1),
+                "content": doc.get("page_content", ""),
+            }
+        )
+
+    with open(f"DEBUG/retrieved_docs.json", "w") as f:
+        json.dump(modified_docs, f, indent=2)
+
+    state.chunks = modified_docs
     return state
 
 
@@ -122,6 +147,31 @@ async def failure(state: AgentState) -> AgentState:
     state.answer = failure_message
     return state
     # return END if the above line ever throws error
+
+
+async def self_knowledge(state: AgentState) -> AgentState:
+    if state.mode == EXTERNAL:
+        state.answer = (
+            "I am unable to answer your question at this time. "
+            "Please try rephrasing or asking a different question."
+        )
+        return state
+
+    print("Using self-knowledge to answer the question.")
+    prompt = build_self_knowledge_prompt(state)
+    with open(f"DEBUG/self_knowledge_prompt.json", "w") as f:
+        json.dump(prompt, f, indent=2)
+
+    result = await invoke_llm(
+        response_schema=SelfKnowledgeLLMOutput,
+        contents=prompt,
+        gpu_model=state.llm.model,
+        port=state.llm.port,
+    )
+    result = SelfKnowledgeLLMOutput.model_validate(result)
+    state.messages.append(AIMessage(content=result.answer))
+    state.answer = result.answer
+    return state
 
 
 async def document_summarizer(state: AgentState) -> AgentState:
@@ -220,6 +270,8 @@ def main_router(state: AgentState) -> str:
     elif state.action == GLOBAL_SUMMARIZER:
         print("Router -> Summarizing global context")
         return GLOBAL_SUMMARIZER
+    elif state.action == FAILURE:
+        return FAILURE
 
     return ANSWER
 
