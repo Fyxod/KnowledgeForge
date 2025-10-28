@@ -1,0 +1,152 @@
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Map as MapIcon, Cloud, FileText, MapPin, Scale } from 'lucide-react';
+import MindMapModal from './MindMapModal';
+import WordCloudModal from './WordCloudModal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
+import { Thread } from '@/lib/api';
+
+interface Props {
+  threadId?: string;
+  threads?: Record<string, Thread>;
+  // controlled collapsed state from parent (true = collapsed)
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = false, onToggleCollapse }) => {
+  // internal open state for modals
+  const [mindOpen, setMindOpen] = React.useState(false);
+  const [wordOpen, setWordOpen] = React.useState(false);
+  const [docsOpen, setDocsOpen] = React.useState(false);
+  const [roadmapOpen, setRoadmapOpen] = React.useState(false);
+  const [prosOpen, setProsOpen] = React.useState(false);
+
+  const documents = React.useMemo(() => {
+    if (!threadId) return [];
+    const t = threads[threadId];
+    return t?.documents || [];
+  }, [threadId, threads]);
+
+  return (
+    <div className="h-full min-h-0 min-w-0 flex flex-col">
+      {/* Match the header sizing/style used in `ThreadSidebar` so the collapse control lines up visually */}
+      <div
+        className="w-full flex items-center justify-center border-l bg-sidebar p-4 border-b cursor-pointer"
+        role="button"
+        tabIndex={0}
+        aria-label={collapsed ? 'Expand right sidebar' : 'Collapse right sidebar'}
+        onClick={() => onToggleCollapse && onToggleCollapse()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleCollapse && onToggleCollapse();
+          }
+        }}
+      >
+        <Button variant="ghost" className="h-10 w-10" onClick={(e) => { e.stopPropagation(); onToggleCollapse && onToggleCollapse(); }} aria-label={collapsed ? 'Expand' : 'Collapse'}>
+          {collapsed ? <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 19l-7-7 7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+        </Button>
+      </div>
+
+      <div className="flex-1 w-full flex flex-col items-start pt-4 px-3 border-l bg-background">
+        {/* Studio buttons moved up here. When collapsed, show icon-only column; when expanded show labeled buttons */}
+        {collapsed ? (
+          <div className="flex flex-col items-center w-full space-y-3">
+            <Button variant="ghost" size="icon" onClick={() => setMindOpen(true)} disabled={!threadId} aria-label="Mind Map">
+              <MapIcon className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setWordOpen(true)} disabled={!threadId} aria-label="Word Cloud">
+              <Cloud className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setDocsOpen(true)} disabled={!threadId} aria-label="Documents">
+              <FileText className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setRoadmapOpen(true)} disabled={!threadId} aria-label="Roadmap">
+              <MapPin className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setProsOpen(true)} disabled={!threadId} aria-label="Pros and Cons">
+              <Scale className="w-5 h-5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="w-full">
+            <div className="mb-2 font-semibold">Studio</div>
+            <div className="space-y-2">
+              <Button className="w-full justify-start" variant="ghost" onClick={() => setDocsOpen(true)} disabled={!threadId}>
+                <FileText className="w-4 h-4 mr-2" /> Documents
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => setMindOpen(true)} disabled={!threadId}>
+                <MapIcon className="w-4 h-4 mr-2" /> Mind Map
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => setWordOpen(true)} disabled={!threadId}>
+                <Cloud className="w-4 h-4 mr-2" /> Word Cloud
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => setRoadmapOpen(true)} disabled={!threadId}>
+                <MapPin className="w-4 h-4 mr-2" /> Roadmap
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => setProsOpen(true)} disabled={!threadId}>
+                <Scale className="w-4 h-4 mr-2" /> Pros / Cons
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
+      <MindMapModal open={mindOpen} onOpenChange={setMindOpen} threadId={threadId ?? ''} />
+      <WordCloudModal open={wordOpen} onOpenChange={setWordOpen} threadId={threadId ?? ''} documents={documents} />
+
+      <Dialog open={docsOpen} onOpenChange={setDocsOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Documents</DialogTitle>
+            <DialogDescription>Documents in this thread</DialogDescription>
+          </DialogHeader>
+          <div className="mt-2">
+            <ScrollArea className="h-64 border rounded-md p-2">
+              {documents.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-4">No documents in this thread.</p>
+              ) : (
+                <div className="space-y-2">
+                  {documents.map((d: any) => (
+                    <div key={d.docId} className="p-2 rounded hover:bg-accent flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{d.title}</div>
+                        <div className="text-sm text-muted-foreground">{d.type} • {new Date(d.time_uploaded).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={roadmapOpen} onOpenChange={setRoadmapOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Roadmap</DialogTitle>
+            <DialogDescription>Roadmap feature is under development.</DialogDescription>
+          </DialogHeader>
+          <div className="p-4 text-sm text-muted-foreground">This feature is coming soon. We are working on a roadmap view to plan and visualize tasks.</div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={prosOpen} onOpenChange={setProsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pros / Cons</DialogTitle>
+            <DialogDescription>Pros & Cons feature is under development.</DialogDescription>
+          </DialogHeader>
+          <div className="p-4 text-sm text-muted-foreground">This feature is coming soon. We'll add a pros and cons analyzer to summarize trade-offs for selected content.</div>
+        </DialogContent>
+      </Dialog>
+    </div>
+    );
+};
+
+export default RightSidebar;

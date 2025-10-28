@@ -232,7 +232,7 @@ const ThreadView = () => {
           <Switch checked={webEnhanced} onCheckedChange={setWebEnhanced} />
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
@@ -270,7 +270,7 @@ const ThreadView = () => {
           <Button variant="outline" size="sm" onClick={() => setWordCloudOpen(true)} disabled={!threadId}>
             Word Cloud
           </Button>
-        </div>
+        </div> */}
       </div>
 
       {/* Chat Area */}
