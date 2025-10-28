@@ -12,6 +12,37 @@ interface ChatMessageProps {
 export const ChatMessage = ({ chat }: ChatMessageProps) => {
   const isUser = chat.type === 'user';
   const [mdEnabled, setMdEnabled] = React.useState(true);
+  const displayTime = React.useMemo(() => {
+    // User-requested simple logic:
+    // 1) Try new Date(chat.timestamp + 'Z') and format to IST
+    // 2) If that yields an invalid date, use current time
+    try {
+      const raw = chat.timestamp ?? '';
+      const parsed = new Date(String(raw) + 'Z');
+      if (isNaN(parsed.getTime())) {
+        return new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'Asia/Kolkata'
+        });
+      }
+
+      return parsed.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata'
+      });
+    } catch (e) {
+      return new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata'
+      });
+    }
+  }, [chat.timestamp]);
 
   return (
     <div className={cn('flex gap-3 p-4', isUser ? 'justify-end' : 'justify-start')}>
@@ -52,9 +83,7 @@ export const ChatMessage = ({ chat }: ChatMessageProps) => {
             <SafeMarkdownRenderer content={chat.content} enableMarkdown={mdEnabled} />
           </div>
         )}
-        <p className="text-xs opacity-70 mt-2">
-          {new Date(chat.timestamp).toLocaleTimeString()}
-        </p>
+        <p className="text-xs opacity-70 mt-2">{displayTime}</p>
       </div>
 
       {isUser && (

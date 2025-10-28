@@ -36,6 +36,17 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
+  // Helper: parse timestamp by appending 'Z' (interpret as UTC); fall back to current time if invalid
+  const parseTimestampAsUTC = (ts?: string) => {
+    try {
+      const parsed = new Date(String(ts ?? '') + 'Z');
+      if (isNaN(parsed.getTime())) return new Date();
+      return parsed;
+    } catch {
+      return new Date();
+    }
+  };
+
   const handleDelete = async (threadId: string, threadName: string) => {
     try {
       
@@ -148,7 +159,7 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      {formatDistanceToNow(new Date(thread.updatedAt), { addSuffix: true })}
+                      {formatDistanceToNow(parseTimestampAsUTC(thread.updatedAt), { addSuffix: true })}
                     </div>
                   </button>
                   <button
