@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useMatch } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Brain, LogOut, User, Moon, Sun } from 'lucide-react';
 import { ThreadSidebar } from '@/components/ThreadSidebar';
+import RightSidebar from '@/components/RightSidebar';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { removeAuthToken, removeCurrentUser, API_URL, getAuthToken } from '@/lib/api';
@@ -27,16 +28,21 @@ const Dashboard = () => {
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length === 2) return parsed as number[];
+        // support both 2-panel and 3-panel layouts stored previously
+        if (Array.isArray(parsed) && parsed.length === 3) return parsed as number[];
+        if (Array.isArray(parsed) && parsed.length === 2) return [parsed[0], parsed[1], 0] as number[];
       } catch {}
     }
-    return [22, 78] as number[]; // percentage widths
+    return [18, 64, 18] as number[]; // percentage widths: left, middle, right
   }, []);
   const [layout, setLayout] = useState<number[]>(defaultLayout);
   const prevSidebarSizeRef = useRef<number>(layout[0]);
+  const prevRightSizeRef = useRef<number>(layout[2]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [collapsedPercent, setCollapsedPercent] = useState<number>(6);
   const panelRef = useRef<any>(null);
+  const rightPanelRef = useRef<any>(null);
+  const [rightCollapsed, setRightCollapsed] = useState<boolean>(false);
   const titleSocketRef = useRef<Socket | null>(null);
   const latestUserRef = useRef(user);
   useEffect(() => { latestUserRef.current = user; }, [user]);
@@ -74,6 +80,23 @@ const Dashboard = () => {
       }
     }
   }, [sidebarCollapsed, collapsedPercent]);
+
+  // Handle right panel collapse/expand by resizing the right panel
+  useEffect(() => {
+    if (rightPanelRef.current && rightPanelRef.current.resize) {
+      if (rightCollapsed) {
+        const currentSize = layout[2];
+        if (currentSize > collapsedPercent) {
+          prevRightSizeRef.current = currentSize;
+        }
+        rightPanelRef.current.resize(collapsedPercent);
+      } else {
+        const restoredSize = prevRightSizeRef.current || defaultLayout[2] || 18;
+        const targetSize = Math.min(40, Math.max(6, restoredSize));
+        rightPanelRef.current.resize(targetSize);
+      }
+    }
+  }, [rightCollapsed, collapsedPercent]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -198,7 +221,7 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <div ref={containerRef} className="flex-1 flex overflow-hidden min-h-0 min-w-0">
+  <div ref={containerRef} className="flex-1 flex overflow-hidden min-h-0 min-w-0">
         <ResizablePanelGroup
           direction="horizontal"
           className="w-full min-h-0 min-w-0"
@@ -209,13 +232,13 @@ const Dashboard = () => {
             localStorage.setItem(storageKey, JSON.stringify(sizes));
           }}
         >
-          <ResizablePanel
-            ref={panelRef}
-            defaultSize={sidebarCollapsed ? collapsedPercent : layout[0]}
-            minSize={sidebarCollapsed ? collapsedPercent : 12}
-            maxSize={sidebarCollapsed ? collapsedPercent : 40}
-            collapsible={false}
-          >
+            <ResizablePanel
+              ref={panelRef}
+              defaultSize={sidebarCollapsed ? collapsedPercent : layout[0]}
+              minSize={sidebarCollapsed ? collapsedPercent : 12}
+              maxSize={sidebarCollapsed ? collapsedPercent : 40}
+              collapsible={false}
+            >
             <div className="h-full min-h-0 min-w-0">
               <ThreadSidebar
                 threads={user.threads || {}}
@@ -228,12 +251,30 @@ const Dashboard = () => {
             </div>
           </ResizablePanel>
           {!sidebarCollapsed && <ResizableHandle withHandle />}
-          <ResizablePanel defaultSize={sidebarCollapsed ? 100 - collapsedPercent : layout[1]} minSize={40}>
+          <ResizablePanel defaultSize={sidebarCollapsed ? 100 - collapsedPercent - (rightCollapsed ? collapsedPercent : layout[2]) : layout[1]} minSize={40}>
             <main className="h-full overflow-hidden min-h-0 min-w-0">
               <Outlet />
             </main>
           </ResizablePanel>
+          {!rightCollapsed && <ResizableHandle withHandle />}
+          <ResizablePanel
+            ref={rightPanelRef}
+            defaultSize={rightCollapsed ? collapsedPercent : layout[2]}
+            minSize={rightCollapsed ? collapsedPercent : 6}
+            maxSize={rightCollapsed ? collapsedPercent : 40}
+            collapsible={false}
+          >
+            <div className="h-full min-h-0 min-w-0">
+              <RightSidebar
+                threadId={activeThreadId}
+                threads={user.threads}
+                collapsed={rightCollapsed}
+                onToggleCollapse={() => setRightCollapsed((p) => !p)}
+              />
+            </div>
+          </ResizablePanel>
         </ResizablePanelGroup>
+        
       </div>
     </div>
   );
