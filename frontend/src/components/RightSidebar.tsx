@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { Thread } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 interface Props {
   threadId?: string;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = false, onToggleCollapse }) => {
+  const { refreshUser } = useAuth();
   // internal open state for modals
   const [mindOpen, setMindOpen] = React.useState(false);
   const [wordOpen, setWordOpen] = React.useState(false);
@@ -31,6 +33,18 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
     const t = threads[threadId];
     return t?.documents || [];
   }, [threadId, threads]);
+
+  const openAfterRefresh = async (setter: (v: boolean) => void) => {
+    try {
+      // Fetch latest user/threads so documents reflect recent uploads
+      await refreshUser();
+    } catch (e) {
+      // Non-blocking: if refresh fails, still open with current data
+      console.debug('RightSidebar refreshUser failed (non-blocking):', e);
+    } finally {
+      setter(true);
+    }
+  };
 
   return (
     <div className="h-full min-h-0 min-w-0 flex flex-col">
@@ -57,23 +71,23 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
         {/* Studio buttons moved up here. When collapsed, show icon-only column; when expanded show labeled buttons */}
         {collapsed ? (
           <div className="flex flex-col items-center w-full space-y-3">
-            <Button variant="ghost" size="icon" onClick={() => setDocsOpen(true)} disabled={!threadId} aria-label="Documents">
+            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setDocsOpen)} disabled={!threadId} aria-label="Documents">
               <FileText className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setSummaryOpen(true)} disabled={!threadId} aria-label="Summary">
+            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setSummaryOpen)} disabled={!threadId} aria-label="Summary">
               <Sparkles className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setMindOpen(true)} disabled={!threadId} aria-label="Mind Map">
+            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setMindOpen)} disabled={!threadId} aria-label="Mind Map">
               <MapIcon className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setWordOpen(true)} disabled={!threadId} aria-label="Word Cloud">
+            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setWordOpen)} disabled={!threadId} aria-label="Word Cloud">
               <Cloud className="w-5 h-5" />
             </Button>
 
-            <Button variant="ghost" size="icon" onClick={() => setRoadmapOpen(true)} disabled={!threadId} aria-label="Roadmap">
+            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId} aria-label="Roadmap">
               <MapPin className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setProsOpen(true)} disabled={!threadId} aria-label="Pros and Cons">
+            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setProsOpen)} disabled={!threadId} aria-label="Pros and Cons">
               <Scale className="w-5 h-5" />
             </Button>
           </div>
@@ -81,22 +95,22 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
           <div className="w-full">
             <div className="mb-2 font-semibold">Studio</div>
             <div className="space-y-2">
-              <Button className="w-full justify-start" variant="ghost" onClick={() => setDocsOpen(true)} disabled={!threadId}>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setDocsOpen)} disabled={!threadId}>
                 <FileText className="w-4 h-4 mr-2" /> Documents
               </Button>
-              <Button className="w-full justify-start" variant="ghost" onClick={() => setSummaryOpen(true)} disabled={!threadId}>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setSummaryOpen)} disabled={!threadId}>
                 <Sparkles className="w-4 h-4 mr-2" /> Summary
               </Button>
-              <Button className="w-full justify-start" variant="ghost" onClick={() => setMindOpen(true)} disabled={!threadId}>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setMindOpen)} disabled={!threadId}>
                 <MapIcon className="w-4 h-4 mr-2" /> Mind Map
               </Button>
-              <Button className="w-full justify-start" variant="ghost" onClick={() => setWordOpen(true)} disabled={!threadId}>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setWordOpen)} disabled={!threadId}>
                 <Cloud className="w-4 h-4 mr-2" /> Word Cloud
               </Button>
-              <Button className="w-full justify-start" variant="ghost" onClick={() => setRoadmapOpen(true)} disabled={!threadId}>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId}>
                 <MapPin className="w-4 h-4 mr-2" /> Roadmap
               </Button>
-              <Button className="w-full justify-start" variant="ghost" onClick={() => setProsOpen(true)} disabled={!threadId}>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setProsOpen)} disabled={!threadId}>
                 <Scale className="w-4 h-4 mr-2" /> Pros / Cons
               </Button>
             </div>

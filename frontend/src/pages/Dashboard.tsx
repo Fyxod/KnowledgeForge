@@ -41,8 +41,10 @@ const Dashboard = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [collapsedPercent, setCollapsedPercent] = useState<number>(6);
   const panelRef = useRef<any>(null);
+  const middlePanelRef = useRef<any>(null);
   const rightPanelRef = useRef<any>(null);
-  const [rightCollapsed, setRightCollapsed] = useState<boolean>(false);
+  // Start the right sidebar collapsed by default
+  const [rightCollapsed, setRightCollapsed] = useState<boolean>(true);
   const titleSocketRef = useRef<Socket | null>(null);
   const latestUserRef = useRef(user);
   useEffect(() => { latestUserRef.current = user; }, [user]);
@@ -61,6 +63,20 @@ const Dashboard = () => {
   }, []);
   const match = useMatch('/dashboard/threads/:threadId');
   const activeThreadId = match?.params.threadId;
+
+  // Normalize initial middle/right sizes after first paint to avoid partial render/clipping
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      const left = layout[0];
+      const desiredRight = rightCollapsed
+        ? collapsedPercent
+        : Math.min(40, Math.max(6, layout[2] ?? defaultLayout[2] ?? 18));
+      const desiredMiddle = Math.max(40, 100 - left - desiredRight);
+
+      if (middlePanelRef.current?.resize) middlePanelRef.current.resize(desiredMiddle);
+      if (rightPanelRef.current?.resize) rightPanelRef.current.resize(desiredRight);
+    });
+  }, []);
 
   // Handle sidebar collapse/expand by resizing the panel
   useEffect(() => {
@@ -89,11 +105,24 @@ const Dashboard = () => {
         if (currentSize > collapsedPercent) {
           prevRightSizeRef.current = currentSize;
         }
-        rightPanelRef.current.resize(collapsedPercent);
+        // Collapse right; expand middle to take freed space
+        const left = layout[0];
+        const targetRight = collapsedPercent;
+        const targetMiddle = Math.max(40, 100 - left - targetRight);
+        // Resize middle first then right to avoid clamping
+        if (middlePanelRef.current?.resize) middlePanelRef.current.resize(targetMiddle);
+        rightPanelRef.current.resize(targetRight);
       } else {
         const restoredSize = prevRightSizeRef.current || defaultLayout[2] || 18;
-        const targetSize = Math.min(40, Math.max(6, restoredSize));
-        rightPanelRef.current.resize(targetSize);
+        const targetRight = Math.min(40, Math.max(6, restoredSize));
+        const left = layout[0];
+        // Allocate remaining width to middle respecting its min (40)
+        const targetMiddle = Math.max(40, 100 - left - targetRight);
+        // Apply in an animation frame to ensure layout is ready
+        requestAnimationFrame(() => {
+          if (middlePanelRef.current?.resize) middlePanelRef.current.resize(targetMiddle);
+          rightPanelRef.current.resize(targetRight);
+        });
       }
     }
   }, [rightCollapsed, collapsedPercent]);
@@ -251,7 +280,7 @@ const Dashboard = () => {
             </div>
           </ResizablePanel>
           {!sidebarCollapsed && <ResizableHandle withHandle />}
-          <ResizablePanel defaultSize={sidebarCollapsed ? 100 - collapsedPercent - (rightCollapsed ? collapsedPercent : layout[2]) : layout[1]} minSize={40}>
+          <ResizablePanel ref={middlePanelRef} defaultSize={sidebarCollapsed ? 100 - collapsedPercent - (rightCollapsed ? collapsedPercent : layout[2]) : layout[1]} minSize={40}>
             <main className="h-full overflow-hidden min-h-0 min-w-0">
               <Outlet />
             </main>
