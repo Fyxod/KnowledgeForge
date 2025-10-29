@@ -333,11 +333,17 @@ export const api = {
       },
       body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
     });
+    let data: any = null;
     try {
-      return await response.json();
+      data = await response.json();
     } catch (_) {
-      return { status: false, message: `Failed to parse summary response (${response.status})` };
+      return { status: false, error: `Failed to parse summary response (${response.status})` };
     }
+    if (!response.ok) {
+      // Normalize error shape
+      return { status: false, error: data?.detail || data?.message || 'Summary request failed' };
+    }
+    return data as SummaryResponse;
   },
 };
 

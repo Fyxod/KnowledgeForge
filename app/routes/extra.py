@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from core.database import db
 from core.word_cloud import generate_word_cloud
 from app.socket_handler import sio
+from core.constants import SWITCHES
 
 router = APIRouter(prefix="", tags=["extra"])
 
@@ -161,6 +162,9 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
 
     if not payload:
         return {"error": "User not authenticated"}
+    
+    if(not SWITCHES["SUMMARIZATION"]):
+        return {"message": "Summarization feature is disabled"}
 
     thread_id = body.thread_id
     document_id = body.document_id
@@ -192,4 +196,4 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
             except Exception as e:
                 continue
 
-    return {"status": False, "message": "No summary found for the given document_id"}
+    return {"status": False, "error": "Summary not yet generated. Generating..."}

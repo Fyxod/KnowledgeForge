@@ -40,8 +40,18 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
       if (res?.status && res.summary) {
         setSummary(res.summary);
         toast.success('Summary generated');
+      } else if (typeof res?.error === 'string' && res.error) {
+        toast.error(res.error);
+      } else if (typeof res?.message === 'string' && res.message) {
+        // Treat informational messages from backend (e.g., disabled or generating) as info
+        const msg = res.message;
+        if (/disable|not enabled|generating/i.test(msg)) {
+          toast.info(msg);
+        } else {
+          toast.error(msg);
+        }
       } else {
-        toast.error(res?.message || 'No summary found for this document');
+        toast.error('Summary not yet generated. Generating...');
       }
     } catch (e) {
       console.error('Error generating summary:', e);
