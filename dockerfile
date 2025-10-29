@@ -27,6 +27,9 @@ ENV NLTK_DATA=/usr/local/nltk_data
 COPY . .
 RUN pip install --no-cache-dir "uvicorn[standard]" gunicorn
 
+
+ENV PYTHONUNBUFFERED=1
+
 COPY --from=frontend-builder /frontend/dist /usr/share/nginx/html
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
