@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Scale } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Scale, Sparkles } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -24,6 +24,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [docsOpen, setDocsOpen] = React.useState(false);
   const [roadmapOpen, setRoadmapOpen] = React.useState(false);
   const [prosOpen, setProsOpen] = React.useState(false);
+  const [summaryOpen, setSummaryOpen] = React.useState(false);
 
   const documents = React.useMemo(() => {
     if (!threadId) return [];
@@ -56,15 +57,19 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
         {/* Studio buttons moved up here. When collapsed, show icon-only column; when expanded show labeled buttons */}
         {collapsed ? (
           <div className="flex flex-col items-center w-full space-y-3">
+            <Button variant="ghost" size="icon" onClick={() => setDocsOpen(true)} disabled={!threadId} aria-label="Documents">
+              <FileText className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setSummaryOpen(true)} disabled={!threadId} aria-label="Summary">
+              <Sparkles className="w-5 h-5" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => setMindOpen(true)} disabled={!threadId} aria-label="Mind Map">
               <MapIcon className="w-5 h-5" />
             </Button>
             <Button variant="ghost" size="icon" onClick={() => setWordOpen(true)} disabled={!threadId} aria-label="Word Cloud">
               <Cloud className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => setDocsOpen(true)} disabled={!threadId} aria-label="Documents">
-              <FileText className="w-5 h-5" />
-            </Button>
+
             <Button variant="ghost" size="icon" onClick={() => setRoadmapOpen(true)} disabled={!threadId} aria-label="Roadmap">
               <MapPin className="w-5 h-5" />
             </Button>
@@ -78,6 +83,9 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
             <div className="space-y-2">
               <Button className="w-full justify-start" variant="ghost" onClick={() => setDocsOpen(true)} disabled={!threadId}>
                 <FileText className="w-4 h-4 mr-2" /> Documents
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => setSummaryOpen(true)} disabled={!threadId}>
+                <Sparkles className="w-4 h-4 mr-2" /> Summary
               </Button>
               <Button className="w-full justify-start" variant="ghost" onClick={() => setMindOpen(true)} disabled={!threadId}>
                 <MapIcon className="w-4 h-4 mr-2" /> Mind Map
@@ -99,6 +107,16 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
       {/* Modals */}
       <MindMapModal open={mindOpen} onOpenChange={setMindOpen} threadId={threadId ?? ''} />
       <WordCloudModal open={wordOpen} onOpenChange={setWordOpen} threadId={threadId ?? ''} documents={documents} />
+
+      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Summary</DialogTitle>
+            <DialogDescription>Summary feature is under development.</DialogDescription>
+          </DialogHeader>
+          <div className="p-4 text-sm text-muted-foreground">This feature is coming soon. We'll add a summary generator for the selected thread.</div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={docsOpen} onOpenChange={setDocsOpen}>
         <DialogContent className="max-w-lg max-h-[80vh]">
