@@ -36,7 +36,7 @@ async def generate_roadmap(
 
 
 def fetch_document_content(document: Document) -> str:
-    if hasattr(document, "full_text") and word_count(document.full_text) < 1000:
+    if hasattr(document, "full_text") and word_count(document.full_text) < 6000:
         print("Using full text for mind map creation")
         text = document.full_text
     elif hasattr(document, "summary") and document.summary:

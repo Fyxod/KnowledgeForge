@@ -4,7 +4,26 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Clipboard } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  Loader2,
+  Clipboard,
+  Target,
+  ShieldAlert,
+  BarChart3,
+  Rocket,
+  Cpu,
+  Wrench,
+  Users,
+  Layers,
+  TrendingUp,
+  MapPin,
+  ListChecks,
+  CheckCircle2,
+  ArrowRight,
+} from 'lucide-react';
 import { Document, StrategicRoadmapLLMOutput, api } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -15,16 +34,16 @@ type Props = {
   documents: Document[];
 };
 
-const SectionList: React.FC<{ title: string; items: string[] }> = ({ title, items }) => {
+const SectionList: React.FC<{ title: string; items: string[]; badgeStyle?: string }> = ({ title, items, badgeStyle }) => {
   if (!items || items.length === 0) return null;
   return (
     <div>
-      <h4 className="text-sm font-semibold mb-2">{title}</h4>
-      <ul className="list-disc list-inside space-y-1 text-sm">
+      {title && <h4 className="text-sm font-semibold mb-2">{title}</h4>}
+      <div className="flex flex-wrap gap-2">
         {items.map((it, idx) => (
-          <li key={idx} className="whitespace-pre-wrap">{it}</li>
+          <Badge key={idx} variant="secondary" className={badgeStyle}>{it}</Badge>
         ))}
-      </ul>
+      </div>
     </div>
   );
 };
@@ -32,116 +51,182 @@ const SectionList: React.FC<{ title: string; items: string[] }> = ({ title, item
 const RoadmapRenderer: React.FC<{ roadmap: StrategicRoadmapLLMOutput }> = ({ roadmap }) => {
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-xl font-bold mb-1">{roadmap.roadmap_title}</h3>
+      {/* Header banner */}
+      <div className="rounded-xl p-5 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-sky-500 text-white shadow-md">
+        <h3 className="text-xl font-bold mb-1 flex items-center gap-2">
+          <MapPin className="w-5 h-5" /> {roadmap.roadmap_title}
+        </h3>
+        <p className="text-xs/relaxed opacity-90">A strategic, phased plan with goals, enablers, risks, and measurable milestones.</p>
       </div>
 
+      {/* Vision & Baseline */}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="p-3 border rounded-lg">
-          <h4 className="font-semibold mb-2">Vision & End Goal</h4>
-          <p className="text-sm whitespace-pre-wrap mb-2">{roadmap.vision_and_end_goal.description}</p>
-          <SectionList title="Success Criteria" items={roadmap.vision_and_end_goal.success_criteria} />
-        </div>
-        <div className="p-3 border rounded-lg">
-          <h4 className="font-semibold mb-2">Current Baseline</h4>
-          <p className="text-sm whitespace-pre-wrap mb-2">{roadmap.current_baseline.summary}</p>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <SectionList title="Strengths" items={roadmap.current_baseline.swot.strengths} />
-            <SectionList title="Weaknesses" items={roadmap.current_baseline.swot.weaknesses} />
-            <SectionList title="Opportunities" items={roadmap.current_baseline.swot.opportunities} />
-            <SectionList title="Threats" items={roadmap.current_baseline.swot.threats} />
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+              <Target className="w-4 h-4" />
+            </div>
+            <h4 className="font-semibold">Vision & End Goal</h4>
           </div>
-        </div>
+          <p className="text-sm whitespace-pre-wrap mb-3">{roadmap.vision_and_end_goal.description}</p>
+          <SectionList title="Success Criteria" items={roadmap.vision_and_end_goal.success_criteria} badgeStyle="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" />
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+              <Layers className="w-4 h-4" />
+            </div>
+            <h4 className="font-semibold">Current Baseline</h4>
+          </div>
+          <p className="text-sm whitespace-pre-wrap mb-3">{roadmap.current_baseline.summary}</p>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <Card className="p-3 border-emerald-200 dark:border-emerald-900/40">
+              <div className="font-medium mb-1">Strengths</div>
+              <SectionList title="" items={roadmap.current_baseline.swot.strengths} badgeStyle="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" />
+            </Card>
+            <Card className="p-3 border-amber-200 dark:border-amber-900/40">
+              <div className="font-medium mb-1">Weaknesses</div>
+              <SectionList title="" items={roadmap.current_baseline.swot.weaknesses} badgeStyle="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" />
+            </Card>
+            <Card className="p-3 border-sky-200 dark:border-sky-900/40">
+              <div className="font-medium mb-1">Opportunities</div>
+              <SectionList title="" items={roadmap.current_baseline.swot.opportunities} badgeStyle="bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300" />
+            </Card>
+            <Card className="p-3 border-rose-200 dark:border-rose-900/40">
+              <div className="font-medium mb-1">Threats</div>
+              <SectionList title="" items={roadmap.current_baseline.swot.threats} badgeStyle="bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300" />
+            </Card>
+          </div>
+        </Card>
       </div>
 
-      <div className="p-3 border rounded-lg">
-        <h4 className="font-semibold mb-2">Strategic Pillars</h4>
+      {/* Strategic pillars */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="p-2 rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+            <Layers className="w-4 h-4" />
+          </div>
+          <h4 className="font-semibold">Strategic Pillars</h4>
+        </div>
         <div className="grid md:grid-cols-2 gap-3">
           {roadmap.strategic_pillars.map((p, idx) => (
-            <div key={idx} className="p-2 rounded-md bg-muted/30">
+            <Card key={idx} className="p-3">
               <div className="font-medium">{p.pillar_name}</div>
-              <div className="text-sm whitespace-pre-wrap">{p.description}</div>
-            </div>
+              <div className="text-sm whitespace-pre-wrap mt-1 text-muted-foreground">{p.description}</div>
+            </Card>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="p-3 border rounded-lg">
-        <h4 className="font-semibold mb-2">Phased Roadmap</h4>
-        <div className="space-y-3">
-          {roadmap.phased_roadmap.map((ph, idx) => (
-            <div key={idx} className="p-3 rounded-md border">
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-medium">{ph.phase}</div>
-                <div className="text-xs text-muted-foreground">{ph.time_frame}</div>
-              </div>
-              <div className="grid md:grid-cols-3 gap-3">
-                <SectionList title="Key Objectives" items={ph.key_objectives} />
-                <SectionList title="Key Initiatives" items={ph.key_initiatives} />
-                <SectionList title="Expected Outcomes" items={ph.expected_outcomes} />
-              </div>
-            </div>
-          ))}
+      {/* Phased timeline */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="p-2 rounded-md bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
+            <Rocket className="w-4 h-4" />
+          </div>
+          <h4 className="font-semibold">Phased Roadmap</h4>
         </div>
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-4">
-        <div className="p-3 border rounded-lg">
-          <h4 className="font-semibold mb-2">Enabling Technologies</h4>
-          <SectionList title="" items={roadmap.enablers_and_dependencies.technologies} />
-        </div>
-        <div className="p-3 border rounded-lg">
-          <h4 className="font-semibold mb-2">Skills & Resources</h4>
-          <SectionList title="" items={roadmap.enablers_and_dependencies.skills_and_resources} />
-        </div>
-        <div className="p-3 border rounded-lg">
-          <h4 className="font-semibold mb-2">Stakeholders</h4>
-          <SectionList title="" items={roadmap.enablers_and_dependencies.stakeholders} />
-        </div>
-      </div>
-
-      <div className="p-3 border rounded-lg">
-        <h4 className="font-semibold mb-2">Risks & Mitigation</h4>
-        <div className="space-y-2 text-sm">
-          {roadmap.risks_and_mitigation.map((r, idx) => (
-            <div key={idx} className="flex md:items-center md:gap-2 md:flex-row flex-col">
-              <span className="font-medium">Risk:</span>
-              <span className="flex-1 whitespace-pre-wrap">{r.risk}</span>
-              <span className="font-medium md:ml-4">Mitigation:</span>
-              <span className="flex-1 whitespace-pre-wrap">{r.mitigation_strategy}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="p-3 border rounded-lg">
-        <h4 className="font-semibold mb-2">Key Metrics & Milestones</h4>
-        <div className="grid md:grid-cols-2 gap-3">
-          {roadmap.key_metrics_and_milestones.map((km, idx) => (
-            <div key={idx} className="p-2 rounded-md bg-muted/30">
-              <div className="font-medium mb-1">{km.year_or_phase}</div>
-              <SectionList title="" items={km.metrics} />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="p-3 border rounded-lg">
-          <h4 className="font-semibold mb-2">Future Opportunities</h4>
-          <SectionList title="" items={roadmap.future_opportunities} />
-        </div>
-        <div className="p-3 border rounded-lg">
-          <h4 className="font-semibold mb-2">Additional Insights</h4>
-          <div className="space-y-2 text-sm">
-            {roadmap.llm_inferred_additions.map((ad, idx) => (
-              <div key={idx}>
-                <div className="font-medium">{ad.section_title}</div>
-                <div className="whitespace-pre-wrap">{ad.content}</div>
+        <div className="relative pl-5">
+          <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-border" />
+          <div className="space-y-4">
+            {roadmap.phased_roadmap.map((ph, idx) => (
+              <div key={idx} className="relative">
+                <div className="absolute -left-[7px] top-2 w-3.5 h-3.5 rounded-full bg-gradient-to-br from-fuchsia-500 to-sky-500 shadow" />
+                <Card className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-fuchsia-600" />
+                      <div className="font-medium">{ph.phase}</div>
+                    </div>
+                    <Badge variant="outline">{ph.time_frame}</Badge>
+                  </div>
+                  <Separator className="my-2" />
+                  <div className="grid md:grid-cols-3 gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 text-sm font-semibold"><ListChecks className="w-4 h-4" /> Objectives</div>
+                      <SectionList title="" items={ph.key_objectives} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 text-sm font-semibold"><Rocket className="w-4 h-4" /> Initiatives</div>
+                      <SectionList title="" items={ph.key_initiatives} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 text-sm font-semibold"><CheckCircle2 className="w-4 h-4" /> Outcomes</div>
+                      <SectionList title="" items={ph.expected_outcomes} />
+                    </div>
+                  </div>
+                </Card>
               </div>
             ))}
           </div>
         </div>
+      </Card>
+
+      {/* Enablers & dependencies */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-2"><Cpu className="w-4 h-4 text-sky-600" /><h4 className="font-semibold">Enabling Technologies</h4></div>
+          <SectionList title="" items={roadmap.enablers_and_dependencies.technologies} />
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-2"><Wrench className="w-4 h-4 text-amber-600" /><h4 className="font-semibold">Skills & Resources</h4></div>
+          <SectionList title="" items={roadmap.enablers_and_dependencies.skills_and_resources} />
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-2"><Users className="w-4 h-4 text-emerald-600" /><h4 className="font-semibold">Stakeholders</h4></div>
+          <SectionList title="" items={roadmap.enablers_and_dependencies.stakeholders} />
+        </Card>
+      </div>
+
+      {/* Risks & mitigation */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-2"><ShieldAlert className="w-4 h-4 text-rose-600" /><h4 className="font-semibold">Risks & Mitigation</h4></div>
+        <div className="space-y-2 text-sm">
+          {roadmap.risks_and_mitigation.map((r, idx) => (
+            <Card key={idx} className="p-3">
+              <div className="flex flex-col md:flex-row md:items-center md:gap-3">
+                <div className="flex-1"><span className="font-medium">Risk:</span> <span className="whitespace-pre-wrap">{r.risk}</span></div>
+                <ArrowRight className="hidden md:block w-4 h-4 text-muted-foreground" />
+                <div className="flex-1 md:text-right"><span className="font-medium">Mitigation:</span> <span className="whitespace-pre-wrap">{r.mitigation_strategy}</span></div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </Card>
+
+      {/* Metrics & milestones */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-2"><BarChart3 className="w-4 h-4 text-violet-600" /><h4 className="font-semibold">Key Metrics & Milestones</h4></div>
+        <div className="grid md:grid-cols-2 gap-3">
+          {roadmap.key_metrics_and_milestones.map((km, idx) => (
+            <Card key={idx} className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium">{km.year_or_phase}</div>
+                <Badge variant="outline">Milestone</Badge>
+              </div>
+              <SectionList title="" items={km.metrics} />
+            </Card>
+          ))}
+        </div>
+      </Card>
+
+      {/* Future & additions */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-2"><TrendingUp className="w-4 h-4 text-sky-600" /><h4 className="font-semibold">Future Opportunities</h4></div>
+          <SectionList title="" items={roadmap.future_opportunities} />
+        </Card>
+        <Card className="p-4">
+          <h4 className="font-semibold mb-2">Additional Insights</h4>
+          <div className="space-y-2 text-sm">
+            {roadmap.llm_inferred_additions.map((ad, idx) => (
+              <Card key={idx} className="p-3">
+                <div className="font-medium">{ad.section_title}</div>
+                <div className="whitespace-pre-wrap text-muted-foreground mt-1">{ad.content}</div>
+              </Card>
+            ))}
+          </div>
+        </Card>
       </div>
     </div>
   );
