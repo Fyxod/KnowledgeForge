@@ -164,6 +164,7 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
 
     thread_id = body.thread_id
     document_id = body.document_id
+    print(f"Fetching summary for document_id: {document_id} in thread_id: {thread_id}")
 
     user_id = payload.userId
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
@@ -173,6 +174,7 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
     thread = user["threads"].get(thread_id)
     if not thread:
         return {"error": "Thread not found"}
+    
 
     parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
     if not os.path.exists(parsed_dir):
@@ -185,7 +187,7 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                 async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     content = await f.read()
                 data = json.loads(content)
-                if isinstance(data, dict) and data.get("document_id") == document_id:
+                if isinstance(data, dict) and data.get("id") == document_id:
                     return {"status": True, "summary": data.get("summary")}
             except Exception as e:
                 continue
