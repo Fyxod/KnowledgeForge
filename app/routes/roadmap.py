@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
 from core.roadmap import generate_roadmap
-from core.word_cloud import generate_word_cloud
 from app.socket_handler import sio
 
 router = APIRouter(prefix="", tags=["extra"])

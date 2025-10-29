@@ -237,6 +237,8 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [roadmap, setRoadmap] = useState<StrategicRoadmapLLMOutput | null>(null);
+  const [view, setView] = useState<'select' | 'progress' | 'display'>('select');
+  const [progressMessages, setProgressMessages] = useState<string[]>([]);
   const pollingActiveRef = useRef<boolean>(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPolledDocRef = useRef<string | null>(null);
@@ -265,10 +267,13 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
           clearTimeout(timeoutRef.current);
           timeoutRef.current = null;
         }
+        setView('display');
       } else if (res?.status === false && res.message) {
         // Backend returns status: false with a progress message; keep polling UX minimal: just show message
         setMessage(res.message);
+        setProgressMessages((msgs) => (msgs[msgs.length - 1] === res.message ? msgs : [...msgs, res.message!]));
         toast.info(res.message);
+        setView('progress');
         // Start polling until ready
         lastPolledDocRef.current = selectedDoc;
         pollingActiveRef.current = true;
@@ -277,6 +282,8 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
         toast.error(res.error);
       } else {
         setMessage('Generating roadmap...');
+        setProgressMessages((msgs) => (msgs[msgs.length - 1] === 'Generating roadmap...' ? msgs : [...msgs, 'Generating roadmap...']));
+        setView('progress');
         lastPolledDocRef.current = selectedDoc;
         pollingActiveRef.current = true;
         schedulePoll();
@@ -304,9 +311,14 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
           setRoadmap(res.roadmap);
           setMessage(null);
           pollingActiveRef.current = false;
+          setView('display');
           return;
         }
-        if (res?.message) setMessage(res.message);
+        if (res?.message) {
+          setMessage(res.message);
+          setProgressMessages((msgs) => (msgs[msgs.length - 1] === res.message ? msgs : [...msgs, res.message!]));
+          setView('progress');
+        }
       } catch (e) {
         // non-fatal; keep polling a bit longer
       }
@@ -330,6 +342,8 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
       setSelectedDoc(null);
       setRoadmap(null);
       setMessage(null);
+      setProgressMessages([]);
+      setView('select');
       setLoading(false);
       // stop polling
       pollingActiveRef.current = false;
@@ -353,17 +367,29 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
     }
   }, [open]);
 
+  const selectedDocObj = selectedDoc ? documents.find(d => d.docId === selectedDoc) : null;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Strategic Roadmap</DialogTitle>
           <DialogDescription>
-            Select a document to generate a strategic roadmap. If it's not ready yet, you'll see a progress message.
+            {view === 'select' && 'Select a document to generate a strategic roadmap.'}
+            {view === 'progress' && (
+              <span>
+                Generating for: <span className="font-medium">{selectedDocObj?.title || 'Selected Document'}</span>
+              </span>
+            )}
+            {view === 'display' && selectedDocObj && (
+              <span>
+                Document: <span className="font-medium">{selectedDocObj.title}</span>
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        {!roadmap ? (
+        {view === 'select' && (
           <div className="flex-1 overflow-hidden flex flex-col gap-6">
             {/* Document Selection */}
             <div className="space-y-3">
@@ -430,10 +456,50 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                   'Generate Roadmap'
                 )}
               </Button>
-              {message && <span className="text-sm text-muted-foreground">{message}</span>}
             </div>
           </div>
-        ) : (
+        )}
+
+        {view === 'progress' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">{selectedDocObj?.title || 'Selected Document'}</h3>
+              <div className="space-y-2">
+                {progressMessages.length > 0 ? (
+                  progressMessages.map((m, idx) => (
+                    <p key={idx} className="text-sm text-muted-foreground whitespace-pre-wrap">{m}</p>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">Generating roadmap…</p>
+                )}
+              </div>
+            </div>
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Go back to selection
+                  pollingActiveRef.current = false;
+                  if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                    timeoutRef.current = null;
+                  }
+                  setView('select');
+                  setProgressMessages([]);
+                  setMessage(null);
+                  setSelectedDoc(null);
+                }}
+              >
+                Back to documents
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {view === 'display' && roadmap && (
           <div className="flex-1 overflow-hidden flex flex-col gap-4">
             {/* Roadmap Display */}
             <ScrollArea className="flex-1 border rounded-lg p-4 bg-muted/30 h-[60vh] overflow-auto">
