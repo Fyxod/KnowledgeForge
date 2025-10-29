@@ -191,6 +191,19 @@ export interface RoadmapResponse {
   error?: string;
 }
 
+// Pros & Cons types
+export interface ProsConsOutput {
+  pros: string[];
+  cons: string[];
+}
+
+export interface ProsConsResponse {
+  status?: boolean;
+  pros_cons?: ProsConsOutput;
+  message?: string;
+  error?: string;
+}
+
 // Auth helpers
 export const getAuthToken = () => localStorage.getItem('auth_token');
 export const setAuthToken = (token: string) => localStorage.setItem('auth_token', token);
@@ -439,6 +452,29 @@ export const api = {
     }
     // Expected shapes: { status: false, message } or { status: true, roadmap }
     return data as RoadmapResponse;
+  },
+
+  async prosCons(threadId: string, documentId: string): Promise<ProsConsResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/pros_cons`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse pros/cons response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Pros/Cons request failed' };
+    }
+    // Expected shapes: { status: false, message } or { status: true, pros_cons }
+    return data as ProsConsResponse;
   },
 };
 
