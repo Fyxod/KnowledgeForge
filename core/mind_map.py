@@ -287,13 +287,8 @@ async def add_node_descriptions_global(
         # Retrieve relevant text for each node in batch
         batch_relevant_texts = []
         for node in batch_nodes:
-            start_time = time.time()
             relevant_text = await doc_retriever.ainvoke(node["title"])
             relevant_str = "\n\n".join([doc.page_content for doc in relevant_text])
-            end_time = time.time()
-            print(
-                f"Retrieval time: {end_time - start_time:.2f}s for node {node['id']} of GLOBAL mind map"
-            )
             batch_relevant_texts.append(relevant_str)
 
         # Attempt to generate descriptions with retries
