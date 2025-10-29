@@ -1,6 +1,7 @@
 // // API Configuration
-// export const API_URL = 'http://localhost:3000';
-export const API_URL = 'https://api.dev-ansh.xyz';
+export const API_URL = 'http://localhost:3000';
+// export const API_URL = 'https://api.dev-ansh.xyz';
+
 
 // Types
 export interface User {
@@ -109,6 +110,13 @@ export interface MindMapResponse {
   status?: boolean; // only present when mind_map is true
   message: string;
   data?: GlobalMindMap; // present when mind_map && status
+}
+
+export interface SummaryResponse {
+  status?: boolean;
+  summary?: string;
+  message?: string;
+  error?: string;
 }
 
 // Auth helpers
@@ -313,6 +321,23 @@ export const api = {
       return { mind_map: false, message: `Failed to fetch mind map (${response.status})` };
     }
     return response.json();
+  },
+
+  async summary(threadId: string, documentId: string): Promise<SummaryResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/summary`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
+    });
+    try {
+      return await response.json();
+    } catch (_) {
+      return { status: false, message: `Failed to parse summary response (${response.status})` };
+    }
   },
 };
 

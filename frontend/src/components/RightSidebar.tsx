@@ -4,6 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Map as MapIcon, Cloud, FileText, MapPin, Scale, Sparkles } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
+import SummaryModal from './SummaryModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -119,18 +120,11 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
       </div>
 
       {/* Modals */}
-      <MindMapModal open={mindOpen} onOpenChange={setMindOpen} threadId={threadId ?? ''} />
-      <WordCloudModal open={wordOpen} onOpenChange={setWordOpen} threadId={threadId ?? ''} documents={documents} />
+  <MindMapModal open={mindOpen} onOpenChange={setMindOpen} threadId={threadId ?? ''} />
+  <WordCloudModal open={wordOpen} onOpenChange={setWordOpen} threadId={threadId ?? ''} documents={documents} />
+  <SummaryModal open={summaryOpen} onOpenChange={setSummaryOpen} threadId={threadId ?? ''} documents={documents} />
 
-      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Summary</DialogTitle>
-            <DialogDescription>Summary feature is under development.</DialogDescription>
-          </DialogHeader>
-          <div className="p-4 text-sm text-muted-foreground">This feature is coming soon. We'll add a summary generator for the selected thread.</div>
-        </DialogContent>
-      </Dialog>
+      {/* Summary handled by SummaryModal above */}
 
       <Dialog open={docsOpen} onOpenChange={setDocsOpen}>
         <DialogContent className="max-w-lg max-h-[80vh]">
