@@ -119,6 +119,78 @@ export interface SummaryResponse {
   error?: string;
 }
 
+// Roadmap types (mirror backend Pydantic models)
+export interface VisionAndEndGoal {
+  description: string;
+  success_criteria: string[];
+}
+
+export interface SWOT {
+  strengths: string[];
+  weaknesses: string[];
+  opportunities: string[];
+  threats: string[];
+}
+
+export interface CurrentBaseline {
+  summary: string;
+  swot: SWOT;
+}
+
+export interface StrategicPillar {
+  pillar_name: string;
+  description: string;
+}
+
+export interface PhasedRoadmapItem {
+  phase: string;
+  time_frame: string;
+  key_objectives: string[];
+  key_initiatives: string[];
+  expected_outcomes: string[];
+}
+
+export interface EnablersAndDependencies {
+  technologies: string[];
+  skills_and_resources: string[];
+  stakeholders: string[];
+}
+
+export interface RiskAndMitigation {
+  risk: string;
+  mitigation_strategy: string;
+}
+
+export interface KeyMetricsAndMilestone {
+  year_or_phase: string;
+  metrics: string[];
+}
+
+export interface LLMInferredAddition {
+  section_title: string;
+  content: string;
+}
+
+export interface StrategicRoadmapLLMOutput {
+  roadmap_title: string;
+  vision_and_end_goal: VisionAndEndGoal;
+  current_baseline: CurrentBaseline;
+  strategic_pillars: StrategicPillar[];
+  phased_roadmap: PhasedRoadmapItem[];
+  enablers_and_dependencies: EnablersAndDependencies;
+  risks_and_mitigation: RiskAndMitigation[];
+  key_metrics_and_milestones: KeyMetricsAndMilestone[];
+  future_opportunities: string[];
+  llm_inferred_additions: LLMInferredAddition[];
+}
+
+export interface RoadmapResponse {
+  status?: boolean;
+  roadmap?: StrategicRoadmapLLMOutput;
+  message?: string;
+  error?: string;
+}
+
 // Auth helpers
 export const getAuthToken = () => localStorage.getItem('auth_token');
 export const setAuthToken = (token: string) => localStorage.setItem('auth_token', token);
@@ -344,6 +416,29 @@ export const api = {
       return { status: false, error: data?.detail || data?.message || 'Summary request failed' };
     }
     return data as SummaryResponse;
+  },
+
+  async roadmap(threadId: string, documentId: string): Promise<RoadmapResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/roadmap`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse roadmap response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Roadmap request failed' };
+    }
+    // Expected shapes: { status: false, message } or { status: true, roadmap }
+    return data as RoadmapResponse;
   },
 };
 

@@ -5,6 +5,7 @@ import { Map as MapIcon, Cloud, FileText, MapPin, Scale, Sparkles } from 'lucide
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
+import RoadmapModal from './RoadmapModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -152,15 +153,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={roadmapOpen} onOpenChange={setRoadmapOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Roadmap</DialogTitle>
-            <DialogDescription>Roadmap feature is under development.</DialogDescription>
-          </DialogHeader>
-          <div className="p-4 text-sm text-muted-foreground">This feature is coming soon. We are working on a roadmap view to plan and visualize tasks.</div>
-        </DialogContent>
-      </Dialog>
+      <RoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
 
       <Dialog open={prosOpen} onOpenChange={setProsOpen}>
         <DialogContent className="max-w-md">
