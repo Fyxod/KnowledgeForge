@@ -61,8 +61,8 @@ const Dashboard = () => {
       const collapsedPct = Math.max(2, Math.min(20, (collapsedPx / Math.max(1, width)) * 100));
       setCollapsedPercent(collapsedPct);
 
-      // Expanded RIGHT min: ~260px (enough to show full tab text)
-      const rightMinPx = 260;
+  // Expanded RIGHT min: ~220px (slightly smaller but still readable)
+  const rightMinPx = 220;
       let rightMinPct = (rightMinPx / Math.max(1, width)) * 100;
       // Clamp to reasonable range so it plays well with left/min middle constraints
       rightMinPct = Math.max(12, Math.min(30, rightMinPct));

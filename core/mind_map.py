@@ -429,7 +429,7 @@ def build_mind_maps_node_prompt_global(parsed_data: Documents) -> str:
 
     final_text = ""
     for document in parsed_data.documents:
-        if hasattr(document, "full_text") and word_count(document.full_text) < 1000:
+        if hasattr(document, "full_text") and word_count(document.full_text) < 5000:
             print("Using full text for mind map creation")
             text = document.full_text
         elif hasattr(document, "summary") and document.summary:
