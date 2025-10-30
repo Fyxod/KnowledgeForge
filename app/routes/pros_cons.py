@@ -7,19 +7,19 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
-from core.roadmap import generate_roadmap
+from core.pros_cons import generate_pros_cons
 from app.socket_handler import sio
 
 router = APIRouter(prefix="", tags=["extra"])
 
 
-class RoadmapRequest(BaseModel):
+class ProsConsRequest(BaseModel):
     thread_id: str
     document_id: str
 
 
-@router.post("/roadmap")
-async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
+@router.post("/pros_cons")
+async def get_pros_cons(request: Request, body: ProsConsRequest = Body(...)):
     payload = request.state.user
 
     if not payload:
@@ -57,28 +57,18 @@ async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
     if document_data is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Prepare roadmap file path
-    roadmap_dir = f"data/{user_id}/threads/{thread_id}/roadmaps"
-    os.makedirs(roadmap_dir, exist_ok=True)
-    roadmap_path = os.path.join(roadmap_dir, f"roadmap_{document_id}.json")
+    # Prepare pros_cons file path
+    pros_cons_dir = f"data/{user_id}/threads/{thread_id}/pros_cons"
+    os.makedirs(pros_cons_dir, exist_ok=True)
+    pros_cons_path = os.path.join(pros_cons_dir, f"pros_cons_{document_id}.json")
 
     # Helper to schedule generation and respond with progress
     async def _generate_and_write():
         try:
-            # Build Document model from parsed data
-            # doc = Document(
-            #     id=document_data.get("id", document_id),
-            #     type=document_data.get("type", "unknown"),
-            #     file_name=document_data.get("file_name", "document"),
-            #     title=document_data.get("title", "Untitled"),
-            #     full_text=document_data.get("full_text", ""),
-            #     summary=document_data.get("summary"),
-            # )
-
             doc = Document.model_validate(document_data)
-            result = await generate_roadmap(doc)
-            # Persist the roadmap output
-            async with aiofiles.open(roadmap_path, "w", encoding="utf-8") as f:
+            result = await generate_pros_cons(doc)
+            # Persist the pros_cons output
+            async with aiofiles.open(pros_cons_path, "w", encoding="utf-8") as f:
                 await f.write(
                     json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
                 )
@@ -86,10 +76,10 @@ async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
             # Silently ignore to avoid crashing the request path; a retry can be triggered by client
             pass
 
-    # If roadmap file already exists, inspect its contents
-    if os.path.exists(roadmap_path):
+    # If file already exists, inspect its contents
+    if os.path.exists(pros_cons_path):
         try:
-            async with aiofiles.open(roadmap_path, "r", encoding="utf-8") as f:
+            async with aiofiles.open(pros_cons_path, "r", encoding="utf-8") as f:
                 content = await f.read()
             if not content.strip():
                 # File exists but is empty => generation in progress
@@ -97,7 +87,7 @@ async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
                     status_code=status.HTTP_200_OK,
                     content={
                         "status": False,
-                        "message": f"Generating Roadmap for {document_data.get('title', 'Untitled')}",
+                        "message": f"Generating Pros & Cons for {document_data.get('title', 'Untitled')}",
                     },
                 )
             # Non-empty: try to parse and return
@@ -105,7 +95,7 @@ async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
                 data = json.loads(content)
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
-                    content={"status": True, "roadmap": data},
+                    content={"status": True, "pros_cons": data},
                 )
             except json.JSONDecodeError:
                 # Treat invalid JSON as still generating
@@ -113,7 +103,7 @@ async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
                     status_code=status.HTTP_200_OK,
                     content={
                         "status": False,
-                        "message": f"Generating Roadmap for {document_data.get('title', 'Untitled')}",
+                        "message": f"Generating Pros & Cons for {document_data.get('title', 'Untitled')}",
                     },
                 )
         except Exception:
@@ -122,13 +112,13 @@ async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
                 status_code=status.HTTP_200_OK,
                 content={
                     "status": False,
-                    "message": f"Generating Roadmap for {document_data.get('title', 'Untitled')}",
+                    "message": f"Generating Pros & Cons for {document_data.get('title', 'Untitled')}",
                 },
             )
 
     # File does not exist: create it empty (acts as a lock) and kick off generation
     try:
-        async with aiofiles.open(roadmap_path, "w", encoding="utf-8") as f:
+        async with aiofiles.open(pros_cons_path, "w", encoding="utf-8") as f:
             await f.write("")
     except Exception:
         # If file creation fails, still proceed to schedule generation
@@ -141,6 +131,6 @@ async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
         status_code=status.HTTP_200_OK,
         content={
             "status": False,
-            "message": f"Generating Roadmap for {document_data.get('title', 'Untitled')}",
+            "message": f"Generating Pros & Cons for {document_data.get('title', 'Untitled')}",
         },
     )

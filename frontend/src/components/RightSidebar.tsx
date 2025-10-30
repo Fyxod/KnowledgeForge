@@ -6,6 +6,7 @@ import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
 import RoadmapModal from './RoadmapModal';
+import ProsConsModal from './ProsConsModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -154,16 +155,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
         </DialogContent>
       </Dialog>
       <RoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
-
-      <Dialog open={prosOpen} onOpenChange={setProsOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Pros / Cons</DialogTitle>
-            <DialogDescription>Pros & Cons feature is under development.</DialogDescription>
-          </DialogHeader>
-          <div className="p-4 text-sm text-muted-foreground">This feature is coming soon. We'll add a pros and cons analyzer to summarize trade-offs for selected content.</div>
-        </DialogContent>
-      </Dialog>
+      <ProsConsModal open={prosOpen} onOpenChange={setProsOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
     );
 };

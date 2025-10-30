@@ -233,3 +233,8 @@ class StrategicRoadmapLLMOutput(BaseModel):
     llm_inferred_additions: List[LLMInferredAddition] = Field(
         description="Model-inferred additional sections with insights."
     )
+
+
+class ProsConsOutput(BaseModel):
+    pros: List[str] = Field(description="List of pros extracted from the document.")
+    cons: List[str] = Field(description="List of cons extracted from the document.")

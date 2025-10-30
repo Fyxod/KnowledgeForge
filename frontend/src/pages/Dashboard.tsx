@@ -40,6 +40,9 @@ const Dashboard = () => {
   const prevRightSizeRef = useRef<number>(layout[2]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [collapsedPercent, setCollapsedPercent] = useState<number>(6);
+  // Minimum width for the RIGHT sidebar when expanded (as a % of container).
+  // We compute this from a pixel target so it adapts to screen size.
+  const [expandedRightMinPercent, setExpandedRightMinPercent] = useState<number>(18);
   const panelRef = useRef<any>(null);
   const middlePanelRef = useRef<any>(null);
   const rightPanelRef = useRef<any>(null);
@@ -49,17 +52,25 @@ const Dashboard = () => {
   const latestUserRef = useRef(user);
   useEffect(() => { latestUserRef.current = user; }, [user]);
 
-  // Keep collapsed width ~64px regardless of screen size
+  // Keep collapsed width ~64px and enforce a minimum expanded width for the RIGHT sidebar (~260px)
   useEffect(() => {
-    const updateCollapsedPercent = () => {
+    const updatePercents = () => {
       const width = containerRef.current?.getBoundingClientRect().width || window.innerWidth || 1200;
-      const px = 64; // match previous w-16 collapsed width
-      const percent = Math.max(2, Math.min(20, (px / Math.max(1, width)) * 100));
-      setCollapsedPercent(percent);
+      // Collapsed: ~64px
+      const collapsedPx = 64;
+      const collapsedPct = Math.max(2, Math.min(20, (collapsedPx / Math.max(1, width)) * 100));
+      setCollapsedPercent(collapsedPct);
+
+  // Expanded RIGHT min: ~220px (slightly smaller but still readable)
+  const rightMinPx = 220;
+      let rightMinPct = (rightMinPx / Math.max(1, width)) * 100;
+      // Clamp to reasonable range so it plays well with left/min middle constraints
+      rightMinPct = Math.max(12, Math.min(30, rightMinPct));
+      setExpandedRightMinPercent(rightMinPct);
     };
-    updateCollapsedPercent();
-    window.addEventListener('resize', updateCollapsedPercent);
-    return () => window.removeEventListener('resize', updateCollapsedPercent);
+    updatePercents();
+    window.addEventListener('resize', updatePercents);
+    return () => window.removeEventListener('resize', updatePercents);
   }, []);
   const match = useMatch('/dashboard/threads/:threadId');
   const activeThreadId = match?.params.threadId;
@@ -70,7 +81,7 @@ const Dashboard = () => {
       const left = layout[0];
       const desiredRight = rightCollapsed
         ? collapsedPercent
-        : Math.min(40, Math.max(6, layout[2] ?? defaultLayout[2] ?? 18));
+        : Math.min(40, Math.max(expandedRightMinPercent, layout[2] ?? defaultLayout[2] ?? 18));
       const desiredMiddle = Math.max(40, 100 - left - desiredRight);
 
       if (middlePanelRef.current?.resize) middlePanelRef.current.resize(desiredMiddle);
@@ -114,7 +125,7 @@ const Dashboard = () => {
         rightPanelRef.current.resize(targetRight);
       } else {
         const restoredSize = prevRightSizeRef.current || defaultLayout[2] || 18;
-        const targetRight = Math.min(40, Math.max(6, restoredSize));
+        const targetRight = Math.min(40, Math.max(expandedRightMinPercent, restoredSize));
         const left = layout[0];
         // Allocate remaining width to middle respecting its min (40)
         const targetMiddle = Math.max(40, 100 - left - targetRight);
@@ -125,7 +136,7 @@ const Dashboard = () => {
         });
       }
     }
-  }, [rightCollapsed, collapsedPercent]);
+  }, [rightCollapsed, collapsedPercent, expandedRightMinPercent]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -289,7 +300,7 @@ const Dashboard = () => {
           <ResizablePanel
             ref={rightPanelRef}
             defaultSize={rightCollapsed ? collapsedPercent : layout[2]}
-            minSize={rightCollapsed ? collapsedPercent : 6}
+            minSize={rightCollapsed ? collapsedPercent : expandedRightMinPercent}
             maxSize={rightCollapsed ? collapsedPercent : 40}
             collapsible={false}
           >
