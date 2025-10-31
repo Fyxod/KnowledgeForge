@@ -1,4 +1,5 @@
 from core.models.gpu_config import GPULLMConfig
+from core.config import settings
 
 # SETTINGS
 SWITCHES = {
@@ -10,7 +11,7 @@ SWITCHES = {
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
 
-    "REMOTE_GPU": True,  # Use remote GPU LLMs
+    "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
 }
 CHUNK_COUNT = 12 # Number of chunks to retrieve from vector DB for each query
