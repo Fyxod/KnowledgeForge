@@ -15,7 +15,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { setUser, refreshUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,6 +26,13 @@ const Login = () => {
       const response = await api.login(email, password);
       setAuthToken(response.token);
       setUser(response.user);
+      // Ensure auth context refreshes/fetches any fresh user data (and clears any loading)
+      try {
+        await refreshUser();
+      } catch (err) {
+        // non-fatal - proceed to navigate even if refresh fails
+        console.debug('refreshUser failed', err);
+      }
       toast.success('Login successful!');
       navigate('/dashboard');
     } catch (error) {
