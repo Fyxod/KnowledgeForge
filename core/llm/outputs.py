@@ -52,3 +52,8 @@ from .output_schemas.insights_outputs import (
     PseudocodeOrTechnicalOutline,
     InsightsLLMOutput,
 )
+
+# Technical roadmap outputs
+from .output_schemas.technical_roadmap_outputs import (
+    TechnicalRoadmapLLMOutput,
+)

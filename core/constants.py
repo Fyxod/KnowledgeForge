@@ -6,7 +6,7 @@ SWITCHES = {
     "MIND_MAP": True,  # For long documents, mind map will be better if SUMMARIZATION = True
     # For Cpu based testing we suggest to keep both False to avoid much load on CPU
     "SUMMARIZATION": True,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
-    "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
+    "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
@@ -33,6 +33,7 @@ GPU_STOP_WORDS_EXTRACTION_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
 GPU_NODE_GENERATION_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
 GPU_NODE_DESCRIPTION_LLM = GPULLMConfig(model=QWEN3_14B, port=PORT1)
 GPU_STRATEGIC_ROADMAP_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
+GPU_TECHNICAL_ROADMAP_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
 GPU_INSIGHTS_LLM = GPULLMConfig(model=GPT_OSS_20B, port=PORT2)
 
 IMAGE_PARSER_LLM = "gemma3:12b"

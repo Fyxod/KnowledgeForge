@@ -1,11 +1,12 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
 import StrategicRoadmapModal from './StrategicRoadmapModal';
+import TechnicalRoadmapModal from './TechnicalRoadmapModal';
 import InsightsModal from './InsightsModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -28,6 +29,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [wordOpen, setWordOpen] = React.useState(false);
   const [docsOpen, setDocsOpen] = React.useState(false);
   const [roadmapOpen, setRoadmapOpen] = React.useState(false);
+  const [techRoadmapOpen, setTechRoadmapOpen] = React.useState(false);
   const [summaryOpen, setSummaryOpen] = React.useState(false);
   const [insightsOpen, setInsightsOpen] = React.useState(false);
 
@@ -123,6 +125,14 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </TooltipTrigger>
               <TooltipContent>Strategic Roadmap</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setTechRoadmapOpen)} disabled={!threadId} aria-label="Technical Roadmap">
+                  <Cpu className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Technical Roadmap</TooltipContent>
+            </Tooltip>
           </div>
         ) : (
           <div className="w-full">
@@ -145,6 +155,9 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </Button>
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId}>
                 <MapPin className="w-4 h-4 mr-2" /> Strategic Roadmap
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setTechRoadmapOpen)} disabled={!threadId}>
+                <Cpu className="w-4 h-4 mr-2" /> Technical Roadmap
               </Button>
             </div>
           </div>
@@ -186,6 +199,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
         </DialogContent>
       </Dialog>
   <StrategicRoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
+  <TechnicalRoadmapModal open={techRoadmapOpen} onOpenChange={setTechRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
     );
 };

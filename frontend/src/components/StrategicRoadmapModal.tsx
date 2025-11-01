@@ -237,7 +237,7 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [roadmap, setRoadmap] = useState<StrategicRoadmapLLMOutput | null>(null);
-  const [view, setView] = useState<'select' | 'progress' | 'display'>('select');
+  const [view, setView] = useState<'select' | 'progress' | 'display' | 'error'>('select');
   const [progressMessages, setProgressMessages] = useState<string[]>([]);
   const pollingActiveRef = useRef<boolean>(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -268,6 +268,17 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
           timeoutRef.current = null;
         }
         setView('display');
+      } else if (res?.error) {
+        const err = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
+        setMessage(err);
+        setProgressMessages([]);
+        toast.error(err);
+        pollingActiveRef.current = false;
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setView('error');
       } else if (res?.status === false && res.message) {
         // Backend returns status: false with a progress message; keep polling UX minimal: just show message
         setMessage(res.message);
@@ -278,8 +289,6 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
         lastPolledDocRef.current = selectedDoc;
         pollingActiveRef.current = true;
         schedulePoll();
-      } else if (res?.error) {
-        toast.error(res.error);
       } else {
         setMessage('Generating strategic roadmap...');
         setProgressMessages((msgs) => (msgs[msgs.length - 1] === 'Generating strategic roadmap...' ? msgs : [...msgs, 'Generating strategic roadmap...']));
@@ -312,6 +321,15 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
           setMessage(null);
           pollingActiveRef.current = false;
           setView('display');
+          return;
+        }
+        if (res?.error) {
+          const err = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
+          setMessage(err);
+          setProgressMessages([]);
+          toast.error(err);
+          pollingActiveRef.current = false;
+          setView('error');
           return;
         }
         if (res?.message) {
@@ -473,6 +491,34 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
                 variant="outline"
                 onClick={() => {
                   // Go back to selection
+                  pollingActiveRef.current = false;
+                  if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                    timeoutRef.current = null;
+                  }
+                  setView('select');
+                  setProgressMessages([]);
+                  setMessage(null);
+                  setSelectedDoc(null);
+                }}
+              >
+                Back to documents
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {view === 'error' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+            <div className="text-rose-600 font-semibold">An error occurred</div>
+            <div className="max-w-xl">
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{message || 'Unknown error'}</p>
+            </div>
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // stop polling and return to selection
                   pollingActiveRef.current = false;
                   if (timeoutRef.current) {
                     clearTimeout(timeoutRef.current);

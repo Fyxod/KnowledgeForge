@@ -44,7 +44,7 @@ def strategic_roadmap_prompt(document: str, n_years: int):
                 "- risks_and_mitigation: Top 3-5 risks with clear mitigation strategies.\n"
                 "- key_metrics_and_milestones: Add measurable checkpoints per year or phase (3-6 total entries).\n"
                 "- future_opportunities: Predict beyond-horizon shifts (3-6).\n"
-                "- llm_inferred_additions: 0-2 optional sections with valuable insights (e.g., Ethical Considerations, Sustainability, AI Outlook).\n\n"
+                "- llm_inferred_additions: 0-2 optional sections with valuable insights.\n\n"
                 "Formatting Note:\n"
                 "- Although the roadmap narrative uses headings and tables conceptually, you MUST deliver JSON fields only.\n"
                 "- Use concise strings and lists; embed brief markdown (e.g., bullets, emphasis) inside string values only if it improves clarity.\n"

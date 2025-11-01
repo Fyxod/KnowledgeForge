@@ -8,5 +8,6 @@ auth_paths = [
     "/wordcloud",
     "/summary",
     "/strategic_roadmap",
+    "/technical_roadmap",
     "/insights",
 ]

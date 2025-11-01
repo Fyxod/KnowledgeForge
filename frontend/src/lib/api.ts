@@ -191,6 +191,88 @@ export interface StrategicRoadmapResponse {
   error?: string;
 }
 
+// Technical Roadmap types (mirror backend Pydantic models provided)
+export interface OverallVision {
+  goal: string;
+  success_metrics: string[];
+}
+
+export interface CurrentStateAnalysis {
+  summary: string;
+  key_challenges: string[];
+  existing_capabilities: string[];
+}
+
+export interface TechnologyDomain {
+  domain_name: string;
+  description: string;
+}
+
+export interface Initiative {
+  initiative: string;
+  objective: string;
+  expected_outcome: string;
+}
+
+export interface PhasedRoadmapPhase {
+  time_frame: string;
+  focus_areas: string[];
+  key_initiatives: Initiative[];
+  dependencies: string[];
+}
+
+export interface PhasedRoadmap {
+  short_term: PhasedRoadmapPhase;
+  mid_term: PhasedRoadmapPhase;
+  long_term: PhasedRoadmapPhase;
+}
+
+export interface KeyTechnologyEnabler {
+  enabler: string;
+  impact: string;
+}
+
+export interface RiskAndMitigationItem {
+  risk: string;
+  mitigation: string;
+}
+
+export interface InnovationOpportunity {
+  idea: string;
+  description: string;
+  maturity_level: string;
+}
+
+export interface TabularSummaryRow {
+  time_frame: string;
+  key_points: string[];
+}
+
+export interface LLMInferredAddition {
+  section_title: string;
+  content: string;
+}
+
+export interface TechnicalRoadmapLLMOutput {
+  roadmap_title: string;
+  overall_vision: OverallVision;
+  current_state_analysis: CurrentStateAnalysis;
+  technology_domains: TechnologyDomain[];
+  phased_roadmap: PhasedRoadmap;
+  key_technology_enablers: KeyTechnologyEnabler[];
+  risks_and_mitigations: RiskAndMitigationItem[];
+  innovation_opportunities: InnovationOpportunity[];
+  tabular_summary: TabularSummaryRow[];
+  llm_inferred_additions?: LLMInferredAddition[] | null;
+}
+
+export interface TechnicalRoadmapResponse {
+  status?: boolean;
+  technical_roadmap?: TechnicalRoadmapLLMOutput;
+  message?: string;
+  error?: string;
+}
+
 // Insights types (mirror backend Pydantic models)
 export interface DocumentSummary {
   title: string;
@@ -517,6 +599,28 @@ export const api = {
       return { status: false, error: data?.detail || data?.message || 'Insights request failed' };
     }
     return data as InsightsResponse; // Expected: { status:false,message } or { status:true, insights }
+  },
+
+  async technicalRoadmap(threadId: string, documentId: string): Promise<TechnicalRoadmapResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/technical_roadmap`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse technical roadmap response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Technical roadmap request failed' };
+    }
+    return data as TechnicalRoadmapResponse;
   },
 };
 
