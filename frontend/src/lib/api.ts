@@ -184,9 +184,9 @@ export interface StrategicRoadmapLLMOutput {
   llm_inferred_additions: LLMInferredAddition[];
 }
 
-export interface RoadmapResponse {
+export interface StrategicRoadmapResponse {
   status?: boolean;
-  roadmap?: StrategicRoadmapLLMOutput;
+  strategic_roadmap?: StrategicRoadmapLLMOutput;
   message?: string;
   error?: string;
 }
@@ -474,9 +474,9 @@ export const api = {
     return data as SummaryResponse;
   },
 
-  async roadmap(threadId: string, documentId: string): Promise<RoadmapResponse> {
+  async strategicRoadmap(threadId: string, documentId: string): Promise<StrategicRoadmapResponse> {
     const token = getAuthToken();
-    const response = await fetch(`${API_URL}/roadmap`, {
+    const response = await fetch(`${API_URL}/strategic_roadmap`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -488,13 +488,13 @@ export const api = {
     try {
       data = await response.json();
     } catch (_) {
-      return { status: false, error: `Failed to parse roadmap response (${response.status})` };
+      return { status: false, error: `Failed to parse strategic roadmap response (${response.status})` };
     }
     if (!response.ok) {
-      return { status: false, error: data?.detail || data?.message || 'Roadmap request failed' };
+      return { status: false, error: data?.detail || data?.message || 'Strategic roadmap request failed' };
     }
-    // Expected shapes: { status: false, message } or { status: true, roadmap }
-    return data as RoadmapResponse;
+    // Expected shapes: { status: false, message } or { status: true, strategic_roadmap }
+    return data as StrategicRoadmapResponse;
   },
 
   async insights(threadId: string, documentId: string): Promise<InsightsResponse> {

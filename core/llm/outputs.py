@@ -27,8 +27,8 @@ from .output_schemas.mindmap_outputs import (
     GlobalMindMap,
 )
 
-# Roadmap outputs
-from .output_schemas.roadmap_outputs import (
+# Strategic roadmap outputs
+from .output_schemas.strategic_roadmap_outputs import (
     VisionAndEndGoal,
     SWOT,
     CurrentBaseline,

@@ -7,6 +7,6 @@ auth_paths = [
     "/mindmap",
     "/wordcloud",
     "/summary",
-    "/roadmap",
+    "/strategic_roadmap",
     "/insights",
 ]
