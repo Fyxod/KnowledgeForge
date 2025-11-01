@@ -55,7 +55,8 @@ function sectionHeader(title: string, color: string = colors.primary): Content {
 }
 
 function phasedCard(label: string, phase: TechnicalRoadmapLLMOutput['phased_roadmap']['short_term']): Content {
-    const initiatives = phase.key_initiatives.map((it) => `• ${it.initiative}: ${it.objective} (Outcome: ${it.expected_outcome})`);
+    // Do NOT prefix with a bullet here because bulletList() renders the list bullets already.
+    const initiatives = phase.key_initiatives.map((it) => `${it.initiative}: ${it.objective} (Outcome: ${it.expected_outcome})`);
     return {
         table: {
             widths: ['*'],
