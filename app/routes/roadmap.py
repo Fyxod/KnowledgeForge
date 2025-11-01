@@ -65,16 +65,6 @@ async def get_roadmap(request: Request, body: RoadmapRequest = Body(...)):
     # Helper to schedule generation and respond with progress
     async def _generate_and_write():
         try:
-            # Build Document model from parsed data
-            # doc = Document(
-            #     id=document_data.get("id", document_id),
-            #     type=document_data.get("type", "unknown"),
-            #     file_name=document_data.get("file_name", "document"),
-            #     title=document_data.get("title", "Untitled"),
-            #     full_text=document_data.get("full_text", ""),
-            #     summary=document_data.get("summary"),
-            # )
-
             doc = Document.model_validate(document_data)
             result = await generate_roadmap(doc)
             # Persist the roadmap output

@@ -5,7 +5,7 @@ import aiofiles
 import datetime
 from typing import List
 from core.llm.client import invoke_llm
-from core.models.document import Documents
+from core.models.document import Documents, Document
 from core.llm.outputs import (
     GlobalSummarizerLLMOutput,
     SummarizerLLMOutputSingle,
@@ -34,12 +34,12 @@ def limit_words(text, max_words=15000):
     return " ".join(words)
 
 
-def build_chunk_summarizer_prompt(document_id: str, chunk_text: str) -> str:
+def build_chunk_summarizer_prompt(title: str, chunk_text: str) -> str:
     """
     Builds the summarizer prompt for a single chunk of a document.
     """
     formatted_chunk = {
-        "document_id": document_id,
+        "title": title,
         "text": re.sub(r"[\x00\n\t]+", " ", chunk_text).strip(),
     }
     return summarize_documents_prompt(document=str(formatted_chunk))
@@ -53,7 +53,7 @@ def chunk_text(text: str, max_words: int = 10000) -> list[str]:
     return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
 
 
-async def process_document_with_chunks(document, user_id: str, thread_id: str):
+async def process_document_with_chunks(document: Document, user_id: str, thread_id: str):
     """
     Summarizes a document with conditional chunking:
     - ≤10k words: summarize directly
@@ -65,7 +65,7 @@ async def process_document_with_chunks(document, user_id: str, thread_id: str):
 
     if word_count <= 11000:
         # Just one summary, no chunking
-        prompt = build_chunk_summarizer_prompt(document.id, document.full_text)
+        prompt = build_chunk_summarizer_prompt(document.title, document.full_text)
         result = None
         for attempt in range(5):
             try:
@@ -88,7 +88,7 @@ async def process_document_with_chunks(document, user_id: str, thread_id: str):
 
     # Step 1: Summarize each chunk
     for idx, chunk in enumerate(chunks):
-        prompt = build_chunk_summarizer_prompt(document.id, chunk)
+        prompt = build_chunk_summarizer_prompt(document.title, chunk)
         result = None
         for attempt in range(5):  # retry logic
             try:
@@ -127,6 +127,7 @@ async def process_document_with_chunks(document, user_id: str, thread_id: str):
 3. Uses clear, concise, and neutral language.
 
 4. Flows logically as if summarizing the entire document in one piece.
+Title: {document.title}
 Here are the section summaries: {partial_summaries}. Please return the final combined summary.
         """
         try:

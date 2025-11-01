@@ -424,7 +424,7 @@ def build_mind_maps_node_prompt_global(parsed_data: Documents) -> str:
 
     final_text = ""
     for document in parsed_data.documents:
-        if hasattr(document, "full_text") and word_count(document.full_text) < 5000:
+        if hasattr(document, "full_text") and word_count(document.full_text) < 8000:
             print("Using full text for mind map creation")
             text = document.full_text
         elif hasattr(document, "summary") and document.summary:
@@ -432,9 +432,9 @@ def build_mind_maps_node_prompt_global(parsed_data: Documents) -> str:
             text = document.summary
         else:
             print("Using truncated text for mind map creation")
-            words = document.full_text.split()[:15000]
+            words = document.full_text.split()[:8000]
             text = " ".join(words)
-        final_text += f"\n{document.title}\n\n{text}\n\n"
+        final_text += f"\nTitle - {document.title}\n\n{text}\n\n"
 
     return f"""
 Respond with a valid JSON of nodes (max_limit: 100).

@@ -36,7 +36,7 @@ async def generate_roadmap(
 
 
 def fetch_document_content(document: Document) -> str:
-    if hasattr(document, "full_text") and word_count(document.full_text) < 6000:
+    if hasattr(document, "full_text") and word_count(document.full_text) < 8000:
         print("Using full text for roadmap creation")
         text = document.full_text
     elif hasattr(document, "summary") and document.summary:
@@ -44,10 +44,10 @@ def fetch_document_content(document: Document) -> str:
         text = document.summary
     else:
         print("Using truncated text for roadmap creation")
-        words = document.full_text.split()[:15000]
+        words = document.full_text.split()[:8000]
         text = " ".join(words)
 
-    return f"\n{document.title}\n\n{text}"
+    return f"\nTitle - {document.title}\n\n{text}"
 
 
 def word_count(text: str) -> int:

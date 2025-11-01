@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Clipboard } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Document, api } from '@/lib/api';
 import { toast } from 'sonner';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
+import { downloadSummaryPdf } from '@/lib/summary-pdf';
 
 type Props = {
   open: boolean;
@@ -58,16 +59,6 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
       toast.error('Failed to generate summary');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCopy = async () => {
-    if (!summary) return;
-    try {
-      await navigator.clipboard.writeText(summary);
-      toast.success('Copied to clipboard');
-    } catch {
-      toast.error('Failed to copy');
     }
   };
 
@@ -164,11 +155,16 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
               <SafeMarkdownRenderer content={summary} enableMarkdown />
             </ScrollArea>
 
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <Button onClick={handleCopy} className="ml-auto" variant="default">
-                <Clipboard className="w-4 h-4 mr-2" />
-                Copy Summary
+            {/* Action Button */}
+            <div className="flex">
+              <Button
+                onClick={() => {
+                  const title = documents.find((d) => d.docId === selectedDoc)?.title || 'Summary';
+                  downloadSummaryPdf(summary, `${title}.pdf`, { title });
+                }}
+                className="ml-auto"
+              >
+                Export as PDF
               </Button>
             </div>
           </div>

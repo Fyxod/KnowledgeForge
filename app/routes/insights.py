@@ -7,19 +7,18 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
-from core.pros_cons import generate_pros_cons
-from app.socket_handler import sio
+from core.insights import generate_insights
 
 router = APIRouter(prefix="", tags=["extra"])
 
 
-class ProsConsRequest(BaseModel):
+class InsightsRequest(BaseModel):
     thread_id: str
     document_id: str
 
 
-@router.post("/pros_cons")
-async def get_pros_cons(request: Request, body: ProsConsRequest = Body(...)):
+@router.post("/insights")
+async def get_insights(request: Request, body: InsightsRequest = Body(...)):
     payload = request.state.user
 
     if not payload:
@@ -57,29 +56,29 @@ async def get_pros_cons(request: Request, body: ProsConsRequest = Body(...)):
     if document_data is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Prepare pros_cons file path
-    pros_cons_dir = f"data/{user_id}/threads/{thread_id}/pros_cons"
-    os.makedirs(pros_cons_dir, exist_ok=True)
-    pros_cons_path = os.path.join(pros_cons_dir, f"pros_cons_{document_id}.json")
+    # Prepare insights file path
+    insights_dir = f"data/{user_id}/threads/{thread_id}/insights"
+    os.makedirs(insights_dir, exist_ok=True)
+    insights_path = os.path.join(insights_dir, f"insights_{document_id}.json")
 
     # Helper to schedule generation and respond with progress
     async def _generate_and_write():
         try:
             doc = Document.model_validate(document_data)
-            result = await generate_pros_cons(doc)
-            # Persist the pros_cons output
-            async with aiofiles.open(pros_cons_path, "w", encoding="utf-8") as f:
+            result = await generate_insights(doc)
+            # Persist the insights output
+            async with aiofiles.open(insights_path, "w", encoding="utf-8") as f:
                 await f.write(
                     json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
                 )
         except Exception:
-            # Silently ignore to avoid crashing the request path; a retry can be triggered by client
+            print("Insights generation failed")
             pass
 
-    # If file already exists, inspect its contents
-    if os.path.exists(pros_cons_path):
+    # If insights file already exists, inspect its contents
+    if os.path.exists(insights_path):
         try:
-            async with aiofiles.open(pros_cons_path, "r", encoding="utf-8") as f:
+            async with aiofiles.open(insights_path, "r", encoding="utf-8") as f:
                 content = await f.read()
             if not content.strip():
                 # File exists but is empty => generation in progress
@@ -87,7 +86,7 @@ async def get_pros_cons(request: Request, body: ProsConsRequest = Body(...)):
                     status_code=status.HTTP_200_OK,
                     content={
                         "status": False,
-                        "message": f"Generating Pros & Cons for {document_data.get('title', 'Untitled')}",
+                        "message": f"Generating Insights for {document_data.get('title', 'Untitled')}",
                     },
                 )
             # Non-empty: try to parse and return
@@ -95,7 +94,7 @@ async def get_pros_cons(request: Request, body: ProsConsRequest = Body(...)):
                 data = json.loads(content)
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
-                    content={"status": True, "pros_cons": data},
+                    content={"status": True, "insights": data},
                 )
             except json.JSONDecodeError:
                 # Treat invalid JSON as still generating
@@ -103,7 +102,7 @@ async def get_pros_cons(request: Request, body: ProsConsRequest = Body(...)):
                     status_code=status.HTTP_200_OK,
                     content={
                         "status": False,
-                        "message": f"Generating Pros & Cons for {document_data.get('title', 'Untitled')}",
+                        "message": f"Generating Insights for {document_data.get('title', 'Untitled')}",
                     },
                 )
         except Exception:
@@ -112,13 +111,13 @@ async def get_pros_cons(request: Request, body: ProsConsRequest = Body(...)):
                 status_code=status.HTTP_200_OK,
                 content={
                     "status": False,
-                    "message": f"Generating Pros & Cons for {document_data.get('title', 'Untitled')}",
+                    "message": f"Generating Insights for {document_data.get('title', 'Untitled')}",
                 },
             )
 
     # File does not exist: create it empty (acts as a lock) and kick off generation
     try:
-        async with aiofiles.open(pros_cons_path, "w", encoding="utf-8") as f:
+        async with aiofiles.open(insights_path, "w", encoding="utf-8") as f:
             await f.write("")
     except Exception:
         # If file creation fails, still proceed to schedule generation
@@ -131,6 +130,6 @@ async def get_pros_cons(request: Request, body: ProsConsRequest = Body(...)):
         status_code=status.HTTP_200_OK,
         content={
             "status": False,
-            "message": f"Generating Pros & Cons for {document_data.get('title', 'Untitled')}",
+            "message": f"Generating Insights for {document_data.get('title', 'Untitled')}",
         },
     )

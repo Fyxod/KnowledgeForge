@@ -99,7 +99,7 @@ async def upload_file(
             # Create a new empty thread only if thread_name is provided
             if thread_name:
                 print("No files provided. Creating a new thread only.")
-                thread_id = str(uuid.uuid4())
+                thread_id = str(uuid.uuid4())[:7]
                 new_thread = {
                     f"threads.{thread_id}": {
                         "thread_name": thread_name or "New Thread",
@@ -128,7 +128,7 @@ async def upload_file(
     # Create new thread if thread_id not provided
     if not thread_id:
         print("Creating a new thread")
-        thread_id = str(uuid.uuid4())
+        thread_id = str(uuid.uuid4())[:7]
         new_thread = {
             f"threads.{thread_id}": {
                 "thread_name": thread_name or "New Thread",

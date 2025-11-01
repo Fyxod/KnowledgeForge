@@ -30,7 +30,7 @@ async def create_thread(request: Request, thread_data: ThreadCreateRequest):
         return {"error": "User not found"}
 
     # Create new thread
-    thread_id = str(uuid.uuid4())
+    thread_id = str(uuid.uuid4())[:7]
     now = datetime.datetime.now(datetime.timezone.utc)
 
     new_thread = {

@@ -9,7 +9,6 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
   Loader2,
-  Clipboard,
   Target,
   ShieldAlert,
   BarChart3,
@@ -25,6 +24,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { Document, StrategicRoadmapLLMOutput, api } from '@/lib/api';
+import { downloadStrategicRoadmapPdf } from '@/lib/strategic-roadmap-pdf';
 import { toast } from 'sonner';
 
 type Props = {
@@ -48,7 +48,7 @@ const SectionList: React.FC<{ title: string; items: string[]; badgeStyle?: strin
   );
 };
 
-const RoadmapRenderer: React.FC<{ roadmap: StrategicRoadmapLLMOutput }> = ({ roadmap }) => {
+const StrategicRoadmapRenderer: React.FC<{ roadmap: StrategicRoadmapLLMOutput }> = ({ roadmap }) => {
   return (
     <div className="space-y-6">
       {/* Header banner */}
@@ -124,7 +124,7 @@ const RoadmapRenderer: React.FC<{ roadmap: StrategicRoadmapLLMOutput }> = ({ roa
           <div className="p-2 rounded-md bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300">
             <Rocket className="w-4 h-4" />
           </div>
-          <h4 className="font-semibold">Phased Roadmap</h4>
+          <h4 className="font-semibold">Phased Strategic Roadmap</h4>
         </div>
         <div className="relative pl-5">
           <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-border" />
@@ -232,7 +232,7 @@ const RoadmapRenderer: React.FC<{ roadmap: StrategicRoadmapLLMOutput }> = ({ roa
   );
 };
 
-const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
+const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -260,7 +260,7 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
       const res = await api.roadmap(threadId, selectedDoc);
       if (res?.status && res.roadmap) {
         setRoadmap(res.roadmap);
-        toast.success('Roadmap ready');
+        toast.success('Strategic roadmap ready');
         // Stop any polling if running
         pollingActiveRef.current = false;
         if (timeoutRef.current) {
@@ -281,16 +281,16 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
       } else if (res?.error) {
         toast.error(res.error);
       } else {
-        setMessage('Generating roadmap...');
-        setProgressMessages((msgs) => (msgs[msgs.length - 1] === 'Generating roadmap...' ? msgs : [...msgs, 'Generating roadmap...']));
+        setMessage('Generating strategic roadmap...');
+        setProgressMessages((msgs) => (msgs[msgs.length - 1] === 'Generating strategic roadmap...' ? msgs : [...msgs, 'Generating strategic roadmap...']));
         setView('progress');
         lastPolledDocRef.current = selectedDoc;
         pollingActiveRef.current = true;
         schedulePoll();
       }
     } catch (e) {
-      console.error('Error requesting roadmap:', e);
-      toast.error('Failed to request roadmap');
+      console.error('Error requesting strategic roadmap:', e);
+      toast.error('Failed to request strategic roadmap');
     } finally {
       setLoading(false);
     }
@@ -327,15 +327,6 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
     }, 5000);
   };
 
-  const handleCopy = async () => {
-    if (!roadmap) return;
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(roadmap, null, 2));
-      toast.success('Roadmap JSON copied');
-    } catch {
-      toast.error('Failed to copy');
-    }
-  };
 
   const handleClose = (open: boolean) => {
     if (!open) {
@@ -453,7 +444,7 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                     Requesting...
                   </>
                 ) : (
-                  'Generate Roadmap'
+                  'Generate Strategic Roadmap'
                 )}
               </Button>
             </div>
@@ -473,7 +464,7 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                     <p key={idx} className="text-sm text-muted-foreground whitespace-pre-wrap">{m}</p>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">Generating roadmap…</p>
+                  <p className="text-sm text-muted-foreground">Generating strategic roadmap…</p>
                 )}
               </div>
             </div>
@@ -503,14 +494,16 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
           <div className="flex-1 overflow-hidden flex flex-col gap-4">
             {/* Roadmap Display */}
             <ScrollArea className="flex-1 border rounded-lg p-4 bg-muted/30 h-[60vh] overflow-auto">
-              <RoadmapRenderer roadmap={roadmap} />
+              <StrategicRoadmapRenderer roadmap={roadmap} />
             </ScrollArea>
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              <Button onClick={handleCopy} className="ml-auto" variant="default">
-                <Clipboard className="w-4 h-4 mr-2" />
-                Copy JSON
+              <Button
+                className="ml-auto"
+                onClick={() => roadmap && downloadStrategicRoadmapPdf(roadmap, `${roadmap.roadmap_title || 'Strategic Roadmap'}.pdf`)}
+              >
+                Export as PDF
               </Button>
             </div>
           </div>
@@ -520,4 +513,4 @@ const RoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
   );
 };
 
-export default RoadmapModal;
+export default StrategicRoadmapModal;

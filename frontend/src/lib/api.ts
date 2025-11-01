@@ -191,15 +191,58 @@ export interface RoadmapResponse {
   error?: string;
 }
 
-// Pros & Cons types
-export interface ProsConsOutput {
-  pros: string[];
-  cons: string[];
+// Insights types (mirror backend Pydantic models)
+export interface DocumentSummary {
+  title: string;
+  purpose: string;
+  key_themes: string[];
 }
 
-export interface ProsConsResponse {
+export interface KeyDiscussionPoint {
+  topic: string;
+  details: string;
+}
+
+export interface StrengthItem {
+  aspect: string;
+  evidence_or_example: string;
+}
+
+export interface ImprovementOrMissingArea {
+  gap: string;
+  suggested_improvement: string;
+}
+
+export interface FutureConsideration {
+  focus_area: string;
+  recommendation: string;
+}
+
+export interface InnovationAspect {
+  innovation_title: string;
+  description: string;
+  potential_impact: string;
+}
+
+export interface PseudocodeOrTechnicalOutline {
+  section?: string | null;
+  pseudocode?: string | null;
+}
+
+export interface InsightsLLMOutput {
+  document_summary: DocumentSummary;
+  key_discussion_points: KeyDiscussionPoint[];
+  strengths: StrengthItem[];
+  improvement_or_missing_areas: ImprovementOrMissingArea[];
+  future_considerations: FutureConsideration[];
+  innovation_aspects: InnovationAspect[];
+  pseudocode_or_technical_outline?: PseudocodeOrTechnicalOutline[] | null;
+  llm_inferred_additions?: LLMInferredAddition[] | null;
+}
+
+export interface InsightsResponse {
   status?: boolean;
-  pros_cons?: ProsConsOutput;
+  insights?: InsightsLLMOutput;
   message?: string;
   error?: string;
 }
@@ -454,9 +497,9 @@ export const api = {
     return data as RoadmapResponse;
   },
 
-  async prosCons(threadId: string, documentId: string): Promise<ProsConsResponse> {
+  async insights(threadId: string, documentId: string): Promise<InsightsResponse> {
     const token = getAuthToken();
-    const response = await fetch(`${API_URL}/pros_cons`, {
+    const response = await fetch(`${API_URL}/insights`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -468,13 +511,12 @@ export const api = {
     try {
       data = await response.json();
     } catch (_) {
-      return { status: false, error: `Failed to parse pros/cons response (${response.status})` };
+      return { status: false, error: `Failed to parse insights response (${response.status})` };
     }
     if (!response.ok) {
-      return { status: false, error: data?.detail || data?.message || 'Pros/Cons request failed' };
+      return { status: false, error: data?.detail || data?.message || 'Insights request failed' };
     }
-    // Expected shapes: { status: false, message } or { status: true, pros_cons }
-    return data as ProsConsResponse;
+    return data as InsightsResponse; // Expected: { status:false,message } or { status:true, insights }
   },
 };
 

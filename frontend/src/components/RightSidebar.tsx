@@ -1,12 +1,12 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Scale, Sparkles } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
-import RoadmapModal from './RoadmapModal';
-import ProsConsModal from './ProsConsModal';
+import StrategicRoadmapModal from './StrategicRoadmapModal';
+import InsightsModal from './InsightsModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -28,8 +28,8 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [wordOpen, setWordOpen] = React.useState(false);
   const [docsOpen, setDocsOpen] = React.useState(false);
   const [roadmapOpen, setRoadmapOpen] = React.useState(false);
-  const [prosOpen, setProsOpen] = React.useState(false);
   const [summaryOpen, setSummaryOpen] = React.useState(false);
+  const [insightsOpen, setInsightsOpen] = React.useState(false);
 
   const documents = React.useMemo(() => {
     if (!threadId) return [];
@@ -74,25 +74,55 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
         {/* Studio buttons moved up here. When collapsed, show icon-only column; when expanded show labeled buttons */}
         {collapsed ? (
           <div className="flex flex-col items-center w-full space-y-3">
-            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setDocsOpen)} disabled={!threadId} aria-label="Documents">
-              <FileText className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setSummaryOpen)} disabled={!threadId} aria-label="Summary">
-              <Sparkles className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setMindOpen)} disabled={!threadId} aria-label="Mind Map">
-              <MapIcon className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setWordOpen)} disabled={!threadId} aria-label="Word Cloud">
-              <Cloud className="w-5 h-5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setDocsOpen)} disabled={!threadId} aria-label="Documents">
+                  <FileText className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Documents</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setSummaryOpen)} disabled={!threadId} aria-label="Summary">
+                  <Sparkles className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Summary</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setInsightsOpen)} disabled={!threadId} aria-label="Insights">
+                  <Lightbulb className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Insights</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setMindOpen)} disabled={!threadId} aria-label="Mind Map">
+                  <MapIcon className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Mind Map</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setWordOpen)} disabled={!threadId} aria-label="Word Cloud">
+                  <Cloud className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Word Cloud</TooltipContent>
+            </Tooltip>
 
-            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId} aria-label="Roadmap">
-              <MapPin className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setProsOpen)} disabled={!threadId} aria-label="Pros and Cons">
-              <Scale className="w-5 h-5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId} aria-label="Strategic Roadmap">
+                  <MapPin className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Strategic Roadmap</TooltipContent>
+            </Tooltip>
           </div>
         ) : (
           <div className="w-full">
@@ -104,6 +134,9 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setSummaryOpen)} disabled={!threadId}>
                 <Sparkles className="w-4 h-4 mr-2" /> Summary
               </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setInsightsOpen)} disabled={!threadId}>
+                <Lightbulb className="w-4 h-4 mr-2" /> Insights
+              </Button>
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setMindOpen)} disabled={!threadId}>
                 <MapIcon className="w-4 h-4 mr-2" /> Mind Map
               </Button>
@@ -111,10 +144,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                 <Cloud className="w-4 h-4 mr-2" /> Word Cloud
               </Button>
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId}>
-                <MapPin className="w-4 h-4 mr-2" /> Roadmap
-              </Button>
-              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setProsOpen)} disabled={!threadId}>
-                <Scale className="w-4 h-4 mr-2" /> Pros / Cons
+                <MapPin className="w-4 h-4 mr-2" /> Strategic Roadmap
               </Button>
             </div>
           </div>
@@ -125,6 +155,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   <MindMapModal open={mindOpen} onOpenChange={setMindOpen} threadId={threadId ?? ''} />
   <WordCloudModal open={wordOpen} onOpenChange={setWordOpen} threadId={threadId ?? ''} documents={documents} />
   <SummaryModal open={summaryOpen} onOpenChange={setSummaryOpen} threadId={threadId ?? ''} documents={documents} />
+  <InsightsModal open={insightsOpen} onOpenChange={setInsightsOpen} threadId={threadId ?? ''} documents={documents} />
 
       {/* Summary handled by SummaryModal above */}
 
@@ -154,8 +185,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
           </div>
         </DialogContent>
       </Dialog>
-      <RoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
-      <ProsConsModal open={prosOpen} onOpenChange={setProsOpen} threadId={threadId ?? ''} documents={documents} />
+  <StrategicRoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
     );
 };
