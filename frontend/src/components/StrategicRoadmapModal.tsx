@@ -257,9 +257,9 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
     setRoadmap(null);
 
     try {
-      const res = await api.roadmap(threadId, selectedDoc);
-      if (res?.status && res.roadmap) {
-        setRoadmap(res.roadmap);
+      const res = await api.strategicRoadmap(threadId, selectedDoc);
+      if (res?.status && res.strategic_roadmap) {
+        setRoadmap(res.strategic_roadmap);
         toast.success('Strategic roadmap ready');
         // Stop any polling if running
         pollingActiveRef.current = false;
@@ -306,9 +306,9 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
       const docId = lastPolledDocRef.current;
       if (!docId) return;
       try {
-        const res = await api.roadmap(threadId, docId);
-        if (res?.status && res.roadmap) {
-          setRoadmap(res.roadmap);
+        const res = await api.strategicRoadmap(threadId, docId);
+        if (res?.status && res.strategic_roadmap) {
+          setRoadmap(res.strategic_roadmap);
           setMessage(null);
           pollingActiveRef.current = false;
           setView('display');
