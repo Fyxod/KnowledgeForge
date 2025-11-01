@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.auth_paths import auth_paths
 
-from app.routes import insights, query, user, upload, health, thread, extra, roadmap
+from app.routes import insights, query, user, upload, health, thread, extra, strategic_roadmap
 from app.socket_handler import sio
 
 fastapi_app = FastAPI()
@@ -33,7 +33,7 @@ fastapi_app.include_router(upload.router)
 fastapi_app.include_router(health.router)
 fastapi_app.include_router(thread.router)
 fastapi_app.include_router(extra.router)
-fastapi_app.include_router(roadmap.router)
+fastapi_app.include_router(strategic_roadmap.router)
 fastapi_app.include_router(insights.router)
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
