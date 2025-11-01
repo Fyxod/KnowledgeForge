@@ -51,8 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserState(newUser);
     if (newUser) {
       setCurrentUser(newUser);
-      // Ensure loading flag is cleared when a user is explicitly set (e.g. after login)
-      setIsLoading(false);
     } else {
       removeCurrentUser();
     }
@@ -66,20 +64,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = useCallback(async () => {
     const current = getCurrentUser();
     const token = getAuthToken();
-    if (!current || !token) {
-      // Nothing to refresh; ensure loading is cleared
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
+    if (!current || !token) return;
     try {
       const fresh = await api.getUser(current.userId);
       setUserState(fresh);
       setCurrentUser(fresh);
     } catch (error) {
       console.error('Failed to refresh user:', error);
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
