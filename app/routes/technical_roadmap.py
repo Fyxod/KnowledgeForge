@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
-from core.technical_roadmap import generate_technical_roadmap
+from core.studio_features.technical_roadmap import generate_technical_roadmap
 
 router = APIRouter(prefix="", tags=["extra"])
 

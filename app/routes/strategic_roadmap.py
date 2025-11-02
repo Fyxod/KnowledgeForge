@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
-from core.strategic_roadmap import generate_strategic_roadmap
+from core.studio_features.strategic_roadmap import generate_strategic_roadmap
 from app.socket_handler import sio
 
 router = APIRouter(prefix="", tags=["extra"])

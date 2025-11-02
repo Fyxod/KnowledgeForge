@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
-from core.insights import generate_insights
+from core.studio_features.insights import generate_insights
 
 router = APIRouter(prefix="", tags=["extra"])
 
