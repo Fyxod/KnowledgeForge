@@ -1,7 +1,7 @@
 from typing import List
 
 
-def technical_roadmap_prompt(document: str, n_years: int = 5):
+def technical_roadmap_prompt(document: str | list[dict], n_years: int = 5):
     """
     Build a chat prompt to generate a Technology Roadmap from a source document,
     with output structured to match TechnicalRoadmapLLMOutput in

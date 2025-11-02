@@ -556,6 +556,28 @@ export const api = {
     return data as SummaryResponse;
   },
 
+  async summaryGlobal(threadId: string): Promise<SummaryResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/summary/global`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse summary (global) response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Summary (global) request failed' };
+    }
+    return data as SummaryResponse;
+  },
+
   async strategicRoadmap(threadId: string, documentId: string): Promise<StrategicRoadmapResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/strategic_roadmap`, {
@@ -576,6 +598,29 @@ export const api = {
       return { status: false, error: data?.detail || data?.message || 'Strategic roadmap request failed' };
     }
     // Expected shapes: { status: false, message } or { status: true, strategic_roadmap }
+    return data as StrategicRoadmapResponse;
+  },
+
+  // Generate strategic roadmap across ALL documents in a thread
+  async strategicRoadmapGlobal(threadId: string): Promise<StrategicRoadmapResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/strategic_roadmap/global`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse strategic roadmap (global) response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Strategic roadmap (global) request failed' };
+    }
     return data as StrategicRoadmapResponse;
   },
 
@@ -601,6 +646,28 @@ export const api = {
     return data as InsightsResponse; // Expected: { status:false,message } or { status:true, insights }
   },
 
+  async insightsGlobal(threadId: string): Promise<InsightsResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/insights/global`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse insights (global) response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Insights (global) request failed' };
+    }
+    return data as InsightsResponse;
+  },
+
   async technicalRoadmap(threadId: string, documentId: string): Promise<TechnicalRoadmapResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/technical_roadmap`, {
@@ -619,6 +686,28 @@ export const api = {
     }
     if (!response.ok) {
       return { status: false, error: data?.detail || data?.message || 'Technical roadmap request failed' };
+    }
+    return data as TechnicalRoadmapResponse;
+  },
+
+  async technicalRoadmapGlobal(threadId: string): Promise<TechnicalRoadmapResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/technical_roadmap/global`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse technical roadmap (global) response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Technical roadmap (global) request failed' };
     }
     return data as TechnicalRoadmapResponse;
   },

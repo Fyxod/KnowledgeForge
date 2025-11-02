@@ -21,6 +21,10 @@ class MindMapRequest(BaseModel):
     document_id: str
 
 
+class GlobalSummaryRequest(BaseModel):
+    thread_id: str
+
+
 @router.post("/wordcloud/{thread_id}")
 async def get_word_cloud(
     request: Request, thread_id: str, body: WordCloudRequest = Body(...)
@@ -196,3 +200,51 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                 continue
 
     return {"status": False, "error": "Summary not yet generated. Generating..."}
+
+
+@router.post("/summary/global")
+async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body(...)):
+
+    payload = request.state.user
+
+    if not payload:
+        return {"error": "User not authenticated"}
+
+    if not SWITCHES["SUMMARIZATION"]:
+        return {"message": "Summarization feature is disabled"}
+
+    thread_id = body.thread_id
+    print(f"Fetching global summary for thread_id: {thread_id}")
+
+    user_id = payload.userId
+    user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
+    if not user:
+        return {"error": "User not found"}
+
+    thread = user["threads"].get(thread_id)
+    if not thread:
+        return {"error": "Thread not found"}
+
+    thread_dir = f"data/{user_id}/threads/{thread_id}"
+    file_path = os.path.join(thread_dir, "global_summary.json")
+
+    if not os.path.exists(file_path):
+        return {
+            "status": False,
+            "error": "Global Summary not yet generated. Generating...",
+        }
+
+    try:
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            content = await f.read()
+        data = json.loads(content)
+
+        if isinstance(data, dict):
+            return {"status": True, "summary": data.get("summary")}
+    except Exception:
+        pass
+
+    return {
+        "status": False,
+        "error": "Global Summary not yet generated. Generating...",
+    }

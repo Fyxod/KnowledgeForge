@@ -1,7 +1,7 @@
 from typing import List
 
 
-def strategic_roadmap_prompt(document: str, n_years: int):
+def strategic_roadmap_prompt(document: str | list[dict], n_years: int):
     """
     Build a chat prompt to generate a strategic roadmap from a source document
     with output structured to match StrategicRoadmapLLMOutput in core.llm.outputs.

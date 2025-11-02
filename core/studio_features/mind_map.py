@@ -49,7 +49,7 @@ async def create_mind_map_global(parsed_data: Documents):
 
     prompt = build_mind_maps_node_prompt_global(parsed_data)
     total_start = time.time()
-    max_retries = 8
+    max_retries = 15
     mind_map_emit_topic = (
         f"{parsed_data.user_id}/{parsed_data.thread_id}/mind_map/progress"
     )
@@ -292,7 +292,7 @@ async def add_node_descriptions_global(
             batch_relevant_texts.append(relevant_str)
 
         # Attempt to generate descriptions with retries
-        max_batch_retries = 4
+        max_batch_retries = 10
         for batch_attempt in range(max_batch_retries):
             try:
                 prompt = build_mind_maps_description_prompt(

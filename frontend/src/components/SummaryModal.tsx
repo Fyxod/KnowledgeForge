@@ -18,6 +18,8 @@ type Props = {
   documents: Document[];
 };
 
+const ALL_DOCS_ID = '__ALL_DOCS__';
+
 const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,7 +39,8 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
     setSummary(null);
 
     try {
-      const res = await api.summary(threadId, selectedDoc);
+      const isAll = selectedDoc === ALL_DOCS_ID;
+      const res = isAll ? await api.summaryGlobal(threadId) : await api.summary(threadId, selectedDoc);
       if (res?.status && res.summary) {
         setSummary(res.summary);
         toast.success('Summary generated');
@@ -77,7 +80,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
         <DialogHeader>
           <DialogTitle>Generate Summary</DialogTitle>
           <DialogDescription>
-            Select a document and generate its summary
+            Select a document (or All Documents) and generate its summary
           </DialogDescription>
         </DialogHeader>
 
@@ -97,13 +100,29 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                 </Button>
               </div>
 
-              <ScrollArea className="h-48 border rounded-lg p-3">
+              <ScrollArea className="h-64 border rounded-lg p-3">
                 {documents.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
                     No documents available in this thread
                   </p>
                 ) : (
                   <div className="space-y-3">
+                    {/* All Documents option */}
+                    <div
+                      key={ALL_DOCS_ID}
+                      className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent' : ''}`}
+                      onClick={() => handleToggle(ALL_DOCS_ID)}
+                    >
+                      <Checkbox
+                        checked={selectedDoc === ALL_DOCS_ID}
+                        onCheckedChange={() => handleToggle(ALL_DOCS_ID)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">All Documents in Thread</p>
+                        <p className="text-sm text-muted-foreground">Generate a summary using all uploaded documents.</p>
+                      </div>
+                    </div>
                     {documents.map((doc) => (
                       <div
                         key={doc.docId}
@@ -128,7 +147,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
               </ScrollArea>
 
               <p className="text-sm text-muted-foreground">
-                {selectedDoc ? '1 document selected' : 'No document selected'}
+                {selectedDoc ? (selectedDoc === ALL_DOCS_ID ? 'All documents selected' : '1 document selected') : 'No document selected'}
               </p>
             </div>
 

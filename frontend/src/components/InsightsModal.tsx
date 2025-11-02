@@ -195,6 +195,8 @@ const InsightsRenderer: React.FC<{ insights: InsightsLLMOutput }> = ({ insights 
   );
 };
 
+const ALL_DOCS_ID = '__ALL_DOCS__';
+
 const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -220,7 +222,8 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
     setInsights(null);
 
     try {
-      const res = await api.insights(threadId, selectedDoc);
+      const isAll = selectedDoc === ALL_DOCS_ID;
+      const res = isAll ? await api.insightsGlobal(threadId) : await api.insights(threadId, selectedDoc);
       if (res?.status && res.insights) {
         setInsights(res.insights);
         toast.success('Insights ready');
@@ -266,7 +269,8 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
       const docId = lastPolledDocRef.current;
       if (!docId) return;
       try {
-        const res = await api.insights(threadId, docId);
+        const isAll = docId === ALL_DOCS_ID;
+        const res = isAll ? await api.insightsGlobal(threadId) : await api.insights(threadId, docId);
         if (res?.status && res.insights) {
           setInsights(res.insights);
           setMessage(null);
@@ -314,7 +318,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
     }
   }, [open]);
 
-  const selectedDocObj = selectedDoc ? documents.find(d => d.docId === selectedDoc) : null;
+  const selectedDocObj = selectedDoc && selectedDoc !== ALL_DOCS_ID ? documents.find(d => d.docId === selectedDoc) : null;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -322,15 +326,19 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
         <DialogHeader>
           <DialogTitle>Insights</DialogTitle>
           <DialogDescription>
-            {view === 'select' && 'Select a document to generate insights.'}
+            {view === 'select' && 'Select a document (or All Documents) to generate insights.'}
             {view === 'progress' && (
               <span>
-                Generating for: <span className="font-medium">{selectedDocObj?.title || 'Selected Document'}</span>
+                Generating for: <span className="font-medium">{selectedDoc === ALL_DOCS_ID ? 'All Documents in Thread' : (selectedDocObj?.title || 'Selected Document')}</span>
               </span>
             )}
-            {view === 'display' && selectedDocObj && (
+            {view === 'display' && (
               <span>
-                Document: <span className="font-medium">{selectedDocObj.title}</span>
+                {selectedDoc === ALL_DOCS_ID ? (
+                  <>Scope: <span className="font-medium">All Documents in Thread</span></>
+                ) : selectedDocObj ? (
+                  <>Document: <span className="font-medium">{selectedDocObj.title}</span></>
+                ) : null}
               </span>
             )}
           </DialogDescription>
@@ -352,13 +360,29 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
                 </Button>
               </div>
 
-              <ScrollArea className="h-48 border rounded-lg p-3">
+              <ScrollArea className="h-64 border rounded-lg p-3">
                 {documents.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
                     No documents available in this thread
                   </p>
                 ) : (
                   <div className="space-y-3">
+                    {/* All Documents option */}
+                    <div
+                      key={ALL_DOCS_ID}
+                      className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent' : ''}`}
+                      onClick={() => handleToggle(ALL_DOCS_ID)}
+                    >
+                      <Checkbox
+                        checked={selectedDoc === ALL_DOCS_ID}
+                        onCheckedChange={() => handleToggle(ALL_DOCS_ID)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">All Documents in Thread</p>
+                        <p className="text-sm text-muted-foreground">Generate insights using all uploaded documents.</p>
+                      </div>
+                    </div>
                     {documents.map((doc) => (
                       <div
                         key={doc.docId}
@@ -383,7 +407,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
               </ScrollArea>
 
               <p className="text-sm text-muted-foreground">
-                {selectedDoc ? '1 document selected' : 'No document selected'}
+                {selectedDoc ? (selectedDoc === ALL_DOCS_ID ? 'All documents selected' : '1 document selected') : 'No document selected'}
               </p>
             </div>
 
@@ -407,13 +431,13 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
           </div>
         )}
 
-        {view === 'progress' && (
+            {view === 'progress' && (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
               <Loader2 className="w-6 h-6 text-primary animate-spin" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-2">{selectedDocObj?.title || 'Selected Document'}</h3>
+              <h3 className="text-lg font-semibold mb-2">{selectedDoc === ALL_DOCS_ID ? 'All Documents in Thread' : (selectedDocObj?.title || 'Selected Document')}</h3>
               <div className="space-y-2">
                 {progressMessages.length > 0 ? (
                   progressMessages.map((m, idx) => (

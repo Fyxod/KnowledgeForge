@@ -1,4 +1,4 @@
-def insights_prompt(document: str):
+def insights_prompt(document: str | list[dict]):
     """
     Build a chat prompt to generate an Insights summary strictly as JSON,
     aligned with the schema defined by InsightsLLMOutput in core.llm.outputs.

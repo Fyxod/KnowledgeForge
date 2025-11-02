@@ -232,6 +232,8 @@ const StrategicRoadmapRenderer: React.FC<{ roadmap: StrategicRoadmapLLMOutput }>
   );
 };
 
+const ALL_DOCS_ID = '__ALL_DOCS__';
+
 const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -257,7 +259,10 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
     setRoadmap(null);
 
     try {
-      const res = await api.strategicRoadmap(threadId, selectedDoc);
+      const isAll = selectedDoc === ALL_DOCS_ID;
+      const res = isAll
+        ? await api.strategicRoadmapGlobal(threadId)
+        : await api.strategicRoadmap(threadId, selectedDoc);
       if (res?.status && res.strategic_roadmap) {
         setRoadmap(res.strategic_roadmap);
         toast.success('Strategic roadmap ready');
@@ -315,7 +320,10 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
       const docId = lastPolledDocRef.current;
       if (!docId) return;
       try {
-        const res = await api.strategicRoadmap(threadId, docId);
+        const isAll = docId === ALL_DOCS_ID;
+        const res = isAll
+          ? await api.strategicRoadmapGlobal(threadId)
+          : await api.strategicRoadmap(threadId, docId);
         if (res?.status && res.strategic_roadmap) {
           setRoadmap(res.strategic_roadmap);
           setMessage(null);
@@ -384,15 +392,22 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
         <DialogHeader>
           <DialogTitle>Strategic Roadmap</DialogTitle>
           <DialogDescription>
-            {view === 'select' && 'Select a document to generate a strategic roadmap.'}
+            {view === 'select' && 'Select a document (or All Documents) to generate a strategic roadmap.'}
             {view === 'progress' && (
               <span>
-                Generating for: <span className="font-medium">{selectedDocObj?.title || 'Selected Document'}</span>
+                Generating for:{' '}
+                <span className="font-medium">
+                  {selectedDoc === ALL_DOCS_ID ? 'All Documents in Thread' : (selectedDocObj?.title || 'Selected Document')}
+                </span>
               </span>
             )}
-            {view === 'display' && selectedDocObj && (
+            {view === 'display' && (
               <span>
-                Document: <span className="font-medium">{selectedDocObj.title}</span>
+                {selectedDoc === ALL_DOCS_ID ? (
+                  <>Scope: <span className="font-medium">All Documents in Thread</span></>
+                ) : selectedDocObj ? (
+                  <>Document: <span className="font-medium">{selectedDocObj.title}</span></>
+                ) : null}
               </span>
             )}
           </DialogDescription>
@@ -414,13 +429,29 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
                 </Button>
               </div>
 
-              <ScrollArea className="h-48 border rounded-lg p-3">
+              <ScrollArea className="h-64 border rounded-lg p-3">
                 {documents.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
                     No documents available in this thread
                   </p>
                 ) : (
                   <div className="space-y-3">
+                    {/* All Documents option */}
+                    <div
+                      key={ALL_DOCS_ID}
+                      className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent' : ''}`}
+                      onClick={() => handleToggle(ALL_DOCS_ID)}
+                    >
+                      <Checkbox
+                        checked={selectedDoc === ALL_DOCS_ID}
+                        onCheckedChange={() => handleToggle(ALL_DOCS_ID)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">All Documents in Thread</p>
+                        <p className="text-sm text-muted-foreground">Generate a strategic roadmap using all uploaded documents.</p>
+                      </div>
+                    </div>
                     {documents.map((doc) => (
                       <div
                         key={doc.docId}
@@ -445,7 +476,7 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
               </ScrollArea>
 
               <p className="text-sm text-muted-foreground">
-                {selectedDoc ? '1 document selected' : 'No document selected'}
+                {selectedDoc ? (selectedDoc === ALL_DOCS_ID ? 'All documents selected' : '1 document selected') : 'No document selected'}
               </p>
             </div>
 
@@ -475,7 +506,7 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
               <Loader2 className="w-6 h-6 text-primary animate-spin" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-2">{selectedDocObj?.title || 'Selected Document'}</h3>
+              <h3 className="text-lg font-semibold mb-2">{selectedDoc === ALL_DOCS_ID ? 'All Documents in Thread' : (selectedDocObj?.title || 'Selected Document')}</h3>
               <div className="space-y-2">
                 {progressMessages.length > 0 ? (
                   progressMessages.map((m, idx) => (
