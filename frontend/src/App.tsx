@@ -15,6 +15,7 @@ import ThreadView from "./pages/ThreadView";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import SimHome from "./pages/SimHome";
+import RequireAuth from "./lib/RequireAuth";
 
 const queryClient = new QueryClient();
 
@@ -27,7 +28,8 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Landing />} />
+              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/dashboard" element={<Dashboard />}>
@@ -36,7 +38,14 @@ const App = () => (
                 <Route path="threads/:threadId" element={<ThreadView />} />
                 <Route path="profile" element={<Profile />} />
               </Route>
-              <Route path="/sim" element={<SimHome />} />
+              <Route
+                path="/sim"
+                element={
+                  <RequireAuth>
+                    <SimHome />
+                  </RequireAuth>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -15,16 +15,16 @@ const SectionCard: React.FC<{
   return (
     <button
       onClick={onClick}
-      className="group w-[260px] h-[400px] rounded-xl border-2 bg-[#f2f8fc] shadow-sm hover:shadow-md transition-all flex flex-col items-center justify-center text-center gap-4 p-6"
+      className="group w-[260px] h-[400px] rounded-xl border-2 bg-[#f2f8fc] dark:bg-card shadow-sm hover:shadow-md dark:hover:shadow-lg transition-all flex flex-col items-center justify-center text-center gap-4 p-6"
       style={{ borderColor: '#5e17eb' }}
     >
       <div className="w-24 h-24 grid place-items-center text-purple-600">
         {icon}
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-        <p className="text-sm text-gray-700 mt-1">{subtitle}</p>
-        <p className="text-xs text-gray-500 mt-2 leading-relaxed">{description}</p>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{subtitle}</p>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">{description}</p>
       </div>
     </button>
   );
@@ -62,7 +62,7 @@ const SimHome: React.FC = () => {
               subtitle=""
               description={(
                 <>
-                  <span className="italic text-black">Knowledge Graph Q&A
+                  <span className="italic text-gray-800 dark:text-gray-200">Knowledge Graph Q&A
                   <br />&<br />
                   External Context Engine</span>
                 </>
@@ -73,21 +73,45 @@ const SimHome: React.FC = () => {
               icon={<img src="/tile-program-orchestrator.svg" alt="Program Orchestrator" className="w-15 h-15" />}
               title="Automatic Program Orchestrator"
               subtitle=""
-              description={"Strategic Coordination &\nExecution Management\nSystem"}
+              // description={"Strategic Coordination &\nExecution Management\nSystem"}
+              description={(
+                <>
+                  <span className="italic text-gray-800 dark:text-gray-200">Strategic Coordination
+                  <br />&<br />
+                  Execution Management System</span>
+                </>
+              )}
+
               onClick={() => goto()}
             />
             <SectionCard
               icon={<img src="/tile-cognitive-foresight.svg" alt="Cognitive Foresight" className="w-15 h-15" />}
               title="Cognitive Foresight Engine"
               subtitle=""
-              description={"Strategic Futures\nExploration &\nTechnology Forecasting\nSystem"}
+              // description={"Strategic Futures\nExploration &\nTechnology Forecasting\nSystem"}
+              description={(
+                <>
+                  <span className="italic text-gray-800 dark:text-gray-200">Strategic Futures\nExploration 
+                  <br />&<br />
+                  Technology Forecasting System</span>
+                </>
+              )}
+
               onClick={() => goto()}
             />
             <SectionCard
               icon={<img src="/tile-rd-insights.svg" alt="R&D Insights" className="w-15 h-15" />}
               title="R&D Insights Analyzer"
               subtitle=""
-              description={"Pattern Recognition &\nAnalytical Intelligence\nEngine"}
+              // description={"Pattern Recognition &\nAnalytical Intelligence\nEngine"}
+              description={(
+                <>
+                  <span className="italic text-gray-800 dark:text-gray-200">Pattern Recognition
+                  <br />&<br />
+                  Analytical Intelligence Engine</span>
+                </>
+              )}
+
               onClick={() => goto()}
             />
           </div>
@@ -96,7 +120,7 @@ const SimHome: React.FC = () => {
           <div className="mt-12 flex flex-col md:flex-row items-center gap-4 md:gap-6">
             {/* Left: Logo + stacked text */}
             <div className="flex items-center gap-4">
-              <img src="/sim-logo.svg" alt="SIM Logo" className="w-16 h-16" />
+              <img src="/sim-logo.svg" alt="SIM Logo" className="w-20 h-20" />
               <div className="leading-tight">
                 <p className="text-base text-muted-foreground">Powered by</p>
                 <p className="mt-1 text-3xl md:text-4xl font-semibold tracking-tight">R&D Knowledge Graph</p>
@@ -105,10 +129,20 @@ const SimHome: React.FC = () => {
 
             {/* Right: CTA buttons */}
             <div className="flex flex-wrap gap-3 md:gap-4 md:ml-6">
-              <Button variant="outline" className="rounded-x1 border-2 bg-[#f2f8fc] text-purple-700 hover:bg-purple-50" style={{ borderColor: '#5e17eb' }} onClick={() => goto()}>
+              <Button
+                variant="outline"
+                className="rounded-xl border-2 bg-[#f2f8fc] text-purple-700 hover:bg-purple-50 dark:bg-card dark:text-purple-300 dark:hover:bg-accent"
+                style={{ borderColor: '#5e17eb' }}
+                onClick={() => goto()}
+              >
                 See all Document Clusters <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
-              <Button variant="outline" className="rounded-xl border-2 bg-[#f2f8fc] text-purple-700 hover:bg-purple-50" style={{ borderColor: '#5e17eb' }} onClick={() => goto()}>
+              <Button
+                variant="outline"
+                className="rounded-xl border-2 bg-[#f2f8fc] text-purple-700 hover:bg-purple-50 dark:bg-card dark:text-purple-300 dark:hover:bg-accent"
+                style={{ borderColor: '#5e17eb' }}
+                onClick={() => goto()}
+              >
                 See all Knowledge Graphs <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
