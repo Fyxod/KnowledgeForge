@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "./lib/auth-context";
+import { AuthProvider, useAuth } from "./lib/auth-context";
 import { ThemeProvider } from "./lib/theme-context";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -19,6 +19,25 @@ import RequireAuth from "./lib/RequireAuth";
 
 const queryClient = new QueryClient();
 
+// Decides what to do at the root path based on auth state
+const RootRedirect = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="h-screen flex items-center justify-center">Loading…</div>;
+  }
+
+  return (
+    <>
+      {isAuthenticated ? (
+        <Navigate to="/sim" replace />
+      ) : (
+        <Navigate to="/login" replace />
+      )}
+    </>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -28,7 +47,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/" element={<RootRedirect />} />
               <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
