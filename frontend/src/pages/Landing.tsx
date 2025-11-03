@@ -11,7 +11,7 @@ const Landing = () => {
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      navigate('/sim');
     } else {
       navigate('/login');
     }

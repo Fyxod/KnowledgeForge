@@ -33,8 +33,8 @@ const Login = () => {
         // non-fatal - proceed to navigate even if refresh fails
         console.debug('refreshUser failed', err);
       }
-      toast.success('Login successful!');
-      navigate('/dashboard');
+  toast.success('Login successful!');
+  navigate('/sim');
     } catch (error) {
       toast.error('Invalid email or password');
     } finally {

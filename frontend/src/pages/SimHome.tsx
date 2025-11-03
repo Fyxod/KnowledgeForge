@@ -67,7 +67,7 @@ const SimHome: React.FC = () => {
                   External Context Engine</span>
                 </>
               )}
-              onClick={() => goto()}
+              onClick={() => goto("/dashboard")}
             />
             <SectionCard
               icon={<img src="/tile-program-orchestrator.svg" alt="Program Orchestrator" className="w-15 h-15" />}
