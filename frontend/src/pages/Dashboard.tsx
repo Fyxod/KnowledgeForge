@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useNavigate, useMatch } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Brain, LogOut, User, Moon, Sun } from 'lucide-react';
 import { ThreadSidebar } from '@/components/ThreadSidebar';
 import RightSidebar from '@/components/RightSidebar';
 import { useAuth } from '@/lib/auth-context';
@@ -14,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import AppNavbar from '@/components/AppNavbar';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 
 const Dashboard = () => {
@@ -223,42 +223,7 @@ const Dashboard = () => {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <header className="border-b bg-background">
-        <div className="px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Brain className="w-6 h-6 text-primary" />
-            <h1 className="text-lg font-semibold">Knowledge Synthesis</h1>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={toggleTheme}>
-              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <User className="w-5 h-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-2 border-b">
-                  <p className="font-medium">{user.name}</p>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
-                </div>
-                <DropdownMenuItem onClick={() => navigate('/dashboard/profile')}>
-                  <User className="w-4 h-4 mr-2" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+      <AppNavbar />
 
       {/* Main Content */}
   <div ref={containerRef} className="flex-1 flex overflow-hidden min-h-0 min-w-0">

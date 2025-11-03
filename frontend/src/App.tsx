@@ -14,6 +14,7 @@ import NewThread from "./pages/NewThread";
 import ThreadView from "./pages/ThreadView";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import SimHome from "./pages/SimHome";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
                 <Route path="threads/:threadId" element={<ThreadView />} />
                 <Route path="profile" element={<Profile />} />
               </Route>
+              <Route path="/sim" element={<SimHome />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
