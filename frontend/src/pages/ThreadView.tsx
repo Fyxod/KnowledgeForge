@@ -54,10 +54,11 @@ const ThreadView = () => {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   useEffect(() => {
-    if (threadId && user) {
-      loadThread();
+    if (!threadId || !user || loading) {
+      return;
     }
-  }, [threadId, user]);
+    loadThread();
+  }, [threadId, user, loading]);
 
   useEffect(() => {
     scrollToBottom();
