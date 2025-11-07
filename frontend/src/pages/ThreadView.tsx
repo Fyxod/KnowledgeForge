@@ -12,6 +12,16 @@ import { ChatMessage } from '@/components/ChatMessage';
 import { SourcesDisplay } from '@/components/SourcesDisplay';
 import { toast } from 'sonner';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,6 +51,7 @@ const ThreadView = () => {
   const [progressMap, setProgressMap] = useState<Record<number, number>>({});
   const [mindMapOpen, setMindMapOpen] = useState(false);
   const [wordCloudOpen, setWordCloudOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (threadId && user) {
@@ -111,10 +122,15 @@ const ThreadView = () => {
   };
 
   const handleClearChats = async () => {
-    if (!threadId || chats.length === 0) return;
+    if (!threadId) {
+      setClearConfirmOpen(false);
+      return;
+    }
 
-    const confirmed = window.confirm('Are you sure you want to clear all messages in this thread?');
-    if (!confirmed) return;
+    if (chats.length === 0) {
+      setClearConfirmOpen(false);
+      return;
+    }
 
     setChats([]);
     setLastSources(null);
@@ -128,6 +144,8 @@ const ThreadView = () => {
     } catch (error) {
       toast.error('Failed to clear messages');
       await loadThread({ suppressErrorToast: true });
+    } finally {
+      setClearConfirmOpen(false);
     }
   };
 
@@ -283,7 +301,7 @@ const ThreadView = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleClearChats}
+            onClick={() => setClearConfirmOpen(true)}
             disabled={!threadId || chats.length === 0}
           >
             <Trash2 className="w-4 h-4 mr-2" />
@@ -476,6 +494,29 @@ const ThreadView = () => {
           documents={documents}
         />
       )}
+
+      <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all messages?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes every chat message in this thread. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                await handleClearChats();
+              }}
+            >
+              Clear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
