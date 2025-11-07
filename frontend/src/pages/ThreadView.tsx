@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check, Trash2 } from 'lucide-react';
-import { api, Chat } from '@/lib/api';
+import { api, Chat, Thread } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { ChatMessage } from '@/components/ChatMessage';
 import { SourcesDisplay } from '@/components/SourcesDisplay';
@@ -34,7 +34,7 @@ import WordCloudModal from '@/components/WordCloudModal';
 
 const ThreadView = () => {
   const { threadId } = useParams();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -53,12 +53,40 @@ const ThreadView = () => {
   const [wordCloudOpen, setWordCloudOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
+  const updateUserThreadState = useCallback(
+    (nextChats: Chat[], extra?: Partial<Thread>) => {
+      if (!user || !threadId) return;
+
+      const existingThread = user.threads?.[threadId];
+      const nowIso = new Date().toISOString();
+
+      const updatedThread: Thread = {
+        thread_name: extra?.thread_name ?? existingThread?.thread_name ?? 'New Chat',
+        createdAt: extra?.createdAt ?? existingThread?.createdAt ?? nowIso,
+        updatedAt: extra?.updatedAt ?? existingThread?.updatedAt ?? nowIso,
+        documents: extra?.documents ?? existingThread?.documents ?? [],
+        chats: nextChats,
+      };
+
+      const updatedUser = {
+        ...user,
+        threads: {
+          ...user.threads,
+          [threadId]: updatedThread,
+        },
+      };
+
+      setUser(updatedUser);
+    },
+    [setUser, threadId, user]
+  );
+
   useEffect(() => {
-    if (!threadId || !user || loading) {
+    if (!threadId || !user?.userId) {
       return;
     }
     loadThread();
-  }, [threadId, user, loading]);
+  }, [threadId, user?.userId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -89,8 +117,15 @@ const ThreadView = () => {
     
     try {
       const thread = await api.getThread(threadId);
-      setChats(thread.chats || []);
+      const nextChats = thread.chats || [];
+      setChats(nextChats);
       setDocuments(thread.documents || []);
+      updateUserThreadState(nextChats, {
+        documents: thread.documents || [],
+        thread_name: thread.thread_name,
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
+      });
     } catch (error) {
       if (!options?.suppressErrorToast) {
         toast.error('Failed to load thread');
@@ -104,6 +139,7 @@ const ThreadView = () => {
     setChats(prev => {
       const updated = [...prev];
       updated.splice(index, 1);
+      updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
       return updated;
     });
     setLastSources(null);
@@ -111,7 +147,9 @@ const ThreadView = () => {
     try {
       const response = await api.deleteChat(threadId, index);
       if (response?.chats) {
-        setChats(response.chats ?? []);
+        const next = response.chats ?? [];
+        setChats(next);
+        updateUserThreadState(next, { updatedAt: new Date().toISOString() });
       } else {
         await loadThread({ suppressErrorToast: true });
       }
@@ -133,13 +171,17 @@ const ThreadView = () => {
       return;
     }
 
-    setChats([]);
+    const next: Chat[] = [];
+    setChats(next);
+    updateUserThreadState(next, { updatedAt: new Date().toISOString() });
     setLastSources(null);
 
     try {
       const response = await api.clearThreadChats(threadId);
       if (response?.chats) {
-        setChats(response.chats ?? []);
+        const fresh = response.chats ?? [];
+        setChats(fresh);
+        updateUserThreadState(fresh, { updatedAt: new Date().toISOString() });
       }
       toast.success('All messages cleared');
     } catch (error) {
@@ -220,7 +262,11 @@ const ThreadView = () => {
       timestamp: new Date().toISOString(),
     };
 
-    setChats(prev => [...prev, userMessage]);
+    setChats(prev => {
+      const updated = [...prev, userMessage];
+      updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
+      return updated;
+    });
     setInput('');
     setLoading(true);
 
@@ -229,7 +275,11 @@ const ThreadView = () => {
       content: '',
       timestamp: new Date().toISOString(),
     };
-    setChats(prev => [...prev, agentMessage]);
+    setChats(prev => {
+      const updated = [...prev, agentMessage];
+      updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
+      return updated;
+    });
 
     try {
       const response = await api.query(
@@ -252,6 +302,7 @@ const ThreadView = () => {
             web_used: webUsed,
           },
         };
+        updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
         return updated;
       });
 
@@ -261,7 +312,11 @@ const ThreadView = () => {
       });
     } catch (error) {
       toast.error('Failed to get response');
-      setChats(prev => prev.slice(0, -2));
+      setChats(prev => {
+        const updated = prev.slice(0, -2);
+        updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
+        return updated;
+      });
       setInput(userMessage.content);
     } finally {
       setLoading(false);
