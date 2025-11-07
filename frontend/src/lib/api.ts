@@ -45,6 +45,21 @@ export interface Chat {
   };
 }
 
+export interface DeleteChatResponse {
+  status: string;
+  message: string;
+  thread_id: string;
+  deleted_index: number;
+  chats: Chat[];
+}
+
+export interface ClearChatsResponse {
+  status: string;
+  message: string;
+  thread_id: string;
+  chats: Chat[];
+}
+
 export interface LoginResponse {
   status: string;
   message: string;
@@ -515,6 +530,38 @@ export const api = {
         Authorization: `Bearer ${token}`,
       },
     });
+
+    return response.json();
+  },
+
+  async deleteChat(threadId: string, chatIndex: number): Promise<DeleteChatResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/thread/${threadId}/chats/${chatIndex}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete chat');
+    }
+
+    return response.json();
+  },
+
+  async clearThreadChats(threadId: string): Promise<ClearChatsResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/thread/${threadId}/chats`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to clear chats');
+    }
 
     return response.json();
   },

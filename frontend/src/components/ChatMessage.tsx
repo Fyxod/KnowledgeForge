@@ -1,5 +1,5 @@
 import { Chat } from '@/lib/api';
-import { User, Bot } from 'lucide-react';
+import { User, Bot, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import React from 'react';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 
 interface ChatMessageProps {
   chat: Chat;
+  onDelete?: () => void;
 }
 
-export const ChatMessage = ({ chat }: ChatMessageProps) => {
+export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
   const isUser = chat.type === 'user';
   const [mdEnabled, setMdEnabled] = React.useState(true);
   const displayTime = React.useMemo(() => {
@@ -63,6 +64,7 @@ export const ChatMessage = ({ chat }: ChatMessageProps) => {
           title={mdEnabled ? 'Markdown: ON' : 'Markdown: OFF'}
           onClick={() => setMdEnabled((v) => !v)}
           aria-pressed={mdEnabled}
+          type="button"
         >
           {mdEnabled ? 'MD' : 'TXT'}
         </Button>
@@ -70,12 +72,24 @@ export const ChatMessage = ({ chat }: ChatMessageProps) => {
 
       <div
         className={cn(
-          'max-w-[80%] rounded-2xl px-4 py-3',
+          'relative max-w-[80%] rounded-2xl px-4 py-3',
           isUser
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted'
         )}
       >
+        {onDelete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute -top-3 -right-3 h-7 w-7 text-muted-foreground hover:text-destructive"
+            aria-label="Delete message"
+            onClick={onDelete}
+            type="button"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        )}
         {isUser ? (
           <p className="text-sm whitespace-pre-wrap break-words">{chat.content}</p>
         ) : (

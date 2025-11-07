@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check } from 'lucide-react';
+import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check, Trash2 } from 'lucide-react';
 import { api, Chat } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { ChatMessage } from '@/components/ChatMessage';
@@ -72,7 +72,7 @@ const ThreadView = () => {
     }
   };
 
-  const loadThread = async () => {
+  const loadThread = async (options?: { suppressErrorToast?: boolean }) => {
     if (!threadId) return;
     
     try {
@@ -80,7 +80,54 @@ const ThreadView = () => {
       setChats(thread.chats || []);
       setDocuments(thread.documents || []);
     } catch (error) {
-      toast.error('Failed to load thread');
+      if (!options?.suppressErrorToast) {
+        toast.error('Failed to load thread');
+      }
+    }
+  };
+
+  const handleDeleteChat = async (index: number) => {
+    if (!threadId) return;
+
+    setChats(prev => {
+      const updated = [...prev];
+      updated.splice(index, 1);
+      return updated;
+    });
+    setLastSources(null);
+
+    try {
+      const response = await api.deleteChat(threadId, index);
+      if (response?.chats) {
+        setChats(response.chats ?? []);
+      } else {
+        await loadThread({ suppressErrorToast: true });
+      }
+      toast.success('Message deleted');
+    } catch (error) {
+      toast.error('Failed to delete message');
+      await loadThread({ suppressErrorToast: true });
+    }
+  };
+
+  const handleClearChats = async () => {
+    if (!threadId || chats.length === 0) return;
+
+    const confirmed = window.confirm('Are you sure you want to clear all messages in this thread?');
+    if (!confirmed) return;
+
+    setChats([]);
+    setLastSources(null);
+
+    try {
+      const response = await api.clearThreadChats(threadId);
+      if (response?.chats) {
+        setChats(response.chats ?? []);
+      }
+      toast.success('All messages cleared');
+    } catch (error) {
+      toast.error('Failed to clear messages');
+      await loadThread({ suppressErrorToast: true });
     }
   };
 
@@ -232,6 +279,18 @@ const ThreadView = () => {
           <Switch checked={webEnhanced} onCheckedChange={setWebEnhanced} />
         </div>
 
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearChats}
+            disabled={!threadId || chats.length === 0}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Clear All
+          </Button>
+        </div>
+
         {/* <div className="flex items-center gap-2">
           <Dialog>
             <DialogTrigger asChild>
@@ -282,10 +341,18 @@ const ThreadView = () => {
               chat.type === 'agent' &&
               chat.sources &&
               (chat.sources.documents_used.length > 0 || chat.sources.web_used.length > 0);
+            const isPendingAgentResponse =
+              loading &&
+              index === chats.length - 1 &&
+              chat.type === 'agent' &&
+              chat.content === '';
 
             return (
               <div key={index}>
-                <ChatMessage chat={chat} />
+                <ChatMessage
+                  chat={chat}
+                  onDelete={isPendingAgentResponse ? undefined : () => handleDeleteChat(index)}
+                />
                 {shouldShowSources && (
                   <div className="ml-11">
                     <SourcesDisplay
