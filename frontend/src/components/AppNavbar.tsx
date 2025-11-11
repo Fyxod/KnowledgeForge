@@ -4,6 +4,7 @@ import { Brain, LogOut, User, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
+import { PROJECT_NAME } from '../../config';
 import { removeAuthToken, removeCurrentUser } from '@/lib/api';
 import {
   DropdownMenu,
@@ -31,7 +32,7 @@ const AppNavbar: React.FC = () => {
       <div className="px-4 py-3 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Brain className="w-6 h-6 text-primary" />
-          <h1 className="text-lg font-semibold">Knowledge Synthesis</h1>
+          <h1 className="text-lg font-semibold">{PROJECT_NAME}</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">

@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { PROJECT_NAME, SIM_PAGE_ENABLED } from '../../config';
 import { Button } from '@/components/ui/button';
 import { Brain, FileText, Sparkles, Zap, Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/lib/theme-context';
@@ -11,7 +12,7 @@ const Landing = () => {
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
-      navigate('/sim');
+      navigate(SIM_PAGE_ENABLED ? '/sim' : '/dashboard');
     } else {
       navigate('/login');
     }
@@ -25,7 +26,7 @@ const Landing = () => {
           <div className="flex items-center gap-2">
             {/* <Brain className="w-8 h-8 text-primary" /> */}
             <div>
-              <h1 className="text-xl font-bold">Knowledge Synthesis</h1>
+              <h1 className="text-xl font-bold">{PROJECT_NAME}</h1>
               <p className="text-xs text-muted-foreground">GPU Version</p>
             </div>
           </div>
@@ -108,7 +109,7 @@ const Landing = () => {
       {/* Footer */}
       <footer className="container mx-auto px-4 py-8 mt-20 border-t">
         <div className="text-center text-muted-foreground">
-          <p>© 2025 Knowledge Synthesis Platform. All rights reserved.</p>
+          <p>{`© 2025 ${PROJECT_NAME}. All rights reserved.`}</p>
         </div>
       </footer>
     </div>

@@ -11,20 +11,30 @@ const SectionCard: React.FC<{
   subtitle: string;
   description: React.ReactNode;
   onClick?: () => void;
-}> = ({ icon, title, subtitle, description, onClick }) => {
+  disabled?: boolean;
+}> = ({ icon, title, subtitle, description, onClick, disabled }) => {
+  const baseClasses =
+    "group w-[260px] h-[400px] rounded-xl border-2 bg-[#f2f8fc] dark:bg-card shadow-sm transition-all duration-300 flex flex-col items-center justify-center text-center gap-4 p-6";
+
+  const enabledHover =
+    "hover:shadow-xl hover:bg-purple-50 dark:hover:shadow-2xl dark:hover:bg-accent";
+
+  const disabledClasses = "opacity-60 cursor-not-allowed hover:shadow-none hover:bg-[#f2f8fc] dark:hover:bg-card";
+
   return (
     <button
-      onClick={onClick}
-      className="group w-[260px] h-[400px] rounded-xl border-2 bg-[#f2f8fc] dark:bg-card shadow-sm hover:shadow-xl hover:bg-purple-50 dark:hover:shadow-2xl dark:hover:bg-accent transition-all duration-300 flex flex-col items-center justify-center text-center gap-4 p-6"
-      style={{ borderColor: '#5e17eb' }}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`${baseClasses} ${disabled ? disabledClasses : enabledHover}`}
+      style={{ borderColor: disabled ? '#bfbfbf' : '#5e17eb' }}
     >
-      <div className="w-24 h-24 grid place-items-center text-purple-600">
+      <div className={`w-24 h-24 grid place-items-center ${disabled ? 'text-gray-400 dark:text-gray-500 opacity-40 filter grayscale' : 'text-purple-600'}`}>
         {icon}
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
-        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{subtitle}</p>
-        <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">{description}</p>
+        <h3 className={`text-lg font-semibold ${disabled ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>{title}</h3>
+        <p className={`text-sm ${disabled ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'} mt-1`}>{subtitle}</p>
+        <p className={`text-xs ${disabled ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'} mt-2 leading-relaxed`}>{description}</p>
       </div>
     </button>
   );
@@ -83,6 +93,7 @@ const SimHome: React.FC = () => {
               )}
 
               onClick={() => goto()}
+              disabled
             />
             <SectionCard
               icon={<img src="/tile-cognitive-foresight.svg" alt="Cognitive Foresight" className="w-15 h-15 select-none" draggable="false" />}
@@ -98,6 +109,7 @@ const SimHome: React.FC = () => {
               )}
 
               onClick={() => goto()}
+              disabled
             />
             <SectionCard
               icon={<img src="/tile-rd-insights.svg" alt="R&D Insights" className="w-15 h-15 select-none" draggable="false" />}
@@ -113,6 +125,7 @@ const SimHome: React.FC = () => {
               )}
 
               onClick={() => goto()}
+              disabled
             />
           </div>
 

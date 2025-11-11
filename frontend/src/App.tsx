@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth-context";
 import { ThemeProvider } from "./lib/theme-context";
+import React, { useEffect } from "react";
+import { PROJECT_NAME, SIM_PAGE_ENABLED } from "../config";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -19,27 +21,39 @@ import RequireAuth from "./lib/RequireAuth";
 
 const queryClient = new QueryClient();
 
-// Decides what to do at the root path based on auth state
+// Decides what to do at the root path. Per config SIM_PAGE_ENABLED,
+// root will route to /sim or /dashboard. Auth protection is enforced by
+// the routes themselves (RequireAuth) so unauthenticated users will be
+// redirected to login as necessary.
 const RootRedirect = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return <div className="h-screen flex items-center justify-center">Loading…</div>;
   }
 
-  return (
-    <>
-      {isAuthenticated ? (
-        <Navigate to="/sim" replace />
-      ) : (
-        <Navigate to="/login" replace />
-      )}
-    </>
-  );
+  const routeTo = SIM_PAGE_ENABLED ? "/sim" : "/dashboard";
+  return <Navigate to={routeTo} replace />;
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
+const App = () => {
+  useEffect(() => {
+    // Update the document title and meta tags at runtime using the project name
+    try {
+      if (PROJECT_NAME) {
+        document.title = PROJECT_NAME;
+        const metaDesc = document.querySelector('meta[name="description"]');
+        if (metaDesc) metaDesc.setAttribute('content', PROJECT_NAME);
+        const og = document.querySelector('meta[property="og:title"]');
+        if (og) og.setAttribute('content', PROJECT_NAME);
+      }
+    } catch (e) {
+      // ignore in environments where DOM isn't available
+    }
+  }, []);
+
+  return (
+    <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
         <TooltipProvider>
@@ -57,14 +71,16 @@ const App = () => (
                 <Route path="threads/:threadId" element={<ThreadView />} />
                 <Route path="profile" element={<Profile />} />
               </Route>
-              <Route
-                path="/sim"
-                element={
-                  <RequireAuth>
-                    <SimHome />
-                  </RequireAuth>
-                }
-              />
+              {SIM_PAGE_ENABLED && (
+                <Route
+                  path="/sim"
+                  element={
+                    <RequireAuth>
+                      <SimHome />
+                    </RequireAuth>
+                  }
+                />
+              )}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
@@ -73,5 +89,7 @@ const App = () => (
     </ThemeProvider>
   </QueryClientProvider>
 );
+
+};
 
 export default App;

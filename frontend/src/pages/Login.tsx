@@ -9,6 +9,7 @@ import { api, setAuthToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { toast } from 'sonner';
+import { PROJECT_NAME, SIM_PAGE_ENABLED } from '../../config';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -34,7 +35,7 @@ const Login = () => {
         console.debug('refreshUser failed', err);
       }
   toast.success('Login successful!');
-  navigate('/sim');
+  navigate(SIM_PAGE_ENABLED ? '/sim' : '/dashboard');
     } catch (error) {
       toast.error('Invalid email or password');
     } finally {
@@ -51,13 +52,13 @@ const Login = () => {
       </div>
       
       <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-4">
+          <CardHeader className="space-y-4">
           {/* <div className="flex items-center justify-center gap-2"> */}
             {/* <Brain className="w-10 h-10 text-primary" /> */}
           {/* </div> */}
           <CardTitle className="text-2xl text-center">Welcome Back</CardTitle>
           <CardDescription className="text-center">
-            Sign in to continue to Knowledge Synthesis
+            {`Sign in to continue to ${PROJECT_NAME}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
