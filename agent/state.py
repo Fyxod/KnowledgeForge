@@ -57,3 +57,4 @@ class AgentState(BaseModel):
     initial_search_results: List[Dict[str, Any]] = Field(
         default_factory=list
     )  # to store initial web search results
+    use_self_knowledge: bool = False

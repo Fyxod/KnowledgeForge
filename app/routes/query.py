@@ -22,6 +22,7 @@ class QueryRequest(BaseModel):
     thread_id: str
     question: str
     mode: Literal[f"{INTERNAL}", f"{EXTERNAL}"] = EXTERNAL
+    use_self_knowledge: bool = False
 
 
 @router.post("/")
@@ -34,9 +35,10 @@ async def query(request: Request, body: QueryRequest):
     thread_id = body.thread_id
     question = body.question
     mode = body.mode
+    use_self_knowledge = body.use_self_knowledge
 
     print(
-        f"Received query for thread_id: {thread_id} with question: {question} and mode: {mode}"
+        f"Received query for thread_id: {thread_id} with question: {question} and mode: {mode} (use_self_knowledge={use_self_knowledge})"
     )
 
     user_id = payload.userId
@@ -98,6 +100,7 @@ async def query(request: Request, body: QueryRequest):
                         initial_search_answer=query_data["answer"] or "",
                         initial_search_results=query_data["results"] or [],
                         mode=mode,
+                        use_self_knowledge=use_self_knowledge,
                     )
                 )
 
@@ -259,6 +262,7 @@ async def query(request: Request, body: QueryRequest):
                 mode=mode,
                 initial_search_answer=search_result.get("answer", ""),
                 initial_search_results=search_result.get("results", []),
+                use_self_knowledge=use_self_knowledge,
             )
         )
 
@@ -320,6 +324,7 @@ async def query(request: Request, body: QueryRequest):
                 "chunks": chunks,
                 "chunks_used": [doc.dict() for doc in chunks_used],
                 "modified_used": modified_used,
+                "use_self_knowledge": use_self_knowledge,
             },
             f,
             ensure_ascii=False,
@@ -355,6 +360,7 @@ async def query(request: Request, body: QueryRequest):
             "documents_used": modified_used,
             "web_used": all_favicons,
         },
+        "use_self_knowledge": use_self_knowledge,
     }
 
     return response

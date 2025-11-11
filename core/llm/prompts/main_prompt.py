@@ -11,6 +11,7 @@ def main_prompt(
     web_search_results: List[Dict[str, Any]] = None,
     initial_search_answer: str = None,
     initial_search_results: List[Dict[str, Any]] = None,
+    use_self_knowledge: bool = False,
 ):
     contents = []
     if mode == INTERNAL:
@@ -178,9 +179,11 @@ def main_prompt(
                 "- **global_summarizer**: Request a collective summary of all documents.\n"
                 + (
                     "- **failure**: Indicate inability to answer with available information.\n"
-                    if mode == INTERNAL
+                    "Do not choose an action lightly; only use 'failure' when absolutely necessary.\n"
+                    if mode == INTERNAL and use_self_knowledge
                     else ""
                 )
+                + "Do not choose any other action other than the ones mentioned above.\n"
             ),
         }
     )

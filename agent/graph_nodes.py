@@ -20,6 +20,7 @@ from core.llm.client import invoke_llm
 from core.llm.outputs import (
     MainLLMOutputExternal,
     MainLLMOutputInternal,
+    MainLLMOutputInternalWithFailure,
     SelfKnowledgeLLMOutput,
 )
 
@@ -70,6 +71,9 @@ async def retriever(state: AgentState) -> AgentState:
 async def generate(state: AgentState) -> AgentState:
     prompt = build_main_prompt(state)
 
+    async with aiofiles.open(f"DEBUG/main_prompt.json", "w") as f:
+        await f.write(json.dumps(prompt, indent=2))
+
     max_retries = 8
     for attempt in range(max_retries):
         try:
@@ -77,7 +81,10 @@ async def generate(state: AgentState) -> AgentState:
             if state.mode == EXTERNAL:
                 response_schema = MainLLMOutputExternal
             else:
-                response_schema = MainLLMOutputInternal
+                if state.use_self_knowledge:
+                    response_schema = MainLLMOutputInternalWithFailure
+                else:
+                    response_schema = MainLLMOutputInternal
 
             result = await invoke_llm(
                 response_schema=response_schema,

@@ -40,6 +40,7 @@ const ThreadView = () => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [webEnhanced, setWebEnhanced] = useState(false);
+  const [useSelfKnowledge, setUseSelfKnowledge] = useState(false);
   const [documents, setDocuments] = useState<any[]>([]);
   const [lastSources, setLastSources] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,6 +53,10 @@ const ThreadView = () => {
   const [mindMapOpen, setMindMapOpen] = useState(false);
   const [wordCloudOpen, setWordCloudOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
+  const selfKnowledgePreferenceKey = user?.userId
+    ? `selfKnowledgePreference:${user.userId}`
+    : null;
 
   const updateUserThreadState = useCallback(
     (nextChats: Chat[], extra?: Partial<Thread>) => {
@@ -87,6 +92,16 @@ const ThreadView = () => {
     }
     loadThread();
   }, [threadId, user?.userId]);
+
+  useEffect(() => {
+    if (!selfKnowledgePreferenceKey || typeof window === 'undefined') {
+      setUseSelfKnowledge(false);
+      return;
+    }
+
+    const storedPreference = window.localStorage.getItem(selfKnowledgePreferenceKey);
+    setUseSelfKnowledge(storedPreference === 'true');
+  }, [selfKnowledgePreferenceKey]);
 
   useEffect(() => {
     scrollToBottom();
@@ -136,24 +151,32 @@ const ThreadView = () => {
   const handleDeleteChat = async (index: number) => {
     if (!threadId) return;
 
-    setChats(prev => {
-      const updated = [...prev];
-      updated.splice(index, 1);
-      updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
-      return updated;
-    });
-    setLastSources(null);
-
     try {
       const response = await api.deleteChat(threadId, index);
-      if (response?.chats) {
-        const next = response.chats ?? [];
-        setChats(next);
-        updateUserThreadState(next, { updatedAt: new Date().toISOString() });
-      } else {
-        await loadThread({ suppressErrorToast: true });
+      const status = response?.status;
+      const isSuccess =
+        (typeof status === 'string' && status.toLowerCase() === 'success') ||
+        (typeof status === 'boolean' && status);
+
+      if (isSuccess) {
+        if (Array.isArray(response?.chats)) {
+          const next = response.chats;
+          setChats(next);
+          updateUserThreadState(next, { updatedAt: new Date().toISOString() });
+        } else {
+          setChats(prev => {
+            const updated = prev.filter((_, chatIndex) => chatIndex !== index);
+            updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
+            return updated;
+          });
+        }
+        setLastSources(null);
+        toast.success('Message deleted');
+        return;
       }
-      toast.success('Message deleted');
+
+      toast.error('Failed to delete message');
+      await loadThread({ suppressErrorToast: true });
     } catch (error) {
       toast.error('Failed to delete message');
       await loadThread({ suppressErrorToast: true });
@@ -171,19 +194,23 @@ const ThreadView = () => {
       return;
     }
 
-    const next: Chat[] = [];
-    setChats(next);
-    updateUserThreadState(next, { updatedAt: new Date().toISOString() });
-    setLastSources(null);
-
     try {
       const response = await api.clearThreadChats(threadId);
-      if (response?.chats) {
-        const fresh = response.chats ?? [];
+      const status = response?.status;
+      const isSuccess =
+        (typeof status === 'string' && status.toLowerCase() === 'success') ||
+        (typeof status === 'boolean' && status);
+
+      if (isSuccess) {
+        const fresh = response?.chats ?? [];
         setChats(fresh);
         updateUserThreadState(fresh, { updatedAt: new Date().toISOString() });
+        setLastSources(null);
+        toast.success('All messages cleared');
+      } else {
+        toast.error('Failed to clear messages');
+        await loadThread({ suppressErrorToast: true });
       }
-      toast.success('All messages cleared');
     } catch (error) {
       toast.error('Failed to clear messages');
       await loadThread({ suppressErrorToast: true });
@@ -282,10 +309,12 @@ const ThreadView = () => {
     });
 
     try {
+      const mode = webEnhanced ? 'External' : 'Internal';
       const response = await api.query(
         threadId,
         userMessage.content,
-        webEnhanced ? 'External' : 'Internal'
+        mode,
+        mode === 'Internal' ? useSelfKnowledge : false
       );
 
       // Support both legacy shape and new `sources` wrapper; default to empty arrays
@@ -330,6 +359,33 @@ const ThreadView = () => {
     }
   };
 
+  const handleModeToggle = (checked: boolean) => {
+    setWebEnhanced(checked);
+
+    if (checked) {
+      setUseSelfKnowledge(false);
+      return;
+    }
+
+    if (!selfKnowledgePreferenceKey || typeof window === 'undefined') {
+      setUseSelfKnowledge(false);
+      return;
+    }
+
+    const storedPreference = window.localStorage.getItem(selfKnowledgePreferenceKey);
+    setUseSelfKnowledge(storedPreference === 'true');
+  };
+
+  const handleSelfKnowledgeToggle = (checked: boolean) => {
+    setUseSelfKnowledge(checked);
+
+    if (!selfKnowledgePreferenceKey || typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(selfKnowledgePreferenceKey, String(checked));
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -350,7 +406,19 @@ const ThreadView = () => {
               </p>
             </div>
           </div>
-          <Switch checked={webEnhanced} onCheckedChange={setWebEnhanced} />
+          <Switch checked={webEnhanced} onCheckedChange={handleModeToggle} />
+          {!webEnhanced && (
+            <div className="flex items-center gap-2">
+              <Label htmlFor="self-knowledge-toggle" className="text-sm">
+                Self Knowledge
+              </Label>
+              <Switch
+                id="self-knowledge-toggle"
+                checked={useSelfKnowledge}
+                onCheckedChange={handleSelfKnowledgeToggle}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

@@ -79,6 +79,7 @@ export interface QueryResponse {
   user_id: string;
   question: string;
   answer: string;
+  use_self_knowledge?: boolean;
   // Original shape (legacy)
   docs_used?: Array<{
     title: string;
@@ -509,7 +510,12 @@ export const api = {
     return data.thread;
   },
 
-  async query(threadId: string, question: string, mode: 'Internal' | 'External'): Promise<QueryResponse> {
+  async query(
+    threadId: string,
+    question: string,
+    mode: 'Internal' | 'External',
+    useSelfKnowledge: boolean
+  ): Promise<QueryResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/query`, {
       method: 'POST',
@@ -517,7 +523,12 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId, question, mode }),
+      body: JSON.stringify({
+        thread_id: threadId,
+        question,
+        mode,
+        use_self_knowledge: useSelfKnowledge,
+      }),
     });
     return response.json();
   },

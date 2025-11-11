@@ -15,6 +15,22 @@ class MainLLMOutputInternal(BaseModel):
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
+    ] = Field(description="The action to take based on the answer.")
+    chunks_used: Optional[List[ChunksUsed]] = Field(
+        default=None,
+        description="List of chunks used to generate the answer, if applicable.",
+    )
+    document_id: Optional[str] = Field(
+        description="The ID of the document to summarize if using document_summarizer, if applicable."
+    )
+
+
+class MainLLMOutputInternalWithFailure(BaseModel):
+    answer: str = Field(description="The answer to the user's question.")
+    action: Literal[
+        "answer",
+        "document_summarizer",  # requires document id of the document to summarize
+        "global_summarizer",
         "failure",
     ] = Field(description="The action to take based on the answer.")
     chunks_used: Optional[List[ChunksUsed]] = Field(

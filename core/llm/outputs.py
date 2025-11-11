@@ -2,6 +2,7 @@
 from .output_schemas.main_outputs import (
     ChunksUsed,
     MainLLMOutputInternal,
+    MainLLMOutputInternalWithFailure,
     MainLLMOutputExternal,
     SelfKnowledgeLLMOutput,
     DecompositionLLMOutput,
