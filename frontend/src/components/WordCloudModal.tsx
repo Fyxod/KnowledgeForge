@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Download } from 'lucide-react';
-import { Document, getAuthToken, API_URL } from '@/lib/api';
+import { Document, getAuthToken } from '@/lib/api';
+import { API_URL } from '../../config';
 import { toast } from 'sonner';
 
 type Props = {

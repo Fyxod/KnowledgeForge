@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Maximize2 } from 'lucide-react';
 import ReactFlow, { Background, BackgroundVariant, Controls, Node, Edge, Position, NodeProps, MarkerType, Handle, MiniMap, useNodesState, useEdgesState, addEdge, useReactFlow } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { api, getAuthToken, API_URL, GlobalMindMap, MindMapNode, MindMapResponse } from '@/lib/api';
+import { api, getAuthToken, GlobalMindMap, MindMapNode, MindMapResponse } from '@/lib/api';
 import { io, Socket } from 'socket.io-client';
+import { API_URL } from '../../config';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 
