@@ -52,9 +52,9 @@ const SimHome: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f2f8fc] dark:bg-background text-foreground flex flex-col">
+    <div className="h-screen overflow-hidden bg-[#f2f8fc] dark:bg-background text-foreground flex flex-col">
       <SimNavbar />
-      <main className="mx-auto max-w-7xl px-6 w-full flex-1">
+      <main className="mx-auto max-w-7xl px-6 w-full flex-1 overflow-hidden">
         <section className="py-12 md:py-16">
           <div className="flex items-center justify-center gap-8">
             <img src="/hero-decor.svg" alt="decor" className="w-28 h-28 md:w-32 md:h-32 object-contain select-none" draggable="false" />
