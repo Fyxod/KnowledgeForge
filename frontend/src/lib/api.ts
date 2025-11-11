@@ -1,7 +1,4 @@
-// // API Configuration
-// export const API_URL = 'http://localhost:3000';
-export const API_URL = 'https://api.dev-ansh.xyz';
-
+import { API_URL } from '../../config';
 
 // Types
 export interface User {

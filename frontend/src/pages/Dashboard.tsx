@@ -5,7 +5,8 @@ import { ThreadSidebar } from '@/components/ThreadSidebar';
 import RightSidebar from '@/components/RightSidebar';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
-import { removeAuthToken, removeCurrentUser, API_URL, getAuthToken } from '@/lib/api';
+import { removeAuthToken, removeCurrentUser, getAuthToken } from '@/lib/api';
+import { API_URL } from '../../config';
 import { io, Socket } from 'socket.io-client';
 import {
   DropdownMenu,
