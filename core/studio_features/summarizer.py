@@ -14,6 +14,7 @@ from core.llm.outputs import (
 from core.llm.prompts.summarizer_prompt import (
     global_summarization_prompt,
     summarize_documents_prompt,
+    combine_summaries_prompt,
 )
 import time
 from app.socket_handler import sio
@@ -53,7 +54,9 @@ def chunk_text(text: str, max_words: int = 10000) -> list[str]:
     return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
 
 
-async def process_document_with_chunks(document: Document, user_id: str, thread_id: str):
+async def process_document_with_chunks(
+    document: Document, user_id: str, thread_id: str
+):
     """
     Summarizes a document with conditional chunking:
     - ≤10k words: summarize directly
@@ -117,19 +120,9 @@ async def process_document_with_chunks(document: Document, user_id: str, thread_
             ensure_ascii=False,
         )
 
-        combine_prompt = f"""
-        I have several summaries of different sections of the same document. Please combine them into a single, cohesive summary that:
-
-1. Eliminates redundancy and overlaps.
-
-2. Preserves all key ideas and insights.
-
-3. Uses clear, concise, and neutral language.
-
-4. Flows logically as if summarizing the entire document in one piece.
-Title: {document.title}
-Here are the section summaries: {partial_summaries}. Please return the final combined summary.
-        """
+        combine_prompt = combine_summaries_prompt(
+            title=document.title, partial_summaries=partial_summaries
+        )
         try:
             combined_result = await invoke_llm(
                 response_schema=SummarizerLLMOutputCombination,

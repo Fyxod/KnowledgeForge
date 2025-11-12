@@ -17,6 +17,7 @@ def summarize_documents_prompt(document: str):
                 "- Use **bullet points** to list facts or details.\n"
                 "- Highlight key terms in **bold** and examples in *italics*.\n"
                 "- Avoid long paragraphs; keep content concise and easy to read.\n\n"
+                "- Don't just provide a paragraph summary; break down the content into sections with headings and bullet points.\n\n"
                 "###  Structure Example\n"
                 "```\n"
                 "# [Concise 3-7 word Title]\n\n"
@@ -45,6 +46,35 @@ def summarize_documents_prompt(document: str):
     return contents
 
 
+def combine_summaries_prompt(title: str, partial_summaries: list[str]):
+    contents = [
+        {
+            "role": "system",
+            "parts": (
+                "You are an expert assistant that merges section-level summaries into one cohesive, structured Markdown summary.\n\n"
+                "### Formatting & Structure\n"
+                "- Begin with a level-1 heading (`#`) featuring a concise, neutral title.\n"
+                "- Organize content with logical level-2/3 headings and bullet points.\n"
+                "- Highlight key concepts with **bold** text and optional *italicized* examples.\n"
+                "- Keep paragraphs short, factual, and neutral in tone.\n"
+                "- Ensure the final output is suitable for downstream retrieval tasks.\n\n"
+                "### Output Requirements\n"
+                "- Preserve all key ideas while eliminating redundancy.\n"
+                "- Maintain logical flow across sections.\n"
+                "- Return only the structured Markdown summary (no additional commentary).\n"
+            ),
+        },
+        {
+            "role": "user",
+            "parts": (
+                f"**Document Title:** {title}\n\n"
+                f"**Section Summaries:** {partial_summaries}\n\n"
+                "Please synthesize these into one cohesive, Markdown-formatted summary that follows the structure guidelines above."
+            ),
+        },
+    ]
+    return contents
+
 
 def global_summarization_prompt(summaries: str):
     contents = [
@@ -56,7 +86,7 @@ def global_summarization_prompt(summaries: str):
                 "- Capture recurring **themes**, **key points**, and **insights** across summaries.\n"
                 "- Group similar ideas together logically.\n"
                 "- Avoid personal interpretation — focus on **common findings**.\n"
-                "- Ensure readability using Markdown structure.\n\n"
+                "- Ensure readability using Markdown structure with headings and bullet points.\n\n"
                 "###  Recommended Structure\n"
                 "```\n"
                 "# [Concise Combined Title]\n\n"
@@ -72,7 +102,9 @@ def global_summarization_prompt(summaries: str):
                 "(Unified conclusion)\n"
                 "```\n\n"
                 "###  Output Requirements\n"
-                "- Summary length: **500-1000 words**\n"
+                "- Summary length: **500-1000 words**.\n"
+                "- Use clear headings (`#`, `##`, `###`) and bullet points throughout.\n"
+                "- Highlight critical concepts in **bold** and optional examples in *italics*.\n"
                 "- Output **only** a valid JSON object containing the Markdown summary.\n"
                 "- Escape quotes, newlines, or special characters.\n"
                 "- Do **not** add commentary outside the JSON.\n"
@@ -88,6 +120,7 @@ def global_summarization_prompt(summaries: str):
         },
     ]
     return contents
+
 
 multi_document_summarization_prompt = ChatPromptTemplate.from_messages(
     [

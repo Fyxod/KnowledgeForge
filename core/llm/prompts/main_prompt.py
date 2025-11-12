@@ -27,10 +27,14 @@ def main_prompt(
                     "- Highlight important terms in **bold** and examples in *italics*.\n"
                     "- Avoid long paragraphs — keep each idea short and readable.\n"
                     "- Merge overlapping ideas and remove redundancy.\n"
+                    "- Rely **strictly** on the supplied data (documents, summaries, conversation history). Never use self-knowledge or unstated assumptions.\n"
+                    "- If the provided data is insufficient to answer, clearly state: *I cannot answer based on the provided data.* Do not fabricate or infer beyond the supplied information.\n"
                     "###  Context Handling\n"
                     "- Extract and use as much relevant information as possible from the documents.\n"
                     "- If the question can be answered using the provided context, give a **direct, detailed, and specific answer**.\n"
                     "- If multiple sources contradict, mention it clearly using a note block.\n\n"
+                    "- Do not use your own knowledge outside the provided data in your answers in any case.\n\n"
+                    "- Only use the information present in the provided data to answer the question.\n\n"
                     "###  Output Structure Example\n"
                     "```\n"
                     "## Overview\n"
@@ -77,13 +81,15 @@ def main_prompt(
             {
                 "role": "system",
                 "parts": (
-                    "You are an expert assistant that answers questions using both **documents** and **external knowledge**.\n"
+                    "You are an expert assistant that answers questions using the provided **documents** and any supplied **external data** (such as web search results).\n"
                     "Your task is to create **well-structured, modular Markdown answers** that are clear and easy to follow.\n\n"
                     " Guidelines\n"
                     "- Structure your answer with **sections, bullets, and bolded keywords**.\n"
                     "- Keep explanations concise and modular.\n"
                     "- Always **prioritize information from documents** over web results.\n"
-                    "- If conflicting data exists, state clearly:  *Some sources provide conflicting information...*\n\n"
+                    "- Never rely on self-knowledge or unstated assumptions; confine answers to the provided data sources.\n"
+                    "- If conflicting data exists, state clearly:  *Some sources provide conflicting information...*\n"
+                    "- If the provided data cannot answer the question, state explicitly: *I cannot answer based on the provided data.*\n\n"
                     "###  Output Structure Example\n"
                     "```\n"
                     "## Overview\n"
@@ -155,7 +161,10 @@ def main_prompt(
         contents.append(
             {
                 "role": "system",
-                "parts": "If conflicting information exists, always **prioritize document content over web sources.**",
+                "parts": (
+                    "If conflicting information exists, always **prioritize document content over web sources.**\n"
+                    "If no provided data resolves the question, respond that you cannot answer based on the provided data."
+                ),
             }
         )
 
@@ -177,19 +186,20 @@ def main_prompt(
                 )
                 + "- **document_summarizer**: Request a summary of a specific document (requires `document_id`).\n"
                 "- **global_summarizer**: Request a collective summary of all documents.\n"
-                + (
-                    "- **failure**: Indicate inability to answer with available information.\n"
-                    "Do not choose an action lightly; only use 'failure' when absolutely necessary.\n"
-                    if mode == INTERNAL and use_self_knowledge
-                    else ""
-                )
+                "- **failure**: Indicate inability to answer with available information.\n"
+                "Do not choose an action lightly; only use 'failure' when absolutely necessary.\n"
                 + "Do not choose any other action other than the ones mentioned above.\n"
             ),
         }
     )
 
-    contents.append({"role": "user", "parts": f"Please use all the provided information to answer the question."})
-    
+    contents.append(
+        {
+            "role": "user",
+            "parts": f"Please use all the provided information to answer the question.",
+        }
+    )
+
     # Final user question
     contents.append({"role": "user", "parts": f" **Question:** {question}\n"})
 
