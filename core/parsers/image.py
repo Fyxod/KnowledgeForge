@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import time
 import aiofiles
 import httpx
@@ -15,6 +16,28 @@ from core.llm.prompts.image_parsing_prompt import image_parsing_prompt
 VISION_URL = settings.VISION_URL
 MODEL = IMAGE_PARSER_LLM
 gemma = settings.USE_VISION_MODEL
+REMOTE_GPU = settings.REMOTE_GPU
+VISION_SERVER_PORT = 11434
+
+_SEMAPHORES: dict[tuple[str, int], asyncio.Semaphore] = {}
+_SEMAPHORE_LOCK = asyncio.Lock()
+
+
+async def get_semaphore(port: int, model: str) -> asyncio.Semaphore:
+    """Return a shared semaphore for the given model/port pair."""
+
+    key = (model, port)
+    semaphore = _SEMAPHORES.get(key)
+    if semaphore is not None:
+        return semaphore
+
+    async with _SEMAPHORE_LOCK:
+        semaphore = _SEMAPHORES.get(key)
+        if semaphore is None:
+            _SEMAPHORES[key] = asyncio.Semaphore(1)
+            semaphore = _SEMAPHORES[key]
+
+    return semaphore
 
 
 async def image_parser(image_path: str, retries: int = 3) -> str:
@@ -37,56 +60,113 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
             print(f"[Tesseract] Exception: {e}")
             return ""
 
-    async def gemma_parse() -> str | None:
-        """Try Gemma vision API with retries, return plain text or None."""
-        for attempt in range(1, retries + 1):
-            try:
+    async def remote_gemma_parse() -> str | None:
+        """Try Gemma via remote vision API, return plain text or None."""
 
-                async with aiofiles.open(image_path, "rb") as f:
-                    file_content = await f.read()
+        semaphore = await get_semaphore(VISION_SERVER_PORT, MODEL)
+        async with semaphore:
+            for attempt in range(1, retries + 1):
+                try:
+                    async with aiofiles.open(image_path, "rb") as f:
+                        file_content = await f.read()
 
-                prompt = image_parsing_prompt()
-                files = {"file": ("filename", file_content)}
-                data = {"prompt": prompt}
-                params = {"model": MODEL, "port": 11434}
+                    prompt = image_parsing_prompt()
+                    files = {"file": ("filename", file_content)}
+                    data = {"prompt": prompt}
+                    params = {"model": MODEL, "port": VISION_SERVER_PORT}
 
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        VISION_URL, files=files, data=data, params=params, timeout=300
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(
+                            VISION_URL,
+                            files=files,
+                            data=data,
+                            params=params,
+                            timeout=300,
+                        )
+
+                    if response.status_code == 200:
+                        payload = response.json()
+
+                        if isinstance(payload, dict) and "text" in payload:
+                            return payload["text"]
+                        return str(payload)
+
+                    print(
+                        f"[Gemma[Remote] attempt {attempt}] Failed with status {response.status_code}: {response.text}"
                     )
 
-                if response.status_code == 200:
-                    data = response.json()
+                except Exception as e:
+                    print(f"[Gemma[Remote] attempt {attempt}] Exception: {e}")
+                await asyncio.sleep(1)
 
-                    if isinstance(data, dict) and "text" in data:
-                        return data["text"]
-                    return str(data)
+        return None
 
-                print(
-                    f"[Gemma attempt {attempt}] Failed with status {response.status_code}: {response.text}"
-                )
+    async def local_vision_parse() -> str | None:
+        """Try local Ollama vision endpoint, return plain text or None."""
 
-            except Exception as e:
-                print(f"[Gemma attempt {attempt}] Exception: {e}")
+        semaphore = await get_semaphore(VISION_SERVER_PORT, MODEL)
+        async with semaphore:
+            for attempt in range(1, retries + 1):
+                try:
+                    async with aiofiles.open(image_path, "rb") as f:
+                        file_content = await f.read()
 
-            await asyncio.sleep(1)
+                    image_b64 = base64.b64encode(file_content).decode("utf-8")
+                    prompt = image_parsing_prompt()
+                    payload = {
+                        "model": MODEL,
+                        "prompt": prompt,
+                        "images": [image_b64],
+                        "stream": False,
+                    }
+
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(
+                            f"http://localhost:{VISION_SERVER_PORT}/api/generate",
+                            json=payload,
+                            timeout=300,
+                        )
+
+                    response.raise_for_status()
+                    result = response.json()
+                    text = result.get("completion") or result.get("response") or ""
+                    return text
+
+                except httpx.HTTPStatusError as e:
+                    status = e.response.status_code if e.response else "unknown"
+                    body = e.response.text if e.response else ""
+                    print(f"[Gemma[Local] attempt {attempt}] HTTP {status}: {body}")
+                except Exception as e:
+                    print(f"[Gemma[Local] attempt {attempt}] Exception: {e}")
+
+                await asyncio.sleep(1)
 
         return None
 
     if gemma:
         start_time = time.time()
-        gemma_result = await gemma_parse()
+        if REMOTE_GPU:
+            gemma_result = await remote_gemma_parse()
+            provider_label = "Gemma[Remote]"
+        else:
+            gemma_result = await local_vision_parse()
+            provider_label = "Gemma[Local]"
         end_time = time.time()
         if gemma_result:
-            print(f"Gemma succeeded in {end_time - start_time:.2f} seconds")
+            print(f"{provider_label} succeeded in {end_time - start_time:.2f} seconds")
             return gemma_result.strip()
 
     # fallback to Tesseract
     try:
         if gemma:
-            print(
-                f"Gemma failed for {os.path.basename(image_path)}, falling back to Tesseract"
-            )
+            if REMOTE_GPU:
+                print(
+                    f"Gemma[Remote] failed for {os.path.basename(image_path)}, falling back to Tesseract"
+                )
+            else:
+                print(
+                    f"Gemma[Local] failed for {os.path.basename(image_path)}, falling back to Tesseract"
+                )
         print(f"processing image: {os.path.basename(image_path)} with Tesseract")
         return (await asyncio.to_thread(tesseract_parse)).strip()
     except Exception as e:
