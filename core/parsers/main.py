@@ -97,9 +97,6 @@ async def extract_document(
             {"message": f"processed {safe_file_name} successfully"},
         )
         end_time = time.time()
-        print(
-            f"Time taken to process {safe_file_name} main image: {end_time - start_time} seconds"
-        )
         return Document(
             id=doc_id,
             type=ext[1:],

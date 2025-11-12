@@ -75,6 +75,7 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
                     data = {"prompt": prompt}
                     params = {"model": MODEL, "port": VISION_SERVER_PORT}
 
+                    start_time = time.time()
                     async with httpx.AsyncClient() as client:
                         response = await client.post(
                             VISION_URL,
@@ -83,9 +84,11 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
                             params=params,
                             timeout=300,
                         )
+                    end_time = time.time()
 
                     if response.status_code == 200:
                         payload = response.json()
+                        print(f"Gemma[Remote] succeeded in {end_time - start_time:.2f} seconds")
 
                         if isinstance(payload, dict) and "text" in payload:
                             return payload["text"]
@@ -120,16 +123,19 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
                         "stream": False,
                     }
 
+                    start_time = time.time()
                     async with httpx.AsyncClient() as client:
                         response = await client.post(
                             f"http://localhost:{VISION_SERVER_PORT}/api/generate",
                             json=payload,
                             timeout=300,
                         )
+                    end_time = time.time()
 
                     response.raise_for_status()
                     result = response.json()
                     text = result.get("completion") or result.get("response") or ""
+                    print(f"Gemma[Local] succeeded in {end_time - start_time:.2f} seconds")
                     return text
 
                 except httpx.HTTPStatusError as e:
@@ -144,16 +150,11 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
         return None
 
     if gemma:
-        start_time = time.time()
         if REMOTE_GPU:
             gemma_result = await remote_gemma_parse()
-            provider_label = "Gemma[Remote]"
         else:
             gemma_result = await local_vision_parse()
-            provider_label = "Gemma[Local]"
-        end_time = time.time()
         if gemma_result:
-            print(f"{provider_label} succeeded in {end_time - start_time:.2f} seconds")
             return gemma_result.strip()
 
     # fallback to Tesseract
