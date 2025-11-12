@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     API_KEY_5: str
     OPENAI_API: str
     QUERY_URL: str
+    VISION_URL: str
     REMOTE_GPU: bool = False
+    USE_VISION_MODEL: bool = False
 
     class Config:
         env_file = ".env"

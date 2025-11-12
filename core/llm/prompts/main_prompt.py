@@ -188,6 +188,8 @@ def main_prompt(
         }
     )
 
+    contents.append({"role": "user", "parts": f"Please use all the provided information to answer the question."})
+    
     # Final user question
     contents.append({"role": "user", "parts": f" **Question:** {question}\n"})
 

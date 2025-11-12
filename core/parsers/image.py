@@ -7,20 +7,25 @@ import pytesseract
 from core.constants import IMAGE_PARSER_LLM
 from core.config import settings
 import os
+from core.llm.prompts.image_parsing_prompt import image_parsing_prompt
+
 # Optional for Windows if Tesseract throws errors:
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# VISION_URL = settings.VISION_URL
-VISION_URL = "https://llm.katiyar.xyz/vision"
+VISION_URL = settings.VISION_URL
 MODEL = IMAGE_PARSER_LLM
-gemma = False
+gemma = settings.USE_VISION_MODEL
 
 
 async def image_parser(image_path: str, retries: int = 3) -> str:
     """
     Parse image text using Gemma vision API.
-    Falls back to Tesseract OCR if Gemma fails after `retries` attempts.
-    Always returns plain text or empty string if everything fails.
+
+    Sends the image file as multipart/form-data
+
+    Also sends `model` and `port` as query params. Falls back to Tesseract OCR
+    if Gemma fails after `retries` attempts. Always returns plain text or an
+    empty string if everything fails.
     """
 
     def tesseract_parse() -> str:
@@ -36,21 +41,19 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
         """Try Gemma vision API with retries, return plain text or None."""
         for attempt in range(1, retries + 1):
             try:
-                start = time.time()
 
                 async with aiofiles.open(image_path, "rb") as f:
                     file_content = await f.read()
 
+                prompt = image_parsing_prompt()
                 files = {"file": ("filename", file_content)}
-                params = {"model": MODEL}
+                data = {"prompt": prompt}
+                params = {"model": MODEL, "port": 11434}
 
                 async with httpx.AsyncClient() as client:
-                    response = await client.post(VISION_URL, files=files, params=params)
-
-                end = time.time()
-                print(
-                    f"[Gemma attempt {attempt}] Time taken: {end - start:.2f} seconds"
-                )
+                    response = await client.post(
+                        VISION_URL, files=files, data=data, params=params, timeout=300
+                    )
 
                 if response.status_code == 200:
                     data = response.json()
@@ -71,12 +74,19 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
         return None
 
     if gemma:
-        gemma_result = await gemma_parse()  # removed due to scarce gpu resources
+        start_time = time.time()
+        gemma_result = await gemma_parse()
+        end_time = time.time()
         if gemma_result:
+            print(f"Gemma succeeded in {end_time - start_time:.2f} seconds")
             return gemma_result.strip()
 
     # fallback to Tesseract
     try:
+        if gemma:
+            print(
+                f"Gemma failed for {os.path.basename(image_path)}, falling back to Tesseract"
+            )
         print(f"processing image: {os.path.basename(image_path)} with Tesseract")
         return (await asyncio.to_thread(tesseract_parse)).strip()
     except Exception as e:
