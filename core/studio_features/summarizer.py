@@ -54,9 +54,7 @@ def chunk_text(text: str, max_words: int = 10000) -> list[str]:
     return [" ".join(words[i : i + max_words]) for i in range(0, len(words), max_words)]
 
 
-async def process_document_with_chunks(
-    document: Document, user_id: str, thread_id: str
-):
+async def process_document_with_chunks(document: Document):
     """
     Summarizes a document with conditional chunking:
     - ≤10k words: summarize directly
@@ -147,9 +145,7 @@ async def summarize_documents(parsed_data: Documents):
             f"{parsed_data.user_id}/progress",
             {"message": f"Summarizing {document.title} in chunks"},
         )
-        await process_document_with_chunks(
-            document, parsed_data.user_id, parsed_data.thread_id
-        )
+        await process_document_with_chunks(document)
 
         if document.summary:
             await sio.emit(
