@@ -24,7 +24,7 @@ const colors = {
     slate600: '#475569',
     slate800: '#1F2937',
     slate500: '#64748B',
-    border: '#E5E7EB',
+    border: '#c4bcf0',
 };
 
 function sanitizeText(s: string | undefined | null): string {
@@ -99,7 +99,7 @@ function risksTable(risks: TechnicalRoadmapLLMOutput['risks_and_mitigations']): 
     return {
         table: { widths: ['*', '*'], body },
         layout: {
-            fillColor: (rowIndex: number) => (rowIndex === 0 ? '#F8FAFC' : undefined),
+            fillColor: (rowIndex: number) => (rowIndex === 0 ? '#e3defc' : undefined),
             hLineColor: () => colors.border,
             vLineColor: () => colors.border,
         },
@@ -230,7 +230,7 @@ function buildDocDefinition(roadmap: TechnicalRoadmapLLMOutput): TDocumentDefini
             phaseTitle: { fontSize: 11, bold: true },
             subheading: { fontSize: 11, bold: true, margin: [0, 6, 0, 2] },
             pillTitle: { fontSize: 11, bold: true },
-            tableHeader: { bold: true, fillColor: '#F3F4F6', margin: [0, 4, 0, 4] },
+            tableHeader: { bold: true, fillColor: '#c4bcf0', margin: [0, 4, 0, 4] },
         },
         defaultStyle: { fontSize: 10, color: colors.slate800 },
     };

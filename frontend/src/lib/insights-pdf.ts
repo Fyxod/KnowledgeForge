@@ -15,15 +15,15 @@ if (g?.pdfMake?.vfs) {
 }
 
 const colors = {
-    primary: '#6D28D9', // violet-700
+    primary: '#6d56f1',
     slate600: '#475569',
     slate800: '#1F2937',
     slate500: '#64748B',
-    accent1: '#F59E0B', // amber-500
-    accent2: '#0EA5E9', // sky-500
+    accent1: '#F59E0B',
+    accent2: '#5341c8',
     success: '#10B981',
     danger: '#EF4444',
-    border: '#E5E7EB',
+    border: '#c4bcf0',
 };
 
 function sanitizeText(s: string | undefined | null): string {
@@ -100,7 +100,7 @@ function gapsContent(items: InsightsLLMOutput['improvement_or_missing_areas']): 
             body,
         },
         layout: {
-            fillColor: (rowIndex: number) => (rowIndex === 0 ? '#F8FAFC' : undefined),
+            fillColor: (rowIndex: number) => (rowIndex === 0 ? '#e3defc' : undefined),
             hLineColor: () => colors.border,
             vLineColor: () => colors.border,
         },

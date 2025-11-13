@@ -17,16 +17,16 @@ if (g?.pdfMake?.vfs) {
 }
 
 const colors = {
-    primary: '#6D28D9', // violet-700
+    primary: '#6d56f1',
     accent1: '#D946EF', // fuchsia-500
-    accent2: '#0EA5E9', // sky-500
+    accent2: '#5341c8',
     success: '#10B981',
     warning: '#F59E0B',
     danger: '#EF4444',
     slate600: '#475569',
     slate800: '#1F2937',
     slate500: '#64748B',
-    border: '#E5E7EB',
+    border: '#c4bcf0',
 };
 
 function sanitizeText(s: string | undefined | null): string {
@@ -147,7 +147,7 @@ function risksTable(risks: StrategicRoadmapLLMOutput['risks_and_mitigation']): C
             body,
         },
         layout: {
-            fillColor: (rowIndex: number) => (rowIndex === 0 ? '#F8FAFC' : undefined),
+            fillColor: (rowIndex: number) => (rowIndex === 0 ? '#e3defc' : undefined),
             hLineColor: () => colors.border,
             vLineColor: () => colors.border,
         },
@@ -261,7 +261,7 @@ function buildDocDefinition(roadmap: StrategicRoadmapLLMOutput): TDocumentDefini
             phaseTitle: { fontSize: 11, bold: true },
             subheading: { fontSize: 11, bold: true, margin: [0, 6, 0, 2] },
             pillTitle: { fontSize: 11, bold: true },
-            tableHeader: { bold: true, fillColor: '#F3F4F6', margin: [0, 4, 0, 4] },
+            tableHeader: { bold: true, fillColor: '#c4bcf0', margin: [0, 4, 0, 4] },
         },
         defaultStyle: {
             fontSize: 10,
