@@ -36,12 +36,15 @@ type Props = {
 
 const SectionList: React.FC<{ title: string; items: string[]; badgeStyle?: string }> = ({ title, items, badgeStyle }) => {
   if (!items || items.length === 0) return null;
+  const baseClass = badgeStyle
+    ? `transition-colors ${badgeStyle}`
+    : 'transition-colors bg-muted/80 text-muted-foreground border border-muted/50 hover:bg-muted hover:border-primary/40 dark:bg-muted/30 dark:border-muted/40 dark:hover:bg-muted/40';
   return (
     <div>
       {title && <h4 className="text-sm font-semibold mb-2">{title}</h4>}
       <div className="flex flex-wrap gap-2">
         {items.map((it, idx) => (
-          <Badge key={idx} variant="secondary" className={badgeStyle}>{it}</Badge>
+          <Badge key={idx} variant="outline" className={baseClass}>{it}</Badge>
         ))}
       </div>
     </div>
@@ -69,7 +72,11 @@ const StrategicRoadmapRenderer: React.FC<{ roadmap: StrategicRoadmapLLMOutput }>
             <h4 className="font-semibold">Vision & End Goal</h4>
           </div>
           <p className="text-sm whitespace-pre-wrap mb-3">{roadmap.vision_and_end_goal.description}</p>
-          <SectionList title="Success Criteria" items={roadmap.vision_and_end_goal.success_criteria} badgeStyle="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" />
+          <SectionList
+            title="Success Criteria"
+            items={roadmap.vision_and_end_goal.success_criteria}
+            badgeStyle="bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200 hover:border-emerald-300 dark:bg-emerald-900/40 dark:border-emerald-800/50 dark:hover:bg-emerald-800 dark:hover:border-emerald-700/60 dark:text-emerald-300"
+          />
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -82,19 +89,35 @@ const StrategicRoadmapRenderer: React.FC<{ roadmap: StrategicRoadmapLLMOutput }>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <Card className="p-3 border-emerald-200 dark:border-emerald-900/40">
               <div className="font-medium mb-1">Strengths</div>
-              <SectionList title="" items={roadmap.current_baseline.swot.strengths} badgeStyle="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" />
+              <SectionList
+                title=""
+                items={roadmap.current_baseline.swot.strengths}
+                badgeStyle="bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200 hover:border-emerald-300 dark:bg-emerald-900/40 dark:border-emerald-800/50 dark:hover:bg-emerald-800 dark:hover:border-emerald-700/60 dark:text-emerald-300"
+              />
             </Card>
             <Card className="p-3 border-amber-200 dark:border-amber-900/40">
               <div className="font-medium mb-1">Weaknesses</div>
-              <SectionList title="" items={roadmap.current_baseline.swot.weaknesses} badgeStyle="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" />
+              <SectionList
+                title=""
+                items={roadmap.current_baseline.swot.weaknesses}
+                badgeStyle="bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200 hover:border-amber-300 dark:bg-amber-900/40 dark:border-amber-800/50 dark:hover:bg-amber-800 dark:hover:border-amber-700/60 dark:text-amber-300"
+              />
             </Card>
             <Card className="p-3 border-sky-200 dark:border-sky-900/40">
               <div className="font-medium mb-1">Opportunities</div>
-              <SectionList title="" items={roadmap.current_baseline.swot.opportunities} badgeStyle="bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300" />
+              <SectionList
+                title=""
+                items={roadmap.current_baseline.swot.opportunities}
+                badgeStyle="bg-sky-100 text-sky-800 border border-sky-200 hover:bg-sky-200 hover:border-sky-300 dark:bg-sky-900/40 dark:border-sky-800/50 dark:hover:bg-sky-800 dark:hover:border-sky-700/60 dark:text-sky-300"
+              />
             </Card>
             <Card className="p-3 border-rose-200 dark:border-rose-900/40">
               <div className="font-medium mb-1">Threats</div>
-              <SectionList title="" items={roadmap.current_baseline.swot.threats} badgeStyle="bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300" />
+              <SectionList
+                title=""
+                items={roadmap.current_baseline.swot.threats}
+                badgeStyle="bg-rose-100 text-rose-800 border border-rose-200 hover:bg-rose-200 hover:border-rose-300 dark:bg-rose-900/40 dark:border-rose-800/50 dark:hover:bg-rose-800 dark:hover:border-rose-700/60 dark:text-rose-300"
+              />
             </Card>
           </div>
         </Card>
@@ -439,7 +462,7 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
                     {/* All Documents option */}
                     <div
                       key={ALL_DOCS_ID}
-                      className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent' : ''}`}
+                      className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent/40' : ''}`}
                       onClick={() => handleToggle(ALL_DOCS_ID)}
                     >
                       <Checkbox
@@ -448,14 +471,14 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
                         className="mt-1"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">All Documents in Thread</p>
-                        <p className="text-sm text-muted-foreground">Generate a strategic roadmap using all uploaded documents.</p>
+                        <p className="font-medium truncate group-hover:text-primary-foreground">All Documents in Thread</p>
+                        <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">Generate a strategic roadmap using all uploaded documents.</p>
                       </div>
                     </div>
                     {documents.map((doc) => (
                       <div
                         key={doc.docId}
-                        className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === doc.docId ? 'bg-accent' : ''}`}
+                        className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === doc.docId ? 'bg-accent/40' : ''}`}
                         onClick={() => handleToggle(doc.docId)}
                       >
                         <Checkbox
@@ -464,8 +487,8 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
                           className="mt-1"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{doc.title}</p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="font-medium truncate group-hover:text-primary-foreground">{doc.title}</p>
+                          <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
                             {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
                           </p>
                         </div>

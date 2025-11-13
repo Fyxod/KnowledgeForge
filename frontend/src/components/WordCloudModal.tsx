@@ -139,18 +139,18 @@ const WordCloudModal: React.FC<Props> = ({ open, onOpenChange, threadId, documen
                   <div className="space-y-3">
                     {documents.map((doc) => (
                       <div
-                        key={doc.docId}
-                        className="flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                        onClick={() => handleDocToggle(doc.docId)}
-                      >
+                          key={doc.docId}
+                          className="flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors"
+                          onClick={() => handleDocToggle(doc.docId)}
+                        >
                         <Checkbox
                           checked={selectedDocs.includes(doc.docId)}
                           onCheckedChange={() => handleDocToggle(doc.docId)}
                           className="mt-1"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{doc.title}</p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="font-medium truncate group-hover:text-primary-foreground">{doc.title}</p>
+                          <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
                             {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
                           </p>
                         </div>

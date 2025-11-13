@@ -30,10 +30,7 @@ const SimNavbar: React.FC = () => {
     <header className="border-b bg-background sticky top-0 z-10">
       <div className="px-4 py-3 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div
-            className="w-19 h-19 rounded-full grid place-items-center"
-            style={{ backgroundColor: '#5e17eb' }}
-          >
+          <div className="w-19 h-19 rounded-full grid place-items-center bg-primary text-primary-foreground shadow-glow">
             <img
               src="/hero-decor.svg"
               alt="SIM Logo"

@@ -31,10 +31,13 @@ type Props = {
 
 const PillList: React.FC<{ items?: string[]; className?: string }> = ({ items = [], className }) => {
   if (!items || items.length === 0) return null;
+  const baseClass = className
+    ? `transition-colors ${className}`
+    : 'transition-colors bg-muted/80 text-muted-foreground border border-muted/50 hover:bg-muted hover:border-primary/40 dark:bg-muted/30 dark:border-muted/40 dark:hover:bg-muted/40';
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((it, idx) => (
-        <Badge key={idx} variant="secondary" className={className}>{it}</Badge>
+        <Badge key={idx} variant="outline" className={baseClass}>{it}</Badge>
       ))}
     </div>
   );
@@ -74,7 +77,10 @@ const InsightsRenderer: React.FC<{ insights: InsightsLLMOutput }> = ({ insights 
         <p className="text-sm whitespace-pre-wrap mb-3">{doc.purpose}</p>
         <div>
           <div className="text-xs font-medium mb-2 text-muted-foreground">Key Themes</div>
-          <PillList items={doc.key_themes} />
+          <PillList
+            items={doc.key_themes}
+            className="bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200 hover:border-amber-300 dark:bg-amber-900/40 dark:border-amber-800/50 dark:hover:bg-amber-800 dark:hover:border-amber-700/60 dark:text-amber-300"
+          />
         </div>
       </Card>
 
@@ -84,9 +90,12 @@ const InsightsRenderer: React.FC<{ insights: InsightsLLMOutput }> = ({ insights 
           <SectionHeader icon={<ListChecks className="w-4 h-4" />} title="Key Discussion Points" tone="violet" />
           <div className="space-y-2 text-sm">
             {insights.key_discussion_points.map((p, idx) => (
-              <Card key={idx} className="p-3 hover:bg-accent/50 transition-colors">
-                <div className="font-medium">{p.topic}</div>
-                <div className="text-muted-foreground whitespace-pre-wrap mt-1">{p.details}</div>
+              <Card
+                key={idx}
+                className="group p-3 transition-colors border border-border hover:border-primary/40 hover:bg-primary/5 dark:hover:bg-primary/20"
+              >
+                <div className="font-medium group-hover:text-foreground">{p.topic}</div>
+                <div className="text-muted-foreground whitespace-pre-wrap mt-1 group-hover:text-foreground/80">{p.details}</div>
               </Card>
             ))}
           </div>
@@ -370,7 +379,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
                     {/* All Documents option */}
                     <div
                       key={ALL_DOCS_ID}
-                      className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent' : ''}`}
+                      className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent/40' : ''}`}
                       onClick={() => handleToggle(ALL_DOCS_ID)}
                     >
                       <Checkbox
@@ -379,14 +388,14 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
                         className="mt-1"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">All Documents in Thread</p>
-                        <p className="text-sm text-muted-foreground">Generate insights using all uploaded documents.</p>
+                        <p className="font-medium truncate group-hover:text-primary-foreground">All Documents in Thread</p>
+                        <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">Generate insights using all uploaded documents.</p>
                       </div>
                     </div>
                     {documents.map((doc) => (
                       <div
                         key={doc.docId}
-                        className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === doc.docId ? 'bg-accent' : ''}`}
+                        className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === doc.docId ? 'bg-accent/40' : ''}`}
                         onClick={() => handleToggle(doc.docId)}
                       >
                         <Checkbox
@@ -395,8 +404,8 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
                           className="mt-1"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{doc.title}</p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="font-medium truncate group-hover:text-primary-foreground">{doc.title}</p>
+                          <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
                             {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
                           </p>
                         </div>

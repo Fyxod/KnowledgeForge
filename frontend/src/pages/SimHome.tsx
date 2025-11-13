@@ -14,27 +14,27 @@ const SectionCard: React.FC<{
   disabled?: boolean;
 }> = ({ icon, title, subtitle, description, onClick, disabled }) => {
   const baseClasses =
-    "group w-[260px] h-[400px] rounded-xl border-2 bg-[#f2f8fc] dark:bg-card shadow-sm transition-all duration-300 flex flex-col items-center justify-center text-center gap-4 p-6";
+    "group w-full sm:w-[260px] h-auto sm:h-[400px] rounded-xl border-2 bg-muted dark:bg-card shadow-sm transition-all duration-300 flex flex-col items-center justify-center text-center gap-4 p-6";
 
   const enabledHover =
-    "hover:shadow-xl hover:bg-purple-50 dark:hover:shadow-2xl dark:hover:bg-accent";
+    "hover:shadow-xl hover:bg-primary/10 dark:hover:shadow-2xl dark:hover:bg-primary/20";
 
-  const disabledClasses = "opacity-60 cursor-not-allowed hover:shadow-none hover:bg-[#f2f8fc] dark:hover:bg-card";
+  const disabledClasses = "opacity-60 cursor-not-allowed hover:shadow-none hover:bg-muted dark:hover:bg-card";
 
   return (
     <button
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       className={`${baseClasses} ${disabled ? disabledClasses : enabledHover}`}
-      style={{ borderColor: disabled ? '#bfbfbf' : '#5e17eb' }}
+      style={{ borderColor: disabled ? 'hsl(var(--border))' : 'hsl(var(--primary))' }}
     >
-      <div className={`w-24 h-24 grid place-items-center ${disabled ? 'text-gray-400 dark:text-gray-500 opacity-40 filter grayscale' : 'text-purple-600'}`}>
+      <div className={`w-24 h-24 grid place-items-center ${disabled ? 'text-muted-foreground opacity-40 filter grayscale dark:text-muted-foreground' : 'text-primary'}`}>
         {icon}
       </div>
       <div>
-        <h3 className={`text-lg font-semibold ${disabled ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>{title}</h3>
-        <p className={`text-sm ${disabled ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'} mt-1`}>{subtitle}</p>
-        <p className={`text-xs ${disabled ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'} mt-2 leading-relaxed`}>{description}</p>
+        <h3 className={`text-lg font-semibold ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}>{title}</h3>
+        <p className={`text-sm mt-1 ${disabled ? 'text-muted-foreground' : 'text-muted-foreground/80'}`}>{subtitle}</p>
+        <p className={`text-xs mt-2 leading-relaxed ${disabled ? 'text-muted-foreground' : 'text-muted-foreground/80 dark:text-muted-foreground'}`}>{description}</p>
       </div>
     </button>
   );
@@ -52,27 +52,27 @@ const SimHome: React.FC = () => {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-[#f2f8fc] dark:bg-background text-foreground flex flex-col">
+    <div className="min-h-screen bg-muted/40 dark:bg-background text-foreground flex flex-col">
       <SimNavbar />
-      <main className="mx-auto max-w-7xl px-6 w-full flex-1 overflow-hidden">
+      <main className="mx-auto max-w-7xl px-6 w-full flex-1 overflow-auto">
         <section className="py-12 md:py-16">
           <div className="flex items-center justify-center gap-8">
             <img src="/hero-decor.svg" alt="decor" className="w-28 h-28 md:w-32 md:h-32 object-contain select-none" draggable="false" />
             <div className="text-center">
               <h2 className="text-5xl md:text-6xl font-bold tracking-tight">Welcome to SIM</h2>
-              <p className="text-2xl md:text-3xl mt-3 text-black dark:text-white">Your one-stop portal to SRI-B Strategy</p>
+              <p className="text-2xl md:text-3xl mt-3 text-foreground/80 dark:text-foreground">Your one-stop portal to SRI-B Strategy</p>
             </div>
           </div>
 
           {/* Four Cards */}
-          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 place-items-center">
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 justify-center">
             <SectionCard
               icon={<img src="/tile-intelligent-augmenter.svg" alt="Intelligent Augmenter" className="w-15 h-15 select-none" draggable="false" />}
               title="Intelligent Knowledge Augmenter"
               subtitle=""
               description={(
                 <>
-                  <span className="italic text-gray-800 dark:text-gray-200">Knowledge Graph Q&A
+                  <span className="italic text-foreground/90 dark:text-foreground">Knowledge Graph Q&A
                   <br />&<br />
                   External Context Engine</span>
                 </>
@@ -86,7 +86,7 @@ const SimHome: React.FC = () => {
               // description={"Strategic Coordination &\nExecution Management\nSystem"}
               description={(
                 <>
-                  <span className="italic text-gray-800 dark:text-gray-200">Strategic Coordination
+                  <span className="italic text-foreground/90 dark:text-foreground">Strategic Coordination
                   <br />&<br />
                   Execution Management System</span>
                 </>
@@ -102,7 +102,7 @@ const SimHome: React.FC = () => {
               // description={"Strategic Futures\nExploration &\nTechnology Forecasting\nSystem"}
               description={(
                 <>
-                  <span className="italic text-gray-800 dark:text-gray-200">Strategic Futures\nExploration 
+                  <span className="italic text-foreground/90 dark:text-foreground">Strategic Futures\nExploration 
                   <br />&<br />
                   Technology Forecasting System</span>
                 </>
@@ -118,7 +118,7 @@ const SimHome: React.FC = () => {
               // description={"Pattern Recognition &\nAnalytical Intelligence\nEngine"}
               description={(
                 <>
-                  <span className="italic text-gray-800 dark:text-gray-200">Pattern Recognition
+                  <span className="italic text-foreground/90 dark:text-foreground">Pattern Recognition
                   <br />&<br />
                   Analytical Intelligence Engine</span>
                 </>
@@ -144,16 +144,14 @@ const SimHome: React.FC = () => {
             <div className="flex flex-wrap gap-3 md:gap-4 md:ml-6">
               <Button
                 variant="outline"
-                className="rounded-xl border-2 bg-[#f2f8fc] text-purple-700 hover:bg-purple-50 dark:bg-card dark:text-purple-300 dark:hover:bg-accent"
-                style={{ borderColor: '#5e17eb' }}
+                className="rounded-xl border-2 border-primary bg-muted text-primary hover:bg-primary/10 dark:bg-card dark:text-primary dark:hover:bg-primary/20"
                 onClick={() => goto()}
               >
                 See all Document Clusters <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
               <Button
                 variant="outline"
-                className="rounded-xl border-2 bg-[#f2f8fc] text-purple-700 hover:bg-purple-50 dark:bg-card dark:text-purple-300 dark:hover:bg-accent"
-                style={{ borderColor: '#5e17eb' }}
+                className="rounded-xl border-2 border-primary bg-muted text-primary hover:bg-primary/10 dark:bg-card dark:text-primary dark:hover:bg-primary/20"
                 onClick={() => goto()}
               >
                 See all Knowledge Graphs <ChevronRight className="w-4 h-4 ml-2" />

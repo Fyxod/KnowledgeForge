@@ -48,34 +48,34 @@ export default function SafeMarkdownRenderer({ content, enableMarkdown = true }:
           li: ({ node, ...props }) => <li className="mb-1" {...props} />,
           blockquote: ({ node, ...props }) => (
             <blockquote
-              className="border-l-4 border-gray-300 dark:border-gray-700 pl-4 italic text-gray-600 dark:text-gray-300 my-2"
+              className="border-l-4 border-primary/40 pl-4 italic text-foreground/80 dark:text-foreground/80 my-2"
               {...props}
             />
           ),
-          code: ({ node, inline, className, children, ...props }) => {
+          code: ({ node, inline, className, children, ...props }: any) => {
             return !inline ? (
-              <pre className="bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 p-3 rounded-lg overflow-x-auto my-3 text-sm border border-zinc-300 dark:border-zinc-700 shadow-sm">
+              <pre className="bg-muted/40 dark:bg-card/40 text-foreground dark:text-foreground p-3 rounded-lg overflow-x-auto my-3 text-sm border border-border shadow-sm">
                 <code className={className} {...props}>
                   {children}
                 </code>
               </pre>
             ) : (
-              <code className="bg-zinc-200 dark:bg-zinc-900 text-red-600 dark:text-red-300 px-1.5 py-0.5 rounded-md text-sm font-mono border border-zinc-300 dark:border-zinc-700">
+              <code className="bg-muted/60 dark:bg-card/60 text-primary dark:text-primary px-1.5 py-0.5 rounded-md text-sm font-mono border border-border">
                 {children}
               </code>
             );
           },
           table: ({ node, ...props }) => (
-            <table className="table-auto border-collapse border border-gray-400 dark:border-gray-700 my-4" {...props} />
+            <table className="table-auto border-collapse border border-border my-4" {...props} />
           ),
           thead: ({ node, ...props }) => (
-            <thead className="bg-gray-100 dark:bg-gray-800" {...props} />
+            <thead className="bg-muted/60 dark:bg-card/60" {...props} />
           ),
           th: ({ node, ...props }) => (
-            <th className="border border-gray-400 dark:border-gray-700 px-3 py-1 text-left font-semibold" {...props} />
+            <th className="border border-border px-3 py-1 text-left font-semibold" {...props} />
           ),
           td: ({ node, ...props }) => (
-            <td className="border border-gray-400 dark:border-gray-700 px-3 py-1" {...props} />
+            <td className="border border-border px-3 py-1" {...props} />
           ),
         }}
       >

@@ -185,10 +185,10 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               ) : (
                 <div className="space-y-2">
                   {documents.map((d: any) => (
-                    <div key={d.docId} className="p-2 rounded hover:bg-accent flex items-start gap-3">
+                    <div key={d.docId} className="p-2 rounded group hover:bg-accent/30 flex items-start gap-3">
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{d.title}</div>
-                        <div className="text-sm text-muted-foreground">{d.type} • {new Date(d.time_uploaded).toLocaleDateString()}</div>
+                        <div className="font-medium truncate group-hover:text-primary-foreground">{d.title}</div>
+                        <div className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">{d.type} • {new Date(d.time_uploaded).toLocaleDateString()}</div>
                       </div>
                     </div>
                   ))}

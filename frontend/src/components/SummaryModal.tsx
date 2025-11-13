@@ -110,7 +110,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                     {/* All Documents option */}
                     <div
                       key={ALL_DOCS_ID}
-                      className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent' : ''}`}
+                      className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent/40' : ''}`}
                       onClick={() => handleToggle(ALL_DOCS_ID)}
                     >
                       <Checkbox
@@ -119,14 +119,14 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                         className="mt-1"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">All Documents in Thread</p>
-                        <p className="text-sm text-muted-foreground">Generate a summary using all uploaded documents.</p>
+                        <p className="font-medium truncate group-hover:text-primary-foreground">All Documents in Thread</p>
+                        <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">Generate a summary using all uploaded documents.</p>
                       </div>
                     </div>
                     {documents.map((doc) => (
                       <div
                         key={doc.docId}
-                        className={`flex items-start space-x-3 p-3 rounded-lg hover:bg-accent cursor-pointer transition-colors ${selectedDoc === doc.docId ? 'bg-accent' : ''}`}
+                        className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === doc.docId ? 'bg-accent/40' : ''}`}
                         onClick={() => handleToggle(doc.docId)}
                       >
                         <Checkbox
@@ -135,8 +135,8 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                           className="mt-1"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{doc.title}</p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="font-medium truncate group-hover:text-primary-foreground">{doc.title}</p>
+                          <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
                             {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
                           </p>
                         </div>
