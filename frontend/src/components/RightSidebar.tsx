@@ -119,19 +119,19 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId} aria-label="Strategic Roadmap">
-                  <MapPin className="w-5 h-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Strategic Roadmap</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setTechRoadmapOpen)} disabled={!threadId} aria-label="Technical Roadmap">
                   <Cpu className="w-5 h-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Technical Roadmap</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId} aria-label="Strategic Roadmap">
+                  <MapPin className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Strategic Roadmap</TooltipContent>
             </Tooltip>
           </div>
         ) : (
@@ -153,11 +153,11 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setWordOpen)} disabled={!threadId}>
                 <Cloud className="w-4 h-4 mr-2" /> Word Cloud
               </Button>
-              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId}>
-                <MapPin className="w-4 h-4 mr-2" /> Strategic Roadmap
-              </Button>
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setTechRoadmapOpen)} disabled={!threadId}>
                 <Cpu className="w-4 h-4 mr-2" /> Technical Roadmap
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId}>
+                <MapPin className="w-4 h-4 mr-2" /> Strategic Roadmap
               </Button>
             </div>
           </div>
