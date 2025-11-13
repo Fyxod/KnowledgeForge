@@ -1,5 +1,0 @@
-FROM qwen3:14b
-#Input Tokens
-PARAMETER num_ctx 39000
-#Output tokens
-PARAMETER num_predict 8000
