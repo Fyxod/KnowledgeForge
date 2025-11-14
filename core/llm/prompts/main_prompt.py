@@ -172,6 +172,13 @@ def main_prompt(
     else:
         raise ValueError("Invalid mode. Mode must be either 'INTERNAL' or 'EXTERNAL'.")
 
+    contents.append(
+        {
+            "role": "system",
+            "parts": f"Don't give too much importance to the title while giving answer as titles are just the filenames which might be vague or unrelated to the content of the documents.",
+        }
+    )
+
     # Defining actions
     contents.append(
         {
