@@ -34,7 +34,7 @@ class MyServerLLM(LLM):
             response = requests.post(
                 self.url,
                 json={"prompt": prompt},
-                timeout=200,
+                timeout=600,
             )
             response.raise_for_status()
             data = response.json()

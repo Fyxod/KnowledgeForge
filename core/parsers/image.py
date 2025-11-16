@@ -40,7 +40,7 @@ async def get_semaphore(port: int, model: str) -> asyncio.Semaphore:
     return semaphore
 
 
-async def image_parser(image_path: str, retries: int = 3) -> str:
+async def image_parser(image_path: str, retries: int = 2) -> str:
     """
     Parse image text using Gemma vision API.
 
@@ -82,7 +82,7 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
                             files=files,
                             data=data,
                             params=params,
-                            timeout=300,
+                            timeout=60,
                         )
                     end_time = time.time()
 
@@ -128,7 +128,7 @@ async def image_parser(image_path: str, retries: int = 3) -> str:
                         response = await client.post(
                             f"http://localhost:{VISION_SERVER_PORT}/api/generate",
                             json=payload,
-                            timeout=300,
+                            timeout=60,
                         )
                     end_time = time.time()
 

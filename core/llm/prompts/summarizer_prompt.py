@@ -35,7 +35,7 @@ def summarize_documents_prompt(document: str):
                 "### Output Requirements\n"
                 "- Summary length: **300-1000 words**\n"
                 "- Do **not** omit significant details.\n"
-                "- Escape any quotes, newlines, or special characters that could break JSON formatting.\n"
+                "- Please provide the summary in **valid parsable Markdown format only**.\n"
             ),
         },
         {
@@ -68,7 +68,8 @@ def combine_summaries_prompt(title: str, partial_summaries: list[str]):
             "parts": (
                 f"**Document Title:** {title}\n\n"
                 f"**Section Summaries:** {partial_summaries}\n\n"
-                "Please synthesize these into one cohesive, Markdown-formatted summary that follows the structure guidelines above."
+                "Please synthesize these into one cohesive, Markdown-formatted summary that follows the structure guidelines above.\n"
+                "Please provide the summary in **valid parsable Markdown format only**.\n"
             ),
         },
     ]
@@ -104,9 +105,7 @@ def global_summarization_prompt(summaries: str):
                 "- Summary length: **500-1000 words**.\n"
                 "- Use clear headings (`#`, `##`, `###`) and bullet points throughout.\n"
                 "- Highlight critical concepts in **bold** and optional examples in *italics*.\n"
-                "- Output **only** a valid JSON object containing the Markdown summary.\n"
-                "- Escape quotes, newlines, or special characters.\n"
-                "- Do **not** add commentary outside the JSON.\n"
+                "- Please provide the summary in **valid parsable Markdown format only**.\n"
             ),
         },
         {
@@ -114,7 +113,7 @@ def global_summarization_prompt(summaries: str):
             "parts": (
                 f" **Summaries to Combine:**\n{summaries}\n\n"
                 "Generate a single, coherent, Markdown-formatted summary (500-1000 words) that merges recurring and essential ideas.\n\n"
-                "Return a valid JSON object containing your final synthesized summary."
+                "Return a valid JSON object containing your final Markdown summary."
             ),
         },
     ]
