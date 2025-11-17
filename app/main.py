@@ -16,6 +16,7 @@ from app.routes import (
     extra,
     strategic_roadmap,
     technical_roadmap,
+    documents,
 )
 from app.socket_handler import sio
 
@@ -46,5 +47,6 @@ fastapi_app.include_router(extra.router)
 fastapi_app.include_router(strategic_roadmap.router)
 fastapi_app.include_router(insights.router)
 fastapi_app.include_router(technical_roadmap.router)
+fastapi_app.include_router(documents.router)
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

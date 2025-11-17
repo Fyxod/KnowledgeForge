@@ -10,9 +10,9 @@ import TechnicalRoadmapModal from './TechnicalRoadmapModal';
 import InsightsModal from './InsightsModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Label } from '@/components/ui/label';
-import { Thread } from '@/lib/api';
+import { Thread, getAuthToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { API_URL } from '../../config';
 
 interface Props {
   threadId?: string;
@@ -22,8 +22,16 @@ interface Props {
   onToggleCollapse?: () => void;
 }
 
+const buildDocumentUrl = (userId: string, threadId: string, fileName: string, token?: string | null) => {
+  const basePath = `${API_URL}/data/${encodeURIComponent(userId)}/threads/${encodeURIComponent(threadId)}/uploads/${encodeURIComponent(fileName)}`;
+  if (token) {
+    return `${basePath}?token=${encodeURIComponent(token)}`;
+  }
+  return basePath;
+};
+
 const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = false, onToggleCollapse }) => {
-  const { refreshUser } = useAuth();
+  const { refreshUser, user } = useAuth();
   // internal open state for modals
   const [mindOpen, setMindOpen] = React.useState(false);
   const [wordOpen, setWordOpen] = React.useState(false);
@@ -38,6 +46,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
     const t = threads[threadId];
     return t?.documents || [];
   }, [threadId, threads]);
+  const authToken = React.useMemo(() => getAuthToken(), [user?.userId]);
 
   const openAfterRefresh = async (setter: (v: boolean) => void) => {
     try {
@@ -184,14 +193,34 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                 <p className="text-sm text-muted-foreground p-4">No documents in this thread.</p>
               ) : (
                 <div className="space-y-2">
-                  {documents.map((d: any) => (
-                    <div key={d.docId} className="p-2 rounded group hover:bg-accent/30 flex items-start gap-3">
+                  {documents.map((d: any) => {
+                    const href = user && threadId
+                      ? buildDocumentUrl(user.userId, threadId, d.file_name, authToken ?? undefined)
+                      : undefined;
+
+                    const content = (
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate group-hover:text-primary-foreground">{d.title}</div>
                         <div className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">{d.type} • {new Date(d.time_uploaded).toLocaleDateString()}</div>
                       </div>
-                    </div>
-                  ))}
+                    );
+
+                    return href ? (
+                      <a
+                        key={d.docId}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded group hover:bg-accent/30 flex items-start gap-3"
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <div key={d.docId} className="p-2 rounded group hover:bg-accent/30 flex items-start gap-3">
+                        {content}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </ScrollArea>

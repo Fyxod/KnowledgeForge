@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain, LogOut, User, Moon, Sun } from 'lucide-react';
+import { LogOut, User, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
@@ -31,7 +31,12 @@ const AppNavbar: React.FC = () => {
     <header className="border-b bg-background sticky top-0 z-10">
       <div className="px-4 py-3 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <Brain className="w-6 h-6 text-primary" />
+          <img
+            src="/tile-intelligent-augmenter.svg"
+            alt="Intelligent Augmenter"
+            className="w-6 h-6 object-contain"
+            draggable={false}
+          />
           <h1 className="text-lg font-semibold">{PROJECT_NAME}</h1>
         </div>
         <div className="flex items-center gap-2">
