@@ -211,12 +211,12 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-2 rounded group hover:bg-accent/30 flex items-start gap-3"
+                        className="p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30 flex items-start gap-3"
                       >
                         {content}
                       </a>
                     ) : (
-                      <div key={d.docId} className="p-2 rounded group hover:bg-accent/30 flex items-start gap-3">
+                      <div key={d.docId} className="p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30 flex items-start gap-3">
                         {content}
                       </div>
                     );
