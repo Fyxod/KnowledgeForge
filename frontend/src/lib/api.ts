@@ -532,11 +532,25 @@ export const api = {
 
   async deleteThread(threadId: string): Promise<{ status: boolean }> {
     const token = getAuthToken();
-    const response = await fetch(`${API_URL}/thread/delete/${threadId}`, {
+    const response = await fetch(`${API_URL}/thread/${threadId}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${token}`,
       },
+    });
+
+    return response.json();
+  },
+
+  async updateThread(threadId: string, data: { thread_name: string }): Promise<{ status: string; message: string; thread_id: string; thread_name: string }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/thread/${threadId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
     });
 
     return response.json();

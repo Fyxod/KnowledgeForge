@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Thread, api } from '@/lib/api';
-import { Plus, FileText, MessageSquare, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Plus, FileText, MessageSquare, ChevronLeft, ChevronRight, X, Pencil, Check } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +35,20 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
   const { user, setUser } = useAuth();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && editingThreadId) {
+        setEditingThreadId(null);
+        setEditingName('');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [editingThreadId]);
 
   // Helper: parse timestamp by appending 'Z' (interpret as UTC); fall back to current time if invalid
   const parseTimestampAsUTC = (ts?: string) => {
@@ -59,7 +73,7 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
       const res = await api.deleteThread(threadId);
       if (!res.status) {
         setUser(prevUser);
-        toast({ title: 'Failed to delete thread', description: `"${threadName}" could not be deleted.`, variant: 'destructive' as any });
+        toast({ title: 'Failed to delete thread', description: `"${threadName}" could not be deleted.` });
         return;
       }
 
@@ -68,7 +82,28 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
       }
       toast({ title: 'Thread deleted', description: `"${threadName}" was removed.` });
     } catch (e) {
-      toast({ title: 'Error deleting thread', description: (e as Error).message, variant: 'destructive' as any });
+      toast({ title: 'Error deleting thread', description: (e as Error).message });
+    }
+  };
+
+  const handleEdit = async (threadId: string, newName: string) => {
+    try {
+      const res = await api.updateThread(threadId, { thread_name: newName });
+      if (res.status === 'success') {
+        // Update the user state
+        if (user) {
+          const updatedThreads = { ...user.threads };
+          updatedThreads[threadId] = { ...updatedThreads[threadId], thread_name: newName };
+          setUser({ ...user, threads: updatedThreads });
+        }
+        setEditingThreadId(null);
+        setEditingName('');
+        toast({ title: 'Thread renamed', description: `Thread renamed to "${newName}".` });
+      } else {
+        toast({ title: 'Failed to rename thread', description: 'Could not update thread name.' });
+      }
+    } catch (e) {
+      toast({ title: 'Error renaming thread', description: (e as Error).message });
     }
   };
 
@@ -138,16 +173,43 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
                     aria-hidden
                   />
                   <button
-                    onClick={() => navigate(`/dashboard/threads/${id}`)}
-                    className={`w-full text-left p-3 pl-4 rounded-lg transition-colors min-w-0 ${
+                    onClick={() => editingThreadId !== id && navigate(`/dashboard/threads/${id}`)}
+                    disabled={editingThreadId === id}
+                    className={`w-full text-left p-3 pl-4 rounded-lg transition-colors min-w-0 ${editingThreadId === id ? 'cursor-not-allowed' : ''} ${
                       activeThreadId === id 
                         ? 'bg-transparent' 
                         : 'hover:bg-sidebar-accent/50'
                     }`}
                   >
-                    <div className="font-medium whitespace-normal break-words mb-1 pr-8">
-                      {thread.thread_name}
-                    </div>
+                    {editingThreadId === id ? (
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={(e) => {
+                          // Don't cancel if clicking the confirm button
+                          if (e.relatedTarget && (e.relatedTarget as HTMLElement).closest('[aria-label="Confirm edit"]')) {
+                            return;
+                          }
+                          setEditingThreadId(null);
+                          setEditingName('');
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleEdit(id, editingName);
+                          } else if (e.key === 'Escape') {
+                            setEditingThreadId(null);
+                            setEditingName('');
+                          }
+                        }}
+                        className="font-medium bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-1 w-[calc(100%-5rem)] mb-1"
+                        autoFocus
+                      />
+                    ) : (
+                      <div className="font-medium whitespace-normal break-words mb-1 pr-8">
+                        {thread.thread_name}
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <FileText className="w-3 h-3" />
@@ -162,6 +224,32 @@ export const ThreadSidebar = ({ threads, activeThreadId, collapsed, onToggleColl
                       {formatDistanceToNow(parseTimestampAsUTC(thread.updatedAt), { addSuffix: true })}
                     </div>
                   </button>
+                  {editingThreadId === id ? (
+                    <button
+                      aria-label="Confirm edit"
+                      className="absolute top-2 right-8 z-10 flex items-center justify-center w-5 h-5 rounded hover:bg-green-500/10 text-muted-foreground/80 hover:text-green-500"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(id, editingName);
+                      }}
+                      title="Confirm"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      aria-label="Edit thread name"
+                      className="absolute top-2 right-8 z-10 flex items-center justify-center w-5 h-5 rounded hover:bg-primary/10 text-muted-foreground/80 hover:text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingThreadId(id);
+                        setEditingName(thread.thread_name);
+                      }}
+                      title="Edit"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     aria-label="Delete thread"
                     className="absolute top-2 right-2 z-10 flex items-center justify-center w-5 h-5 rounded hover:bg-destructive/10 text-muted-foreground/80 hover:text-destructive"

@@ -12,7 +12,7 @@ interface ChatMessageProps {
 
 export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
   const isUser = chat.type === 'user';
-  const [mdEnabled, setMdEnabled] = React.useState(true);
+  // Markdown is enabled by default for bot messages. Removed per-message toggle.
   const displayTime = React.useMemo(() => {
     // User-requested simple logic:
     // 1) Try new Date(chat.timestamp + 'Z') and format to IST
@@ -53,22 +53,7 @@ export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
         </div>
       )}
 
-      {!isUser && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            'h-6 px-2 text-[10px] leading-none mt-1 border border-transparent',
-            mdEnabled ? 'text-primary' : 'text-muted-foreground'
-          )}
-          title={mdEnabled ? 'Markdown: ON' : 'Markdown: OFF'}
-          onClick={() => setMdEnabled((v) => !v)}
-          aria-pressed={mdEnabled}
-          type="button"
-        >
-          {mdEnabled ? 'MD' : 'TXT'}
-        </Button>
-      )}
+      {/* Markdown toggle removed; messages use Markdown by default */}
 
       <div
         className={cn(
@@ -94,7 +79,7 @@ export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
           <p className="text-sm whitespace-pre-wrap break-words">{chat.content}</p>
         ) : (
           <div className="text-sm">
-            <SafeMarkdownRenderer content={chat.content} enableMarkdown={mdEnabled} />
+            <SafeMarkdownRenderer content={chat.content} />
           </div>
         )}
         <p className="text-xs opacity-70 mt-2">{displayTime}</p>
