@@ -127,7 +127,7 @@ const NewThread = () => {
             </div>
 
             {files.length > 0 && (
-              <div className="space-y-2 mt-4">
+              <div className="space-y-2 mt-4 max-h-60 overflow-y-auto">
                 <p className="text-sm font-medium">Selected Files:</p>
                 {files.map((file, index) => (
                   <div key={index} className="flex items-center gap-2 p-3 bg-muted rounded-lg">

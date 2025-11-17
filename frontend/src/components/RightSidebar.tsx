@@ -200,7 +200,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
 
                     const content = (
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate group-hover:text-primary-foreground">{d.title}</div>
+                        <div className="font-medium break-words whitespace-normal group-hover:text-primary-foreground">{d.title}</div>
                         <div className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">{d.type} • {new Date(d.time_uploaded).toLocaleDateString()}</div>
                       </div>
                     );
@@ -211,12 +211,12 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30 flex items-start gap-3"
+                        className="w-full p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30 flex items-start gap-3"
                       >
                         {content}
                       </a>
                     ) : (
-                      <div key={d.docId} className="p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30 flex items-start gap-3">
+                      <div key={d.docId} className="w-full p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30 flex items-start gap-3">
                         {content}
                       </div>
                     );
