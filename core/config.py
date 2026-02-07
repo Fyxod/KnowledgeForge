@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     OPENAI_API: str
     QUERY_URL: str
     VISION_URL: str
+    MAIN_MODEL: str
     REMOTE_GPU: bool = False
     USE_VISION_MODEL: bool = False
 
