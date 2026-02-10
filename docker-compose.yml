@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  notebook:
+    image: notebook:latest
+    container_name: samsung
+    env_file:
+      - .env
+    dns:
+      - 8.8.8.8
+    ports:
+      - "8080:8080"
+      - "8000:8000"
+    volumes:
+      - ./data:/backend/data
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo_data:

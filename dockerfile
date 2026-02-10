@@ -6,10 +6,15 @@ RUN npm install --verbose && npm run build --verbose
 FROM python:3.11
 
 WORKDIR /backend 
+RUN pip install --upgrade pip \
+&& pip install --no-cache-dir \
+    torch==2.2.2+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
 
-COPY requirements.txt .
+
+COPY requirements-docker.txt .
 RUN python -m pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-docker.txt
 
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
