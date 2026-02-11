@@ -6,15 +6,18 @@ RUN npm install --verbose && npm run build --verbose
 FROM python:3.11
 
 WORKDIR /backend 
-RUN pip install --upgrade pip \
-&& pip install --no-cache-dir \
-    torch==2.2.2+cpu \
-    --index-url https://download.pytorch.org/whl/cpu
+# RUN pip install --upgrade pip \
+# && pip install --no-cache-dir \
+#     torch==2.2.2+cpu \
+#     --index-url https://download.pytorch.org/whl/cpu
 
+# RUN pip install --upgrade pip \
+# && pip install --no-cache-dir \
+#     torch
 
-COPY requirements-docker.txt .
+COPY requirements_freezed.txt .
 RUN python -m pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements-docker.txt
+RUN pip install --no-cache-dir -r requirements_freezed.txt
 
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
