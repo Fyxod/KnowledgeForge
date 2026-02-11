@@ -1,0 +1,324 @@
+# MAYBE LIMIT THE NO OF RESULT ROWS RETURNED TO 50 (cURRENTLY - 100) TO SAVE TOKEN COUNT
+
+"""
+SQLite Manager for Excel/CSV Data
+Manages per-user, per-thread in-memory SQLite databases that store
+spreadsheet data as queryable SQL tables.
+"""
+
+import sqlite3
+import pandas as pd
+import re
+import os
+import traceback
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+
+class SQLiteManager:
+    """
+    Manages SQLite databases for spreadsheet data.
+    Each (user_id, thread_id) pair gets its own in-memory SQLite connection.
+    """
+
+    # Class-level storage: { (user_id, thread_id): sqlite3.Connection }
+    _connections: Dict[Tuple[str, str], sqlite3.Connection] = {}
+
+    # Track which tables belong to which document:
+    # { (user_id, thread_id): { doc_id: [table_name, ...] } }
+    _table_registry: Dict[Tuple[str, str], Dict[str, List[str]]] = {}
+
+    @classmethod
+    def get_connection(cls, user_id: str, thread_id: str) -> sqlite3.Connection:
+        """Get or create an in-memory SQLite connection for a user/thread pair."""
+        key = (user_id, thread_id)
+        if key not in cls._connections:
+            conn = sqlite3.connect(":memory:", check_same_thread=False)
+            # Enable WAL mode for better concurrent reads
+            conn.execute("PRAGMA journal_mode=WAL;")
+            cls._connections[key] = conn
+            cls._table_registry[key] = {}
+        return cls._connections[key]
+
+    @classmethod
+    def close_connection(cls, user_id: str, thread_id: str):
+        """Close and remove the SQLite connection for a user/thread pair."""
+        key = (user_id, thread_id)
+        if key in cls._connections:
+            try:
+                cls._connections[key].close()
+            except Exception:
+                pass
+            del cls._connections[key]
+        if key in cls._table_registry:
+            del cls._table_registry[key]
+
+    @classmethod
+    def _sanitize_table_name(cls, name: str) -> str:
+        """Create a safe SQL table name from a sheet/file name."""
+        # Remove non-alphanumeric chars (except underscores)
+        sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", str(name).strip())
+        # Ensure it doesn't start with a digit
+        if sanitized and sanitized[0].isdigit():
+            sanitized = f"t_{sanitized}"
+        # Collapse multiple underscores
+        sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+        return sanitized.lower() or "unnamed_table"
+
+    @classmethod
+    def _sanitize_column_name(cls, name: str) -> str:
+        """Create a safe SQL column name."""
+        sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", str(name).strip())
+        if sanitized and sanitized[0].isdigit():
+            sanitized = f"col_{sanitized}"
+        sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+        return sanitized.lower() or "unnamed_col"
+
+    @classmethod
+    def load_spreadsheet(
+        cls,
+        user_id: str,
+        thread_id: str,
+        doc_id: str,
+        file_path: str,
+        file_name: str,
+    ) -> Dict[str, List[dict]]:
+        """
+        Load an Excel/CSV file into the SQLite database.
+        Each sheet becomes a separate table.
+
+        Returns:
+            Dict mapping table_name -> list of column info dicts
+        """
+        conn = cls.get_connection(user_id, thread_id)
+        key = (user_id, thread_id)
+        ext = Path(file_path).suffix.lower()
+        base_name = Path(file_name).stem
+
+        tables_created = {}
+        table_names = []
+
+        try:
+            if ext == ".csv":
+                df = pd.read_csv(file_path)
+                # Clean column names
+                df.columns = [cls._sanitize_column_name(c) for c in df.columns]
+                df = df.convert_dtypes()
+
+                table_name = cls._sanitize_table_name(base_name)
+                # Make table name unique by prefixing with doc_id
+                table_name = f"{table_name}_{doc_id}"
+
+                df.to_sql(table_name, conn, index=False, if_exists="replace")
+                tables_created[table_name] = cls._get_column_info(conn, table_name)
+                table_names.append(table_name)
+
+            elif ext in {".xls", ".xlsx"}:
+                if ext == ".xlsx":
+                    xls = pd.ExcelFile(file_path, engine="openpyxl")
+                else:
+                    xls = pd.ExcelFile(file_path, engine="xlrd")
+
+                for sheet_name in xls.sheet_names:
+                    df = pd.read_excel(xls, sheet_name=sheet_name)
+
+                    # Clean column names
+                    df.columns = [cls._sanitize_column_name(c) for c in df.columns]
+
+                    # Drop fully empty rows
+                    df = df.dropna(how="all")
+
+                    # Convert dtypes for better type inference
+                    df = df.convert_dtypes()
+
+                    # Build table name: filename_sheetname_docid
+                    if len(xls.sheet_names) == 1:
+                        table_name = cls._sanitize_table_name(base_name)
+                    else:
+                        table_name = cls._sanitize_table_name(
+                            f"{base_name}_{sheet_name}"
+                        )
+                    table_name = f"{table_name}_{doc_id}"
+
+                    df.to_sql(table_name, conn, index=False, if_exists="replace")
+                    tables_created[table_name] = cls._get_column_info(conn, table_name)
+                    table_names.append(table_name)
+
+            # Register tables for this document
+            if key not in cls._table_registry:
+                cls._table_registry[key] = {}
+            cls._table_registry[key][doc_id] = table_names
+
+        except Exception as e:
+            print(f"[SQLiteManager] Error loading {file_name}: {e}")
+            traceback.print_exc()
+
+        return tables_created
+
+    @classmethod
+    def _get_column_info(cls, conn: sqlite3.Connection, table_name: str) -> List[dict]:
+        """Get column information for a table."""
+        cursor = conn.cursor()
+        cursor.execute(f'PRAGMA table_info("{table_name}");')
+        columns = cursor.fetchall()
+        return [
+            {
+                "name": col[1],
+                "type": col[2],
+                "nullable": not col[3],  # notnull flag
+            }
+            for col in columns
+        ]
+
+    @classmethod
+    def get_schema(cls, user_id: str, thread_id: str) -> Optional[str]:
+        """
+        Get a human-readable schema description for all tables in this user/thread's DB.
+        Returns None if no tables exist.
+        """
+        key = (user_id, thread_id)
+        if key not in cls._connections:
+            return None
+
+        conn = cls._connections[key]
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+
+        if not tables:
+            return None
+
+        schema_parts = []
+        for (table_name,) in tables:
+            cursor.execute(f'PRAGMA table_info("{table_name}");')
+            columns = cursor.fetchall()
+
+            col_lines = []
+            for col in columns:
+                col_name = col[1]
+                col_type = col[2]
+                col_lines.append(f"  - {col_name} ({col_type})")
+
+            # Get row count
+            try:
+                cursor.execute(f'SELECT COUNT(*) FROM "{table_name}";')
+                row_count = cursor.fetchone()[0]
+            except Exception:
+                row_count = "unknown"
+
+            # Get a sample of first 3 rows for context
+            try:
+                cursor.execute(f'SELECT * FROM "{table_name}" LIMIT 3;')
+                sample_rows = cursor.fetchall()
+                col_names = [col[1] for col in columns]
+                sample_text = ""
+                if sample_rows:
+                    sample_lines = []
+                    for row in sample_rows:
+                        row_dict = dict(zip(col_names, row))
+                        sample_lines.append(f"    {row_dict}")
+                    sample_text = f"\n  Sample rows:\n" + "\n".join(sample_lines)
+            except Exception:
+                sample_text = ""
+
+            schema_parts.append(
+                f"Table: {table_name}\n"
+                f"  Rows: {row_count}\n"
+                f"  Columns:\n" + "\n".join(col_lines) + sample_text
+            )
+
+        return "\n\n".join(schema_parts)
+
+    @classmethod
+    def execute_query(cls, user_id: str, thread_id: str, query: str) -> Dict:
+        """
+        Execute a SQL query against the user/thread's SQLite database.
+        Only SELECT queries are allowed for safety.
+
+        Returns:
+            Dict with 'success', 'data' or 'error', and 'row_count' keys
+        """
+        key = (user_id, thread_id)
+        if key not in cls._connections:
+            return {
+                "success": False,
+                "error": "No spreadsheet data loaded for this session.",
+                "data": None,
+                "row_count": 0,
+            }
+
+        conn = cls._connections[key]
+
+        # Security: only allow SELECT statements
+        normalized = query.strip().upper()
+        if not normalized.startswith("SELECT"):
+            return {
+                "success": False,
+                "error": "Only SELECT queries are allowed. Do not use INSERT, UPDATE, DELETE, DROP, or ALTER.",
+                "data": None,
+                "row_count": 0,
+            }
+
+        # Block dangerous keywords even in SELECT
+        dangerous = ["DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "CREATE", "ATTACH"]
+        for keyword in dangerous:
+            # Match the keyword as a standalone word (not part of column names)
+            if re.search(rf"\b{keyword}\b", normalized):
+                return {
+                    "success": False,
+                    "error": f"Query contains disallowed keyword: {keyword}",
+                    "data": None,
+                    "row_count": 0,
+                }
+
+        try:
+            df = pd.read_sql_query(query, conn)
+            # Limit output to avoid overwhelming the LLM
+            max_rows = 100
+            truncated = len(df) > max_rows
+            if truncated:
+                result_df = df.head(max_rows)
+            else:
+                result_df = df
+
+            result_text = result_df.to_markdown(index=False)
+
+            return {
+                "success": True,
+                "data": result_text,
+                "row_count": len(df),
+                "truncated": truncated,
+                "columns": list(df.columns),
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"SQL Error: {str(e)}",
+                "data": None,
+                "row_count": 0,
+            }
+
+    @classmethod
+    def has_spreadsheet_data(cls, user_id: str, thread_id: str) -> bool:
+        """Check if there's any spreadsheet data loaded for this user/thread."""
+        key = (user_id, thread_id)
+        if key not in cls._connections:
+            return False
+        conn = cls._connections[key]
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = cursor.fetchall()
+            return len(tables) > 0
+        except Exception:
+            return False
+
+    @classmethod
+    def get_tables_for_document(
+        cls, user_id: str, thread_id: str, doc_id: str
+    ) -> List[str]:
+        """Get the table names associated with a specific document."""
+        key = (user_id, thread_id)
+        if key not in cls._table_registry:
+            return []
+        return cls._table_registry[key].get(doc_id, [])
