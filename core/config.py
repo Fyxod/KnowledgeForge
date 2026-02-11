@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     MAIN_MODEL: str
     REMOTE_GPU: bool = False
     USE_VISION_MODEL: bool = False
+    LOCAL_BASE_URL : str = "http://localhost"
 
     class Config:
         env_file = ".env"

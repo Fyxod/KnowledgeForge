@@ -1,6 +1,9 @@
 import httpx
 import asyncio
 from core.constants import SWITCHES
+from core.config import settings
+
+LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 
 async def unload_ollama_model(model: str, port: int = 11434):
     """
@@ -13,7 +16,7 @@ async def unload_ollama_model(model: str, port: int = 11434):
     Example:
         asyncio.run(unload_ollama_model("llama3.2"))
     """
-    url = f"http://localhost:{port}/api/generate"
+    url = f"{LOCAL_BASE_URL}:{port}/api/generate"
     payload = {"model": model, "keep_alive": 0}
 
     try:

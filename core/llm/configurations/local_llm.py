@@ -5,11 +5,13 @@ from pydantic import PrivateAttr
 import re
 import threading
 from contextlib import contextmanager
+from core.config import settings
 
 # Global dictionary of locks per (model, port)
 _locks: Dict[Tuple[str, int], threading.Lock] = {}
 _locks_global_lock = threading.Lock()  # Protects access to the _locks dict
 
+LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 
 @contextmanager
 def model_port_lock(model: str, port: int):
@@ -47,7 +49,7 @@ class MyServerLLM(LLM):
         super().__init__(model=model, port=port, **kwargs)
 
         self._client = ChatOllama(
-            model=model, base_url=f"http://localhost:{port}", timeout=1000, **kwargs
+            model=model, base_url=f"{LOCAL_BASE_URL}:{port}", timeout=1000, **kwargs
         )
 
     @property

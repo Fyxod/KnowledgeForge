@@ -17,6 +17,7 @@ VISION_URL = settings.VISION_URL
 MODEL = IMAGE_PARSER_LLM
 gemma = settings.USE_VISION_MODEL
 REMOTE_GPU = settings.REMOTE_GPU
+LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 VISION_SERVER_PORT = 11434
 
 _SEMAPHORES: dict[tuple[str, int], asyncio.Semaphore] = {}
@@ -126,7 +127,7 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
                     start_time = time.time()
                     async with httpx.AsyncClient() as client:
                         response = await client.post(
-                            f"http://localhost:{VISION_SERVER_PORT}/api/generate",
+                            f"{LOCAL_BASE_URL}:{VISION_SERVER_PORT}/api/generate",
                             json=payload,
                             timeout=60,
                         )
