@@ -7,6 +7,7 @@ langchain-community
 langchain-core
 langchain-huggingface
 tavily-python
+numpy<2.0.0
 langchain-ollama
 langgraph
 PyJWT

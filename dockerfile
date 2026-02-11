@@ -11,13 +11,15 @@ WORKDIR /backend
 #     torch==2.2.2+cpu \
 #     --index-url https://download.pytorch.org/whl/cpu
 
-# RUN pip install --upgrade pip \
-# && pip install --no-cache-dir \
-#     torch
+RUN pip install --upgrade pip \
+&& pip install --no-cache-dir \
+    torch 
 
-COPY requirements_freezed.txt .
+
+
+COPY requirements-docker.txt .
 RUN python -m pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements_freezed.txt
+RUN pip install --no-cache-dir -r requirements-docker.txt
 
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
@@ -45,5 +47,6 @@ COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 8080
+EXPOSE 8000
 
 CMD ["./docker-entrypoint.sh"]
