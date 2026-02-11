@@ -19,6 +19,7 @@ API_KEYS = [
     settings.API_KEY_3,
     settings.API_KEY_4,
     settings.API_KEY_5,
+    settings.API_KEY_6,
 ]
 
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API)

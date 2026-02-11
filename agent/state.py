@@ -32,6 +32,13 @@ class AgentState(BaseModel):
     attempts: int = 0
     web_search_attempts: int = 0
 
+    # SQL query fields for spreadsheet analysis
+    sql_query: Optional[str] = None
+    sql_result: Optional[str] = None
+    sql_attempts: int = 0
+    has_spreadsheet_data: bool = False
+    spreadsheet_schema: Optional[str] = None
+
     action: Optional[
         Literal[
             f"{ANSWER}",
@@ -39,10 +46,11 @@ class AgentState(BaseModel):
             f"{DOCUMENT_SUMMARIZER}",
             f"{GLOBAL_SUMMARIZER}",
             f"{FAILURE}",
+            f"{SQL_QUERY}",
         ]
     ] = Field(
         default=None,
-        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', or 'failure'.",
+        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', 'sql_query', or 'failure'.",
     )
 
     # Used to determine the next step in the state graph

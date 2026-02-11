@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     API_KEY_3: str
     API_KEY_4: str
     API_KEY_5: str
+    API_KEY_6: str
     OPENAI_API: str
     QUERY_URL: str
     VISION_URL: str

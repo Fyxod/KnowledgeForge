@@ -15,6 +15,7 @@ class MainLLMOutputInternal(BaseModel):
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
+        "sql_query",  # execute a SQL query against spreadsheet data
     ] = Field(description="The action to take based on the answer.")
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -22,6 +23,10 @@ class MainLLMOutputInternal(BaseModel):
     )
     document_id: Optional[str] = Field(
         description="The ID of the document to summarize if using document_summarizer, if applicable."
+    )
+    sql_query: Optional[str] = Field(
+        default=None,
+        description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
     )
 
 
@@ -32,6 +37,7 @@ class MainLLMOutputInternalWithFailure(BaseModel):
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
         "failure",
+        "sql_query",  # execute a SQL query against spreadsheet data
     ] = Field(description="The action to take based on the answer.")
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -39,6 +45,10 @@ class MainLLMOutputInternalWithFailure(BaseModel):
     )
     document_id: Optional[str] = Field(
         description="The ID of the document to summarize if using document_summarizer, if applicable."
+    )
+    sql_query: Optional[str] = Field(
+        default=None,
+        description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
     )
 
 
@@ -50,6 +60,7 @@ class MainLLMOutputExternal(BaseModel):
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
         "failure",
+        "sql_query",  # execute a SQL query against spreadsheet data
     ] = Field(description="The action to take based on the answer.")
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -61,6 +72,10 @@ class MainLLMOutputExternal(BaseModel):
     )
     document_id: Optional[str] = Field(
         description="The ID of the document to summarize if using document_summarizer, if applicable."
+    )
+    sql_query: Optional[str] = Field(
+        default=None,
+        description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
     )
 
 

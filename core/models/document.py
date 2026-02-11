@@ -16,6 +16,14 @@ class Document(BaseModel):
     title: str
     full_text: str
     summary: Optional[str] = None
+    has_sql_data: bool = Field(
+        default=False,
+        description="Whether this document has structured data loaded into SQLite for SQL querying.",
+    )
+    spreadsheet_schema: Optional[str] = Field(
+        default=None,
+        description="Optional human-readable SQL schema for spreadsheet data loaded from this document.",
+    )
 
 
 class Documents(BaseModel):

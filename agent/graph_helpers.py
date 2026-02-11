@@ -46,6 +46,8 @@ def build_main_prompt(state: AgentState):
         initial_search_results=state.initial_search_results or None,
         mode=state.mode,
         use_self_knowledge=state.use_self_knowledge or False,
+        spreadsheet_schema=state.spreadsheet_schema or None,
+        sql_result=state.sql_result or None,
     )
 
 

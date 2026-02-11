@@ -10,6 +10,7 @@ from agent.graph_nodes import (
     document_summarizer,
     global_summarizer,
     self_knowledge,
+    sql_query_node,
 )
 from agent.state import AgentState
 from core.constants import *
@@ -28,6 +29,7 @@ graph_builder.add_node(FAILURE, failure)
 graph_builder.add_node(DOCUMENT_SUMMARIZER, document_summarizer)
 graph_builder.add_node(GLOBAL_SUMMARIZER, global_summarizer)
 graph_builder.add_node(SELF_KNOWLEDGE, self_knowledge)
+graph_builder.add_node(SQL_QUERY, sql_query_node)
 
 # Set the entry point
 graph_builder.set_entry_point(RETRIEVER)
@@ -44,6 +46,7 @@ graph_builder.add_conditional_edges(
         WEB_SEARCH: WEB_SEARCH,
         DOCUMENT_SUMMARIZER: DOCUMENT_SUMMARIZER,
         GLOBAL_SUMMARIZER: GLOBAL_SUMMARIZER,
+        SQL_QUERY: SQL_QUERY,
         FAILURE: SELF_KNOWLEDGE,
     },
 )
@@ -70,6 +73,9 @@ graph_builder.add_conditional_edges(
 
 # Web search loops back to GENERATE
 graph_builder.add_edge(WEB_SEARCH, GENERATE)
+
+# SQL query loops back to GENERATE (so LLM can interpret the result)
+graph_builder.add_edge(SQL_QUERY, GENERATE)
 
 graph_builder.add_edge(SELF_KNOWLEDGE, END)
 

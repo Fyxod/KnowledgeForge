@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from core.constants import INTERNAL, EXTERNAL
 
 
@@ -12,6 +12,8 @@ def main_prompt(
     initial_search_answer: str = None,
     initial_search_results: List[Dict[str, Any]] = None,
     use_self_knowledge: bool = False,
+    spreadsheet_schema: Optional[str] = None,
+    sql_result: Optional[str] = None,
 ):
     contents = []
     if mode == INTERNAL:
@@ -179,7 +181,55 @@ def main_prompt(
         }
     )
 
+    # --- Spreadsheet SQL schema (if available) ---
+    if spreadsheet_schema:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "###  Spreadsheet Data (SQL Queryable)\n"
+                    "The user has uploaded spreadsheet files (Excel/CSV) that have been loaded into a SQL database. "
+                    "You can query this data using SQL SELECT statements.\n\n"
+                    "**Available Tables and Columns:**\n"
+                    f"```\n{spreadsheet_schema}\n```\n\n"
+                    "**SQL Query Guidelines:**\n"
+                    "- Use the `sql_query` action to run a SQL SELECT query against the spreadsheet data.\n"
+                    "- Write standard SQLite-compatible SQL queries.\n"
+                    "- Use aggregate functions like COUNT(), SUM(), AVG(), MIN(), MAX() for calculations.\n"
+                    "- Use GROUP BY and ORDER BY for grouping and sorting.\n"
+                    "- Use WHERE clauses to filter data.\n"
+                    "- Column names and table names are case-sensitive and use underscores instead of spaces.\n"
+                    "- Only SELECT queries are allowed (no INSERT, UPDATE, DELETE).\n"
+                    "- For questions about counts, averages, sums, or any numerical analysis of spreadsheet data, "
+                    "ALWAYS use the `sql_query` action instead of trying to compute from the text chunks.\n"
+                    "- Always provide the `sql_query` field in your response when choosing the `sql_query` action.\n"
+                ),
+            }
+        )
+
+    # --- SQL query result from a previous iteration ---
+    if sql_result:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "###  SQL Query Result\n"
+                    "A SQL query was executed on the spreadsheet data. Here is the result:\n\n"
+                    f"{sql_result}\n\n"
+                    "Use this result to formulate your final answer to the user's question. "
+                    "Present the data clearly using Markdown tables or formatted text."
+                ),
+            }
+        )
+
     # Defining actions
+    sql_action_text = ""
+    if spreadsheet_schema:
+        sql_action_text = (
+            "- **sql_query**: Execute a SQL SELECT query against spreadsheet data to get precise numerical answers "
+            "(counts, averages, sums, filtering, etc.). Requires the `sql_query` field with a valid SQLite SELECT statement.\n"
+        )
+
     contents.append(
         {
             "role": "system",
@@ -191,6 +241,7 @@ def main_prompt(
                     if mode == EXTERNAL
                     else ""
                 )
+                + sql_action_text
                 + "- **document_summarizer**: Request a summary of a specific document (requires `document_id`).\n"
                 "- **global_summarizer**: Request a collective summary of all documents.\n"
                 "- **failure**: Indicate inability to answer with available information.\n"

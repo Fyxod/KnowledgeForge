@@ -15,6 +15,7 @@ from app.socket_handler import sio
 from core.parsers.image import image_parser
 from core.models.document import Document, Page
 from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
+from core.services.sqlite_manager import SQLiteManager
 from pptx import Presentation
 import traceback
 import olefile
@@ -207,33 +208,78 @@ async def extract_document(
 
     if ext in {".xls", ".xlsx", ".csv"}:
         try:
-            # Read Excel or CSV file
+            # Read Excel or CSV file into DataFrame(s)
+            sheets = {}
             if ext == ".xlsx":
-                df = pd.read_excel(file_path, engine="openpyxl")
+                xls = pd.ExcelFile(file_path, engine="openpyxl")
+                for sheet_name in xls.sheet_names:
+                    sheets[sheet_name] = pd.read_excel(xls, sheet_name=sheet_name)
             elif ext == ".xls":
-                df = pd.read_excel(file_path, engine="xlrd")
+                xls = pd.ExcelFile(file_path, engine="xlrd")
+                for sheet_name in xls.sheet_names:
+                    sheets[sheet_name] = pd.read_excel(xls, sheet_name=sheet_name)
             else:
-                df = pd.read_csv(file_path)
+                sheets["Sheet1"] = pd.read_csv(file_path)
 
-            # Clean merged cells & empty rows
-            # df = df.ffill().dropna(how='all')
-
-            # Normalize newlines inside cells
-            df = df.applymap(
-                lambda x: str(x).replace("\n", " ") if isinstance(x, str) else x
-            )
-
+            # --- Load into SQLite for structured querying ---
             try:
-                text = df.to_json(orient="records", lines=True)
-                # text = df.to_markdown(index=False)
-
-            except Exception:
-                print("Error converting DataFrame to string")
+                tables_info = SQLiteManager.load_spreadsheet(
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    doc_id=doc_id,
+                    file_path=file_path,
+                    file_name=safe_file_name,
+                )
+                if tables_info:
+                    print(
+                        f"[SQLite] Loaded {len(tables_info)} table(s) for {safe_file_name}: "
+                        f"{list(tables_info.keys())}"
+                    )
+            except Exception as e:
+                print(f"[SQLite] Failed to load {safe_file_name} into SQLite: {e}")
                 traceback.print_exc()
-                text = str(df)
 
-            # Optional: compact whitespace
-            text = re.sub(r"\s{2,}", " ", text).strip()
+            # --- Also generate text representation for RAG/vector store ---
+            # Use a structured text format so the LLM has some context about the data
+            text_parts = []
+            pages = []
+            page_num = 1
+
+            for sheet_name, df in sheets.items():
+                # Drop fully empty rows
+                df = df.dropna(how="all")
+
+                # Normalize newlines inside cells
+                for col in df.select_dtypes(include=["object"]).columns:
+                    df[col] = df[col].apply(
+                        lambda x: str(x).replace("\n", " ") if isinstance(x, str) else x
+                    )
+
+                # Build a text summary: schema + data preview
+                col_info = ", ".join([f"{col} ({df[col].dtype})" for col in df.columns])
+                sheet_header = (
+                    f"=== Spreadsheet: {safe_file_name} | Sheet: {sheet_name} ===\n"
+                    f"Columns: {col_info}\n"
+                    f"Total rows: {len(df)}\n"
+                )
+
+                # Include the full data as compact JSON lines for RAG
+                try:
+                    data_text = df.to_json(orient="records", lines=True)
+                except Exception:
+                    data_text = str(df)
+
+                sheet_text = sheet_header + "\nData:\n" + data_text
+                sheet_text = re.sub(r"\s{2,}", " ", sheet_text).strip()
+
+                text_parts.append(sheet_text)
+                pages.append(Page(number=page_num, text=sheet_text))
+                page_num += 1
+
+            full_text = "\n\n".join(text_parts)
+
+            # Get the schema info to store with the document
+            schema = SQLiteManager.get_schema(user_id, thread_id)
 
             await safe_emit(
                 f"{user_id}/progress",
@@ -244,9 +290,11 @@ async def extract_document(
                 id=doc_id,
                 type="spreadsheet",
                 file_name=safe_file_name,
-                content=[Page(number=1, text=text)],
+                content=pages,
                 title=title,
-                full_text=text,
+                full_text=full_text,
+                has_sql_data=True,
+                spreadsheet_schema=schema,
             )
 
         except Exception as e:

@@ -3,12 +3,12 @@ from core.config import settings
 
 # SETTINGS
 SWITCHES = {
-    "MIND_MAP": True,  # For long documents, mind map will be better if SUMMARIZATION = True
+    "MIND_MAP": False,  # For long documents, mind map will be better if SUMMARIZATION = True
     # For Cpu based testing we suggest to keep both False to avoid much load on CPU
-    "SUMMARIZATION": True,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
-    "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
+    "SUMMARIZATION": False,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
+    "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
-    "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
+    "DECOMPOSITION": False,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
 
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
@@ -40,7 +40,7 @@ GPU_INSIGHTS_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 IMAGE_PARSER_LLM = "gemma3:12b"
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
-FALLBACK_GEMINI_MODEL = "gemini-2.0-flash"
+FALLBACK_GEMINI_MODEL = "gemini-2.5-flash"
 
 # Used if SWITCHES["FALLBACK_TO_OPENAI"] = True
 FALLBACK_OPENAI_MODEL = "gpt-4o-mini"
@@ -55,6 +55,8 @@ FAILURE = "failure"
 GLOBAL_SUMMARIZER = "global_summarizer"
 DOCUMENT_SUMMARIZER = "document_summarizer"
 SELF_KNOWLEDGE = "self_knowledge"
+SQL_QUERY = "sql_query"
 MAX_WEB_SEARCH = 2
+MAX_SQL_RETRIES = 3
 INTERNAL = "Internal"
 EXTERNAL = "External"

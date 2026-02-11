@@ -13,6 +13,8 @@ from core.database import db
 from core.utils.extra_done_check import is_extra_done
 from core.constants import GPU_QUERY_LLM, GPU_QUERY_LLM2, INTERNAL, EXTERNAL, SWITCHES
 from agent.tools.search import search_tavily as search_tool
+from agent.tools.sql_query import get_sql_schema
+from core.services.sqlite_manager import SQLiteManager
 from typing import Literal
 
 router = APIRouter(prefix="/query", tags=["query"])
@@ -59,6 +61,14 @@ async def query(request: Request, body: QueryRequest):
             messages.append(HumanMessage(content=message["content"]))
         elif message["type"] == "agent":
             messages.append(AIMessage(content=message["content"]))
+
+    # Check if spreadsheet data is available for this thread
+    has_spreadsheet = SQLiteManager.has_spreadsheet_data(user_id, thread_id)
+    spreadsheet_schema = None
+    if has_spreadsheet:
+        spreadsheet_schema = get_sql_schema(user_id, thread_id)
+        print(f"[SQL] Spreadsheet data available for thread {thread_id}")
+
     ds = time.time()
     if SWITCHES["DECOMPOSITION"]:
         decomposition_result: DecompositionLLMOutput = await decomposition_node(
@@ -101,6 +111,8 @@ async def query(request: Request, body: QueryRequest):
                         initial_search_results=query_data["results"] or [],
                         mode=mode,
                         use_self_knowledge=use_self_knowledge,
+                        has_spreadsheet_data=has_spreadsheet,
+                        spreadsheet_schema=spreadsheet_schema,
                     )
                 )
 
@@ -263,6 +275,8 @@ async def query(request: Request, body: QueryRequest):
                 initial_search_answer=search_result.get("answer", ""),
                 initial_search_results=search_result.get("results", []),
                 use_self_knowledge=use_self_knowledge,
+                has_spreadsheet_data=has_spreadsheet,
+                spreadsheet_schema=spreadsheet_schema,
             )
         )
 
