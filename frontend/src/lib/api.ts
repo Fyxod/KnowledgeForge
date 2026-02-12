@@ -372,7 +372,9 @@ export const api = {
     });
 
     if (!response.ok) {
-      throw new Error('Invalid email or password');
+      const errorData = await response.json();
+      const errorMessage = errorData.detail || 'Invalid email or password';
+      throw new Error(errorMessage);
     }
 
     return response.json();
@@ -402,7 +404,15 @@ export const api = {
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
-    return response.json();
+    
+    const json = await response.json();
+    
+    if (!response.ok || json.error) {
+      const errorMessage = json.error || json.detail || 'Failed to upload files';
+      throw new Error(errorMessage);
+    }
+    
+    return json;
   },
 
 
@@ -467,6 +477,14 @@ export const api = {
         xhr.onload = () => {
           try {
             const json: UploadResponse = JSON.parse(xhr.responseText);
+            
+            // Check for errors in response
+            if (xhr.status >= 400 || (json as any).error) {
+              const errorMessage = (json as any).error || (json as any).detail || 'Failed to upload file';
+              reject(new Error(errorMessage));
+              return;
+            }
+            
             if (!results.thread_id && json.thread_id) {
               results.thread_id = json.thread_id;
             }
@@ -504,6 +522,12 @@ export const api = {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
+    
+    if (!response.ok || data.error) {
+      const errorMessage = data.error || data.detail || 'Failed to load thread';
+      throw new Error(errorMessage);
+    }
+    
     return data.thread;
   },
 
@@ -527,7 +551,15 @@ export const api = {
         use_self_knowledge: useSelfKnowledge,
       }),
     });
-    return response.json();
+    
+    const data = await response.json();
+    
+    if (!response.ok || data.error) {
+      const errorMessage = data.error || data.detail || 'Failed to get response';
+      throw new Error(errorMessage);
+    }
+    
+    return data;
   },
 
   async deleteThread(threadId: string): Promise<{ status: boolean }> {
@@ -566,7 +598,9 @@ export const api = {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to delete chat');
+      const errorData = await response.json();
+      const errorMessage = errorData.error || errorData.detail || 'Failed to delete chat';
+      throw new Error(errorMessage);
     }
 
     return response.json();
@@ -582,7 +616,9 @@ export const api = {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to clear chats');
+      const errorData = await response.json();
+      const errorMessage = errorData.error || errorData.detail || 'Failed to clear chats';
+      throw new Error(errorMessage);
     }
 
     return response.json();

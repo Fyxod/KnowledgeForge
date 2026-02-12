@@ -37,7 +37,8 @@ const Login = () => {
   toast.success('Login successful!');
   navigate(SIM_PAGE_ENABLED ? '/sim' : '/dashboard');
     } catch (error) {
-      toast.error('Invalid email or password');
+      const errorMessage = error instanceof Error ? error.message : 'Invalid email or password';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

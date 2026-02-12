@@ -143,7 +143,8 @@ const ThreadView = () => {
       });
     } catch (error) {
       if (!options?.suppressErrorToast) {
-        toast.error('Failed to load thread');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load thread';
+        toast.error(errorMessage);
       }
     }
   };
@@ -178,7 +179,8 @@ const ThreadView = () => {
       toast.error('Failed to delete message');
       await loadThread({ suppressErrorToast: true });
     } catch (error) {
-      toast.error('Failed to delete message');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete message';
+      toast.error(errorMessage);
       await loadThread({ suppressErrorToast: true });
     }
   };
@@ -212,7 +214,8 @@ const ThreadView = () => {
         await loadThread({ suppressErrorToast: true });
       }
     } catch (error) {
-      toast.error('Failed to clear messages');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to clear messages';
+      toast.error(errorMessage);
       await loadThread({ suppressErrorToast: true });
     } finally {
       setClearConfirmOpen(false);
@@ -274,7 +277,8 @@ const ThreadView = () => {
       setProgressMap({});
       setEditingIndex(null);
     } catch (error) {
-      toast.error('Failed to upload files');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload files';
+      toast.error(errorMessage);
     } finally {
       setUploading(false);
     }
@@ -340,7 +344,8 @@ const ThreadView = () => {
         webUsed,
       });
     } catch (error) {
-      toast.error('Failed to get response');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
+      toast.error(errorMessage);
       setChats(prev => {
         const updated = prev.slice(0, -2);
         updateUserThreadState(updated, { updatedAt: new Date().toISOString() });

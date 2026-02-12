@@ -84,7 +84,8 @@ const NewThread = () => {
       }
       navigate(`/dashboard/threads/${response.thread_id}`);
     } catch (error) {
-      toast.error('Failed to create thread');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create thread';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
