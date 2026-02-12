@@ -27,7 +27,10 @@ const Register = () => {
         toast.success('Account created successfully!');
         navigate('/login');
       } else {
-        toast.error('Registration failed. Please try again.');
+        // Parse the error response to get the actual error message
+        const errorData = await response.json();
+        const errorMessage = errorData.detail || 'Registration failed. Please try again.';
+        toast.error(errorMessage);
       }
     } catch (error) {
       toast.error('An error occurred. Please try again.');
