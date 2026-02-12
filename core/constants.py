@@ -6,7 +6,7 @@ SWITCHES = {
     "MIND_MAP": False,  # For long documents, mind map will be better if SUMMARIZATION = True
     # For Cpu based testing we suggest to keep both False to avoid much load on CPU
     "SUMMARIZATION": False,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
-    "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
+    "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
@@ -19,7 +19,7 @@ CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
 PORT1 = 11434  # port where ollama is running
 PORT2 = 11435  # port where second ollama instance is running
 
-MAIN_MODEL = settings.MAIN_MODEL
+MAIN_MODEL = settings.MAIN_MODEL # Set in .env file, e.g. "gpt-oss:20b-50k-8k" or "qwen3:14b-39500-8k"
 # MAIN_MODEL = "gpt-oss:20b-50k-8k"
 # QWEN3_14B = "qwen3:14b-39500-8k"
 

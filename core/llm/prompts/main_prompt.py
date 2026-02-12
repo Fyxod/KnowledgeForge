@@ -198,14 +198,23 @@ def main_prompt(
                     "- Use aggregate functions like COUNT(), SUM(), AVG(), MIN(), MAX() for calculations.\n"
                     "- Use GROUP BY and ORDER BY for grouping and sorting.\n"
                     "- Use WHERE clauses to filter data.\n"
+                    "- Use LIKE with wildcards for partial text matching (e.g., WHERE column LIKE '%keyword%').\n"
                     "- Column names and table names are case-sensitive and use underscores instead of spaces.\n"
                     "- Only SELECT queries are allowed (no INSERT, UPDATE, DELETE).\n"
-                    "- **CRITICAL**: For ANY question about counts, averages, sums, filtering, ranking, sorting, "
-                    "or any numerical/analytical operation on spreadsheet data, you MUST use the `sql_query` action. "
-                    "NEVER attempt to compute these from text chunks — text chunks contain incomplete data and will give wrong results. "
-                    "The SQL database has ALL the data and will give exact results.\n"
+                    "- **CRITICAL — SQL-FIRST RULE**: For ANY question whose answer could exist in the spreadsheet tables above, "
+                    "you MUST use the `sql_query` action. This includes but is NOT limited to:\n"
+                    "  * Looking up a specific person's details (address, email, phone, etc.)\n"
+                    "  * Finding or listing records that match a condition (e.g., students from a state, employees in a department)\n"
+                    "  * Searching for a name, value, or keyword in the data\n"
+                    "  * Counting, summing, averaging, ranking, or any aggregation\n"
+                    "  * Filtering, sorting, or comparing rows\n"
+                    "  * ANY data retrieval from tabular/spreadsheet content\n"
+                    "  NEVER answer from text chunks when the question relates to spreadsheet data — "
+                    "text chunks are incomplete fragments and WILL give wrong or partial results. "
+                    "The SQL database contains ALL rows and ALL columns and will give exact, complete results.\n"
                     "- Always provide the `sql_query` field in your response when choosing the `sql_query` action.\n"
-                    "- Even if you see some spreadsheet data in the document chunks, ALWAYS prefer `sql_query` for analytical questions.\n"
+                    "- Even if you see some spreadsheet data in the document chunks, ALWAYS use `sql_query` instead. "
+                    "The document chunks are only text previews and do NOT contain the full dataset.\n"
                 ),
             }
         )
@@ -229,8 +238,10 @@ def main_prompt(
     sql_action_text = ""
     if spreadsheet_schema:
         sql_action_text = (
-            "- **sql_query**: Execute a SQL SELECT query against spreadsheet data to get precise numerical answers "
-            "(counts, averages, sums, filtering, etc.). Requires the `sql_query` field with a valid SQLite SELECT statement.\n"
+            "- **sql_query**: Execute a SQL SELECT query against the spreadsheet data. Use this for ANY question "
+            "that can be answered from the uploaded spreadsheet/CSV files — including lookups, searches, filters, "
+            "aggregations, listings, and data retrieval. Requires the `sql_query` field with a valid SQLite SELECT statement. "
+            "**This should be your DEFAULT choice whenever the question relates to spreadsheet data.**\n"
         )
 
     contents.append(

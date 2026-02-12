@@ -15,8 +15,10 @@ class MainLLMOutputInternal(BaseModel):
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
-        "sql_query",  # execute a SQL query against spreadsheet data
-    ] = Field(description="The action to take based on the answer.")
+        "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
+    ] = Field(
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data."
+    )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
         description="List of chunks used to generate the answer, if applicable.",
@@ -37,8 +39,10 @@ class MainLLMOutputInternalWithFailure(BaseModel):
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
         "failure",
-        "sql_query",  # execute a SQL query against spreadsheet data
-    ] = Field(description="The action to take based on the answer.")
+        "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
+    ] = Field(
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data."
+    )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
         description="List of chunks used to generate the answer, if applicable.",
@@ -60,8 +64,10 @@ class MainLLMOutputExternal(BaseModel):
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
         "failure",
-        "sql_query",  # execute a SQL query against spreadsheet data
-    ] = Field(description="The action to take based on the answer.")
+        "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
+    ] = Field(
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data."
+    )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
         description="List of chunks used to generate the answer, if applicable.",

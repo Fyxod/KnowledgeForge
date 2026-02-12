@@ -49,13 +49,18 @@ When is decomposition REQUIRED?
 When is decomposition NOT REQUIRED?
     • A single, factual information need.
     • Ambiguous queries needing clarification rather than splitting.
-    • **CRITICAL**: If the user's question involves numerical analysis, aggregation, filtering, counting, averaging, summing, or any statistical operation on spreadsheet/tabular data, do NOT decompose. These questions MUST remain as a single query so that a SQL engine can answer them in one operation. Decomposing them causes partial, incorrect answers.
+    • **CRITICAL**: If the user's question can be answered by querying spreadsheet/tabular data (via SQL), do NOT decompose.
+      This includes: lookups, searches, filters, aggregations, listings, counting, averaging, summing, or any data retrieval from spreadsheet content.
+      These questions MUST remain as a single query so that a SQL engine can answer them in one operation. Decomposing them causes partial, incorrect answers.
       Examples that must NOT be decomposed:
         - "What is the average salary of engineers?"
         - "How many students scored above 90%?"
         - "What is the total revenue by region?"
         - "Give the count of rows where status is active."
-        - "What is the average of the 10th percentage of all CSE students?"
+        - "What is the address of John?"
+        - "List all students from Haryana."
+        - "What is the phone number of employee X?"
+        - "Show me all records where department is HR."
 
 ⸻
 
@@ -223,8 +228,8 @@ Respond ONLY with valid JSON. Do not include explanations, reasoning, or extra t
         spreadsheet_note = """
 
 **IMPORTANT: Spreadsheet SQL Data Available**
-The user has uploaded spreadsheet files (Excel/CSV). A SQL engine is available to answer numerical/analytical questions on this data.
-For ANY question that involves numerical computation, aggregation, counting, averaging, filtering, or statistical analysis on spreadsheet data, set requires_decomposition to FALSE. The SQL engine handles this as a single query far more accurately than splitting into sub-questions.
+The user has uploaded spreadsheet files (Excel/CSV). A SQL engine is available to answer questions on this data.
+For ANY question that can be answered from the spreadsheet data — including lookups, searches, filters, data retrieval, aggregations, counting, or statistical analysis — set requires_decomposition to FALSE. The SQL engine handles this as a single query far more accurately than splitting into sub-questions.
 """
         if spreadsheet_schema:
             spreadsheet_note += (
