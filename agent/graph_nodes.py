@@ -288,12 +288,8 @@ async def sql_query_node(state: AgentState) -> AgentState:
             query=query,
         )
         state.sql_result = result
-        state.messages.append(
-            HumanMessage(content=f"SQL query executed: {query}")
-        )
-        state.messages.append(
-            AIMessage(content=f"SQL Result:\n{result}")
-        )
+        state.messages.append(HumanMessage(content=f"SQL query executed: {query}"))
+        state.messages.append(AIMessage(content=f"SQL Result:\n{result}"))
         print(f"[sql_query_node] Query result length: {len(result)} chars")
     except Exception as e:
         error_msg = f"SQL execution error: {str(e)}"

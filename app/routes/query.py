@@ -72,7 +72,10 @@ async def query(request: Request, body: QueryRequest):
     ds = time.time()
     if SWITCHES["DECOMPOSITION"]:
         decomposition_result: DecompositionLLMOutput = await decomposition_node(
-            question, messages
+            question,
+            messages,
+            has_spreadsheet_data=has_spreadsheet,
+            spreadsheet_schema=spreadsheet_schema,
         )
     else:
         decomposition_result = DecompositionLLMOutput(

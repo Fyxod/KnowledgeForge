@@ -200,9 +200,12 @@ def main_prompt(
                     "- Use WHERE clauses to filter data.\n"
                     "- Column names and table names are case-sensitive and use underscores instead of spaces.\n"
                     "- Only SELECT queries are allowed (no INSERT, UPDATE, DELETE).\n"
-                    "- For questions about counts, averages, sums, or any numerical analysis of spreadsheet data, "
-                    "ALWAYS use the `sql_query` action instead of trying to compute from the text chunks.\n"
+                    "- **CRITICAL**: For ANY question about counts, averages, sums, filtering, ranking, sorting, "
+                    "or any numerical/analytical operation on spreadsheet data, you MUST use the `sql_query` action. "
+                    "NEVER attempt to compute these from text chunks — text chunks contain incomplete data and will give wrong results. "
+                    "The SQL database has ALL the data and will give exact results.\n"
                     "- Always provide the `sql_query` field in your response when choosing the `sql_query` action.\n"
+                    "- Even if you see some spreadsheet data in the document chunks, ALWAYS prefer `sql_query` for analytical questions.\n"
                 ),
             }
         )

@@ -1,7 +1,13 @@
 import json
+from typing import Optional
 
 
-def decomposition_prompt(recent_history: list, question: str):
+def decomposition_prompt(
+    recent_history: list,
+    question: str,
+    has_spreadsheet_data: bool = False,
+    spreadsheet_schema: Optional[str] = None,
+):
     contents = []
     for msg in recent_history:
         if msg.type == "human":
@@ -43,6 +49,13 @@ When is decomposition REQUIRED?
 When is decomposition NOT REQUIRED?
     • A single, factual information need.
     • Ambiguous queries needing clarification rather than splitting.
+    • **CRITICAL**: If the user's question involves numerical analysis, aggregation, filtering, counting, averaging, summing, or any statistical operation on spreadsheet/tabular data, do NOT decompose. These questions MUST remain as a single query so that a SQL engine can answer them in one operation. Decomposing them causes partial, incorrect answers.
+      Examples that must NOT be decomposed:
+        - "What is the average salary of engineers?"
+        - "How many students scored above 90%?"
+        - "What is the total revenue by region?"
+        - "Give the count of rows where status is active."
+        - "What is the average of the 10th percentage of all CSE students?"
 
 ⸻
 
@@ -205,9 +218,23 @@ Respond ONLY with valid JSON. Do not include explanations, reasoning, or extra t
 
 """
 
+    spreadsheet_note = ""
+    if has_spreadsheet_data:
+        spreadsheet_note = """
+
+**IMPORTANT: Spreadsheet SQL Data Available**
+The user has uploaded spreadsheet files (Excel/CSV). A SQL engine is available to answer numerical/analytical questions on this data.
+For ANY question that involves numerical computation, aggregation, counting, averaging, filtering, or statistical analysis on spreadsheet data, set requires_decomposition to FALSE. The SQL engine handles this as a single query far more accurately than splitting into sub-questions.
+"""
+        if spreadsheet_schema:
+            spreadsheet_note += (
+                f"\nAvailable SQL tables:\n```\n{spreadsheet_schema}\n```\n"
+            )
+
     full_prompt = (
         system_prompt
         + examples
+        + spreadsheet_note
         + """
 
 ⸻

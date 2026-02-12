@@ -8,7 +8,7 @@ SWITCHES = {
     "SUMMARIZATION": False,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
     "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
-    "DECOMPOSITION": False,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
+    "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
 
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
