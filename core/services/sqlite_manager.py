@@ -15,6 +15,22 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
+def _clean_dataframe_unicode(df: pd.DataFrame) -> pd.DataFrame:
+    """Strip \u00a0, zero-width chars, and other unicode whitespace from all string cells."""
+    for col in df.columns:
+        if df[col].dtype == object or str(df[col].dtype) == "string":
+            df[col] = df[col].apply(
+                lambda x: (
+                    re.sub(r"[\u00a0\u200b\u200c\u200d\ufeff\xa0]+", " ", str(x))
+                    .replace("\n", " ")
+                    .strip()
+                    if isinstance(x, str) and str(x) != "nan"
+                    else x
+                )
+            )
+    return df
+
+
 class SQLiteManager:
     """
     Manages SQLite databases for spreadsheet data.
@@ -101,6 +117,8 @@ class SQLiteManager:
         try:
             if ext == ".csv":
                 df = pd.read_csv(file_path)
+                # Clean unicode whitespace from all cells
+                df = _clean_dataframe_unicode(df)
                 # Clean column names
                 df.columns = [cls._sanitize_column_name(c) for c in df.columns]
                 df = df.convert_dtypes()
@@ -121,6 +139,9 @@ class SQLiteManager:
 
                 for sheet_name in xls.sheet_names:
                     df = pd.read_excel(xls, sheet_name=sheet_name)
+
+                    # Clean unicode whitespace from all cells
+                    df = _clean_dataframe_unicode(df)
 
                     # Clean column names
                     df.columns = [cls._sanitize_column_name(c) for c in df.columns]

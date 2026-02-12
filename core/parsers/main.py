@@ -249,28 +249,86 @@ async def extract_document(
                 # Drop fully empty rows
                 df = df.dropna(how="all")
 
-                # Normalize newlines inside cells
-                for col in df.select_dtypes(include=["object"]).columns:
-                    df[col] = df[col].apply(
-                        lambda x: str(x).replace("\n", " ") if isinstance(x, str) else x
-                    )
+                # --- Clean unicode whitespace (non-breaking spaces etc.) ---
+                # Apply to ALL columns: replace \u00a0 and other unicode whitespace
+                for col in df.columns:
+                    if df[col].dtype == object or str(df[col].dtype) == "string":
+                        df[col] = df[col].apply(
+                            lambda x: (
+                                re.sub(
+                                    r"[\u00a0\u200b\u200c\u200d\ufeff\xa0]+",
+                                    " ",
+                                    str(x),
+                                )
+                                .replace("\n", " ")
+                                .strip()
+                                if isinstance(x, str) and str(x) != "nan"
+                                else x
+                            )
+                        )
 
-                # Build a text summary: schema + data preview
-                col_info = ", ".join([f"{col} ({df[col].dtype})" for col in df.columns])
+                # --- Fix "Unnamed" columns ---
+                # Replace 'Unnamed: N' column headers with something more useful
+                new_cols = []
+                for i, col in enumerate(df.columns):
+                    col_str = str(col)
+                    # Clean non-breaking spaces from column names too
+                    col_str = re.sub(r"[\u00a0\xa0]+", " ", col_str).strip()
+                    if col_str.startswith("Unnamed"):
+                        # Try to use the first non-null value in the column as a hint
+                        first_val = df.iloc[:, i].dropna().head(1)
+                        if not first_val.empty:
+                            hint = str(first_val.iloc[0]).strip()
+                            hint = re.sub(r"[\u00a0\xa0]+", " ", hint).strip()
+                            # Only use as column name if it looks like a header (short text)
+                            if (
+                                hint
+                                and len(hint) < 50
+                                and not hint.replace(".", "").replace(",", "").isdigit()
+                            ):
+                                col_str = hint
+                            else:
+                                col_str = f"Column_{i}"
+                        else:
+                            col_str = f"Column_{i}"
+                    new_cols.append(col_str)
+                df.columns = new_cols
+
+                # Drop columns that are entirely NaN or empty
+                df = df.dropna(axis=1, how="all")
+
+                # Replace NaN with empty string for cleaner text output
+                df = df.fillna("")
+
+                # Remove rows where all values are empty strings
+                df = df[
+                    df.apply(lambda row: any(str(v).strip() != "" for v in row), axis=1)
+                ]
+
+                # Build a text summary: schema + data
+                col_info = ", ".join([str(col) for col in df.columns])
                 sheet_header = (
                     f"=== Spreadsheet: {safe_file_name} | Sheet: {sheet_name} ===\n"
                     f"Columns: {col_info}\n"
                     f"Total rows: {len(df)}\n"
                 )
 
-                # Include the full data as compact JSON lines for RAG
+                # Use markdown table for RAG — much more readable for the LLM
                 try:
-                    data_text = df.to_json(orient="records", lines=True)
+                    data_text = df.to_markdown(index=False)
                 except Exception:
-                    data_text = str(df)
+                    # Fallback: try to_string which is still more readable than JSON
+                    try:
+                        data_text = df.to_string(index=False)
+                    except Exception:
+                        data_text = str(df)
+
+                # Final cleanup: remove any remaining \u00a0 from the output
+                data_text = re.sub(r"[\u00a0\xa0]+", " ", data_text)
 
                 sheet_text = sheet_header + "\nData:\n" + data_text
-                sheet_text = re.sub(r"\s{2,}", " ", sheet_text).strip()
+                # Collapse excessive whitespace but preserve single newlines for table rows
+                sheet_text = re.sub(r"[^\S\n]{2,}", " ", sheet_text).strip()
 
                 text_parts.append(sheet_text)
                 pages.append(Page(number=page_num, text=sheet_text))
