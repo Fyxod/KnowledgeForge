@@ -293,7 +293,7 @@ class SQLiteManager:
         try:
             df = pd.read_sql_query(query, conn)
             # Limit output to avoid overwhelming the LLM
-            max_rows = 100
+            max_rows = 500
             truncated = len(df) > max_rows
             if truncated:
                 result_df = df.head(max_rows)
