@@ -4,42 +4,23 @@ services:
   notebook:
     image: samsung:latest
     container_name: samsung
+    network_mode: host
     env_file:
       - .env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "8080:8080"
-      - "8000:8000"
     volumes:
       - ./data:/backend/data
     depends_on:
       mongo:
         condition: service_started
     restart: unless-stopped
-    networks:
-      - app-network
 
   mongo:
     image: mongo:latest
     container_name: mongodb
-    ports:
-      - "27017:27017"
+    network_mode: host
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
-    networks:
-      - app-network
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 40s
-
-networks:
-  app-network:
-    driver: bridge
 
 volumes:
   mongo_data:

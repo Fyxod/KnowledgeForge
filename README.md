@@ -37,3 +37,20 @@ For windows setup instructions please refer to [Windows_README.md](Windows_READM
    ```bash
    make run 
     ```
+
+# Accessing the Application
+Once the application is running, you can access it by navigating to  [http://localhost:8080](http://localhost:8080) in your web browser.
+
+# Additional Notes
+- Ensure that you have the necessary API keys and configurations set up in the `.env` file before running the application.
+- PORTS:
+   - Ollama Server: 11434
+   - Ollama Server: 114345
+   - Application-frontend: 8080
+   - Application-backend: 8000
+
+
+<!-- next task
+   - add a account setting page to modify constants and other settings
+   - add flags to docker to make a local build or a production build
+    -->
