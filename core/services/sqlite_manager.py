@@ -1,5 +1,3 @@
-# MAYBE LIMIT THE NO OF RESULT ROWS RETURNED TO 50 (cURRENTLY - 100) TO SAVE TOKEN COUNT
-
 """
 SQLite Manager for Excel/CSV Data
 Manages per-user, per-thread in-memory SQLite databases that store
@@ -295,7 +293,7 @@ class SQLiteManager:
         try:
             df = pd.read_sql_query(query, conn)
             # Limit output to avoid overwhelming the LLM
-            max_rows = 100
+            max_rows = 500
             truncated = len(df) > max_rows
             if truncated:
                 result_df = df.head(max_rows)
