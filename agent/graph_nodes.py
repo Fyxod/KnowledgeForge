@@ -47,7 +47,7 @@ async def retriever(state: AgentState) -> AgentState:
     )
     end_time = time.time()
     print(
-        f"Retrieved {len(retrieved_docs)} documents in {end_time - start_time:.2f} seconds for user {state.user_id}"
+        f"Retrieved {len(retrieved_docs)} chunks in {end_time - start_time:.2f} seconds for user {state.user_id}"
     )
     retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
     modified_docs = []

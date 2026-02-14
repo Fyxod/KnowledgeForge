@@ -42,3 +42,4 @@ tiktoken
 numpy
 opencv-python-headless
 pdf2image
+easyocr

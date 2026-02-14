@@ -6,7 +6,7 @@ import httpx
 from PIL import Image
 import pytesseract
 import easyocr
-# from paddleocr import PaddleOCR
+# from paddleocr import PaddleOCR # Disabled due to dependency conflicts
 from core.constants import IMAGE_PARSER_LLM
 from core.config import settings
 import os
