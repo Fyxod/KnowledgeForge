@@ -19,9 +19,108 @@ from core.services.sqlite_manager import SQLiteManager
 from pptx import Presentation
 import traceback
 import olefile
+import xml.etree.ElementTree as ET
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
+SMARTART_URI = "http://schemas.openxmlformats.org/drawingml/2006/diagram"
+XML_NAMESPACES = {
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+}
+
+
+def _clean_ppt_text(text: str) -> str:
+    if not text:
+        return ""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _extract_table_block(shape) -> str:
+    if not getattr(shape, "has_table", False):
+        return ""
+
+    try:
+        table_rows = []
+        for row in shape.table.rows:
+            row_cells = [_clean_ppt_text(cell.text) for cell in row.cells]
+            if any(row_cells):
+                table_rows.append(" | ".join(row_cells))
+
+        if not table_rows:
+            return ""
+
+        table_text = "\n".join(table_rows)
+        return f"[Table]\n{table_text}\n[/Table]"
+    except Exception:
+        traceback.print_exc()
+        return ""
+
+
+def _extract_smartart_text_from_xml(xml_blob: bytes) -> list[str]:
+    try:
+        root = ET.fromstring(xml_blob)
+    except Exception:
+        traceback.print_exc()
+        return []
+
+    texts = []
+    for node in root.findall(".//a:t", XML_NAMESPACES):
+        cleaned = _clean_ppt_text(node.text or "")
+        if cleaned:
+            texts.append(cleaned)
+    return texts
+
+
+def _extract_smartart_block(shape, slide_part) -> str:
+    try:
+        graphic_data = shape.element.find(".//a:graphicData", XML_NAMESPACES)
+        if graphic_data is None or graphic_data.get("uri") != SMARTART_URI:
+            return ""
+
+        smartart_lines = []
+
+        # Text can exist inline in the shape XML for some decks.
+        for node in shape.element.findall(".//a:t", XML_NAMESPACES):
+            cleaned = _clean_ppt_text(node.text or "")
+            if cleaned:
+                smartart_lines.append(cleaned)
+
+        # For native SmartArt, text is often in related diagram parts.
+        rel_ids = graphic_data.find(".//dgm:relIds", XML_NAMESPACES)
+        if rel_ids is not None:
+            rel_keys = (
+                "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}dm",
+                "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}qs",
+                "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}cs",
+                "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}lo",
+            )
+            for rel_key in rel_keys:
+                rel_id = rel_ids.get(rel_key)
+                if not rel_id:
+                    continue
+
+                try:
+                    rel = slide_part.rels[rel_id]
+                except Exception:
+                    continue
+
+                target_part = getattr(rel, "target_part", None)
+                xml_blob = getattr(target_part, "blob", None)
+                if not xml_blob:
+                    continue
+                smartart_lines.extend(_extract_smartart_text_from_xml(xml_blob))
+
+        # Deduplicate while preserving order.
+        deduped_lines = list(dict.fromkeys(smartart_lines))
+        if not deduped_lines:
+            return ""
+
+        return "[SmartArt Diagram]\n" + "\n".join(deduped_lines) + "\n[/SmartArt Diagram]"
+    except Exception:
+        traceback.print_exc()
+        return ""
 
 
 def extract_text_from_doc(path: str) -> str:
@@ -413,11 +512,20 @@ async def extract_document(
                 slide_text = []
                 for shape in slide.shapes:
                     try:
-                        if (
-                            hasattr(shape, "text")
-                            and getattr(shape, "text", "").strip()
-                        ):
-                            slide_text.append(shape.text.strip())
+                        table_block = _extract_table_block(shape)
+                        if table_block:
+                            slide_text.append(table_block)
+                            continue
+
+                        smartart_block = _extract_smartart_block(shape, slide.part)
+                        if smartart_block:
+                            slide_text.append(smartart_block)
+                            continue
+
+                        if hasattr(shape, "text"):
+                            cleaned_text = _clean_ppt_text(getattr(shape, "text", ""))
+                            if cleaned_text:
+                                slide_text.append(cleaned_text)
                     except Exception:
                         traceback.print_exc()
                 page_text = "\n".join(slide_text)
