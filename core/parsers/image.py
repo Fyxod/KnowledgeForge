@@ -6,7 +6,7 @@ import httpx
 from PIL import Image
 import pytesseract
 import easyocr
-from paddleocr import PaddleOCR
+# from paddleocr import PaddleOCR
 from core.constants import IMAGE_PARSER_LLM
 from core.config import settings
 import os
@@ -230,31 +230,20 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
         if gemma_result:
             return gemma_result.strip()
 
-    # Fall back to PaddleOCR (excellent for flowcharts/diagrams/tables)
+    # fallback to EasyOCR (better than Tesseract for tables)
+    # PaddleOCR disabled due to dependency conflicts
     try:
         if gemma:
             if REMOTE_GPU:
                 print(
-                    f"Gemma[Remote] failed for {os.path.basename(image_path)}, falling back to PaddleOCR"
+                    f"Gemma[Remote] failed for {os.path.basename(image_path)}, falling back to EasyOCR"
                 )
             else:
                 print(
-                    f"Gemma[Local] failed for {os.path.basename(image_path)}, falling back to PaddleOCR"
+                    f"Gemma[Local] failed for {os.path.basename(image_path)}, falling back to EasyOCR"
                 )
 
-        print(f"Processing image: {os.path.basename(image_path)} with PaddleOCR")
-        paddleocr_result = await paddleocr_parse()
-        if paddleocr_result and paddleocr_result.strip():
-            return paddleocr_result.strip()
-
-    except Exception as e:
-        print(f"[Fallback PaddleOCR] Exception: {e}")
-
-    # Fallback to EasyOCR (better than Tesseract for tables)
-    try:
-        print(
-            f"PaddleOCR failed or returned empty, falling back to EasyOCR for {os.path.basename(image_path)}"
-        )
+        print(f"Processing image: {os.path.basename(image_path)} with EasyOCR")
         easyocr_result = await easyocr_parse()
         if easyocr_result and easyocr_result.strip():
             return easyocr_result.strip()
@@ -262,7 +251,7 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
     except Exception as e:
         print(f"[Fallback EasyOCR] Exception: {e}")
 
-    # Final fallback to Tesseract
+    # final fallback to Tesseract
     try:
         print(
             f"EasyOCR failed or returned empty, falling back to Tesseract for {os.path.basename(image_path)}"
