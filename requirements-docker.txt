@@ -39,3 +39,6 @@ openpyxl
 tabulate
 olefile
 tiktoken
+opencv-python-headless
+pdf2image
+easyocr
