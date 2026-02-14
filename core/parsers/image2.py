@@ -6,6 +6,7 @@ import httpx
 from PIL import Image
 import pytesseract
 import easyocr
+from paddleocr import PaddleOCR
 # Lazy import PaddleOCR to avoid dependency conflicts
 # from paddleocr import PaddleOCR
 from core.constants import IMAGE_PARSER_LLM
@@ -81,9 +82,6 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
         """OCR using PaddleOCR - excellent for flowcharts/diagrams/tables."""
         global _PADDLEOCR_INSTANCE, _PADDLEOCR_LOCK
         try:
-            # Lazy import PaddleOCR to avoid dependency conflicts at startup
-            from paddleocr import PaddleOCR
-
             # Use cached PaddleOCR instance to avoid reinitialization
             async with _PADDLEOCR_LOCK:
                 if _PADDLEOCR_INSTANCE is None:
