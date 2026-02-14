@@ -283,3 +283,60 @@ async def export_and_ocr_ppt_with_fallback(
     except Exception as e:
         print(f"[Export] Exception in export_and_ocr_ppt_with_fallback: {e}")
         return []
+
+async def convert_ppt_to_pptx(ppt_path: str) -> Optional[str]:
+    """
+    Convert .ppt to .pptx using LibreOffice.
+    Returns new .pptx path or None if failed.
+    """
+
+    try:
+        if not ppt_path.lower().endswith(".ppt"):
+            return ppt_path  # Already pptx
+
+        libreoffice_cmd = get_libreoffice_command()
+        if not libreoffice_cmd:
+            print("[LibreOffice] Not found for PPT→PPTX conversion.")
+            return None
+
+        output_dir = os.path.dirname(ppt_path)
+
+        process = await asyncio.create_subprocess_exec(
+            libreoffice_cmd,
+            "--headless",
+            "--convert-to", "pptx",
+            "--outdir", output_dir,
+            ppt_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+        except asyncio.TimeoutError:
+            process.kill()
+            print("[LibreOffice] PPT→PPTX conversion timed out.")
+            return None
+
+        if process.returncode != 0:
+            print("[LibreOffice] PPT→PPTX conversion failed:")
+            print(stderr.decode())
+            return None
+
+        converted_path = os.path.splitext(ppt_path)[0] + ".pptx"
+
+        if os.path.exists(converted_path):
+            print(f"[LibreOffice] Converted to {converted_path}")
+            return converted_path
+
+        # Fallback: search directory
+        for f in os.listdir(output_dir):
+            if f.lower().endswith(".pptx"):
+                return os.path.join(output_dir, f)
+
+        return None
+
+    except Exception as e:
+        print(f"[LibreOffice] Exception during PPT→PPTX: {e}")
+        traceback.print_exc()
+        return None

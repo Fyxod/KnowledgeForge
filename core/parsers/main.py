@@ -16,7 +16,7 @@ from core.parsers.image import image_parser
 from core.models.document import Document, Page
 from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from core.services.sqlite_manager import SQLiteManager
-from core.parsers.slide_export import export_and_ocr_ppt_with_fallback
+from core.parsers.slide_export import convert_ppt_to_pptx, export_and_ocr_ppt_with_fallback
 from pptx import Presentation
 import traceback
 import olefile
@@ -492,6 +492,30 @@ async def extract_document(
 
     # --- Handle PowerPoint files ---
     if ext in {".ppt", ".pptx"}:
+
+        # If .ppt, convert to .pptx first
+        if ext == ".ppt":
+            await safe_emit(
+                f"{user_id}/progress",
+                {"message": f"Converting {safe_file_name} to modern PPTX format..."},
+            )
+
+            converted_path = await convert_ppt_to_pptx(file_path)
+
+            if not converted_path:
+                print(f"[Parser] Failed to convert {safe_file_name} to .pptx")
+                return None
+
+            # Remove the original .ppt file to save space, since we'll work with the converted .pptx from now on
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+            # Update file_path and ext to point to the new .pptx file for the rest of the processing
+            file_path = converted_path
+            ext = ".pptx"
+
         full_slide_ocr_results = []
         try:
             
@@ -512,6 +536,7 @@ async def extract_document(
             print(f"Error opening presentation {safe_file_name}: {e}")
             traceback.print_exc()
             return None
+
         pages = []
         combined_texts = []
         ocr_tasks = {}
