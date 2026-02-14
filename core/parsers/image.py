@@ -70,7 +70,7 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
         try:
             # Run EasyOCR in a thread pool to avoid blocking
             result = await asyncio.to_thread(
-                lambda: easyocr.Reader(['en'], gpu=True).readtext(image_path)
+                lambda: easyocr.Reader(["en"], gpu=True).readtext(image_path)
             )
             # Extract text maintaining order
             text_lines = [item[1] for item in result]
@@ -88,7 +88,9 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
                 if _PADDLEOCR_INSTANCE is None:
                     print("[PaddleOCR] Initializing PaddleOCR instance...")
                     _PADDLEOCR_INSTANCE = await asyncio.to_thread(
-                        lambda: PaddleOCR(use_angle_cls=True, lang='en', use_gpu=True, show_log=False)
+                        lambda: PaddleOCR(
+                            use_angle_cls=True, lang="en", use_gpu=True, show_log=False
+                        )
                     )
                     print("[PaddleOCR] Instance initialized successfully")
 
@@ -101,23 +103,21 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
 
             text_items = []
             for line in result[0]:
-                bbox = line[0] # Bounding box coordinates
-                text = line[1] [0] # Text content
-                confidence = line[1][1] # Confidence score
+                bbox = line[0]  # Bounding box coordinates
+                text = line[1][0]  # Text content
+                confidence = line[1][1]  # Confidence score
 
                 # Sort by Y position to maintain top-to-bottom flow
                 y_position = bbox[0][1]
 
-                text_items.append({
-                    "text": text,
-                    "y": y_position,
-                    "confidence": confidence
-                })
-                
+                text_items.append(
+                    {"text": text, "y": y_position, "confidence": confidence}
+                )
+
             # Sort by Y position to maintain flowchart structure
             text_items.sort(key=lambda x: x["y"])
 
-            #Extract test maintaining order
+            # Extract test maintaining order
             text_lines = [item["text"] for item in text_items]
             return "\n".join(text_lines)
 
@@ -153,7 +153,9 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
 
                     if response.status_code == 200:
                         payload = response.json()
-                        print(f"[Gemma][Remote] succeeded in {end_time - start_time:.2f} seconds")
+                        print(
+                            f"[Gemma][Remote] succeeded in {end_time - start_time:.2f} seconds"
+                        )
 
                         if isinstance(payload, dict) and "text" in payload:
                             return payload["text"]
@@ -202,7 +204,9 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
                     result = response.json()
                     text = result.get("completion") or result.get("response") or ""
 
-                    print(f"[Gemma][Local] succeeded in {end_time - start_time:.2f} seconds")
+                    print(
+                        f"[Gemma][Local] succeeded in {end_time - start_time:.2f} seconds"
+                    )
                     return text
 
                 except httpx.HTTPStatusError as e:
@@ -226,20 +230,31 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
         if gemma_result:
             return gemma_result.strip()
 
-    # fallback to EasyOCR (better than Tesseract for tables)
-    # PaddleOCR temporarily disabled due to dependency conflicts
+    # Fall back to PaddleOCR (excellent for flowcharts/diagrams/tables)
     try:
         if gemma:
             if REMOTE_GPU:
                 print(
-                    f"Gemma[Remote] failed for {os.path.basename(image_path)}, falling back to EasyOCR"
+                    f"Gemma[Remote] failed for {os.path.basename(image_path)}, falling back to PaddleOCR"
                 )
             else:
                 print(
-                    f"Gemma[Local] failed for {os.path.basename(image_path)}, falling back to EasyOCR"
+                    f"Gemma[Local] failed for {os.path.basename(image_path)}, falling back to PaddleOCR"
                 )
 
-        print(f"Processing image: {os.path.basename(image_path)} with EasyOCR")
+        print(f"Processing image: {os.path.basename(image_path)} with PaddleOCR")
+        paddleocr_result = await paddleocr_parse()
+        if paddleocr_result and paddleocr_result.strip():
+            return paddleocr_result.strip()
+
+    except Exception as e:
+        print(f"[Fallback PaddleOCR] Exception: {e}")
+
+    # Fallback to EasyOCR (better than Tesseract for tables)
+    try:
+        print(
+            f"PaddleOCR failed or returned empty, falling back to EasyOCR for {os.path.basename(image_path)}"
+        )
         easyocr_result = await easyocr_parse()
         if easyocr_result and easyocr_result.strip():
             return easyocr_result.strip()
@@ -247,11 +262,12 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
     except Exception as e:
         print(f"[Fallback EasyOCR] Exception: {e}")
 
-    # final fallback to Tesseract
+    # Final fallback to Tesseract
     try:
-        print(f"EasyOCR failed or returned empty, falling back to Tesseract for {os.path.basename(image_path)}")
+        print(
+            f"EasyOCR failed or returned empty, falling back to Tesseract for {os.path.basename(image_path)}"
+        )
         return (await asyncio.to_thread(tesseract_parse)).strip()
     except Exception as e:
         print(f"[Fallback Tesseract] Fatal exception: {e}")
         return ""
-
