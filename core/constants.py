@@ -15,6 +15,8 @@ SWITCHES = {
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
 }
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
+EASYOCR_WORKERS = 4  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
+TESSERACT_WORKERS = 50  # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
 
 PORT1 = 11434  # port where ollama is running
 PORT2 = 11435  # port where second ollama instance is running

@@ -18,71 +18,103 @@ import tempfile
 import shutil
 from pathlib import Path
 from typing import List, Optional
+import platform
+import shutil
 import asyncio
 import traceback
 from pdf2image import convert_from_path
 
 from core.parsers.image import image_parser
+from core.constants import EASYOCR_WORKERS
+
+
+def get_libreoffice_command() -> Optional[str]:
+    """
+    Detect LibreOffice executable cross-platform.
+    Returns full path if found, else None.
+    """
+
+    system = platform.system().lower()
+
+    if system == "windows":
+        possible_paths = [
+            r"C:\Program Files\LibreOffice\program\soffice.exe",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        ]
+
+        for path in possible_paths:
+            if os.path.exists(path):
+                return path
+
+        return shutil.which("soffice")
+
+    # Linux / macOS
+    return shutil.which("libreoffice") or shutil.which("soffice")
+
 
 
 async def export_ppt_to_pdf(ppt_path: str, output_dir: str) -> Optional[str]:
     """
-    Convert PowerPoint file to PDF using LibreOffice.
-
-    Args:
-        ppt_path: Path to the PowerPoint file
-        output_dir: Directory to save the PDF
-
-    Returns:
-        Path to the generated PDF, or None if conversion failed
+    Convert PowerPoint file to PDF using LibreOffice (async-safe).
     """
-    try:
-        # Check if LibreOffice is available
-        result = subprocess.run(
-            ["which", "libreoffice"],
-            capture_output=True,
-            text=True
-        )
 
-        if result.returncode != 0:
-            print("[LibreOffice] Not found. Please install LibreOffice:")
-            print("  sudo apt-get install libreoffice")
+    try:
+        if not os.path.exists(ppt_path):
+            print(f"[Export] File not found: {ppt_path}")
             return None
 
-        # Convert PPT to PDF
+        libreoffice_cmd = get_libreoffice_command()
+
+        if not libreoffice_cmd:
+            print("[LibreOffice] Not found. Please install LibreOffice.")
+            return None
+
         pdf_filename = Path(ppt_path).stem + ".pdf"
         pdf_path = os.path.join(output_dir, pdf_filename)
 
         print(f"[LibreOffice] Converting {ppt_path} to PDF...")
 
-        # Use LibreOffice headless mode to convert
-        result = subprocess.run(
-            [
-                "libreoffice",
-                "--headless",
-                "--convert-to", "pdf",
-                "--outdir", output_dir,
-                ppt_path,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=90  # 90 second timeout
+        process = await asyncio.create_subprocess_exec(
+            libreoffice_cmd,
+            "--headless",
+            "--nologo",
+            "--nolockcheck",
+            "--nodefault",
+            "--nofirststartwizard",
+            "--convert-to", "pdf",
+            "--outdir", output_dir,
+            ppt_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
 
-        if result.returncode != 0:
-            print(f"[LibreOffice] Conversion failed: {result.stderr}")
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+        except asyncio.TimeoutError:
+            process.kill()
+            print("[LibreOffice] Conversion timed out")
             return None
+
+        if process.returncode != 0:
+            print("[LibreOffice] Conversion failed:")
+            print(stderr.decode())
+            return None
+
+        # LibreOffice sometimes needs a moment to finish writing
+        await asyncio.sleep(1)
 
         if os.path.exists(pdf_path):
             print(f"[LibreOffice] Successfully converted to {pdf_path}")
             return pdf_path
-        else:
-            print(f"[LibreOffice] PDF file not created at {pdf_path}")
-            return None
 
-    except subprocess.TimeoutExpired:
-        print("[LibreOffice] Conversion timed out")
+        # Fallback: search directory for any pdf
+        for file in os.listdir(output_dir):
+            if file.lower().endswith(".pdf"):
+                return os.path.join(output_dir, file)
+
+        print("[LibreOffice] PDF not found after conversion")
         return None
+
     except Exception as e:
         print(f"[LibreOffice] Exception: {e}")
         return None
@@ -140,24 +172,24 @@ async def ocr_slide_images(image_paths: List[str]) -> List[str]:
     try:
         print(f"[OCR] Processing {len(image_paths)} slide images...")
 
-        # Process images in parallel
-        ocr_tasks = []
-        for image_path in image_paths:
-            task = asyncio.create_task(image_parser(image_path))
-            ocr_tasks.append(task)
+        results = []
+        semaphore = asyncio.Semaphore(EASYOCR_WORKERS)  # Max parallel OCR tasks
+
+        async def process_image(image_path: str, index: int) -> str:
+            async with semaphore:
+                try:
+                    result = await image_parser(image_path)
+                    print(f"[OCR] Successfully processed slide {index + 1}")
+                    return result
+                except Exception as e:
+                    print(f"[OCR] Error processing slide {index + 1}: {e}")
+                    return ""
+
+        # Create tasks for all images
+        ocr_tasks = [process_image(path, i) for i, path in enumerate(image_paths)]
 
         # Wait for all OCR tasks to complete
-        ocr_results = await asyncio.gather(*ocr_tasks, return_exceptions=True)
-
-        # Process results
-        results = []
-        for i, result in enumerate(ocr_results, start=1):
-            if isinstance(result, Exception):
-                print(f"[OCR] Error processing slide {i}: {result}")
-                results.append("")
-            else:
-                print(f"[OCR] Successfully processed slide {i}")
-                results.append(result)
+        results = await asyncio.gather(*ocr_tasks)
 
         return results
 

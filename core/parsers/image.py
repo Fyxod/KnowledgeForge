@@ -1,3 +1,4 @@
+import os
 import asyncio
 import base64
 import time
@@ -6,10 +7,10 @@ import httpx
 from PIL import Image
 import pytesseract
 import easyocr
+
 # from paddleocr import PaddleOCR # Disabled due to dependency conflicts
-from core.constants import IMAGE_PARSER_LLM
+from core.constants import IMAGE_PARSER_LLM, EASYOCR_WORKERS, TESSERACT_WORKERS
 from core.config import settings
-import os
 from core.llm.prompts.image_parsing_prompt import image_parsing_prompt
 
 # Optional for Windows if Tesseract throws errors:
@@ -26,6 +27,10 @@ _SEMAPHORES: dict[tuple[str, int], asyncio.Semaphore] = {}
 _SEMAPHORE_LOCK = asyncio.Lock()
 _PADDLEOCR_INSTANCE = None
 _PADDLEOCR_LOCK = asyncio.Lock()
+_EASYOCR_SEMAPHORE = None
+_EASYOCR_SEMAPHORE_LOCK = asyncio.Lock()
+_TESSERACT_SEMAPHORE = None
+_TESSERACT_SEMAPHORE_LOCK = asyncio.Lock()
 
 
 async def get_semaphore(port: int, model: str) -> asyncio.Semaphore:
@@ -45,22 +50,54 @@ async def get_semaphore(port: int, model: str) -> asyncio.Semaphore:
     return semaphore
 
 
+async def get_easyocr_semaphore() -> asyncio.Semaphore:
+    """Return a shared semaphore for EasyOCR with EASYOCR_WORKERS limit."""
+    global _EASYOCR_SEMAPHORE
+
+    if _EASYOCR_SEMAPHORE is not None:
+        return _EASYOCR_SEMAPHORE
+
+    async with _EASYOCR_SEMAPHORE_LOCK:
+        if _EASYOCR_SEMAPHORE is None:
+            _EASYOCR_SEMAPHORE = asyncio.Semaphore(EASYOCR_WORKERS)
+
+    return _EASYOCR_SEMAPHORE
+
+
+async def get_tesseract_semaphore() -> asyncio.Semaphore:
+    """Return a shared semaphore for Tesseract with TESSERACT_WORKERS limit."""
+    global _TESSERACT_SEMAPHORE
+
+    if _TESSERACT_SEMAPHORE is not None:
+        return _TESSERACT_SEMAPHORE
+
+    async with _TESSERACT_SEMAPHORE_LOCK:
+        if _TESSERACT_SEMAPHORE is None:
+            _TESSERACT_SEMAPHORE = asyncio.Semaphore(TESSERACT_WORKERS)
+
+    return _TESSERACT_SEMAPHORE
+
+
 async def image_parser(image_path: str, retries: int = 2) -> str:
     """
-    Parse image text using Gemma vision API.
-
-    Sends the image file as multipart/form-data
-
-    Also sends `model` and `port` as query params. Falls back to Tesseract OCR
-    if Gemma fails after `retries` attempts. Always returns plain text or an
-    empty string if everything fails.
+    Parses text from an image using a multi-tiered approach:
+    1. Primary: Gemma vision model (remote or local)
+    2. Secondary: EasyOCR (better for tables and general text)
+    3. Tertiary: Tesseract OCR (final fallback)
     """
 
-    def tesseract_parse() -> str:
+    async def tesseract_parse() -> str:
         """Fallback OCR with Tesseract."""
         try:
-            image = Image.open(image_path).convert("RGB")
-            return pytesseract.image_to_string(image)
+            semaphore = await get_tesseract_semaphore()
+            async with semaphore:
+                # Run Tesseract in a thread pool to avoid blocking
+                image = await asyncio.to_thread(
+                    lambda: Image.open(image_path).convert("RGB")
+                )
+                return await asyncio.to_thread(
+                    lambda: pytesseract.image_to_string(image)
+                )
         except Exception as e:
             print(f"[Tesseract] Exception: {e}")
             return ""
@@ -68,13 +105,15 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
     async def easyocr_parse() -> str:
         """OCR using EasyOCR - better for tables and general text."""
         try:
-            # Run EasyOCR in a thread pool to avoid blocking
-            result = await asyncio.to_thread(
-                lambda: easyocr.Reader(["en"], gpu=True).readtext(image_path)
-            )
-            # Extract text maintaining order
-            text_lines = [item[1] for item in result]
-            return "\n".join(text_lines)
+            semaphore = await get_easyocr_semaphore()
+            async with semaphore:
+                # Run EasyOCR in a thread pool to avoid blocking
+                result = await asyncio.to_thread(
+                    lambda: easyocr.Reader(["en"], gpu=True).readtext(image_path)
+                )
+                # Extract text maintaining order
+                text_lines = [item[1] for item in result]
+                return "\n".join(text_lines)
         except Exception as e:
             print(f"[EasyOCR] Exception: {e}")
             return ""
@@ -256,7 +295,7 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
         print(
             f"EasyOCR failed or returned empty, falling back to Tesseract for {os.path.basename(image_path)}"
         )
-        return (await asyncio.to_thread(tesseract_parse)).strip()
+        return (await tesseract_parse()).strip()
     except Exception as e:
         print(f"[Fallback Tesseract] Fatal exception: {e}")
         return ""
