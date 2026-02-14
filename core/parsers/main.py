@@ -16,6 +16,7 @@ from core.parsers.image import image_parser
 from core.models.document import Document, Page
 from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from core.services.sqlite_manager import SQLiteManager
+from core.parsers.slide_export import export_and_ocr_ppt_with_fallback
 from pptx import Presentation
 import traceback
 import olefile
@@ -491,6 +492,20 @@ async def extract_document(
 
     # --- Handle PowerPoint files ---
     if ext in {".ppt", ".pptx"}:
+        full_slide_ocr_results = []
+        try:
+            
+            await safe_emit(
+                f"{user_id}/progress",
+                {"message": f"Running full-slide OCR export for {safe_file_name}..."},
+            )
+            full_slide_ocr_results = await export_and_ocr_ppt_with_fallback(
+                file_path, user_id, thread_id
+            )
+        except Exception as e:
+            print(f"[SlideExport] Full-slide OCR unavailable for {safe_file_name}: {e}")
+            traceback.print_exc()
+
         try:
             prs = Presentation(file_path)
         except Exception as e:
@@ -529,6 +544,14 @@ async def extract_document(
                     except Exception:
                         traceback.print_exc()
                 page_text = "\n".join(slide_text)
+
+                # Add exported full-slide OCR if available.
+                if slide_number - 1 < len(full_slide_ocr_results):
+                    full_slide_text = (full_slide_ocr_results[slide_number - 1] or "").strip()
+                    if full_slide_text:
+                        page_text += (
+                            f"\n\n[Full Slide OCR]\n{full_slide_text}\n[/Full Slide OCR]"
+                        )
 
                 image_names = []
 

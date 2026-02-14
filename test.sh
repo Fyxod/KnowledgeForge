@@ -32,8 +32,10 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # ----------------------------
-# PaddleOCR (installed via pip, no system packages needed)
+# Install Tesseract OCR
 # ----------------------------
+echo "========== Installing Tesseract OCR =========="
+sudo apt install -y tesseract-ocr tesseract-ocr-eng
 
 # ----------------------------
 # Install pyenv

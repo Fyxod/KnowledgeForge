@@ -3,6 +3,7 @@
 # Prerequisites
 
 - **Node.js**
+- **Tesseract**
 - **MongoDB**
 - **Python**
 
@@ -24,6 +25,12 @@ npm -v
 ```
 
 if `npm -v` error's out try restarting your terminal / pc / vscode
+
+# Tesseract
+
+- Download the Windows installer from https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe
+
+- run the installer
 
 # MongoDB
 
