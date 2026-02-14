@@ -9,7 +9,7 @@ import pytesseract
 import easyocr
 
 # from paddleocr import PaddleOCR # Disabled due to dependency conflicts
-from core.constants import IMAGE_PARSER_LLM, EASYOCR_WORKERS, TESSERACT_WORKERS
+from core.constants import IMAGE_PARSER_LLM, EASYOCR_WORKERS, TESSERACT_WORKERS, EASYOCR_GPU
 from core.config import settings
 from core.llm.prompts.image_parsing_prompt import image_parsing_prompt
 
@@ -109,7 +109,7 @@ async def image_parser(image_path: str, retries: int = 2) -> str:
             async with semaphore:
                 # Run EasyOCR in a thread pool to avoid blocking
                 result = await asyncio.to_thread(
-                    lambda: easyocr.Reader(["en"], gpu=True).readtext(image_path)
+                    lambda: easyocr.Reader(["en"], gpu=EASYOCR_GPU).readtext(image_path)
                 )
                 # Extract text maintaining order
                 text_lines = [item[1] for item in result]
