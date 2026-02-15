@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check, Trash2 } from 'lucide-react';
 import { api, Chat, Thread } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { socketManager, StreamEndPayload, StreamTokenPayload, StreamStatusPayload, StreamErrorPayload } from '@/lib/socket';
 import { ChatMessage } from '@/components/ChatMessage';
 import { SourcesDisplay } from '@/components/SourcesDisplay';
 import { toast } from 'sonner';
@@ -53,6 +54,9 @@ const ThreadView = () => {
   const [mindMapOpen, setMindMapOpen] = useState(false);
   const [wordCloudOpen, setWordCloudOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
+  const streamAnswerRef = useRef<string>('');
+  const isStreamingRef = useRef(false);
 
   const selfKnowledgePreferenceKey = user?.userId
     ? `selfKnowledgePreference:${user.userId}`
@@ -85,6 +89,15 @@ const ThreadView = () => {
     },
     [setUser, threadId, user]
   );
+
+  // ── Socket.IO lifecycle ─────────────────────────────────────────
+  useEffect(() => {
+    socketManager.connect();
+    return () => {
+      // Don't fully disconnect — reuse across navigations
+      socketManager.clearCallbacks();
+    };
+  }, []);
 
   useEffect(() => {
     if (!threadId || !user?.userId) {
@@ -208,6 +221,8 @@ const ThreadView = () => {
         setChats(fresh);
         updateUserThreadState(fresh, { updatedAt: new Date().toISOString() });
         setLastSources(null);
+        // Reset KV cache / conversation history on the server
+        socketManager.emitResetSession(threadId);
         toast.success('All messages cleared');
       } else {
         toast.error('Failed to clear messages');
@@ -298,8 +313,12 @@ const ThreadView = () => {
       updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
       return updated;
     });
+    const savedInput = input;
     setInput('');
     setLoading(true);
+    setStreamingStatus(null);
+    streamAnswerRef.current = '';
+    isStreamingRef.current = true;
 
     const agentMessage: Chat = {
       type: 'agent',
@@ -312,49 +331,88 @@ const ThreadView = () => {
       return updated;
     });
 
-    try {
-      const mode = webEnhanced ? 'External' : 'Internal';
-      const response = await api.query(
-        threadId,
-        userMessage.content,
-        mode,
-        mode === 'Internal' ? useSelfKnowledge : false
-      );
+    // ── Register streaming callbacks ────────────────────────────
+    socketManager.setCallbacks({
+      onStatus: (data: StreamStatusPayload) => {
+        setStreamingStatus(data.status);
+      },
 
-      // Support both legacy shape and new `sources` wrapper; default to empty arrays
-      const docsUsed = response.sources?.documents_used ?? response.docs_used ?? [];
-      const webUsed = response.sources?.web_used ?? response.web_used ?? [];
-      
-      setChats(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
-          ...updated[updated.length - 1],
-          content: response.answer,
-          sources: {
-            documents_used: docsUsed,
-            web_used: webUsed,
-          },
-        };
-        updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
-        return updated;
-      });
+      onToken: (data: StreamTokenPayload) => {
+        streamAnswerRef.current += data.token;
+        // Update the last chat message content incrementally
+        setChats(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.type === 'agent') {
+            updated[updated.length - 1] = {
+              ...last,
+              content: streamAnswerRef.current,
+            };
+          }
+          return updated;
+        });
+      },
 
-      setLastSources({
-        docsUsed,
-        webUsed,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to get response';
-      toast.error(errorMessage);
-      setChats(prev => {
-        const updated = prev.slice(0, -2);
-        updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
-        return updated;
-      });
-      setInput(userMessage.content);
-    } finally {
-      setLoading(false);
-    }
+      onEnd: (data: StreamEndPayload) => {
+        isStreamingRef.current = false;
+        const docsUsed = data.sources?.documents_used ?? [];
+        const webUsed = data.sources?.web_used ?? [];
+
+        setChats(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.type === 'agent') {
+            updated[updated.length - 1] = {
+              ...last,
+              content: data.answer,
+              sources: { documents_used: docsUsed, web_used: webUsed },
+            };
+          }
+          updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
+          return updated;
+        });
+
+        setLastSources({ docsUsed, webUsed });
+        setLoading(false);
+        setStreamingStatus(null);
+        socketManager.clearCallbacks();
+      },
+
+      onError: (data: StreamErrorPayload) => {
+        isStreamingRef.current = false;
+        toast.error(data.error || 'Streaming error');
+        // Remove the empty agent message and restore input
+        setChats(prev => {
+          const updated = prev.slice(0, -2);
+          updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
+          return updated;
+        });
+        setInput(savedInput);
+        setLoading(false);
+        setStreamingStatus(null);
+        socketManager.clearCallbacks();
+      },
+
+      onDisconnect: (_reason: string) => {
+        if (isStreamingRef.current) {
+          isStreamingRef.current = false;
+          toast.error('Connection lost during streaming');
+          setLoading(false);
+          setStreamingStatus(null);
+          socketManager.clearCallbacks();
+        }
+      },
+    });
+
+    // ── Ensure socket is connected, then emit ───────────────────
+    socketManager.connect();
+    const mode = webEnhanced ? 'External' : 'Internal';
+    socketManager.emitQuery({
+      thread_id: threadId,
+      question: savedInput,
+      mode,
+      use_self_knowledge: mode === 'Internal' ? useSelfKnowledge : false,
+    });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -517,7 +575,7 @@ const ThreadView = () => {
                 <Loader2 className="w-5 h-5 text-primary animate-spin" />
               </div>
               <div className="bg-muted rounded-2xl px-4 py-3">
-                <p className="text-sm">Thinking...</p>
+                <p className="text-sm">{streamingStatus || 'Thinking...'}</p>
               </div>
             </div>
           )}
