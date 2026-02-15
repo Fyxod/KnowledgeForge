@@ -1,0 +1,20 @@
+{
+    "thread_id": "de3ae5a",
+    "user_id": "test_user_47329c",
+    "question": "What is 1+1?",
+    "answer": "## Overview\nThe sum of 1 and 1.\n\n## Key Details\n- **Result:** 2\n\n## Summary\n1 + 1 = 2.",
+    "documents_used": [],
+    "all_favicons": [],
+    "decomposed": false,
+    "decomposition_result": {
+        "requires_decomposition": false,
+        "resolved_query": "What is 1+1?",
+        "sub_queries": [
+            "What is 1+1?"
+        ]
+    },
+    "chunks": [],
+    "chunks_used": [],
+    "modified_used": [],
+    "use_self_knowledge": true
+}

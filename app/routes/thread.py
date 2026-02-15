@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from core.database import db
+from core.llm.session_manager import session_manager
 
 router = APIRouter(prefix="/thread", tags=["thread"])
 
@@ -217,6 +218,9 @@ async def delete_thread(request: Request, thread_id: str):
         )
 
         if result.modified_count > 0:
+            # Reset inference session (KV cache / history)
+            sid = session_manager.make_session_id(user_id, thread_id)
+            session_manager.reset(sid)
             print(f"DELETE /thread/{thread_id} - Thread deleted successfully")
             return {
                 "status": "success",
@@ -301,6 +305,10 @@ async def clear_thread_chats(request: Request, thread_id: str):
             }
         },
     )
+
+    # Reset inference session (KV cache / conversation history)
+    sid = session_manager.make_session_id(user_id, thread_id)
+    session_manager.reset(sid)
 
     return {
         "status": "success",
