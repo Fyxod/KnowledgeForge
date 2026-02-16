@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Document, InsightsLLMOutput, api } from '@/lib/api';
 import { downloadInsightsPdf } from '@/lib/insights-pdf';
+import { downloadInsightsPptx } from '@/lib/insights-pptx';
 import { toast } from 'sonner';
 
 type Props = {
@@ -489,7 +490,16 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
             {/* Action Buttons */}
             <div className="flex gap-3">
               <Button
+                variant="outline"
                 className="ml-auto"
+                onClick={() => {
+                  const title = insights?.document_summary?.title || 'Insights';
+                  downloadInsightsPptx(insights, `${title}.pptx`);
+                }}
+              >
+                Export as PPT
+              </Button>
+              <Button
                 onClick={() => {
                   const title = insights?.document_summary?.title || 'Insights';
                   downloadInsightsPdf(insights, `${title}.pdf`);

@@ -10,6 +10,7 @@ import { Document, api } from '@/lib/api';
 import { toast } from 'sonner';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
 import { downloadSummaryPdf } from '@/lib/summary-pdf';
+import { downloadSummaryPptx } from '@/lib/summary-pptx';
 
 type Props = {
   open: boolean;
@@ -177,13 +178,22 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
             </ScrollArea>
 
             {/* Action Button */}
-            <div className="flex">
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const title = documents.find((d) => d.docId === selectedDoc)?.title || 'Summary';
+                  downloadSummaryPptx(summary, `${title}.pptx`, { title });
+                }}
+                className="ml-auto"
+              >
+                Export as PPT
+              </Button>
               <Button
                 onClick={() => {
                   const title = documents.find((d) => d.docId === selectedDoc)?.title || 'Summary';
                   downloadSummaryPdf(summary, `${title}.pdf`, { title });
                 }}
-                className="ml-auto"
               >
                 Export as PDF
               </Button>

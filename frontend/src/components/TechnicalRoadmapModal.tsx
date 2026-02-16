@@ -10,6 +10,7 @@ import { Loader2, Cpu, Wrench, ShieldAlert, Rocket, MapPin, TrendingUp, BarChart
 import { Document, TechnicalRoadmapLLMOutput, api } from '@/lib/api';
 import { toast } from 'sonner';
 import { downloadTechnicalRoadmapPdf } from '@/lib/technical-roadmap-pdf';
+import { downloadTechnicalRoadmapPptx } from '@/lib/technical-roadmap-pptx';
 
 type Props = {
   open: boolean;
@@ -420,7 +421,13 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
 
             <div className="flex gap-3">
               <Button
+                variant="outline"
                 className="ml-auto"
+                onClick={() => roadmap && downloadTechnicalRoadmapPptx(roadmap, `${roadmap.roadmap_title || 'Technical Roadmap'}.pptx`)}
+              >
+                Export as PPT
+              </Button>
+              <Button
                 onClick={() => roadmap && downloadTechnicalRoadmapPdf(roadmap, `${roadmap.roadmap_title || 'Technical Roadmap'}.pdf`)}
               >
                 Export as PDF

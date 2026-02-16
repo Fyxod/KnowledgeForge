@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Document, StrategicRoadmapLLMOutput, api } from '@/lib/api';
 import { downloadStrategicRoadmapPdf } from '@/lib/strategic-roadmap-pdf';
+import { downloadStrategicRoadmapPptx } from '@/lib/strategic-roadmap-pptx';
 import { toast } from 'sonner';
 
 type Props = {
@@ -602,7 +603,13 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
             {/* Action Buttons */}
             <div className="flex gap-3">
               <Button
+                variant="outline"
                 className="ml-auto"
+                onClick={() => roadmap && downloadStrategicRoadmapPptx(roadmap, `${roadmap.roadmap_title || 'Strategic Roadmap'}.pptx`)}
+              >
+                Export as PPT
+              </Button>
+              <Button
                 onClick={() => roadmap && downloadStrategicRoadmapPdf(roadmap, `${roadmap.roadmap_title || 'Strategic Roadmap'}.pdf`)}
               >
                 Export as PDF
