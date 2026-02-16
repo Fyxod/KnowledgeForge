@@ -76,9 +76,9 @@ export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
               </h4>
               <div className="space-y-1">
                 {Object.entries(groupedDocs).map(([docId, doc]) => (
-                  <div key={docId} className="text-xs">
-                    <span className="font-medium">{doc.title}</span>
-                    <span className="text-muted-foreground ml-2">
+                  <div key={docId} className="text-xs min-w-0">
+                    <span className="font-medium truncate block" title={doc.title}>{doc.title}</span>
+                    <span className="text-muted-foreground">
                       (Pages: {Array.from(new Set(doc.pages)).sort((a, b) => a - b).join(', ')})
                     </span>
                   </div>
@@ -100,12 +100,13 @@ export const SourcesDisplay = ({ docsUsed, webUsed }: SourcesDisplayProps) => {
                     href={web.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs hover:underline text-primary"
+                    className="flex items-center gap-2 text-xs hover:underline text-primary min-w-0"
+                    title={web.title}
                   >
                     {web.favicon && (
-                      <img src={web.favicon} alt="" className="w-4 h-4" />
+                      <img src={web.favicon} alt="" className="w-4 h-4 flex-shrink-0" />
                     )}
-                    <span>{web.title}</span>
+                    <span className="truncate">{web.title}</span>
                   </a>
                 ))}
               </div>

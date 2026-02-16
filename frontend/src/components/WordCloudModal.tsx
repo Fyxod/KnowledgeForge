@@ -131,33 +131,35 @@ const WordCloudModal: React.FC<Props> = ({ open, onOpenChange, threadId, documen
               </div>
 
               <ScrollArea className="h-48 border rounded-lg p-3">
-                {documents.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    No documents available in this thread
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {documents.map((doc) => (
-                      <div
-                          key={doc.docId}
-                          className="flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors"
-                          onClick={() => handleDocToggle(doc.docId)}
-                        >
-                        <Checkbox
-                          checked={selectedDocs.includes(doc.docId)}
-                          onCheckedChange={() => handleDocToggle(doc.docId)}
-                          className="mt-1"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate group-hover:text-primary-foreground">{doc.title}</p>
-                          <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
-                            {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
-                          </p>
+                <div className="w-full overflow-hidden">
+                  {documents.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      No documents available in this thread
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {documents.map((doc) => (
+                        <div
+                            key={doc.docId}
+                            className="flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors"
+                            onClick={() => handleDocToggle(doc.docId)}
+                          >
+                          <Checkbox
+                            checked={selectedDocs.includes(doc.docId)}
+                            onCheckedChange={() => handleDocToggle(doc.docId)}
+                            className="mt-1 flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <p className="font-medium truncate block w-full group-hover:text-primary-foreground" title={doc.title}>{doc.title}</p>
+                            <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
+                              {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </ScrollArea>
 
               <p className="text-sm text-muted-foreground">

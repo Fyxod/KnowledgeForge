@@ -180,7 +180,7 @@ const NewThread = () => {
                         autoFocus
                       />
                     ) : (
-                      <span className="flex-1 text-sm truncate">
+                      <span className="flex-1 text-sm truncate" title={fileNames[index] || file.name}>
                         {fileNames[index] || file.name}
                       </span>
                     )}

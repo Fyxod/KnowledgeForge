@@ -182,47 +182,53 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
       {/* Summary handled by SummaryModal above */}
 
       <Dialog open={docsOpen} onOpenChange={setDocsOpen}>
-        <DialogContent className="max-w-lg max-h-[80vh]">
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Documents</DialogTitle>
             <DialogDescription>Documents in this thread</DialogDescription>
           </DialogHeader>
-          <div className="mt-2">
+          <div className="mt-2 min-w-0 overflow-hidden flex-1">
             <ScrollArea className="h-64 border rounded-md p-2">
-              {documents.length === 0 ? (
-                <p className="text-sm text-muted-foreground p-4">No documents in this thread.</p>
-              ) : (
-                <div className="space-y-2">
-                  {documents.map((d: any) => {
-                    const href = user && threadId
-                      ? buildDocumentUrl(user.userId, threadId, d.file_name, authToken ?? undefined)
-                      : undefined;
+              <div className="w-full overflow-hidden">
+                {documents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground p-4">No documents in this thread.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {documents.map((d: any) => {
+                      const href = user && threadId
+                        ? buildDocumentUrl(user.userId, threadId, d.file_name, authToken ?? undefined)
+                        : undefined;
 
-                    const content = (
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium break-words whitespace-normal group-hover:text-primary-foreground">{d.title}</div>
-                        <div className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">{d.type} • {new Date(d.time_uploaded).toLocaleDateString()}</div>
-                      </div>
-                    );
+                      const content = (
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <div className="font-medium truncate block w-full group-hover:text-primary-foreground" title={d.title}>{d.title}</div>
+                          <div className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">{d.type} • {new Date(d.time_uploaded).toLocaleDateString()}</div>
+                        </div>
+                      );
 
-                    return href ? (
-                      <a
-                        key={d.docId}
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30 flex items-start gap-3"
-                      >
-                        {content}
-                      </a>
-                    ) : (
-                      <div key={d.docId} className="w-full p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30 flex items-start gap-3">
-                        {content}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      return href ? (
+                        <a
+                          key={d.docId}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30"
+                        >
+                          <div className="flex items-start gap-3 min-w-0 overflow-hidden">
+                            {content}
+                          </div>
+                        </a>
+                      ) : (
+                        <div key={d.docId} className="block p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30">
+                          <div className="flex items-start gap-3 min-w-0 overflow-hidden">
+                            {content}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </ScrollArea>
           </div>
         </DialogContent>
