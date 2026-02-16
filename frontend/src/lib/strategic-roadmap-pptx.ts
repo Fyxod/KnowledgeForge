@@ -1,8 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import PptxGenJS from 'pptxgenjs';
 import type { StrategicRoadmapLLMOutput } from './api';
+import {
+    PAGE_W, PAGE_H, ML, CW, FONT,
+    s, makeBullets, estimateTextHeight, estimateBulletsHeight,
+    SlideWriter,
+} from './pptx-slide-writer';
 
-// ── Theme ──────────────────────────────────────────────────────────────────────
 const colors = {
     primary: '6d56f1',
     accent1: 'D946EF',
@@ -10,196 +14,221 @@ const colors = {
     success: '10B981',
     warning: 'F59E0B',
     danger: 'EF4444',
-    slate800: '1F2937',
     slate600: '475569',
-    white: 'FFFFFF',
+    slate800: '1F2937',
+    headerBg: 'e3defc',
     border: 'c4bcf0',
+    white: 'FFFFFF',
 };
 
-const M = 0.5;
+// ── Phase card helper ──────────────────────────────────────────────────────────
+function writePhaseCard(w: SlideWriter, phase: StrategicRoadmapLLMOutput['phased_roadmap'][0]): void {
+    const labelH = estimateTextHeight(phase.phase, FONT.phaseTitle, CW / 2);
+    w.ensureSpace(labelH + 1.5);
 
-function s(text: string | undefined | null): string {
-    if (!text) return '';
-    return String(text)
-        .replace(/≥/g, '>=').replace(/≤/g, '<=').replace(/×/g, 'x')
-        .replace(/±/g, '+/-').replace(/[–—]/g, '-').replace(/[""]/g, '"')
-        .replace(/\u202F/g, ' ').replace(/'/g, "'").replace(/‑/g, '-');
-}
+    w.addTwoColumns(
+        (x, y, colW) => {
+            w.currentSlide.addText(s(phase.phase), {
+                x, y, w: colW, h: labelH,
+                fontSize: FONT.phaseTitle, bold: true, color: colors.accent1,
+            } as any);
+            return y + labelH;
+        },
+        (x, y, colW) => {
+            w.currentSlide.addText(s(phase.time_frame), {
+                x, y, w: colW, h: labelH,
+                fontSize: FONT.body, color: colors.slate600, align: 'right',
+            } as any);
+            return y + labelH;
+        },
+    );
 
-function bullets(items: string[], opts?: { fontSize?: number; color?: string }): any[] {
-    return items.map((t) => ({
-        text: s(t),
-        options: { bullet: { type: 'bullet' as const }, fontSize: opts?.fontSize ?? 13, color: opts?.color ?? colors.slate800, breakLine: true },
-    }));
-}
+    w.addLine({ indent: 0.1 });
 
-function headerBar(slide: any, pptx: PptxGenJS, title: string, color: string = colors.primary) {
-    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.9, fill: { color } });
-    slide.addText(s(title), { x: M, y: 0.15, w: `${10 - M * 2}`, h: 0.6, fontSize: 22, bold: true, color: colors.white });
+    w.addSubheading('Objectives', { indent: 0.1 });
+    w.addBullets(phase.key_objectives, { fontSize: 9, indent: 0.1 });
+
+    w.addSubheading('Initiatives', { indent: 0.1 });
+    w.addBullets(phase.key_initiatives, { fontSize: 9, indent: 0.1 });
+
+    w.addSubheading('Expected Outcomes', { indent: 0.1 });
+    w.addBullets(phase.expected_outcomes, { fontSize: 9, indent: 0.1 });
 }
 
 // ── Build slides ───────────────────────────────────────────────────────────────
 export function downloadStrategicRoadmapPptx(roadmap: StrategicRoadmapLLMOutput, filename?: string) {
     const pptx = new PptxGenJS();
-    pptx.defineLayout({ name: 'NARROW_10_33', width: 10.33, height: 7.5 }); // 3" narrower than default wide
-    pptx.layout = 'NARROW_10_33';
+    pptx.defineLayout({ name: 'LETTER_PORTRAIT', width: PAGE_W, height: PAGE_H });
+    pptx.layout = 'LETTER_PORTRAIT';
     pptx.author = 'NotebookLM';
     pptx.subject = 'Strategic Roadmap';
     pptx.title = s(roadmap.roadmap_title);
 
-    // ── Title Slide ────────────────────────────────────────────────────────────
-    const titleSlide = pptx.addSlide();
-    titleSlide.background = { color: colors.primary };
-    titleSlide.addText(s(roadmap.roadmap_title), {
-        x: M, y: '30%', w: `${10 - M * 2}`, h: 1.2,
-        fontSize: 32, bold: true, color: colors.white, align: 'center',
-    } as any);
-    titleSlide.addText('Strategic Roadmap', {
-        x: M, y: '52%', w: `${10 - M * 2}`,
-        fontSize: 16, color: colors.border, align: 'center',
-    } as any);
+    const w = new SlideWriter(pptx);
+    w.newSlide();
 
-    // ── Vision & End Goal ──────────────────────────────────────────────────────
-    const visionSlide = pptx.addSlide();
-    headerBar(visionSlide, pptx, 'Vision & End Goal', colors.success);
-    visionSlide.addText(s(roadmap.vision_and_end_goal.description), {
-        x: M, y: 1.1, w: `${10 - M * 2}`, h: 1.0, fontSize: 14, color: colors.slate800, valign: 'top',
-    } as any);
-    visionSlide.addText('Success Criteria', { x: M, y: 2.2, w: 4, fontSize: 14, bold: true, color: colors.success } as any);
-    visionSlide.addText(bullets(roadmap.vision_and_end_goal.success_criteria) as any, {
-        x: M, y: 2.6, w: `${10 - M * 2}`, h: 4.0, valign: 'top', lineSpacingMultiple: 1.2,
-    } as any);
+    // ── Title ──────────────────────────────────────────────────────────────
+    w.addTitle(roadmap.roadmap_title);
+    w.addSubtitle('Strategic, phased plan with goals, enablers, risks, and measurable milestones.');
+    w.gap(0.1);
 
-    // ── Current Baseline + SWOT ────────────────────────────────────────────────
-    const baseSlide = pptx.addSlide();
-    headerBar(baseSlide, pptx, 'Current Baseline', colors.accent2);
-    baseSlide.addText(s(roadmap.current_baseline.summary), {
-        x: M, y: 1.1, w: `${10 - M * 2}`, h: 0.7, fontSize: 13, color: colors.slate800, valign: 'top',
-    } as any);
+    // ── Vision & End Goal ──────────────────────────────────────────────────
+    w.addSectionHeader('Vision & End Goal', colors.success);
+    w.addText(roadmap.vision_and_end_goal.description);
+    w.addBullets(roadmap.vision_and_end_goal.success_criteria);
 
-    // SWOT as 2×2 table
+    // ── Current Baseline ───────────────────────────────────────────────────
+    w.addSectionHeader('Current Baseline', colors.accent2);
+    w.addText(roadmap.current_baseline.summary);
+
+    // SWOT 2×2 table
     const swot = roadmap.current_baseline.swot;
     const swotRows: any[][] = [
         [
-            { text: 'Strengths', options: { bold: true, color: colors.white, fill: { color: colors.success } } },
-            { text: 'Weaknesses', options: { bold: true, color: colors.white, fill: { color: colors.warning } } },
+            { text: 'Strengths', options: { bold: true, color: colors.white, fill: { color: colors.success }, fontSize: FONT.swotTitle } },
+            { text: 'Weaknesses', options: { bold: true, color: colors.white, fill: { color: colors.warning }, fontSize: FONT.swotTitle } },
         ],
         [
-            { text: swot.strengths.map((x) => `• ${s(x)}`).join('\n') },
-            { text: swot.weaknesses.map((x) => `• ${s(x)}`).join('\n') },
+            { text: swot.strengths.map((x) => `• ${s(x)}`).join('\n'), options: { fontSize: 9 } },
+            { text: swot.weaknesses.map((x) => `• ${s(x)}`).join('\n'), options: { fontSize: 9 } },
         ],
         [
-            { text: 'Opportunities', options: { bold: true, color: colors.white, fill: { color: colors.accent2 } } },
-            { text: 'Threats', options: { bold: true, color: colors.white, fill: { color: colors.danger } } },
+            { text: 'Opportunities', options: { bold: true, color: colors.white, fill: { color: colors.accent2 }, fontSize: FONT.swotTitle } },
+            { text: 'Threats', options: { bold: true, color: colors.white, fill: { color: colors.danger }, fontSize: FONT.swotTitle } },
         ],
         [
-            { text: swot.opportunities.map((x) => `• ${s(x)}`).join('\n') },
-            { text: swot.threats.map((x) => `• ${s(x)}`).join('\n') },
+            { text: swot.opportunities.map((x) => `• ${s(x)}`).join('\n'), options: { fontSize: 9 } },
+            { text: swot.threats.map((x) => `• ${s(x)}`).join('\n'), options: { fontSize: 9 } },
         ],
     ];
-    baseSlide.addText('', { x: M, y: 1.9, h: 0.8 });
-    baseSlide.addTable(swotRows, {
-        x: M, y: 2.0, w: `${10 - M * 2}`,
-        fontSize: 11, border: { pt: 0.5, color: colors.border },
-        colW: [4.5, 4.5],
-    } as any);
+    w.addTable(swotRows, { colWidths: [CW / 2, CW / 2], borderColor: colors.border });
 
-    // ── Strategic Pillars ──────────────────────────────────────────────────────
-    const pillSlide = pptx.addSlide();
-    headerBar(pillSlide, pptx, 'Strategic Pillars', colors.primary);
-    const pillBullets = roadmap.strategic_pillars.map((p) => `${p.pillar_name}: ${p.description}`);
-    pillSlide.addText(bullets(pillBullets) as any, {
-        x: M, y: 1.1, w: `${10 - M * 2}`, h: 5.5, valign: 'top', lineSpacingMultiple: 1.2,
-    } as any);
+    // ── Strategic Pillars ──────────────────────────────────────────────────
+    w.addSectionHeader('Strategic Pillars', colors.primary);
 
-    // ── Phased Roadmap ─────────────────────────────────────────────────────────
+    const pillars = roadmap.strategic_pillars;
+    const leftPillars = pillars.filter((_, i) => i % 2 === 0);
+    const rightPillars = pillars.filter((_, i) => i % 2 !== 0);
+
+    w.addTwoColumns(
+        (x, y, colW) => {
+            const slide = w.currentSlide;
+            let dy = y;
+            for (const p of leftPillars) {
+                const nh = estimateTextHeight(p.pillar_name, FONT.pillTitle, colW);
+                slide.addText(s(p.pillar_name), {
+                    x, y: dy, w: colW, h: nh,
+                    fontSize: FONT.pillTitle, bold: true, color: colors.primary,
+                } as any);
+                dy += nh + 0.02;
+                const dh = estimateTextHeight(p.description, FONT.body, colW);
+                slide.addText(s(p.description), {
+                    x, y: dy, w: colW, h: dh,
+                    fontSize: FONT.body, color: colors.slate800, valign: 'top',
+                } as any);
+                dy += dh + 0.08;
+            }
+            return dy;
+        },
+        (x, y, colW) => {
+            const slide = w.currentSlide;
+            let dy = y;
+            for (const p of rightPillars) {
+                const nh = estimateTextHeight(p.pillar_name, FONT.pillTitle, colW);
+                slide.addText(s(p.pillar_name), {
+                    x, y: dy, w: colW, h: nh,
+                    fontSize: FONT.pillTitle, bold: true, color: colors.primary,
+                } as any);
+                dy += nh + 0.02;
+                const dh = estimateTextHeight(p.description, FONT.body, colW);
+                slide.addText(s(p.description), {
+                    x, y: dy, w: colW, h: dh,
+                    fontSize: FONT.body, color: colors.slate800, valign: 'top',
+                } as any);
+                dy += dh + 0.08;
+            }
+            return dy;
+        },
+    );
+
+    // ── Phased Strategic Roadmap ───────────────────────────────────────────
+    w.addSectionHeader('Phased Strategic Roadmap', colors.accent1);
     for (const phase of roadmap.phased_roadmap) {
-        const sl = pptx.addSlide();
-        headerBar(sl, pptx, `${s(phase.phase)} — ${s(phase.time_frame)}`, colors.accent1);
-
-        sl.addText('Key Objectives', { x: M, y: 1.1, w: 4, fontSize: 13, bold: true, color: colors.accent2 } as any);
-        sl.addText(bullets(phase.key_objectives, { fontSize: 11 }) as any, {
-            x: M, y: 1.45, w: 4, h: 2.0, valign: 'top', lineSpacingMultiple: 1.15,
-        } as any);
-
-        sl.addText('Key Initiatives', { x: 5.3, y: 1.1, w: 4, fontSize: 13, bold: true, color: colors.primary } as any);
-        sl.addText(bullets(phase.key_initiatives, { fontSize: 11 }) as any, {
-            x: 5.3, y: 1.45, w: 4, h: 2.0, valign: 'top', lineSpacingMultiple: 1.15,
-        } as any);
-
-        sl.addText('Expected Outcomes', { x: M, y: 3.8, w: 9, fontSize: 13, bold: true, color: colors.success } as any);
-        sl.addText(bullets(phase.expected_outcomes, { fontSize: 11 }) as any, {
-            x: M, y: 4.15, w: `${10 - M * 2}`, h: 3.0, valign: 'top', lineSpacingMultiple: 1.15,
-        } as any);
+        writePhaseCard(w, phase);
     }
 
-    // ── Enablers & Dependencies ────────────────────────────────────────────────
-    const enSlide = pptx.addSlide();
-    headerBar(enSlide, pptx, 'Enablers & Dependencies', colors.primary);
-    enSlide.addText('Technologies', { x: M, y: 1.1, w: 3, fontSize: 13, bold: true, color: colors.primary } as any);
-    enSlide.addText(bullets(roadmap.enablers_and_dependencies.technologies, { fontSize: 11 }) as any, {
-        x: M, y: 1.45, w: 3, h: 2.5, valign: 'top', lineSpacingMultiple: 1.15,
-    } as any);
-    enSlide.addText('Skills & Resources', { x: 3.7, y: 1.1, w: 3, fontSize: 13, bold: true, color: colors.accent2 } as any);
-    enSlide.addText(bullets(roadmap.enablers_and_dependencies.skills_and_resources, { fontSize: 11 }) as any, {
-        x: 3.7, y: 1.45, w: 3, h: 2.5, valign: 'top', lineSpacingMultiple: 1.15,
-    } as any);
-    enSlide.addText('Stakeholders', { x: 7.0, y: 1.1, w: 2.5, fontSize: 13, bold: true, color: colors.slate600 } as any);
-    enSlide.addText(bullets(roadmap.enablers_and_dependencies.stakeholders, { fontSize: 11 }) as any, {
-        x: 7.0, y: 1.45, w: 2.5, h: 2.5, valign: 'top', lineSpacingMultiple: 1.15,
-    } as any);
+    // ── Enablers & Dependencies ────────────────────────────────────────────
+    w.addSectionHeader('Enablers & Dependencies', colors.primary);
 
-    // ── Risks & Mitigation ─────────────────────────────────────────────────────
-    const riskSlide = pptx.addSlide();
-    headerBar(riskSlide, pptx, 'Risks & Mitigation', colors.danger);
+    w.addTwoColumns(
+        (x, y, colW) => {
+            const slide = w.currentSlide;
+            const hh = estimateTextHeight('Technologies', FONT.subheading, colW);
+            slide.addText('Technologies', {
+                x, y, w: colW, h: hh,
+                fontSize: FONT.subheading, bold: true, color: colors.slate800,
+            } as any);
+            let dy = y + hh + 0.04;
+            const bh = estimateBulletsHeight(roadmap.enablers_and_dependencies.technologies, 9, colW);
+            slide.addText(makeBullets(roadmap.enablers_and_dependencies.technologies, { fontSize: 9 }) as any, {
+                x, y: dy, w: colW, h: bh, valign: 'top', lineSpacingMultiple: 1.1,
+            } as any);
+            return dy + bh;
+        },
+        (x, y, colW) => {
+            const slide = w.currentSlide;
+            const hh = estimateTextHeight('Skills & Resources', FONT.subheading, colW);
+            slide.addText('Skills & Resources', {
+                x, y, w: colW, h: hh,
+                fontSize: FONT.subheading, bold: true, color: colors.slate800,
+            } as any);
+            let dy = y + hh + 0.04;
+            const bh = estimateBulletsHeight(roadmap.enablers_and_dependencies.skills_and_resources, 9, colW);
+            slide.addText(makeBullets(roadmap.enablers_and_dependencies.skills_and_resources, { fontSize: 9 }) as any, {
+                x, y: dy, w: colW, h: bh, valign: 'top', lineSpacingMultiple: 1.1,
+            } as any);
+            return dy + bh;
+        },
+    );
+
+    w.addSubheading('Stakeholders');
+    w.addBullets(roadmap.enablers_and_dependencies.stakeholders, { fontSize: 9 });
+
+    // ── Risks & Mitigation ─────────────────────────────────────────────────
+    w.addSectionHeader('Risks & Mitigation', colors.danger);
     const riskRows: any[][] = [[
-        { text: 'Risk', options: { bold: true, color: colors.white, fill: { color: colors.danger } } },
-        { text: 'Mitigation', options: { bold: true, color: colors.white, fill: { color: colors.danger } } },
+        { text: 'Risk', options: { bold: true, color: colors.slate800, fill: { color: colors.headerBg } } },
+        { text: 'Mitigation', options: { bold: true, color: colors.slate800, fill: { color: colors.headerBg } } },
     ]];
     roadmap.risks_and_mitigation.forEach((r) => {
         riskRows.push([{ text: s(r.risk) }, { text: s(r.mitigation_strategy) }]);
     });
-    riskSlide.addTable(riskRows, {
-        x: M, y: 1.1, w: `${10 - M * 2}`,
-        fontSize: 12, border: { pt: 0.5, color: colors.border },
-        colW: [4.5, 4.5],
-        autoPage: true,
-    } as any);
+    w.addTable(riskRows, { colWidths: [CW / 2, CW / 2], borderColor: colors.border });
 
-    // ── Key Metrics & Milestones ───────────────────────────────────────────────
-    if (roadmap.key_metrics_and_milestones.length > 0) {
-        const metSlide = pptx.addSlide();
-        headerBar(metSlide, pptx, 'Key Metrics & Milestones', colors.accent2);
-        const metBullets: string[] = [];
-        roadmap.key_metrics_and_milestones.forEach((m) => {
-            metBullets.push(`${m.year_or_phase}:`);
-            m.metrics.forEach((mt) => metBullets.push(`  ${mt}`));
-        });
-        metSlide.addText(bullets(metBullets, { fontSize: 12 }) as any, {
-            x: M, y: 1.1, w: `${10 - M * 2}`, h: 5.5, valign: 'top', lineSpacingMultiple: 1.15,
-        } as any);
+    // ── Key Metrics & Milestones ───────────────────────────────────────────
+    w.addSectionHeader('Key Metrics & Milestones', colors.accent2);
+    for (const m of roadmap.key_metrics_and_milestones) {
+        w.addSubheading(m.year_or_phase, { color: colors.accent2 });
+        w.addBullets(m.metrics, { fontSize: 9 });
     }
 
-    // ── Future Opportunities ───────────────────────────────────────────────────
+    // ── Future Opportunities ───────────────────────────────────────────────
     if (roadmap.future_opportunities.length > 0) {
-        const futSlide = pptx.addSlide();
-        headerBar(futSlide, pptx, 'Future Opportunities', colors.accent2);
-        futSlide.addText(bullets(roadmap.future_opportunities) as any, {
-            x: M, y: 1.1, w: `${10 - M * 2}`, h: 5.5, valign: 'top', lineSpacingMultiple: 1.2,
-        } as any);
+        w.addSectionHeader('Future Opportunities', colors.accent2);
+        w.addBullets(roadmap.future_opportunities);
     }
 
-    // ── LLM Inferred Additions ─────────────────────────────────────────────────
+    // ── LLM Inferred Additions ─────────────────────────────────────────────
     if (roadmap.llm_inferred_additions && roadmap.llm_inferred_additions.length > 0) {
-        const addSlide = pptx.addSlide();
-        headerBar(addSlide, pptx, 'Additional Insights', colors.slate600);
-        const addBullets = roadmap.llm_inferred_additions.map((a) => `${a.section_title}: ${a.content}`);
-        addSlide.addText(bullets(addBullets) as any, {
-            x: M, y: 1.1, w: `${10 - M * 2}`, h: 5.5, valign: 'top', lineSpacingMultiple: 1.2,
-        } as any);
+        w.addSectionHeader('Additional Insights', colors.slate600);
+        for (const a of roadmap.llm_inferred_additions) {
+            w.addSubheading(a.section_title);
+            w.addText(a.content);
+        }
     }
 
-    // ── Download ───────────────────────────────────────────────────────────────
+    w.finalize();
+
     const safe = (roadmap.roadmap_title || 'strategic-roadmap').replace(/[^a-z0-9\-\s]/gi, '').trim();
     const name = filename || `${safe}.pptx`;
     pptx.writeFile({ fileName: name });
