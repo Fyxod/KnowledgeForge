@@ -67,6 +67,6 @@ DOCUMENT_SUMMARIZER = "document_summarizer"
 SELF_KNOWLEDGE = "self_knowledge"
 SQL_QUERY = "sql_query"
 MAX_WEB_SEARCH = 2
-MAX_SQL_RETRIES = 3
+MAX_SQL_RETRIES = 6
 INTERNAL = "Internal"
 EXTERNAL = "External"
