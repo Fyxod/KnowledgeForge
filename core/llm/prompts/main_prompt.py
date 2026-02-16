@@ -14,7 +14,6 @@ def detect_answer_style(question: str) -> str:
     """
     question_lower = question.lower()
 
-    # Brief answer keywords
     brief_keywords = [
         "3 bullet points",
         "summarize",
@@ -28,7 +27,6 @@ def detect_answer_style(question: str) -> str:
         if keyword in question_lower:
             return "brief"
 
-    # Detailed answer keywords
     detailed_keywords = [
         "detailed",
         "elaborate",
@@ -41,7 +39,6 @@ def detect_answer_style(question: str) -> str:
         if keyword in question_lower:
             return "detailed"
 
-    # Default to detailed answers
     return "detailed"
 
 
@@ -58,90 +55,182 @@ def main_prompt(
 ):
     contents = []
 
-    # Detect answer style based on question
     answer_style = detect_answer_style(question)
 
+    # =========================
+    # INTERNAL MODE
+    # =========================
     if mode == INTERNAL:
         if answer_style == "brief":
             system_prompt = (
                 "You are an expert assistant that answers questions based on the provided **documents**.\n"
                 "Your job is to give **clear, concise, and brief answers** using Markdown formatting.\n\n"
                 "### Guidelines for Brief Answers\n"
-                "- Use **headings (##, ###)** for major sections.\n"
-                "- Use **bullet points** and **numbered lists** to organize ideas concisely.\n"
-                "- Keep explanations **short and to the point**.\n"
-                "- Focus on the most important information only.\n"
-                "- Avoid unnecessary details or elaboration.\n"
-                "- Merge overlapping ideas and remove redundancy.\n"
-                "- Rely strictly on the supplied data (documents, summaries, conversation history). Never use self-knowledge or unstated assumptions.\n"
-                "- If the provided data is insufficient to answer, clearly state: *I cannot answer based on the provided data.*\n"
-                "### Context Handling\n"
-                "- Extract the most relevant information from the documents.\n"
-                "- Provide a **direct and concise answer**.\n"
-                "- If multiple sources contradict, mention it briefly.\n"
-                "- Do not use your own knowledge outside the provided data in your answers in any case.\n"
-                "- Only use the information present in the provided data to answer the question.\n\n"
-                "### Output Structure Example\n"
+                "- Use headings (##, ###).\n"
+                "- Use bullets and numbered lists.\n"
+                "- Keep explanations short.\n"
+                "- Focus only on key information.\n"
+                "- Avoid unnecessary elaboration.\n"
+                "- Never use self-knowledge.\n"
+                "- If insufficient data, state clearly you cannot answer.\n\n"
+                "### Output Structure\n"
                 "## Overview\n"
-                "(Brief explanation)\n\n"
                 "## Key Points\n"
-                "- **Point 1:** Brief explanation...\n"
-                "- **Point 2:** Brief explanation...\n"
-                "- **Point 3:** Brief explanation...\n\n"
                 "## Summary\n"
-                "(Concise conclusion)\n"
             )
         else:
             system_prompt = (
                 "You are an expert assistant that answers questions based on the provided **documents**.\n"
                 "Your job is to give **clear, structured, and comprehensive answers** using Markdown formatting.\n\n"
                 "### Guidelines for Detailed Answers\n"
-                "- Use **headings (##, ###)** for major sections.\n"
-                "- Use **bullet points** and **numbered lists** to organize ideas.\n"
-                "- Highlight important terms in **bold** and examples in *italics*.\n"
-                "- Provide **detailed explanations** for each point.\n"
-                "- Include relevant examples, comparisons, and clarifications.\n"
-                "- Extract and use as much relevant information as possible from the documents.\n"
-                "- Provide context and background where helpful.\n"
-                "- Merge overlapping ideas but maintain comprehensive coverage.\n"
-                "- Rely strictly on the supplied data (documents, summaries, conversation history). Never use self-knowledge or unstated assumptions.\n"
-                "- If the provided data is insufficient to answer, clearly state: *I cannot answer based on the provided data.* Do not fabricate or infer beyond the supplied information.\n\n"
-                "### Context Handling\n"
-                "- Extract and use as much relevant information as possible from the documents.\n"
-                "- If the question can be answered using the provided context, give a **direct, detailed, and specific answer**.\n"
-                "- Provide comprehensive explanations with examples and context.\n"
-                "- If multiple sources contradict, mention it clearly using a note block.\n"
-                "- Do not use your own knowledge outside the provided data in your answers in any case.\n"
-                "- Only use the information present in the provided data to answer the question.\n\n"
+                "- Use headings (##, ###).\n"
+                "- Use structured bullets and lists.\n"
+                "- Highlight important terms in bold.\n"
+                "- Provide detailed explanations.\n"
+                "- Include examples and clarifications.\n"
+                "- Extract maximum relevant information from documents.\n"
+                "- Never use self-knowledge.\n"
+                "- If insufficient data, clearly state inability to answer.\n\n"
                 "### Document References\n"
-                "- IMPORTANT: When referencing documents in your answer, ALWAYS use the **document name/title**, NOT the document ID.\n"
-                "- Document IDs are for internal tracking only and should NOT appear in your answers.\n\n"
-                "### Output Structure Example\n"
+                "- Always use document name/title, not document ID.\n\n"
+                "### Output Structure\n"
                 "## Overview\n"
-                "(Comprehensive explanation)\n\n"
                 "## Key Details\n"
-                "- **Point 1:** Detailed explanation with context...\n"
-                "- **Point 2:** Detailed explanation with examples...\n"
-                "- **Point 3:** Detailed explanation with clarifications...\n\n"
                 "## Additional Insights\n"
-                "*Examples, comparisons, or clarifications.*\n"
-                "*Related information from documents.*\n\n"
                 "## Summary\n"
-                "(Comprehensive conclusion)\n"
             )
 
         contents.append({"role": "system", "parts": system_prompt})
 
+        if chunks:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": f"**Document Chunks (Context):**\n{chunks}\n",
+                }
+            )
+
+    # =========================
+    # EXTERNAL MODE
+    # =========================
     elif mode == EXTERNAL:
-        system_prompt = (
-            "You are an expert assistant that answers questions using the provided **documents** "
-            "and any supplied **external data** (such as web search results).\n"
-        )
+        if answer_style == "brief":
+            system_prompt = (
+                "You are an expert assistant that answers questions using provided **documents** "
+                "and supplied **external data** (e.g., web search results).\n\n"
+                "- Keep answers concise and structured.\n"
+                "- Prioritize document data over web data.\n"
+                "- If conflict exists, mention briefly.\n"
+                "- If insufficient data, explicitly state inability to answer.\n"
+            )
+        else:
+            system_prompt = (
+                "You are an expert assistant that answers questions using provided **documents** "
+                "and supplied **external data** (e.g., web search results).\n\n"
+                "- Provide comprehensive structured answers.\n"
+                "- Prioritize document data over web data.\n"
+                "- Mention conflicting information clearly.\n"
+                "- If insufficient data, explicitly state inability to answer.\n"
+                "- Use document name/title when referencing.\n"
+            )
+
         contents.append({"role": "system", "parts": system_prompt})
+
+        if chunks:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": f"**Document Chunks (Context):**\n{chunks}\n",
+                }
+            )
+
+        if initial_search_results:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": f"**Initial External Knowledge Sources:**\n{initial_search_results}\n",
+                }
+            )
+
+        if web_search_results:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": f"**Web Search Results:**\n{web_search_results}\n",
+                }
+            )
+
+        if initial_search_answer:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": f"**Initial Web Search Answer:**\n{initial_search_answer}\n",
+                }
+            )
+
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "If conflicting information exists, always prioritize document content over web sources.\n"
+                    "If no provided data resolves the question, respond that you cannot answer based on the provided data."
+                ),
+            }
+        )
 
     else:
         raise ValueError("Invalid mode. Mode must be either 'INTERNAL' or 'EXTERNAL'.")
 
+    # =========================
+    # Conversation History
+    # =========================
+    for m in messages:
+        if m.type == "human":
+            contents.append({"role": "user", "parts": m.content})
+        elif m.type == "ai":
+            contents.append({"role": "assistant", "parts": m.content})
+
+    # =========================
+    # Summary Context
+    # =========================
+    if summary:
+        contents.append(
+            {"role": "system", "parts": f"**Summary Reference:**\n{summary}\n"}
+        )
+
+    # =========================
+    # Title Warning
+    # =========================
+    contents.append(
+        {
+            "role": "system",
+            "parts": "Don't give too much importance to the title while giving answer as titles may be vague filenames.",
+        }
+    )
+
+    # =========================
+    # Action Definitions
+    # =========================
+    action_block = (
+        "You can perform the following actions:\n"
+        "- **answer**: Directly answer using available information.\n"
+    )
+
+    if mode == EXTERNAL:
+        action_block += "- **web_search**: Search for recent or external information.\n"
+
+    action_block += (
+        "- **document_summarizer**: Request summary of a specific document.\n"
+        "- **global_summarizer**: Request collective summary of all documents.\n"
+        "- **failure**: Indicate inability to answer.\n"
+        "Do not choose actions lightly.\n"
+    )
+
+    contents.append({"role": "system", "parts": action_block})
+
+    # =========================
+    # Final Question
+    # =========================
     contents.append(
         {
             "role": "user",
