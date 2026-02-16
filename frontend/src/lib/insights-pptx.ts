@@ -41,10 +41,11 @@ function headerBar(slide: any, pptx: PptxGenJS, title: string, color: string = c
 export function downloadInsightsPptx(insights: InsightsLLMOutput, filename?: string) {
     const title = insights?.document_summary?.title || 'Insights';
     const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'NARROW_10_33', width: 10.33, height: 7.5 }); // 3" narrower than default wide
+    pptx.layout = 'NARROW_10_33';
     pptx.author = 'NotebookLM';
     pptx.subject = 'Insights';
     pptx.title = s(title);
-    pptx.layout = 'LAYOUT_WIDE';
 
     // ── Title Slide ────────────────────────────────────────────────────────────
     const titleSlide = pptx.addSlide();

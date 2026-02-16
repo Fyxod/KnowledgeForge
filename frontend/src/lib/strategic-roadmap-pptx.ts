@@ -41,10 +41,11 @@ function headerBar(slide: any, pptx: PptxGenJS, title: string, color: string = c
 // ── Build slides ───────────────────────────────────────────────────────────────
 export function downloadStrategicRoadmapPptx(roadmap: StrategicRoadmapLLMOutput, filename?: string) {
     const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'NARROW_10_33', width: 10.33, height: 7.5 }); // 3" narrower than default wide
+    pptx.layout = 'NARROW_10_33';
     pptx.author = 'NotebookLM';
     pptx.subject = 'Strategic Roadmap';
     pptx.title = s(roadmap.roadmap_title);
-    pptx.layout = 'LAYOUT_WIDE';
 
     // ── Title Slide ────────────────────────────────────────────────────────────
     const titleSlide = pptx.addSlide();
@@ -96,6 +97,7 @@ export function downloadStrategicRoadmapPptx(roadmap: StrategicRoadmapLLMOutput,
             { text: swot.threats.map((x) => `• ${s(x)}`).join('\n') },
         ],
     ];
+    baseSlide.addText('', { x: M, y: 1.9, h: 0.8 });
     baseSlide.addTable(swotRows, {
         x: M, y: 2.0, w: `${10 - M * 2}`,
         fontSize: 11, border: { pt: 0.5, color: colors.border },

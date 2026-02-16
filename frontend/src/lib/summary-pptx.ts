@@ -163,10 +163,11 @@ export function downloadSummaryPptx(markdown: string, filename?: string, opts?: 
     const title = opts?.title || parsedTitle;
 
     const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'NARROW_10_33', width: 10.33, height: 7.5 }); // shrink width by ~3" from 13.33"
+    pptx.layout = 'NARROW_10_33';
     pptx.author = 'NotebookLM';
     pptx.subject = 'Summary';
     pptx.title = title;
-    pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 → we use 10 x 7.5
 
     addTitleSlide(pptx, title);
 

@@ -35,17 +35,19 @@ function bullets(items: string[], opts?: { fontSize?: number; color?: string }):
 }
 
 function headerBar(slide: any, pptx: PptxGenJS, title: string, color: string = colors.primary) {
-    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10, h: 0.9, fill: { color } });
-    slide.addText(s(title), { x: M, y: 0.15, w: `${10 - M * 2}`, h: 0.6, fontSize: 22, bold: true, color: colors.white });
+    // Match bar width to layout width for consistent coverage
+    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 10.33, h: 0.9, fill: { color } });
+    slide.addText(s(title), { x: M, y: 0.15, w: `${10.33 - M * 2}`, h: 0.6, fontSize: 22, bold: true, color: colors.white });
 }
 
 // ── Build slides ───────────────────────────────────────────────────────────────
 export function downloadTechnicalRoadmapPptx(roadmap: TechnicalRoadmapLLMOutput, filename?: string) {
     const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'NARROW_10_33', width: 10.33, height: 7.5 }); // 3" narrower than default wide
+    pptx.layout = 'NARROW_10_33';
     pptx.author = 'NotebookLM';
     pptx.subject = 'Technical Roadmap';
     pptx.title = s(roadmap.roadmap_title);
-    pptx.layout = 'LAYOUT_WIDE';
 
     // ── Title Slide ────────────────────────────────────────────────────────────
     const titleSlide = pptx.addSlide();
@@ -73,16 +75,16 @@ export function downloadTechnicalRoadmapPptx(roadmap: TechnicalRoadmapLLMOutput,
     const stateSlide = pptx.addSlide();
     headerBar(stateSlide, pptx, 'Current State Analysis', colors.primary);
     stateSlide.addText(s(roadmap.current_state_analysis.summary), {
-        x: M, y: 1.1, w: `${10 - M * 2}`, h: 0.8, fontSize: 13, color: colors.slate800, valign: 'top',
+        x: M, y: 1.05, w: `${10.33 - M * 2}`, h: 1.05, fontSize: 13, color: colors.slate800, valign: 'top',
     } as any);
     // Two-column: challenges & capabilities
-    stateSlide.addText('Key Challenges', { x: M, y: 2.0, w: 4, fontSize: 14, bold: true, color: colors.danger } as any);
+    stateSlide.addText('Key Challenges', { x: M, y: 2.35, w: 4.3, fontSize: 14, bold: true, color: colors.danger } as any);
     stateSlide.addText(bullets(roadmap.current_state_analysis.key_challenges, { fontSize: 12 }) as any, {
-        x: M, y: 2.4, w: 4, h: 4.0, valign: 'top', lineSpacingMultiple: 1.2,
+        x: M, y: 2.7, w: 4.3, h: 3.9, valign: 'top', lineSpacingMultiple: 1.1,
     } as any);
-    stateSlide.addText('Existing Capabilities', { x: 5.3, y: 2.0, w: 4, fontSize: 14, bold: true, color: colors.success } as any);
+    stateSlide.addText('Existing Capabilities', { x: 5.5, y: 2.35, w: 4.3, fontSize: 14, bold: true, color: colors.success } as any);
     stateSlide.addText(bullets(roadmap.current_state_analysis.existing_capabilities, { fontSize: 12 }) as any, {
-        x: 5.3, y: 2.4, w: 4, h: 4.0, valign: 'top', lineSpacingMultiple: 1.2,
+        x: 5.5, y: 2.7, w: 4.3, h: 3.9, valign: 'top', lineSpacingMultiple: 1.1,
     } as any);
 
     // ── Technology Domains ──────────────────────────────────────────────────────
@@ -95,8 +97,9 @@ export function downloadTechnicalRoadmapPptx(roadmap: TechnicalRoadmapLLMOutput,
     roadmap.technology_domains.forEach((d) => {
         domRows.push([{ text: s(d.domain_name) }, { text: s(d.description) }]);
     });
+    // start lower to avoid overlapping the heading bar on narrower slides
     domSlide.addTable(domRows, {
-        x: M, y: 1.1, w: `${10 - M * 2}`,
+        x: M, y: 3, w: `${10 - M * 2}`,
         fontSize: 12, border: { pt: 0.5, color: colors.border },
         colW: [3, 6],
         rowH: 0.5,
