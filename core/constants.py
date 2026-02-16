@@ -16,6 +16,12 @@ SWITCHES = {
 }
 
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
+
+# Adaptive Retrieval Parameters
+MIN_CHUNKS_PER_DOC = 10 # Minimum chunks to retrieve per document
+MAX_TOTAL_CHUNKS = 100 # Maximum total chunks to retrieve (for 10+ documents)
+
+
 EASYOCR_WORKERS = 4  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
 TESSERACT_WORKERS = 50  # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
 EASYOCR_GPU = False  # Whether to use GPU for EasyOCR (set to True if you have enough VRAM and want faster OCR)
