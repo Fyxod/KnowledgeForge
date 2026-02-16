@@ -152,6 +152,7 @@ async def extract_document(
     start_time = time.time()
     file_path = path
     ext = Path(path).suffix.lower()
+
     # Derive a safe base name even if file_name is None
     try:
         safe_file_name = file_name or os.path.basename(file_path)
@@ -195,8 +196,9 @@ async def extract_document(
 
         await safe_emit(
             f"{user_id}/progress",
-            {"message": f"processed {safe_file_name} successfully"},
+            {"message": f"Processed {safe_file_name} successfully"},
         )
+
         end_time = time.time()
         return Document(
             id=doc_id,
