@@ -65,6 +65,7 @@ DEBUG
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+debug_agent_response.json
 
 # Unit test / coverage reports
 htmlcov/

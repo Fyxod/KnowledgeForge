@@ -16,7 +16,7 @@ from agent.tools.search import search_tavily as search_tool
 from agent.tools.sql_query import execute_sql_query
 
 from core.constants import *
-from core.embeddings.retriever import get_user_retriever
+from core.embeddings.retriever import get_thread_documents_retriever, rerank_chunks
 from core.llm.client import invoke_llm
 from core.llm.outputs import (
     MainLLMOutputExternal,
@@ -29,36 +29,60 @@ os.makedirs("DEBUG", exist_ok=True)
 
 
 async def retriever(state: AgentState) -> AgentState:
-    """Retrieves documents based on the user's question.
-    This is a placeholder function that simulates document retrieval.
+    """
+    Retrieves documents based on the user's question with balanced multi-document representation.
+
+    This function now uses the robust retrieval strategy that ensures:
+    1. Balanced representation across all documents in the thread
+    2. Each document gets proportional chunks based on total document count
+    3. Better coverage when multiple documents are present
+    4. Re-ranking for optimal relevance and diversity
     """
     start_time = time.time()
-    doc_retriever = get_user_retriever(
-        state.user_id, state.thread_id, k=CHUNK_COUNT
-    )  # try different k values
-    end_time = time.time()
-    print(
-        f"Initialized retriever in {end_time - start_time:.2f} seconds for user {state.user_id}"
+
+    # Use the new robust retrieval function that ensures document diversity
+    # Uses adaptive scaling based on document count
+    retrieved_docs = await get_thread_documents_retriever(
+        user_id=state.user_id,
+        thread_id=state.thread_id,
+        k=None,  # None enables adaptive scaling
+        min_chunks_per_doc=MIN_CHUNKS_PER_DOC,
+        max_total_chunks=MAX_TOTAL_CHUNKS
     )
 
-    start_time = time.time()
-    retrieved_docs = await doc_retriever.ainvoke(
-        state.query or state.resolved_query or state.original_query
-    )
     end_time = time.time()
     print(
-        f"Retrieved {len(retrieved_docs)} chunks in {end_time - start_time:.2f} seconds for user {state.user_id}"
+        f"Retrieved {len(retrieved_docs)} documents in {end_time - start_time:.2f} seconds for user {state.user_id}"
     )
-    retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
+
+    # Re-rank chunks for better relevance and diversity
+    query = state.query or state.resolved_query or state.original_query
+    rerank_start = time.time()
+    reranked_docs = rerank_chunks(
+        query=query,
+        chunks=retrieved_docs,
+        top_k=len(retrieved_docs),
+        diversity_lambda=0.5  # Balance between relevance and diversity
+    )
+    rerank_end = time.time()
+    print(f"Re-ranking completed in {rerank_end - rerank_start:.2f} seconds")
+
     modified_docs = []
-    for doc in retrieved_docs:
+    for doc in reranked_docs:
         metadata = doc.get("metadata", {}) or {}
+        doc_title = metadata.get("title", "Unknown Title")
+        doc_id = metadata.get("document_id", "")
+
+        # Format content with document name prominently displayed
+        content = doc.get("page_content", "")
+        formatted_content = f"[Document: {doc_title}]\n\n{content}"
+
         modified_docs.append(
             {
-                "document_id": metadata.get("document_id", ""),
-                "title": metadata.get("title", "Unknown Title"),
+                "document_id": doc_id,
+                "title": doc_title,
                 "page_no": metadata.get("page_no", 1),
-                "content": doc.get("page_content", ""),
+                "content": formatted_content,
             }
         )
 
@@ -93,13 +117,16 @@ async def generate(state: AgentState) -> AgentState:
                 gpu_model=state.llm.model,
                 port=state.llm.port,
             )
+
             result = response_schema.model_validate(result)
             end_time = time.time()
             print("LLM result: ", result)
             print(f"LLM response time: {end_time - start_time:.2f} seconds")
+
             state.messages.append(HumanMessage(content=state.query))  # controversial
             state.messages.append(AIMessage(content=result.answer))
             state.messages.append(AIMessage("Action taken: " + result.action))
+
             state.answer = result.answer
             state.action = result.action
             # state.chunks_used = []  # temporary
@@ -109,6 +136,7 @@ async def generate(state: AgentState) -> AgentState:
             state.document_id = result.document_id or None
             state.sql_query = getattr(result, "sql_query", None)
             return state
+
         except Exception as e:
             print(f"Error in generate (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
@@ -133,7 +161,7 @@ async def web_search(state: AgentState) -> AgentState:
             state.web_search_results = results
             return state
         except Exception as e:
-            print(f"Error in web_search (attempt {attempt+1}/{max_retries}): {e}")
+            print(f"Error in web search (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 state.web_search = False
                 state.web_search_results = []
@@ -177,6 +205,7 @@ async def self_knowledge(state: AgentState) -> AgentState:
         gpu_model=state.llm.model,
         port=state.llm.port,
     )
+
     result = SelfKnowledgeLLMOutput.model_validate(result)
     state.messages.append(AIMessage(content=result.answer))
     state.answer = result.answer
@@ -198,6 +227,7 @@ async def document_summarizer(state: AgentState) -> AgentState:
 
     parsed_dir = f"data/{state.user_id}/threads/{state.thread_id}/parsed"
     os.makedirs(parsed_dir, exist_ok=True)
+
     for doc in state.chunks:
         if doc["metadata"]["document_id"] == document_id:
             file_name = doc["metadata"]["file_name"]
@@ -239,7 +269,7 @@ async def global_summarizer(state: AgentState) -> AgentState:
     json_file_path = os.path.join(parsed_dir, "global_summary.json")
 
     if not os.path.exists(json_file_path):
-        print(f"Global summary for the documents not available")
+        print("Global summary for the documents not available")
         state.summary = "No global summary available for the documents. Use your own knowledge and context to provide an answer."
         state.after_summary = GENERATE
         return state
@@ -318,12 +348,15 @@ def main_router(state: AgentState) -> str:
         else:
             print("Router -> Max SQL retries reached, answering with what we have")
             return ANSWER
+
     elif state.action == DOCUMENT_SUMMARIZER:
         print("Router -> Summarizing document")
         return DOCUMENT_SUMMARIZER
+
     elif state.action == GLOBAL_SUMMARIZER:
         print("Router -> Summarizing global context")
         return GLOBAL_SUMMARIZER
+
     elif state.action == FAILURE:
         return FAILURE
 

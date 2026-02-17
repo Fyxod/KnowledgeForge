@@ -10,6 +10,7 @@ import { Document, api } from '@/lib/api';
 import { toast } from 'sonner';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
 import { downloadSummaryPdf } from '@/lib/summary-pdf';
+import { downloadSummaryPptx } from '@/lib/summary-pptx';
 
 type Props = {
   open: boolean;
@@ -101,49 +102,51 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
               </div>
 
               <ScrollArea className="h-64 border rounded-lg p-3">
-                {documents.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    No documents available in this thread
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {/* All Documents option */}
-                    <div
-                      key={ALL_DOCS_ID}
-                      className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent/40' : ''}`}
-                      onClick={() => handleToggle(ALL_DOCS_ID)}
-                    >
-                      <Checkbox
-                        checked={selectedDoc === ALL_DOCS_ID}
-                        onCheckedChange={() => handleToggle(ALL_DOCS_ID)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate group-hover:text-primary-foreground">All Documents in Thread</p>
-                        <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">Generate a summary using all uploaded documents.</p>
-                      </div>
-                    </div>
-                    {documents.map((doc) => (
+                <div className="w-full overflow-hidden">
+                  {documents.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      No documents available in this thread
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* All Documents option */}
                       <div
-                        key={doc.docId}
-                        className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === doc.docId ? 'bg-accent/40' : ''}`}
-                        onClick={() => handleToggle(doc.docId)}
+                        key={ALL_DOCS_ID}
+                        className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === ALL_DOCS_ID ? 'bg-accent/40' : ''}`}
+                        onClick={() => handleToggle(ALL_DOCS_ID)}
                       >
                         <Checkbox
-                          checked={selectedDoc === doc.docId}
-                          onCheckedChange={() => handleToggle(doc.docId)}
-                          className="mt-1"
+                          checked={selectedDoc === ALL_DOCS_ID}
+                          onCheckedChange={() => handleToggle(ALL_DOCS_ID)}
+                          className="mt-1 flex-shrink-0"
                         />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate group-hover:text-primary-foreground">{doc.title}</p>
-                          <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
-                            {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
-                          </p>
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <p className="font-medium truncate block w-full group-hover:text-primary-foreground">All Documents in Thread</p>
+                          <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">Generate a summary using all uploaded documents.</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {documents.map((doc) => (
+                        <div
+                          key={doc.docId}
+                          className={`flex items-start space-x-3 p-3 rounded-lg group hover:bg-accent/30 cursor-pointer transition-colors ${selectedDoc === doc.docId ? 'bg-accent/40' : ''}`}
+                          onClick={() => handleToggle(doc.docId)}
+                        >
+                          <Checkbox
+                            checked={selectedDoc === doc.docId}
+                            onCheckedChange={() => handleToggle(doc.docId)}
+                            className="mt-1 flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <p className="font-medium truncate block w-full group-hover:text-primary-foreground" title={doc.title}>{doc.title}</p>
+                            <p className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">
+                              {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </ScrollArea>
 
               <p className="text-sm text-muted-foreground">
@@ -175,13 +178,22 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
             </ScrollArea>
 
             {/* Action Button */}
-            <div className="flex">
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const title = documents.find((d) => d.docId === selectedDoc)?.title || 'Summary';
+                  downloadSummaryPptx(summary, `${title}.pptx`, { title });
+                }}
+                className="ml-auto"
+              >
+                Export as PPT
+              </Button>
               <Button
                 onClick={() => {
                   const title = documents.find((d) => d.docId === selectedDoc)?.title || 'Summary';
                   downloadSummaryPdf(summary, `${title}.pdf`, { title });
                 }}
-                className="ml-auto"
               >
                 Export as PDF
               </Button>

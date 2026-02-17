@@ -512,18 +512,20 @@ const ThreadView = () => {
                 </DialogDescription>
               </DialogHeader>
               <ScrollArea className="max-h-96">
-                <div className="space-y-2">
-                  {documents.map((doc) => (
-                    <div key={doc.docId} className="p-3 border rounded-lg">
-                      <p className="font-medium">{doc.title}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
-                      </p>
-                    </div>
-                  ))}
-                  {documents.length === 0 && (
-                    <p className="text-center text-muted-foreground py-4">No documents uploaded</p>
-                  )}
+                <div className="w-full overflow-hidden">
+                  <div className="space-y-2">
+                    {documents.map((doc) => (
+                      <div key={doc.docId} className="p-3 border rounded-lg overflow-hidden">
+                        <p className="font-medium truncate block w-full" title={doc.title}>{doc.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {doc.type.toUpperCase()} • {new Date(doc.time_uploaded).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))}
+                    {documents.length === 0 && (
+                      <p className="text-center text-muted-foreground py-4">No documents uploaded</p>
+                    )}
+                  </div>
                 </div>
               </ScrollArea>
             </DialogContent>
@@ -615,7 +617,7 @@ const ThreadView = () => {
                       autoFocus
                     />
                   ) : (
-                    <span className="flex-1 text-sm truncate">{fileNames[index] || file.name}</span>
+                    <span className="flex-1 text-sm truncate" title={fileNames[index] || file.name}>{fileNames[index] || file.name}</span>
                   )}
                   {typeof progressMap[index] === 'number' && (
                     <span className="text-xs text-muted-foreground w-12 text-right">{progressMap[index]}%</span>

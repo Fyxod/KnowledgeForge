@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,8 @@ const NewThread = () => {
   const [fileNames, setFileNames] = useState<Record<number, string>>({});
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { refreshUser, user, setUser } = useAuth();
 
@@ -23,6 +25,33 @@ const NewThread = () => {
       const newFiles = Array.from(e.target.files);
       setFiles(prev => [...prev, ...newFiles]);
     }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const newFiles = Array.from(e.dataTransfer.files);
+      setFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const handleUploadAreaClick = () => {
+    fileInputRef.current?.click();
   };
 
   const removeFile = (index: number) => {
@@ -113,16 +142,27 @@ const NewThread = () => {
 
           <div className="space-y-3">
             <Label>Upload Files (Optional)</Label>
-            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+            <div 
+              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                isDragging 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50'
+              }`}
+              onClick={handleUploadAreaClick}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <Upload className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
               <p className="text-sm text-muted-foreground mb-3">
                 Click to upload or drag and drop files
               </p>
               <Input
+                ref={fileInputRef}
                 type="file"
                 multiple
                 onChange={handleFileChange}
-                className="cursor-pointer"
+                className="hidden"
                 accept=".pdf,.doc,.docx,.rtf,.txt,.epub,.odt,.ppt,.pptx,.xls,.xlsx,.csv,.html,.xml,.md,.jpg,.jpeg,.png,.tiff,.bmp,.gif"
               />
             </div>
@@ -140,7 +180,7 @@ const NewThread = () => {
                         autoFocus
                       />
                     ) : (
-                      <span className="flex-1 text-sm truncate">
+                      <span className="flex-1 text-sm truncate" title={fileNames[index] || file.name}>
                         {fileNames[index] || file.name}
                       </span>
                     )}

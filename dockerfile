@@ -22,7 +22,6 @@ RUN python -m pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements-docker.txt
 
 RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
     libtesseract-dev \
     libleptonica-dev \
     pkg-config \

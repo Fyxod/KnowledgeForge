@@ -16,7 +16,13 @@ SWITCHES = {
 }
 
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
-EASYOCR_WORKERS = 4  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
+
+# Adaptive Retrieval Parameters
+MIN_CHUNKS_PER_DOC = 10 # Minimum chunks to retrieve per document
+MAX_TOTAL_CHUNKS = 100 # Maximum total chunks to retrieve (for 10+ documents)
+
+
+EASYOCR_WORKERS = 10  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
 TESSERACT_WORKERS = 50  # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
 EASYOCR_GPU = False  # Whether to use GPU for EasyOCR (set to True if you have enough VRAM and want faster OCR)
 
@@ -61,6 +67,6 @@ DOCUMENT_SUMMARIZER = "document_summarizer"
 SELF_KNOWLEDGE = "self_knowledge"
 SQL_QUERY = "sql_query"
 MAX_WEB_SEARCH = 2
-MAX_SQL_RETRIES = 3
+MAX_SQL_RETRIES = 6
 INTERNAL = "Internal"
 EXTERNAL = "External"
