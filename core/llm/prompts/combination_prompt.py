@@ -25,6 +25,13 @@ def combination_prompt(query: str, sub_answers: list) -> list:
                 "8. Retain the formatting of any lists/headings/bullets from Sub_answers.\n"
                 "9. Ensure the final answer is in **clear, structured Markdown** with headings, bullet points, and bold text for readability.\n"
                 "10. Synthesize ONLY from the provided sub-answers. Do not add external knowledge.\n\n"
+                "### CRITICAL: Document Naming Rules\n"
+                "- **ALWAYS** use the **exact document name/title** as it appears in the sub-answers "
+                "(e.g., \"Annual Report 2025\", \"Q3 Financial Summary\").\n"
+                "- **NEVER** use generic labels like 'Document 1', 'Document 2', 'the first document', "
+                "'the second document', 'the uploaded document', or similar numbered/ordinal references.\n"
+                "- If a sub-answer mentions a document by name, PRESERVE that exact name in the combined answer.\n"
+                "- Inline citations in `[Document Title, Page X]` format MUST be preserved from sub-answers.\n\n"
                 "### Output\n"
                 "Return only the final synthesized answer, written for the end user, without repeating the Resolved_query.\n"
             ),

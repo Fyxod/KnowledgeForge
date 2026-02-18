@@ -165,11 +165,17 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
     # ── Document References & Citations (applies to ALL answer styles) ──
     doc_refs = (
         "\n### Document References & Inline Citations\n"
-        "- **CRITICAL**: When referencing documents, ALWAYS use the **exact document name/title** "
+        "- **MANDATORY**: When referencing documents, you MUST use the **exact document name/title** "
         "as shown in the `[Document: <name>]` prefix of each chunk.\n"
-        "- NEVER use generic labels like 'Document 1', 'Document 2', 'the first document', or 'the uploaded file'.\n"
-        "- NEVER use document IDs in your answers — they are for internal tracking only.\n"
-        '- Example: Say "According to **Annual Report 2025**..." instead of "Document 1 states...".\n'
+        "- **STRICTLY FORBIDDEN**: NEVER use ANY of these patterns:\n"
+        "  - ❌ 'Document 1', 'Document 2', 'Document 3'\n"
+        "  - ❌ 'the first document', 'the second document'\n"
+        "  - ❌ 'the uploaded file', 'your document'\n"
+        "  - ❌ Document IDs (internal tracking codes)\n"
+        "- **CORRECT examples**:\n"
+        '  - ✅ "According to **Annual Report 2025**, revenue increased by 15%."\n'
+        '  - ✅ "The **Q3 Financial Summary** highlights a declining trend."\n'
+        "- To find the correct name: look for `[Document: XYZ]` at the start of each chunk — use `XYZ` as the name.\n"
         "- **INLINE CITATIONS**: For every factual claim or data point, include a citation in the format "
         "`[Document Title, Page X]` at the end of the sentence or paragraph.\n"
         '- Example: "Revenue grew by 15% year-over-year [Annual Report 2025, Page 12]."\n'
