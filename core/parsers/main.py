@@ -990,12 +990,21 @@ async def extract_document(
                         img_bytes = pix.tobytes("png")
                         
                         vlm_text = await vlm_parse_slide(img_bytes)
-                        if vlm_text and len(vlm_text) > len(page_text):
+                        # Force mode (USE_VLM_FOR_PDF=True): always prefer VLM if it returns content
+                        # Auto-detect mode: only use VLM if it extracted more than PyMuPDF
+                        should_use_vlm_result = False
+                        if vlm_text:
+                            if settings.USE_VLM_FOR_PDF:
+                                should_use_vlm_result = True  # Force mode: always use VLM
+                            elif len(vlm_text) > len(page_text):
+                                should_use_vlm_result = True  # Auto-detect: use if VLM got more
+                        
+                        if should_use_vlm_result:
                             page_text = f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
-                            # If VLM succeeded, we might want to skip table/image extraction 
-                            # to avoid duplication, or keep them? 
-                            # For now, let's keep VLM as the primary source if it worked.
-                            table_blocks = [] # Clear table blocks as VLM likely captured them
+                            table_blocks = []  # VLM likely captured tables too
+                            print(f"[PDF] VLM content used for page {page_number + 1} ({len(vlm_text)} chars)")
+                        elif vlm_text:
+                            print(f"[PDF] VLM returned less content than PyMuPDF for page {page_number + 1}, keeping original")
                     except Exception as e:
                         print(f"[PDF] VLM failed for page {page_number + 1}: {e}")
                         traceback.print_exc()
