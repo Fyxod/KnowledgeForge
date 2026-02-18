@@ -2,7 +2,118 @@ import pandas as pd
 import openpyxl
 from openpyxl.utils import get_column_letter
 import re
-from typing import Tuple, List, Dict, Any, Optional
+from typing import Tuple, List, Dict, Any, Optional, Union
+
+
+def detect_merged_header_rows(
+    file_path: str, sheet_name: str, header_row_idx: int, max_scan_rows: int = 10
+) -> Union[List[int], int]:
+    """
+    Detect if the sheet has multi-level headers caused by merged cells.
+
+    Checks for horizontally merged cells in the header region. If a merged cell
+    spans multiple columns in the row at or near header_row_idx, the row below
+    it likely contains sub-headers (e.g., "Budget" spans "Plan" and "Actual").
+
+    Returns:
+        List[int] if multi-level headers detected (e.g., [2, 3])
+        int (header_row_idx) if single-level headers
+    """
+    try:
+        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+        if sheet_name not in wb.sheetnames:
+            wb.close()
+            return header_row_idx
+        ws = wb[sheet_name]
+
+        # Collect merged cell ranges in the header region
+        merged_in_header = []
+        for merged_range in ws.merged_cells.ranges:
+            # merged_range has min_row, max_row, min_col, max_col (1-based)
+            # header_row_idx is 0-based, so the header row in openpyxl is header_row_idx + 1
+            header_row_1based = header_row_idx + 1
+
+            # Check if this merge is in the header region (within a few rows of detected header)
+            if merged_range.min_row <= header_row_1based + 1 and merged_range.min_row >= max(1, header_row_1based - 1):
+                # Check if it spans multiple columns (horizontal merge = multi-level header)
+                col_span = merged_range.max_col - merged_range.min_col + 1
+                if col_span > 1:
+                    merged_in_header.append(merged_range)
+
+        wb.close()
+
+        if not merged_in_header:
+            return header_row_idx
+
+        # We found horizontal merges in the header area.
+        # Determine the parent and child header rows:
+        # The merged cells are in the parent row, the row below has sub-headers.
+        parent_rows = set()
+        for mr in merged_in_header:
+            parent_rows.add(mr.min_row)
+
+        # Convert to 0-based for pandas
+        parent_row_0based = min(parent_rows) - 1
+        child_row_0based = parent_row_0based + 1
+
+        # Validate: child row should exist and be within reasonable range
+        if child_row_0based < max_scan_rows:
+            return [parent_row_0based, child_row_0based]
+
+        return header_row_idx
+
+    except Exception as e:
+        print(f"Error detecting merged headers for sheet {sheet_name}: {e}")
+        return header_row_idx
+
+
+def flatten_multiindex_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Flatten MultiIndex columns into single-level names.
+
+    E.g., ('Budget', 'Plan') -> 'Budget_Plan'
+          ('Budget', 'Actual') -> 'Budget_Actual'
+          ('', 'Name') -> 'Name'
+          ('Total', '') -> 'Total'
+    """
+    if not isinstance(df.columns, pd.MultiIndex):
+        return df
+
+    new_columns = []
+    for col_tuple in df.columns:
+        # Filter out empty/NaN/Unnamed parts
+        parts = []
+        for part in col_tuple:
+            part_str = str(part).strip()
+            if part_str and part_str.lower() != "nan" and not part_str.startswith("Unnamed"):
+                parts.append(part_str)
+
+        if parts:
+            new_columns.append("_".join(parts))
+        else:
+            new_columns.append(f"Column_{len(new_columns)}")
+
+    df.columns = new_columns
+    return df
+
+
+def deduplicate_columns(columns: List[str]) -> List[str]:
+    """
+    Append _2, _3, etc. to duplicate column names to ensure uniqueness.
+
+    E.g., ['amount', 'name', 'amount'] -> ['amount', 'name', 'amount_2']
+    """
+    seen = {}
+    result = []
+    for col in columns:
+        col_lower = col.lower()
+        if col_lower in seen:
+            seen[col_lower] += 1
+            result.append(f"{col}_{seen[col_lower]}")
+        else:
+            seen[col_lower] = 1
+            result.append(col)
+    return result
 
 def find_header_row(file_path: str, sheet_name: str, max_scan_rows: int = 20) -> Tuple[int, Optional[str]]:
     """

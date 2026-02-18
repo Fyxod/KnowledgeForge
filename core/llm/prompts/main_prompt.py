@@ -114,16 +114,15 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
             "- If multiple sources contradict, mention it clearly using a note block.\n"
         )
 
-    # ── Document References ──
-    doc_refs = ""
-    if not is_brief:
-        doc_refs = (
-            "\n### Document References\n"
-            "- **IMPORTANT**: When referencing documents in your answer, ALWAYS use the **document name/title** "
-            "(shown at the top of each chunk), NOT the document ID.\n"
-            "- Document IDs are for internal tracking only and should NOT appear in your answers.\n"
-            '- Example: Refer to "Annual Report 2025" instead of "document 73c47".\n'
-        )
+    # ── Document References (applies to ALL answer styles) ──
+    doc_refs = (
+        "\n### Document References\n"
+        "- **CRITICAL**: When referencing documents, ALWAYS use the **exact document name/title** "
+        "as shown in the `[Document: <name>]` prefix of each chunk.\n"
+        "- NEVER use generic labels like 'Document 1', 'Document 2', 'the first document', or 'the uploaded file'.\n"
+        "- NEVER use document IDs in your answers — they are for internal tracking only.\n"
+        '- Example: Say "According to **Annual Report 2025**..." instead of "Document 1 states...".\n'
+    )
 
     # ── Output Structure Example ──
     if is_brief:
@@ -219,12 +218,13 @@ def main_prompt(
                 }
             )
 
-    # ── Conversation history ──
-    for m in messages:
-        if m.type == "human":
-            contents.append({"role": "user", "parts": m.content})
-        elif m.type == "ai":
-            contents.append({"role": "assistant", "parts": m.content})
+    # ── Conversation history (disabled — messages is always empty now) ──
+    if messages:
+        for m in messages:
+            if m.type == "human":
+                contents.append({"role": "user", "parts": m.content})
+            elif m.type == "ai":
+                contents.append({"role": "assistant", "parts": m.content})
 
     # ── Summary context ──
     if summary:

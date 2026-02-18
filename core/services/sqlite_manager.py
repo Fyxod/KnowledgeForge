@@ -11,7 +11,7 @@ import os
 import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from core.parsers.excel_utils import find_header_row
+from core.parsers.excel_utils import find_header_row, detect_merged_header_rows, flatten_multiindex_columns, deduplicate_columns
 
 
 def _clean_dataframe_unicode(df: pd.DataFrame) -> pd.DataFrame:
@@ -118,8 +118,10 @@ class SQLiteManager:
                 df = pd.read_csv(file_path)
                 # Clean unicode whitespace from all cells
                 df = _clean_dataframe_unicode(df)
-                # Clean column names
-                df.columns = [cls._sanitize_column_name(c) for c in df.columns]
+                # Clean and deduplicate column names
+                df.columns = deduplicate_columns(
+                    [cls._sanitize_column_name(c) for c in df.columns]
+                )
                 df = df.convert_dtypes()
 
                 table_name = cls._sanitize_table_name(base_name)
@@ -139,13 +141,26 @@ class SQLiteManager:
                 for sheet_name in xls.sheet_names:
                     # Detect Header to ensure correct columns
                     header_idx, _ = find_header_row(file_path, sheet_name)
-                    df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
+
+                    # Detect multi-level headers from merged cells (.xlsx only)
+                    if ext == ".xlsx":
+                        header_param = detect_merged_header_rows(file_path, sheet_name, header_idx)
+                    else:
+                        header_param = header_idx
+
+                    df = pd.read_excel(xls, sheet_name=sheet_name, header=header_param)
+
+                    # Flatten MultiIndex columns if multi-level headers were detected
+                    if isinstance(header_param, list):
+                        df = flatten_multiindex_columns(df)
 
                     # Clean unicode whitespace from all cells
                     df = _clean_dataframe_unicode(df)
 
-                    # Clean column names
-                    df.columns = [cls._sanitize_column_name(c) for c in df.columns]
+                    # Clean and deduplicate column names
+                    df.columns = deduplicate_columns(
+                        [cls._sanitize_column_name(c) for c in df.columns]
+                    )
 
                     # Drop fully empty rows
                     df = df.dropna(how="all")

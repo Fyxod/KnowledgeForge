@@ -13,7 +13,7 @@ import io
 import re
 from app.socket_handler import sio
 from core.parsers.image import image_parser
-from core.parsers.excel_utils import find_header_row, enrich_dataframe_with_metadata
+from core.parsers.excel_utils import find_header_row, enrich_dataframe_with_metadata, detect_merged_header_rows, flatten_multiindex_columns, deduplicate_columns
 from core.models.document import Document, Page
 from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from core.services.sqlite_manager import SQLiteManager
@@ -353,12 +353,20 @@ async def extract_document(
                     # 1. Detect Header & Context
                     header_idx, context = find_header_row(file_path, sheet_name)
                     
-                    # 2. Read DataFrame with correct header
-                    df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
+                    # 2. Detect multi-level headers from merged cells
+                    header_param = detect_merged_header_rows(file_path, sheet_name, header_idx)
                     
-                    # 3. Enrich with Metadata (Colors, Comments)
+                    # 3. Read DataFrame with correct header(s)
+                    df = pd.read_excel(xls, sheet_name=sheet_name, header=header_param)
+                    
+                    # 4. Flatten MultiIndex columns if multi-level headers detected
+                    if isinstance(header_param, list):
+                        df = flatten_multiindex_columns(df)
+                    
+                    # 5. Enrich with Metadata (Colors, Comments)
                     # Note: We pass header_idx so we know where data starts
-                    df = enrich_dataframe_with_metadata(df, file_path, sheet_name, header_idx)
+                    enrichment_header = header_param[-1] if isinstance(header_param, list) else header_param
+                    df = enrich_dataframe_with_metadata(df, file_path, sheet_name, enrichment_header)
                     
                     sheets_data[sheet_name] = (df, context)
 
@@ -459,6 +467,9 @@ async def extract_document(
                             col_str = f"Column_{i}"
                     new_cols.append(col_str)
                 df.columns = new_cols
+
+                # Deduplicate column names (handles duplicates after cleanup)
+                df.columns = deduplicate_columns(list(df.columns))
 
                 # Drop columns that are entirely NaN or empty
                 df = df.dropna(axis=1, how="all")

@@ -56,12 +56,6 @@ async def query(request: Request, body: QueryRequest):
     chunks = []
     chunks_used = []
 
-    for message in thread.get("chats", []):
-        if message["type"] == "user":
-            messages.append(HumanMessage(content=message["content"]))
-        elif message["type"] == "agent":
-            messages.append(AIMessage(content=message["content"]))
-
     # Check if spreadsheet data is available for this thread
     has_spreadsheet = SQLiteManager.has_spreadsheet_data(user_id, thread_id)
     spreadsheet_schema = None

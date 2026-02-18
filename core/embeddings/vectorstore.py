@@ -3,8 +3,14 @@ import os
 import time
 import pickle
 import math
+import gc
 from typing import List
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# Set WAL journal mode for ChromaDB's SQLite BEFORE importing chromadb.
+# This is critical for FUSE filesystems where fcntl() locking is unreliable.
+os.environ.setdefault("CHROMA_SQLITE_JOURNAL_MODE", "WAL")
+
 from langchain_chroma import Chroma
 from core.embeddings.embeddings import get_embedding_function
 from core.models.document import Documents
@@ -83,6 +89,7 @@ def _check_and_migrate_chroma(persist_path: str, user_id: str):
     import shutil
     import chromadb
 
+    client = None
     try:
         client = chromadb.PersistentClient(path=persist_path)
         try:
@@ -99,20 +106,32 @@ def _check_and_migrate_chroma(persist_path: str, user_id: str):
                         )
                         # Close the client, then nuke the directory
                         del client
+                        client = None
+                        gc.collect()
+                        time.sleep(0.5)  # Allow FUSE to release file locks
                         shutil.rmtree(persist_path, ignore_errors=True)
                         os.makedirs(persist_path, exist_ok=True)
                         return
         except ValueError:
             # Collection doesn't exist, that's fine
             pass
-        # Clean up client reference so LangChain can create its own
-        del client
     except Exception as e:
         print(f"[MIGRATION CHECK] Error checking dimensions: {e}")
         # If anything goes wrong, nuke and recreate to be safe
         import shutil
+        if client is not None:
+            del client
+            client = None
+        gc.collect()
+        time.sleep(0.5)  # Allow FUSE to release file locks
         shutil.rmtree(persist_path, ignore_errors=True)
         os.makedirs(persist_path, exist_ok=True)
+    finally:
+        # Ensure client is always cleaned up to release file locks on FUSE
+        if client is not None:
+            del client
+            gc.collect()
+            time.sleep(0.5)  # Allow FUSE to release file locks
 
 
 # Get Chroma vector store instance (with auto-migration for dimension changes)
@@ -250,17 +269,28 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
             f"Generated embeddings for batch {batch_idx + 1} in {end_time - start_time:.2f} seconds"
         )
 
-        # Upsert to Chroma
+        # Upsert to Chroma (with retry for FUSE lock issues)
         print(f"Upserting batch {batch_idx + 1} to Chroma")
-        start_time = time.time()
-        await asyncio.to_thread(
-            vectorstore._collection.upsert,
-            embeddings=embeddings,
-            documents=list(batch_texts),
-            metadatas=list(batch_metadatas),
-            ids=list(batch_ids),
-        )
-        end_time = time.time()
-        print(f"Upserted batch {batch_idx + 1} in {end_time - start_time:.2f} seconds")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                start_time = time.time()
+                await asyncio.to_thread(
+                    vectorstore._collection.upsert,
+                    embeddings=embeddings,
+                    documents=list(batch_texts),
+                    metadatas=list(batch_metadatas),
+                    ids=list(batch_ids),
+                )
+                end_time = time.time()
+                print(f"Upserted batch {batch_idx + 1} in {end_time - start_time:.2f} seconds")
+                break
+            except Exception as e:
+                if "locked" in str(e).lower() and attempt < max_retries - 1:
+                    wait = 2 ** attempt  # 1s, 2s, 4s
+                    print(f"[ChromaDB] Lock detected on batch {batch_idx + 1}, retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                    await asyncio.sleep(wait)
+                else:
+                    raise
 
     print(f"Saved {len(chunk_data)} chunks to Chroma for user {user_id}")

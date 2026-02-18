@@ -35,12 +35,13 @@ def self_knowledge_prompt(
         }
     )
 
-    # Conversation history — previously ignored despite being a parameter
-    for m in messages:
-        if m.type == "human":
-            contents.append({"role": "user", "parts": m.content})
-        elif m.type == "ai":
-            contents.append({"role": "assistant", "parts": m.content})
+    # Conversation history (disabled — messages is always empty now)
+    if messages:
+        for m in messages:
+            if m.type == "human":
+                contents.append({"role": "user", "parts": m.content})
+            elif m.type == "ai":
+                contents.append({"role": "assistant", "parts": m.content})
 
     # Final user question
     contents.append({"role": "user", "parts": f"**Question:** {question}\n"})

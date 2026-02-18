@@ -32,12 +32,8 @@ def build_main_prompt(state: AgentState):
     Builds the main prompt for the agent based on the current state.
     """
 
-    recent_chats = get_recent_history(
-        state.messages, turns=5
-    )  # fine tune the no of turns
-
     return main_prompt(
-        messages=recent_chats,
+        messages=[],
         chunks=state.chunks,
         question=state.query or state.resolved_query or state.original_query,
         summary=state.summary,
@@ -58,11 +54,7 @@ def build_self_knowledge_prompt(
     Builds the self-knowledge prompt for the agent based on the current state.
     """
 
-    recent_chats = get_recent_history(
-        state.messages, turns=5
-    )  # fine tune the no of turns
-
     return self_knowledge_prompt(
-        messages=recent_chats,
+        messages=[],
         question=state.query or state.resolved_query or state.original_query,
     )
