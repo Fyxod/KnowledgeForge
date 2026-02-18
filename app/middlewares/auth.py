@@ -1,7 +1,7 @@
 import jwt
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
-from fastapi import Request
+from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -13,6 +13,14 @@ def normalize_path(path: str) -> str:
     if path != "/" and path.endswith("/"):
         return path.rstrip("/")
     return path
+
+
+def get_current_user_email(request: Request) -> str:
+    """Dependency to get the current user's email from request state."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    return user.email
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
