@@ -28,6 +28,10 @@ export interface Chat {
   type: 'user' | 'agent';
   content: string;
   timestamp: string;
+  // Enhanced metadata fields from Phase 1/2 backend
+  suggested_questions?: string[];
+  confidence_score?: number;
+  thought_process?: string; // For Deep Reasoning output
   sources?: {
     documents_used: Array<{
       title: string;
@@ -77,6 +81,10 @@ export interface QueryResponse {
   question: string;
   answer: string;
   use_self_knowledge?: boolean;
+  // Enhanced metadata fields
+  suggested_questions?: string[];
+  confidence_score?: number;
+  thought_process?: string;
   // Original shape (legacy)
   docs_used?: Array<{
     title: string;

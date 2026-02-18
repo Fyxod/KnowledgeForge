@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
@@ -77,7 +77,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
         }}
       >
         <Button variant="ghost" className="h-10 w-10" onClick={(e) => { e.stopPropagation(); onToggleCollapse && onToggleCollapse(); }} aria-label={collapsed ? 'Expand' : 'Collapse'}>
-          {collapsed ? <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 19l-7-7 7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          {collapsed ? <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5l7 7-7 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> : <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 19l-7-7 7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
         </Button>
       </div>
 
@@ -142,6 +142,24 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </TooltipTrigger>
               <TooltipContent>Strategic Roadmap</TooltipContent>
             </Tooltip>
+            {/* Export Button (Collapsed) */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    if (!threadId) return;
+                    window.open(`${API_URL}/export/${threadId}/html?token=${authToken}`, '_blank');
+                  }}
+                  disabled={!threadId}
+                  aria-label="Export Chat"
+                >
+                  <Download className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export Chat</TooltipContent>
+            </Tooltip>
           </div>
         ) : (
           <div className="w-full">
@@ -168,16 +186,28 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setRoadmapOpen)} disabled={!threadId}>
                 <MapPin className="w-4 h-4 mr-2" /> Strategic Roadmap
               </Button>
+              <div className="border-t my-2" />
+              <Button
+                className="w-full justify-start text-muted-foreground hover:text-primary"
+                variant="ghost"
+                onClick={() => {
+                  if (!threadId) return;
+                  window.open(`${API_URL}/export/${threadId}/html?token=${authToken}`, '_blank');
+                }}
+                disabled={!threadId}
+              >
+                <Download className="w-4 h-4 mr-2" /> Export Chat
+              </Button>
             </div>
           </div>
         )}
       </div>
 
       {/* Modals */}
-  <MindMapModal open={mindOpen} onOpenChange={setMindOpen} threadId={threadId ?? ''} />
-  <WordCloudModal open={wordOpen} onOpenChange={setWordOpen} threadId={threadId ?? ''} documents={documents} />
-  <SummaryModal open={summaryOpen} onOpenChange={setSummaryOpen} threadId={threadId ?? ''} documents={documents} />
-  <InsightsModal open={insightsOpen} onOpenChange={setInsightsOpen} threadId={threadId ?? ''} documents={documents} />
+      <MindMapModal open={mindOpen} onOpenChange={setMindOpen} threadId={threadId ?? ''} />
+      <WordCloudModal open={wordOpen} onOpenChange={setWordOpen} threadId={threadId ?? ''} documents={documents} />
+      <SummaryModal open={summaryOpen} onOpenChange={setSummaryOpen} threadId={threadId ?? ''} documents={documents} />
+      <InsightsModal open={insightsOpen} onOpenChange={setInsightsOpen} threadId={threadId ?? ''} documents={documents} />
 
       {/* Summary handled by SummaryModal above */}
 
@@ -233,10 +263,10 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
           </div>
         </DialogContent>
       </Dialog>
-  <StrategicRoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
-  <TechnicalRoadmapModal open={techRoadmapOpen} onOpenChange={setTechRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
+      <StrategicRoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
+      <TechnicalRoadmapModal open={techRoadmapOpen} onOpenChange={setTechRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
-    );
+  );
 };
 
 export default RightSidebar;

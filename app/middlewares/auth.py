@@ -54,9 +54,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             auth_header.split(" ")[-1] if auth_header.startswith("Bearer ") else None
         )
 
+        # Fallback: Check query params for 'token' (for downloads/exports)
+        if not jwt_token:
+            jwt_token = request.query_params.get("token")
+
         if not jwt_token:
             return JSONResponse(
-                {"error": "Authorization header or JWT token missing"},
+                {"error": "Authorization header, query param, or JWT token missing"},
                 status_code=401,
             )
 

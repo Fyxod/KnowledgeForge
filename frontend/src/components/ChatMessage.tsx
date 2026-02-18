@@ -4,13 +4,23 @@ import { cn } from '@/lib/utils';
 import React from 'react';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { FileText, ExternalLink, Sparkles, AlertTriangle, Lightbulb } from 'lucide-react';
+
 
 interface ChatMessageProps {
   chat: Chat;
   onDelete?: () => void;
+  onSuggestionClick?: (question: string) => void;
 }
 
-export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
+export const ChatMessage = ({ chat, onDelete, onSuggestionClick }: ChatMessageProps) => {
   const isUser = chat.type === 'user';
   // Markdown is enabled by default for bot messages. Removed per-message toggle.
   const displayTime = React.useMemo(() => {
@@ -83,7 +93,78 @@ export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
           </div>
         )}
         <p className="text-xs opacity-70 mt-2">{displayTime}</p>
+
+        {/* Confidence Score Indicator */}
+        {!isUser && chat.confidence_score !== undefined && (
+          <div className="mt-2 flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-xs font-normal border-opacity-50",
+                chat.confidence_score > 0.8 ? "border-green-500 text-green-600 bg-green-500/10" :
+                  chat.confidence_score > 0.5 ? "border-yellow-500 text-yellow-600 bg-yellow-500/10" :
+                    "border-red-500 text-red-600 bg-red-500/10"
+              )}
+            >
+              {chat.confidence_score > 0.8 ? <Sparkles className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+              Confidence: {Math.round(chat.confidence_score * 100)}%
+            </Badge>
+          </div>
+        )}
+
+        {/* Sources Accordion */}
+        {!isUser && chat.sources && (chat.sources.documents_used?.length > 0 || chat.sources.web_used?.length > 0) && (
+          <div className="mt-3 border-t pt-2">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="sources" className="border-b-0">
+                <AccordionTrigger className="py-1 text-xs text-muted-foreground hover:no-underline hover:text-primary">
+                  <span className="flex items-center gap-1">
+                    <FileText className="w-3 h-3" />
+                    Sources ({(chat.sources.documents_used?.length || 0) + (chat.sources.web_used?.length || 0)})
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-2 pt-1 text-xs text-muted-foreground">
+                    {chat.sources.documents_used?.map((doc, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <div className="w-1 h-1 rounded-full bg-primary/40" />
+                        <span className="font-medium text-foreground/80">{doc.title}</span>
+                        <span className="opacity-70">(Page {doc.page_no})</span>
+                      </div>
+                    ))}
+                    {chat.sources.web_used?.map((site, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <ExternalLink className="w-3 h-3" />
+                        <a href={site.url} target="_blank" rel="noopener noreferrer" className="hover:underline text-blue-500">
+                          {site.title || site.url}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+        )}
       </div>
+
+      {/* Suggested Follow-up Questions */}
+      {!isUser && chat.suggested_questions && chat.suggested_questions.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2 ml-11 max-w-[80%]">
+          {chat.suggested_questions.map((q, idx) => (
+            <Button
+              key={idx}
+              variant="outline"
+              size="sm"
+              className="h-auto py-1.5 px-3 rounded-full text-xs bg-background/50 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-muted-foreground hover:text-primary whitespace-normal text-left h-auto"
+              onClick={() => onSuggestionClick?.(q)}
+            >
+              <Lightbulb className="w-3 h-3 mr-2 opacity-70" />
+              {q}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {isUser && (
         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">

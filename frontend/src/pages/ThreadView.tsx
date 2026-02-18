@@ -129,7 +129,7 @@ const ThreadView = () => {
 
   const loadThread = async (options?: { suppressErrorToast?: boolean }) => {
     if (!threadId) return;
-    
+
     try {
       const thread = await api.getThread(threadId);
       const nextChats = thread.chats || [];
@@ -271,7 +271,7 @@ const ThreadView = () => {
       });
       setDocuments(prev => [...prev, ...response.documents]);
       toast.success('Files uploaded successfully!');
-      
+
       setPendingFiles([]);
       setFileNames({});
       setProgressMap({});
@@ -324,7 +324,7 @@ const ThreadView = () => {
       // Support both legacy shape and new `sources` wrapper; default to empty arrays
       const docsUsed = response.sources?.documents_used ?? response.docs_used ?? [];
       const webUsed = response.sources?.web_used ?? response.web_used ?? [];
-      
+
       setChats(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = {
@@ -501,6 +501,7 @@ const ThreadView = () => {
                 <ChatMessage
                   chat={chat}
                   onDelete={isPendingAgentResponse ? undefined : () => handleDeleteChat(index)}
+                  onSuggestionClick={(q) => setInput(q)}
                 />
                 {shouldShowSources && (
                   <div className="ml-11">
@@ -602,8 +603,8 @@ const ThreadView = () => {
                 {uploading ? 'Uploading…' : 'Upload'}
               </Button>
             )}
-            <Button 
-              onClick={handleSend} 
+            <Button
+              onClick={handleSend}
               disabled={loading || !input.trim()}
               className="bg-gradient-primary"
             >
@@ -618,9 +619,9 @@ const ThreadView = () => {
       )}
       {/* Word Cloud Modal */}
       {threadId && (
-        <WordCloudModal 
-          open={wordCloudOpen} 
-          onOpenChange={setWordCloudOpen} 
+        <WordCloudModal
+          open={wordCloudOpen}
+          onOpenChange={setWordCloudOpen}
           threadId={threadId}
           documents={documents}
         />
