@@ -16,16 +16,13 @@ pytesseract
 python-dotenv
 python-multipart
 python-socketio
-uvicorn
 uvicorn[standard]
 aiofiles
 google-genai
 openai
-aiofiles
 matplotlib
 wordcloud
 nltk
-pydantic
 pydantic[email]
 sentence-transformers
 PyMuPDF
@@ -42,3 +39,6 @@ tiktoken
 opencv-python-headless
 pdf2image
 easyocr
+python-docx
+rank-bm25
+einops
