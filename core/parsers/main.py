@@ -600,6 +600,84 @@ async def extract_document(
                 f"{user_id}/progress",
                 {"message": f"Processed {safe_file_name} (.doc) with basic extraction"},
             )
+            # --- VLM Enhancement for DOCX (Optimized) ---
+            if settings.USE_VISION_MODEL:
+                try:
+                    print(f"[DOCX] VLM enhancement enabled for {safe_file_name}. Converting to PDF...")
+                    await safe_emit(
+                        f"{user_id}/progress",
+                        {"message": f"Running VLM enhancement on {safe_file_name}..."},
+                    )
+
+                    libreoffice_cmd = get_libreoffice_command()
+                    pdf_path = None
+                    if libreoffice_cmd:
+                        try:
+                            # Use LibreOffice to convert DOCX to PDF
+                            docx_dir = os.path.dirname(file_path)
+                            proc = await asyncio.create_subprocess_exec(
+                                libreoffice_cmd, "--headless", "--convert-to", "pdf",
+                                "--outdir", docx_dir, file_path,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                            )
+                            await asyncio.wait_for(proc.communicate(), timeout=120)
+                            if proc.returncode == 0:
+                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                                if os.path.exists(expected_pdf):
+                                    pdf_path = expected_pdf
+                        except Exception as e:
+                            print(f"[DOCX] LibreOffice conversion failed: {e}")
+                            traceback.print_exc()
+
+                    if pdf_path:
+                        try:
+                            pdf_doc = fitz.open(pdf_path)
+                            vlm_images = []
+                            vlm_labels = []
+                            
+                            # Collect pages (Limit to 50 to avoid massive batch for huge docs?)
+                            # For now, process all. 150 DPI is manageable.
+                            for pg_num in range(len(pdf_doc)):
+                                pg = pdf_doc.load_page(pg_num)
+                                pix = pg.get_pixmap(dpi=150)
+                                vlm_images.append(pix.tobytes("png"))
+                                vlm_labels.append(f"Page {pg_num + 1}")
+                            pdf_doc.close()
+
+                            if vlm_images:
+                                vlm_results = await vlm_parse_concurrent(
+                                    images=vlm_images,
+                                    page_labels=vlm_labels,
+                                    max_concurrent=3
+                                )
+
+                                vlm_combined = "\n\n".join(
+                                    f"[VLM Page {i+1}]\n{r}" 
+                                    for i, r in enumerate(vlm_results) if r
+                                )
+
+                                if vlm_combined:
+                                    enhancement = f"\n\n[VLM Enhanced Content]\n{vlm_combined}\n[/VLM Enhanced Content]"
+                                    text += enhancement
+                                    print(f"[DOCX] VLM enhancement added ({len(vlm_combined)} chars)")
+
+                        except Exception as e:
+                            print(f"[DOCX] VLM processing failed: {e}")
+                            traceback.print_exc()
+                        finally:
+                            # Cleanup PDF
+                            if pdf_path and os.path.exists(pdf_path):
+                                try:
+                                    os.remove(pdf_path)
+                                except:
+                                    pass
+                    else:
+                        print("[DOCX] Skipping VLM: LibreOffice conversion failed or not available")
+                except Exception as e:
+                    print(f"[DOCX] VLM enhancement error: {e}")
+                    traceback.print_exc()
+
             return Document(
                 id=doc_id,
                 type="doc",
@@ -714,6 +792,85 @@ async def extract_document(
                 pages.append(
                     Page(number=slide_number, text=page_text, images=image_names)
                 )
+
+            # --- Optimised VLM Enhancement for PPT ---
+            if settings.USE_VISION_MODEL:
+                try:
+                    print(f"[PPT] VLM enhancement enabled for {safe_file_name}. Converting to PDF...")
+                    await safe_emit(
+                        f"{user_id}/progress",
+                        {"message": f"Running VLM enhancement on {safe_file_name}..."},
+                    )
+
+                    libreoffice_cmd = get_libreoffice_command()
+                    pdf_path = None
+                    if libreoffice_cmd:
+                        try:
+                            # Use LibreOffice to convert PPTX to PDF
+                            ppt_dir = os.path.dirname(file_path)
+                            proc = await asyncio.create_subprocess_exec(
+                                libreoffice_cmd, "--headless", "--convert-to", "pdf",
+                                "--outdir", ppt_dir, file_path,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                            )
+                            await asyncio.wait_for(proc.communicate(), timeout=120)
+                            if proc.returncode == 0:
+                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                                if os.path.exists(expected_pdf):
+                                    pdf_path = expected_pdf
+                        except Exception as e:
+                            print(f"[PPT] LibreOffice PDF conversion failed: {e}")
+                            traceback.print_exc()
+
+                    if pdf_path:
+                        try:
+                            pdf_doc = fitz.open(pdf_path)
+                            vlm_images = []
+                            vlm_labels = []
+                            
+                            # Ensure we don't process more pages than we have slides/pages
+                            num_pdf_pages = len(pdf_doc)
+                            num_slides = len(pages)
+                            
+                            process_count = min(num_pdf_pages, num_slides)
+                            
+                            for pg_num in range(process_count):
+                                pg = pdf_doc.load_page(pg_num)
+                                pix = pg.get_pixmap(dpi=150) # 150 DPI optimized
+                                vlm_images.append(pix.tobytes("png"))
+                                vlm_labels.append(f"Slide {pg_num + 1}")
+                            pdf_doc.close()
+
+                            if vlm_images:
+                                vlm_results = await vlm_parse_concurrent(
+                                    images=vlm_images,
+                                    page_labels=vlm_labels,
+                                    max_concurrent=3
+                                )
+
+                                # Append results to corresponding pages
+                                for i, vlm_text in enumerate(vlm_results):
+                                    if vlm_text and i < len(pages):
+                                        enhancement = f"\n\n[VLM Enhanced Content]\n{vlm_text}\n[/VLM Enhanced Content]"
+                                        pages[i].text += enhancement
+                                        combined_texts[i] += enhancement
+                                        print(f"[PPT] VLM enhancement added to Slide {i+1} ({len(vlm_text)} chars)")
+
+                        except Exception as e:
+                            print(f"[PPT] VLM processing failed: {e}")
+                            traceback.print_exc()
+                        finally:
+                            if pdf_path and os.path.exists(pdf_path):
+                                try:
+                                    os.remove(pdf_path)
+                                except:
+                                    pass
+                    else:
+                        print("[PPT] Skipping VLM: LibreOffice conversion failed")
+                except Exception as e:
+                    print(f"[PPT] VLM enhancement error: {e}")
+                    traceback.print_exc()
 
             # Wait for OCR tasks
             for placeholder, task in ocr_tasks.items():
