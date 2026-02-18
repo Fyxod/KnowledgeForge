@@ -7,9 +7,19 @@ import gc
 from typing import List
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Set WAL journal mode for ChromaDB's SQLite BEFORE importing chromadb.
-# This is critical for FUSE filesystems where fcntl() locking is unreliable.
-os.environ.setdefault("CHROMA_SQLITE_JOURNAL_MODE", "WAL")
+# ── FUSE Filesystem Compatibility ──
+# Must be set BEFORE any chromadb/sqlite3 imports.
+# WAL mode fails on FUSE because it requires mmap() and shared memory (-shm file)
+# which FUSE filesystems don't support. DELETE mode uses simple file-based rollback
+# journals that work reliably on any filesystem.
+os.environ.setdefault("CHROMA_SQLITE_JOURNAL_MODE", "DELETE")
+
+# Disable memory-mapped I/O — FUSE doesn't support mmap reliably
+os.environ.setdefault("SQLITE_MMAP_SIZE", "0")
+
+# Set a busy timeout so SQLite waits (ms) instead of immediately failing on locks
+os.environ.setdefault("SQLITE_BUSY_TIMEOUT", "5000")
+
 
 from langchain_chroma import Chroma
 from core.embeddings.embeddings import get_embedding_function
