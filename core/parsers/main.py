@@ -973,7 +973,7 @@ async def extract_document(
                 # --- VLM Fallback for PPT-as-PDF or complex layouts ---
                 # Heuristic: If text is very sparse (< 50 chars) but page has content, 
                 # OR if explicitly enabled in settings.
-                use_vlm = settings.USE_VLM_FOR_PDF
+                use_vlm = settings.USE_VISION_MODEL
                 if not use_vlm:
                     # Auto-detect "slide" characteristics: 
                     # 1. Low text density
@@ -994,7 +994,7 @@ async def extract_document(
                         # Auto-detect mode: only use VLM if it extracted more than PyMuPDF
                         should_use_vlm_result = False
                         if vlm_text:
-                            if settings.USE_VLM_FOR_PDF:
+                            if settings.USE_VISION_MODEL:
                                 should_use_vlm_result = True  # Force mode: always use VLM
                             elif len(vlm_text) > len(page_text):
                                 should_use_vlm_result = True  # Auto-detect: use if VLM got more

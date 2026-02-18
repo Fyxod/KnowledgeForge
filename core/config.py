@@ -20,11 +20,8 @@ class Settings(BaseSettings):
     VISION_URL: str
     MAIN_MODEL: str
     REMOTE_GPU: bool = False
-    USE_VISION_MODEL: bool = False
+    USE_VISION_MODEL: bool = False  # Set to True in .env to force VLM for all PDF pages
     LOCAL_BASE_URL : str = "http://localhost"
-    
-    # VLM Feature Flag
-    USE_VLM_FOR_PDF: bool = False  # Set to True to force VLM for all PDF pages (slower but more accurate)
 
     class Config:
         env_file = ".env"
