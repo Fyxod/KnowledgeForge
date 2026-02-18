@@ -72,13 +72,18 @@ def login_user(user_input: UserLoginModel):
     if not user or not verify_password(user_data["password"], user["password"]):
         raise HTTPException(status_code=400, detail="Invalid email or password")
 
-    token = jwt.encode(
-        UserJwtPayload(
+    token_payload = UserJwtPayload(
             userId=user["userId"],
             name=user["name"],
             email=user["email"],
             is_active=user.get("is_active", True),
-        ).model_dump(),
+        ).model_dump()
+
+    # Add expiry — tokens valid for 24 hours
+    token_payload["exp"] = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+
+    token = jwt.encode(
+        token_payload,
         key=settings.SECRET_KEY,
         algorithm="HS256",
     )

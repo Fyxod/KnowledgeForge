@@ -167,7 +167,13 @@ async def upload_file(
 
     parsed_data: Documents = await process_files(files_data, user_id, thread_id)
 
-    asyncio.create_task(summarize_documents(parsed_data.model_copy()))
+    async def _safe_summarize(data):
+        try:
+            await summarize_documents(data)
+        except Exception as e:
+            print(f"[upload] Background summarization failed: {e}")
+
+    asyncio.create_task(_safe_summarize(parsed_data.model_copy()))
     # Check if any documents were successfully parsed
     if not parsed_data.documents:
         return {"error": "No documents could be processed successfully"}

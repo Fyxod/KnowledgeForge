@@ -1,7 +1,13 @@
 .env
-.json
-.txt
-.pdf
+# Debug and output files (specific patterns, not blanket extensions)
+formatted_prompt.txt
+llm_result.json
+parsed_data_*.json
+retrieved_docs_*.json
+rewrite_query.txt
+rewrite_result.json
+debug_agent_response.json
+*.pdf
 data
 .virtual
 .vscode
@@ -19,19 +25,10 @@ main.env
 parthenv311
 parthenv310
 parthenv
-.md
-.v
-.json
-test
-.pdf
 images/
-# Project specific files
-formatted_prompt.txt
-llm_result.json
-parsed_data_*.json
-retrieved_docs_*.json
-rewrite_query.txt
-rewrite_result.json
+
+
+
 # Frontend build artifacts
 Frontend/dist/
 Frontend/node_modules/

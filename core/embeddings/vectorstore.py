@@ -9,16 +9,18 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # ── FUSE Filesystem Compatibility ──
 # Must be set BEFORE any chromadb/sqlite3 imports.
-# WAL mode fails on FUSE because it requires mmap() and shared memory (-shm file)
-# which FUSE filesystems don't support. DELETE mode uses simple file-based rollback
-# journals that work reliably on any filesystem.
+# WAL mode fails on FUSE because it requires mmap() and shared memory (-shm file).
+# DELETE mode uses simple file-based rollback journals that work on any filesystem.
 os.environ.setdefault("CHROMA_SQLITE_JOURNAL_MODE", "DELETE")
 
-# Disable memory-mapped I/O — FUSE doesn't support mmap reliably
-os.environ.setdefault("SQLITE_MMAP_SIZE", "0")
+# Turn off synchronous writes — avoids extra fsync() calls that block on FUSE
+os.environ.setdefault("CHROMA_SQLITE_SYNCHRONOUS", "OFF")
 
-# Set a busy timeout so SQLite waits (ms) instead of immediately failing on locks
-os.environ.setdefault("SQLITE_BUSY_TIMEOUT", "5000")
+# Use normal locking mode (not exclusive) so file locks are released between transactions
+os.environ.setdefault("CHROMA_SQLITE_LOCKING_MODE", "NORMAL")
+
+# Disable memory-mapped I/O — FUSE doesn't support mmap reliably
+os.environ.setdefault("CHROMA_SQLITE_MMAP_SIZE", "0")
 
 
 from langchain_chroma import Chroma
@@ -94,12 +96,15 @@ def _check_and_migrate_chroma(persist_path: str, user_id: str):
     """
     Check if existing ChromaDB data has mismatched embedding dimensions.
     If so, delete the entire persist directory to force re-creation.
-    Uses filesystem-level cleanup to avoid dual-client conflicts.
+
+    IMPORTANT: Does NOT nuke the directory on harmless errors like
+    'collection does not exist' — that's normal for first-time users.
     """
     import shutil
     import chromadb
 
     client = None
+    needs_reset = False
     try:
         client = chromadb.PersistentClient(path=persist_path)
         try:
@@ -114,34 +119,28 @@ def _check_and_migrate_chroma(persist_path: str, user_id: str):
                             f"[MIGRATION] Embedding dimension changed: {existing_dim} → {expected_dim}. "
                             f"Resetting ChromaDB for user {user_id}."
                         )
-                        # Close the client, then nuke the directory
-                        del client
-                        client = None
-                        gc.collect()
-                        time.sleep(0.5)  # Allow FUSE to release file locks
-                        shutil.rmtree(persist_path, ignore_errors=True)
-                        os.makedirs(persist_path, exist_ok=True)
-                        return
-        except ValueError:
-            # Collection doesn't exist, that's fine
-            pass
+                        needs_reset = True
+        except (ValueError, Exception) as e:
+            # Collection doesn't exist — this is NORMAL for new users, not an error.
+            # Do NOT nuke the directory for this.
+            print(f"[MIGRATION CHECK] Collection check: {e} (OK for new users)")
     except Exception as e:
-        print(f"[MIGRATION CHECK] Error checking dimensions: {e}")
-        # If anything goes wrong, nuke and recreate to be safe
-        import shutil
+        # Client creation itself failed — the DB may be corrupted
+        print(f"[MIGRATION CHECK] ChromaDB client creation failed: {e}")
+        needs_reset = True
+    finally:
+        # Always clean up the client before LangChain creates its own
         if client is not None:
             del client
             client = None
         gc.collect()
         time.sleep(0.5)  # Allow FUSE to release file locks
+
+    # Reset OUTSIDE the try/finally so client is fully released first
+    if needs_reset:
+        print(f"[MIGRATION CHECK] Resetting ChromaDB directory for user {user_id}")
         shutil.rmtree(persist_path, ignore_errors=True)
         os.makedirs(persist_path, exist_ok=True)
-    finally:
-        # Ensure client is always cleaned up to release file locks on FUSE
-        if client is not None:
-            del client
-            gc.collect()
-            time.sleep(0.5)  # Allow FUSE to release file locks
 
 
 # Get Chroma vector store instance (with auto-migration for dimension changes)

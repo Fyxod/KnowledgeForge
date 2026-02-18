@@ -120,34 +120,6 @@ def _get_authenticated_user(request: Request):
     return payload, user, None
 
 
-@router.delete("/delete/{thread_id}")
-async def delete_thread(request: Request, thread_id: str):
-    """Delete a thread for the authenticated user."""
-    payload = request.state.user
-    if not payload:
-        return {"status": False, "error": "User not authenticated"}
-
-    user_id = payload.userId
-
-    # Find user in DB
-    user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
-    if not user:
-        return {"status": False, "error": "User not found"}
-
-    # Check if thread exists
-    if thread_id not in user.get("threads", {}):
-        return {"status": False, "error": "Thread not found"}
-
-    # Delete thread
-    result = db.users.update_one(
-        {"userId": user_id}, {"$unset": {f"threads.{thread_id}": ""}}
-    )
-
-    if result.modified_count == 1:
-        return {"status": True}
-    else:
-        return {"status": False}
-
 
 @router.put("/{thread_id}")
 async def update_thread(

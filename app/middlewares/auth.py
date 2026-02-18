@@ -5,7 +5,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from core.config import Settings
+from core.config import settings
 from core.models.user import UserJwtPayload
 
 
@@ -52,7 +52,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 status_code=401,
             )
 
-        if not Settings().SECRET_KEY:
+        if not settings.SECRET_KEY:
             return JSONResponse(
                 {"error": "Secret key is not set in the environment"},
                 status_code=500,
@@ -60,7 +60,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Verify token
         try:
-            payload = jwt.decode(jwt_token, Settings().SECRET_KEY, algorithms=["HS256"])
+            payload = jwt.decode(jwt_token, settings.SECRET_KEY, algorithms=["HS256"])
             request.state.user = UserJwtPayload(**payload)
         except ExpiredSignatureError:
             return JSONResponse({"error": "JWT token has expired"}, status_code=401)

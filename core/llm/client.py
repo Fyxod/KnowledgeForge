@@ -1,5 +1,6 @@
 import asyncio
 import time
+import itertools
 from core.config import settings
 from google import genai
 from openai import AsyncOpenAI
@@ -25,7 +26,16 @@ API_KEYS = [
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API)
 MAX_RETRIES = 8  # Total attempts across all LLMs
 
-count = 0
+# Thread-safe API key cycling
+_api_key_cycle = itertools.cycle(API_KEYS)
+_api_key_lock = asyncio.Lock()
+
+
+async def _next_api_key():
+    """Get the next API key in round-robin fashion, safely under concurrency."""
+    async with _api_key_lock:
+        return next(_api_key_cycle)
+
 
 
 async def invoke_llm(
@@ -42,7 +52,6 @@ async def invoke_llm(
     - OpenAI API
     Each returns parsed structured data using the same logic.
     """
-    global count
 
     # Initialize the parser for structured output
     parser = PydanticOutputParser(pydantic_object=response_schema)
@@ -91,8 +100,7 @@ async def invoke_llm(
             print("Falling back to Gemini...")
 
             for _ in range(len(API_KEYS)):
-                api_key = API_KEYS[count % len(API_KEYS)]
-                count = (count + 1) % len(API_KEYS)
+                api_key = await _next_api_key()
                 client = genai.Client(api_key=api_key)
                 s = time.time()
                 try:
