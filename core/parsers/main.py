@@ -18,6 +18,8 @@ from core.models.document import Document, Page
 from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from core.services.sqlite_manager import SQLiteManager
 from core.parsers.slide_export import convert_ppt_to_pptx, export_and_ocr_ppt_with_fallback, get_libreoffice_command
+from core.parsers.vlm import vlm_parse_slide
+from core.config import settings
 from pptx import Presentation
 from docx import Document as DocxDocument
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
@@ -967,6 +969,37 @@ async def extract_document(
                     page_text = "\n".join(non_table_lines)
                 else:
                     page_text = page.get_text("text")
+
+                # --- VLM Fallback for PPT-as-PDF or complex layouts ---
+                # Heuristic: If text is very sparse (< 50 chars) but page has content, 
+                # OR if explicitly enabled in settings.
+                use_vlm = settings.USE_VLM_FOR_PDF
+                if not use_vlm:
+                    # Auto-detect "slide" characteristics: 
+                    # 1. Low text density
+                    # 2. Landscape orientation (width > height) often indicates slides
+                    is_landscape = page.rect.width > page.rect.height
+                    if len(page_text.strip()) < 100 and is_landscape:
+                        use_vlm = True
+                
+                if use_vlm:
+                    try:
+                        print(f"[PDF] Triggering VLM for {safe_file_name} page {page_number + 1}...")
+                        # Render page to image
+                        pix = page.get_pixmap(dpi=200)
+                        img_bytes = pix.tobytes("png")
+                        
+                        vlm_text = await vlm_parse_slide(img_bytes)
+                        if vlm_text and len(vlm_text) > len(page_text):
+                            page_text = f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
+                            # If VLM succeeded, we might want to skip table/image extraction 
+                            # to avoid duplication, or keep them? 
+                            # For now, let's keep VLM as the primary source if it worked.
+                            table_blocks = [] # Clear table blocks as VLM likely captured them
+                    except Exception as e:
+                        print(f"[PDF] VLM failed for page {page_number + 1}: {e}")
+                        traceback.print_exc()
+
             except Exception:
                 traceback.print_exc()
                 page_text = page.get_text("text")

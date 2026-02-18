@@ -150,7 +150,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                   size="icon"
                   onClick={() => {
                     if (!threadId) return;
-                    window.open(`${API_URL}/export/${threadId}/html?token=${authToken}`, '_blank');
+                    window.open(`${API_URL}/export/${threadId}/html?token=${encodeURIComponent(authToken || '')}`, '_blank');
                   }}
                   disabled={!threadId}
                   aria-label="Export Chat"
@@ -192,7 +192,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                 variant="ghost"
                 onClick={() => {
                   if (!threadId) return;
-                  window.open(`${API_URL}/export/${threadId}/html?token=${authToken}`, '_blank');
+                  window.open(`${API_URL}/export/${threadId}/html?token=${encodeURIComponent(authToken || '')}`, '_blank');
                 }}
                 disabled={!threadId}
               >

@@ -9,7 +9,6 @@ import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check, Trash2 
 import { api, Chat, Thread } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { ChatMessage } from '@/components/ChatMessage';
-import { SourcesDisplay } from '@/components/SourcesDisplay';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -334,6 +333,10 @@ const ThreadView = () => {
             documents_used: docsUsed,
             web_used: webUsed,
           },
+          // Map enhanced metadata from backend
+          suggested_questions: response.suggested_questions,
+          confidence_score: response.confidence_score,
+          thought_process: response.thought_process,
         };
         updateUserThreadState(updated, { updatedAt: new Date().toISOString() });
         return updated;
@@ -485,11 +488,6 @@ const ThreadView = () => {
       <ScrollArea ref={scrollRef} className="flex-1 p-4">
         <div className="max-w-4xl mx-auto space-y-4">
           {chats.map((chat, index) => {
-            // Check if this agent message has sources and at least one source array is non-empty
-            const shouldShowSources =
-              chat.type === 'agent' &&
-              chat.sources &&
-              (chat.sources.documents_used.length > 0 || chat.sources.web_used.length > 0);
             const isPendingAgentResponse =
               loading &&
               index === chats.length - 1 &&
@@ -503,14 +501,6 @@ const ThreadView = () => {
                   onDelete={isPendingAgentResponse ? undefined : () => handleDeleteChat(index)}
                   onSuggestionClick={(q) => setInput(q)}
                 />
-                {shouldShowSources && (
-                  <div className="ml-11">
-                    <SourcesDisplay
-                      docsUsed={chat.sources!.documents_used}
-                      webUsed={chat.sources!.web_used}
-                    />
-                  </div>
-                )}
               </div>
             );
           })}

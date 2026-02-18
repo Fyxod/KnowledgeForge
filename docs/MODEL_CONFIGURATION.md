@@ -40,6 +40,9 @@ ollama pull nomic-embed-text
 # For Balanced Setup
 ollama pull qwen2.5:32b
 ollama pull qwen2.5:14b
+
+# VLM (Vision Language Model) for PDF/Slide Parsing
+ollama pull qwen2.5-vl
 ```
 
 ### 2. Configure Environment (`.env`)

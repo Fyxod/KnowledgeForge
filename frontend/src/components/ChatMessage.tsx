@@ -156,7 +156,7 @@ export const ChatMessage = ({ chat, onDelete, onSuggestionClick }: ChatMessagePr
               key={idx}
               variant="outline"
               size="sm"
-              className="h-auto py-1.5 px-3 rounded-full text-xs bg-background/50 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-muted-foreground hover:text-primary whitespace-normal text-left h-auto"
+              className="h-auto py-1.5 px-3 rounded-full text-xs bg-background/50 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-muted-foreground hover:text-primary whitespace-normal text-left"
               onClick={() => onSuggestionClick?.(q)}
             >
               <Lightbulb className="w-3 h-3 mr-2 opacity-70" />
