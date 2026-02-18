@@ -42,7 +42,7 @@ ollama pull qwen2.5:32b
 ollama pull qwen2.5:14b
 
 # VLM (Vision Language Model) for PDF/Slide Parsing
-ollama pull qwen3-vl
+ollama pull qwen3-vl:8b
 ```
 
 ### 2. Configure Environment (`.env`)
