@@ -18,7 +18,7 @@ from core.models.document import Document, Page
 from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from core.services.sqlite_manager import SQLiteManager
 from core.parsers.slide_export import convert_ppt_to_pptx, export_and_ocr_ppt_with_fallback, get_libreoffice_command
-from core.parsers.vlm import vlm_parse_slide
+from core.parsers.vlm import vlm_parse_slide, vlm_parse_concurrent
 from core.config import settings
 from pptx import Presentation
 from docx import Document as DocxDocument
@@ -916,6 +916,7 @@ async def extract_document(
         pages = []
         combined_texts = []
         ocr_tasks = {}
+        vlm_candidates = []  # Collect pages for concurrent VLM processing
 
         image_dir_base = f"data/{user_id}/threads/{thread_id}/images/{name}"
         MIN_IMAGE_SIZE = 50  # Skip images smaller than 50px (icons, bullets)
@@ -970,9 +971,7 @@ async def extract_document(
                 else:
                     page_text = page.get_text("text")
 
-                # --- VLM Fallback for PPT-as-PDF or complex layouts ---
-                # Heuristic: If text is very sparse (< 50 chars) but page has content, 
-                # OR if explicitly enabled in settings.
+                # --- VLM candidate detection (Phase 1: collect, don't process yet) ---
                 use_vlm = settings.USE_VISION_MODEL
                 if not use_vlm:
                     # Auto-detect "slide" characteristics: 
@@ -984,29 +983,17 @@ async def extract_document(
                 
                 if use_vlm:
                     try:
-                        print(f"[PDF] Triggering VLM for {safe_file_name} page {page_number + 1}...")
-                        # Render page to image
-                        pix = page.get_pixmap(dpi=200)
+                        # Render page to image at 150 DPI (optimized: lower than 200 for speed)
+                        pix = page.get_pixmap(dpi=150)
                         img_bytes = pix.tobytes("png")
-                        
-                        vlm_text = await vlm_parse_slide(img_bytes)
-                        # Force mode (USE_VLM_FOR_PDF=True): always prefer VLM if it returns content
-                        # Auto-detect mode: only use VLM if it extracted more than PyMuPDF
-                        should_use_vlm_result = False
-                        if vlm_text:
-                            if settings.USE_VISION_MODEL:
-                                should_use_vlm_result = True  # Force mode: always use VLM
-                            elif len(vlm_text) > len(page_text):
-                                should_use_vlm_result = True  # Auto-detect: use if VLM got more
-                        
-                        if should_use_vlm_result:
-                            page_text = f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
-                            table_blocks = []  # VLM likely captured tables too
-                            print(f"[PDF] VLM content used for page {page_number + 1} ({len(vlm_text)} chars)")
-                        elif vlm_text:
-                            print(f"[PDF] VLM returned less content than PyMuPDF for page {page_number + 1}, keeping original")
+                        vlm_candidates.append({
+                            "page_index": page_number,  # 0-based index into pages[]
+                            "page_number": page_number + 1,  # 1-based for display
+                            "image_bytes": img_bytes,
+                            "original_text": page_text,
+                        })
                     except Exception as e:
-                        print(f"[PDF] VLM failed for page {page_number + 1}: {e}")
+                        print(f"[PDF] Failed to render page {page_number + 1} for VLM: {e}")
                         traceback.print_exc()
 
             except Exception:
@@ -1069,6 +1056,47 @@ async def extract_document(
             pages.append(
                 Page(number=page_number + 1, text=page_text, images=image_names)
             )
+
+        # --- Phase 2: Concurrent VLM processing for candidate pages ---
+        if vlm_candidates:
+            print(f"[PDF] {len(vlm_candidates)} pages queued for concurrent VLM processing")
+            await safe_emit(
+                f"{user_id}/progress",
+                {"message": f"Running VLM on {len(vlm_candidates)} pages of {safe_file_name}..."},
+            )
+
+            vlm_images = [c["image_bytes"] for c in vlm_candidates]
+            vlm_labels = [f"Page {c['page_number']}" for c in vlm_candidates]
+
+            vlm_results = await vlm_parse_concurrent(
+                images=vlm_images,
+                page_labels=vlm_labels,
+                max_concurrent=3,
+            )
+
+            # Merge VLM results back into pages
+            for candidate, vlm_text in zip(vlm_candidates, vlm_results):
+                if not vlm_text:
+                    continue
+
+                page_idx = candidate["page_index"]
+                original_text = candidate["original_text"]
+
+                # Force mode: always use VLM content
+                # Auto-detect mode: only use if VLM extracted more
+                should_use = False
+                if settings.USE_VISION_MODEL:
+                    should_use = True
+                elif len(vlm_text) > len(original_text):
+                    should_use = True
+
+                if should_use:
+                    enhanced_text = f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
+                    pages[page_idx].text = enhanced_text
+                    combined_texts[page_idx] = enhanced_text
+                    print(f"[PDF] VLM content used for page {candidate['page_number']} ({len(vlm_text)} chars)")
+                else:
+                    print(f"[PDF] VLM returned less than PyMuPDF for page {candidate['page_number']}, keeping original")
 
         # Wait for OCR tasks from the embedded raster images only
         for placeholder, task in ocr_tasks.items():
