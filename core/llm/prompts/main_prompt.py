@@ -7,9 +7,9 @@ def detect_answer_style(question: str) -> str:
     Detect the desired answer style based on keywords in the question.
 
     Returns:
-        'brief'    - User wants a concise answer (keywords: "3 bullet points", "summarize", "brief", "short", "concise")
-        'detailed' - User wants a detailed answer (keywords: "detailed", "elaborate", "explain in detail", "comprehensive")
-        'normal'   - Default to detailed answers
+        'brief'    - User wants a concise answer
+        'analyst'  - User wants strategic analysis with recommendations
+        'detailed' - User wants a detailed answer (default)
     """
     question_lower = question.lower()
 
@@ -26,6 +26,42 @@ def detect_answer_style(question: str) -> str:
     for keyword in brief_keywords:
         if keyword in question_lower:
             return "brief"
+
+    # Analyst / strategic answer keywords
+    analyst_keywords = [
+        "recommend",
+        "recommendation",
+        "what should",
+        "implications",
+        "strategy",
+        "strategic",
+        "suggest",
+        "advise",
+        "action items",
+        "what are the risks",
+        "swot",
+        "pros and cons",
+        "trade-off",
+        "tradeoff",
+        "evaluate",
+        "assessment",
+        "analysis",
+        "analyze",
+        "analyse",
+        "what can we learn",
+        "what does this mean",
+        "insights",
+        "common trend",
+        "common themes",
+        "compare",
+        "comparison",
+        "contrast",
+        "gaps",
+        "opportunities",
+    ]
+    for keyword in analyst_keywords:
+        if keyword in question_lower:
+            return "analyst"
 
     # Detailed answer keywords
     detailed_keywords = [
@@ -51,6 +87,7 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
     """
 
     is_brief = answer_style == "brief"
+    is_analyst = answer_style == "analyst"
     is_external = mode == EXTERNAL
 
     # ── Role ──
@@ -58,6 +95,12 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
         role = (
             "You are an expert assistant that answers questions using the provided **documents** "
             "and any supplied **external data** (such as web search results).\n"
+        )
+    elif is_analyst:
+        role = (
+            "You are a **senior strategic analyst** that provides data-driven insights, "
+            "recommendations, and risk assessments based on the provided **documents**. "
+            "Your analysis must always be grounded in the data — never speculate beyond what the evidence supports.\n"
         )
     else:
         role = (
@@ -67,6 +110,11 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
     # ── Task ──
     if is_brief:
         task = "Your job is to give clear, concise, and brief answers using Markdown formatting.\n\n"
+    elif is_analyst:
+        task = (
+            "Your job is to provide **strategic analysis with actionable recommendations** using Markdown formatting. "
+            "Every claim must be backed by evidence from the documents.\n\n"
+        )
     else:
         task = "Your job is to create **clear, structured, and comprehensive answers** using Markdown formatting.\n\n"
 
@@ -114,14 +162,19 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
             "- If multiple sources contradict, mention it clearly using a note block.\n"
         )
 
-    # ── Document References (applies to ALL answer styles) ──
+    # ── Document References & Citations (applies to ALL answer styles) ──
     doc_refs = (
-        "\n### Document References\n"
+        "\n### Document References & Inline Citations\n"
         "- **CRITICAL**: When referencing documents, ALWAYS use the **exact document name/title** "
         "as shown in the `[Document: <name>]` prefix of each chunk.\n"
         "- NEVER use generic labels like 'Document 1', 'Document 2', 'the first document', or 'the uploaded file'.\n"
         "- NEVER use document IDs in your answers — they are for internal tracking only.\n"
         '- Example: Say "According to **Annual Report 2025**..." instead of "Document 1 states...".\n'
+        "- **INLINE CITATIONS**: For every factual claim or data point, include a citation in the format "
+        "`[Document Title, Page X]` at the end of the sentence or paragraph.\n"
+        '- Example: "Revenue grew by 15% year-over-year [Annual Report 2025, Page 12]."\n'
+        "- If a claim is supported by multiple documents, cite all of them: "
+        '"Both reports confirm the trend [Report A, Page 3] [Report B, Page 7]."\n'
     )
 
     # ── Output Structure Example ──
@@ -137,7 +190,26 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
             "- **Point 3:** Brief explanation...\n"
             "```\n"
         )
-    else:
+    if is_analyst:
+        structure = (
+            "\n### Output Structure (Analyst Mode)\n"
+            "```\n"
+            "## Key Findings\n"
+            "- **Finding 1:** Evidence-based insight [Document, Page X]\n"
+            "- **Finding 2:** Evidence-based insight [Document, Page X]\n\n"
+            "## Implications\n"
+            "- What do these findings mean for the organization?\n"
+            "- What patterns or trends emerge from the data?\n\n"
+            "## Recommendations\n"
+            "1. **Action Item 1:** Specific recommendation with rationale...\n"
+            "2. **Action Item 2:** Specific recommendation with rationale...\n\n"
+            "## Risks & Considerations\n"
+            "- Potential risks or caveats associated with the recommendations\n\n"
+            "## Summary\n"
+            "(Concise conclusion with key takeaway)\n"
+            "```\n"
+        )
+    elif not is_brief:
         if is_external:
             structure = (
                 "\n### Output Structure\n"
@@ -145,7 +217,7 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
                 "## Overview\n"
                 "(Comprehensive explanation)\n\n"
                 "## Key Information\n"
-                "- **Document Insight:** Detailed explanation with context...\n"
+                "- **Document Insight:** Detailed explanation with context [Document, Page X]...\n"
                 "- **Web Insight:** Detailed explanation with examples...\n\n"
                 "## Additional Insights\n"
                 "- Examples, comparisons, or clarifications.\n"
@@ -163,9 +235,9 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
                 "## Overview\n"
                 "(Comprehensive explanation)\n\n"
                 "## Key Details\n"
-                "- **Point 1:** Detailed explanation with context...\n"
-                "- **Point 2:** Detailed explanation with examples...\n"
-                "- **Point 3:** Detailed explanation with clarifications...\n\n"
+                "- **Point 1:** Detailed explanation with context [Document, Page X]...\n"
+                "- **Point 2:** Detailed explanation with examples [Document, Page X]...\n"
+                "- **Point 3:** Detailed explanation with clarifications [Document, Page X]...\n\n"
                 "## Additional Insights\n"
                 "- *Examples, comparisons, or clarifications.*\n"
                 "- *Related information from documents.*\n\n"
@@ -367,7 +439,11 @@ def main_prompt(
     contents.append(
         {
             "role": "user",
-            "parts": "Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.",
+            "parts": (
+                "Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.\n"
+                "IMPORTANT: Include 2-3 specific follow-up questions in the `suggested_questions` field that would "
+                "help the user explore the topic further based on the available documents."
+            ),
         }
     )
 

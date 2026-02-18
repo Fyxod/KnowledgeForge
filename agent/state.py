@@ -28,6 +28,14 @@ class AgentState(BaseModel):
 
     answer: Optional[str] = None
     chunks_used: List[ChunksUsed] = Field(default_factory=list)
+    confidence_score: Optional[str] = Field(
+        default=None,
+        description="Confidence level of the answer: 'high', 'medium', or 'low'."
+    )
+    suggested_questions: Optional[List[str]] = Field(
+        default=None,
+        description="Follow-up questions suggested by the LLM."
+    )
 
     attempts: int = 0
     web_search_attempts: int = 0

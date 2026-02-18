@@ -85,11 +85,22 @@ async def retriever(state: AgentState) -> AgentState:
                 "page_no": metadata.get("page_no", 1),
                 "file_name": metadata.get("file_name", ""),
                 "content": formatted_content,
+                "rerank_score": doc.get("rerank_score", 0.0),
             }
         )
 
     with open(f"DEBUG/retrieved_docs.json", "w") as f:
         json.dump(modified_docs, f, indent=2)
+
+    # Compute confidence score from retrieval quality
+    unique_docs = set(d["document_id"] for d in modified_docs if d["document_id"])
+    num_chunks = len(modified_docs)
+    if num_chunks >= 5 and len(unique_docs) >= 2:
+        state.confidence_score = "high"
+    elif num_chunks >= 3:
+        state.confidence_score = "medium"
+    else:
+        state.confidence_score = "low"
 
     state.chunks = modified_docs
     return state
@@ -131,8 +142,8 @@ async def generate(state: AgentState) -> AgentState:
 
             state.answer = result.answer
             state.action = result.action
-            # state.chunks_used = []  # temporary
             state.chunks_used = result.chunks_used or []
+            state.suggested_questions = getattr(result, "suggested_questions", None) or []
             state.web_search_queries = getattr(result, "web_search_queries", []) or []
             state.attempts += 1
             state.document_id = result.document_id or None

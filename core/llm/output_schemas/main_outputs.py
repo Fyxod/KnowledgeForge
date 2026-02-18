@@ -6,6 +6,10 @@ class ChunksUsed(BaseModel):
     document_id: str = Field(
         description="The ID of the document used to which the chunk belongs."
     )
+    title: Optional[str] = Field(
+        default=None,
+        description="The title/name of the document used.",
+    )
     page_no: int = Field(description="The page_no of the document used.")
 
 
@@ -22,6 +26,10 @@ class MainLLMOutputInternal(BaseModel):
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
         description="List of chunks used to generate the answer, if applicable.",
+    )
+    suggested_questions: Optional[List[str]] = Field(
+        default=None,
+        description="List of 2-3 follow-up questions the user might want to ask based on the answer and available documents.",
     )
     document_id: Optional[str] = Field(
         description="The ID of the document to summarize if using document_summarizer, if applicable."
@@ -47,6 +55,10 @@ class MainLLMOutputInternalWithFailure(BaseModel):
         default=None,
         description="List of chunks used to generate the answer, if applicable.",
     )
+    suggested_questions: Optional[List[str]] = Field(
+        default=None,
+        description="List of 2-3 follow-up questions the user might want to ask based on the answer and available documents.",
+    )
     document_id: Optional[str] = Field(
         description="The ID of the document to summarize if using document_summarizer, if applicable."
     )
@@ -71,6 +83,10 @@ class MainLLMOutputExternal(BaseModel):
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
         description="List of chunks used to generate the answer, if applicable.",
+    )
+    suggested_questions: Optional[List[str]] = Field(
+        default=None,
+        description="List of 2-3 follow-up questions the user might want to ask based on the answer and available documents.",
     )
     web_search_queries: Optional[List[str]] = Field(
         default=None,

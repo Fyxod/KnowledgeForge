@@ -55,6 +55,8 @@ async def query(request: Request, body: QueryRequest):
     messages = []
     chunks = []
     chunks_used = []
+    confidence_scores = []
+    suggested_questions = []
 
     # Check if spreadsheet data is available for this thread
     has_spreadsheet = SQLiteManager.has_spreadsheet_data(user_id, thread_id)
@@ -125,6 +127,11 @@ async def query(request: Request, body: QueryRequest):
                 qe = time.time() - qs
                 chunks.extend(state.chunks)
                 chunks_used.extend(state.chunks_used)
+                # Collect confidence and suggestions from sub-queries
+                if state.confidence_score:
+                    confidence_scores.append(state.confidence_score)
+                if state.suggested_questions:
+                    suggested_questions.extend(state.suggested_questions)
                 print(
                     f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {model}"
                 )
@@ -293,6 +300,10 @@ async def query(request: Request, body: QueryRequest):
         answer = state.answer
         chunks.extend(state.chunks)
         chunks_used.extend(state.chunks_used)
+        if state.confidence_score:
+            confidence_scores.append(state.confidence_score)
+        if state.suggested_questions:
+            suggested_questions.extend(state.suggested_questions)
     end_time = time.time()
 
     print(f"Total Agent response time: {end_time - start_time:.2f} seconds")
@@ -316,6 +327,7 @@ async def query(request: Request, body: QueryRequest):
                 "title": doc.get("title", "Untitled Document"),
                 "document_id": doc.get("document_id", "unknown"),
                 "page_no": doc.get("page_no", 1),
+                "content": doc.get("content", ""),
             }
         )
 
@@ -362,6 +374,22 @@ async def query(request: Request, body: QueryRequest):
         },
     )
 
+    # Resolve final confidence score — worst-case across all sub-queries
+    confidence_priority = {"low": 0, "medium": 1, "high": 2}
+    final_confidence = "low"
+    if confidence_scores:
+        final_confidence = min(confidence_scores, key=lambda c: confidence_priority.get(c, 0))
+
+    # Deduplicate suggested questions
+    seen_questions = set()
+    unique_suggestions = []
+    for q in suggested_questions:
+        q_lower = q.strip().lower()
+        if q_lower not in seen_questions:
+            seen_questions.add(q_lower)
+            unique_suggestions.append(q.strip())
+    unique_suggestions = unique_suggestions[:5]  # Cap at 5
+
     response = {
         "thread_id": thread_id,
         "user_id": user_id,
@@ -371,6 +399,8 @@ async def query(request: Request, body: QueryRequest):
             "documents_used": modified_used,
             "web_used": all_favicons,
         },
+        "confidence_score": final_confidence,
+        "suggested_questions": unique_suggestions,
         "use_self_knowledge": use_self_knowledge,
     }
 
