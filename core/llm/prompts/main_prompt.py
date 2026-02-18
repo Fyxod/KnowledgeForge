@@ -8,6 +8,7 @@ def detect_answer_style(question: str) -> str:
 
     Returns:
         'brief'    - User wants a concise answer
+        'compare'  - User wants cross-document comparison
         'analyst'  - User wants strategic analysis with recommendations
         'detailed' - User wants a detailed answer (default)
     """
@@ -26,6 +27,29 @@ def detect_answer_style(question: str) -> str:
     for keyword in brief_keywords:
         if keyword in question_lower:
             return "brief"
+
+    # Comparison keywords — detect BEFORE analyst to avoid analyst absorbing these
+    compare_keywords = [
+        "compare",
+        "comparison",
+        "contrast",
+        "difference between",
+        "differences between",
+        "how do they differ",
+        "how does it differ",
+        "versus",
+        " vs ",
+        " vs.",
+        "side by side",
+        "side-by-side",
+        "which is better",
+        "which one",
+        "similarities and differences",
+        "common and different",
+    ]
+    for keyword in compare_keywords:
+        if keyword in question_lower:
+            return "compare"
 
     # Analyst / strategic answer keywords
     analyst_keywords = [
@@ -53,11 +77,10 @@ def detect_answer_style(question: str) -> str:
         "insights",
         "common trend",
         "common themes",
-        "compare",
-        "comparison",
-        "contrast",
         "gaps",
         "opportunities",
+        "trends",
+        "trend analysis",
     ]
     for keyword in analyst_keywords:
         if keyword in question_lower:
@@ -88,6 +111,7 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
 
     is_brief = answer_style == "brief"
     is_analyst = answer_style == "analyst"
+    is_compare = answer_style == "compare"
     is_external = mode == EXTERNAL
 
     # ── Role ──
@@ -95,6 +119,12 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
         role = (
             "You are an expert assistant that answers questions using the provided **documents** "
             "and any supplied **external data** (such as web search results).\n"
+        )
+    elif is_compare:
+        role = (
+            "You are a **cross-document comparison specialist** that identifies similarities, differences, "
+            "patterns, and contradictions across multiple documents. "
+            "You present findings in a structured, side-by-side format grounded in the source data.\n"
         )
     elif is_analyst:
         role = (
@@ -110,6 +140,11 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
     # ── Task ──
     if is_brief:
         task = "Your job is to give clear, concise, and brief answers using Markdown formatting.\n\n"
+    elif is_compare:
+        task = (
+            "Your job is to provide a **structured cross-document comparison** using Markdown formatting. "
+            "Analyze each document's perspective and present a clear side-by-side analysis.\n\n"
+        )
     elif is_analyst:
         task = (
             "Your job is to provide **strategic analysis with actionable recommendations** using Markdown formatting. "
@@ -183,6 +218,18 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
         '"Both reports confirm the trend [Report A, Page 3] [Report B, Page 7]."\n'
     )
 
+    # ── Table & Data Formatting ──
+    table_fmt = (
+        "\n### Table & Data Formatting\n"
+        "- When presenting **comparative data** across documents, features, or items, use **Markdown tables**.\n"
+        "- Use tables when you have **3 or more comparable items** with shared attributes.\n"
+        "- Use tables for any **numerical data, metrics, or statistics** that can be organized in rows/columns.\n"
+        "- Example:\n"
+        "  | Metric | 2024 | 2025 | Change |\n"
+        "  |--------|------|------|--------|\n"
+        "  | Revenue | $10M | $12M | +20% |\n"
+    )
+
     # ── Output Structure Example ──
     if is_brief:
         structure = (
@@ -196,7 +243,31 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
             "- **Point 3:** Brief explanation...\n"
             "```\n"
         )
-    if is_analyst:
+    if is_compare:
+        structure = (
+            "\n### Output Structure (Cross-Document Comparison)\n"
+            "```\n"
+            "## Overview\n"
+            "(Brief context: what is being compared and why)\n\n"
+            "## Per-Document Findings\n"
+            "### [Exact Document Name A]\n"
+            "- Key points from this document [Document A, Page X]\n\n"
+            "### [Exact Document Name B]\n"
+            "- Key points from this document [Document B, Page X]\n\n"
+            "## Comparative Analysis\n"
+            "| Aspect | Document A | Document B |\n"
+            "|--------|-----------|-----------|\n"
+            "| Topic 1 | Position/Data | Position/Data |\n"
+            "| Topic 2 | Position/Data | Position/Data |\n\n"
+            "## Agreements\n"
+            "- Points where documents align\n\n"
+            "## Contradictions & Gaps\n"
+            "- Points where documents differ or information is missing\n\n"
+            "## Synthesis\n"
+            "(What can we conclude from both documents together?)\n"
+            "```\n"
+        )
+    elif is_analyst:
         structure = (
             "\n### Output Structure (Analyst Mode)\n"
             "```\n"
@@ -252,7 +323,7 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
                 "```\n"
             )
 
-    return role + task + guidelines + grounding + doc_refs + structure
+    return role + task + guidelines + grounding + doc_refs + table_fmt + structure
 
 
 def main_prompt(

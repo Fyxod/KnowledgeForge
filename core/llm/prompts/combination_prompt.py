@@ -32,8 +32,13 @@ def combination_prompt(query: str, sub_answers: list) -> list:
                 "'the second document', 'the uploaded document', or similar numbered/ordinal references.\n"
                 "- If a sub-answer mentions a document by name, PRESERVE that exact name in the combined answer.\n"
                 "- Inline citations in `[Document Title, Page X]` format MUST be preserved from sub-answers.\n\n"
+                "### Table & Data Formatting\n"
+                "- When presenting **comparative data**, use **Markdown tables**.\n"
+                "- Use tables for **numerical data** or when comparing 3+ items.\n\n"
                 "### Output\n"
-                "Return only the final synthesized answer, written for the end user, without repeating the Resolved_query.\n"
+                "Return only the final synthesized answer. "
+                "If the user asked for a comparison, use a side-by-side structure (e.g., headings for each document, then a comparison table). "
+                "Otherwise, provide a coherent narrative answer.\n"
             ),
         },
         {
