@@ -354,26 +354,7 @@ async def query(request: Request, body: QueryRequest):
             indent=4,
         )
 
-    # Update the thread with the new messages
-    now = datetime.now(timezone.utc)
-    new_messages = [
-        {"type": "user", "content": question, "timestamp": now},
-        {
-            "type": "agent",
-            "content": answer,
-            "timestamp": now,
-            "sources": {"documents_used": modified_used, "web_used": all_favicons},
-        },
-    ]
-
-    db.users.update_one(
-        {"userId": user_id},
-        {
-            "$push": {f"threads.{thread_id}.chats": {"$each": new_messages}},
-            "$set": {f"threads.{thread_id}.updatedAt": now},
-        },
-    )
-
+    # Build the final response metadata early so we can persist it in MongoDB
     # Resolve final confidence score — worst-case across all sub-queries
     confidence_priority = {"low": 0, "medium": 1, "high": 2}
     final_confidence = "low"
@@ -389,6 +370,28 @@ async def query(request: Request, body: QueryRequest):
             seen_questions.add(q_lower)
             unique_suggestions.append(q.strip())
     unique_suggestions = unique_suggestions[:5]  # Cap at 5
+
+    # Update the thread with the new messages (including metadata for persistence)
+    now = datetime.now(timezone.utc)
+    new_messages = [
+        {"type": "user", "content": question, "timestamp": now},
+        {
+            "type": "agent",
+            "content": answer,
+            "timestamp": now,
+            "sources": {"documents_used": modified_used, "web_used": all_favicons},
+            "confidence_score": final_confidence,
+            "suggested_questions": unique_suggestions,
+        },
+    ]
+
+    db.users.update_one(
+        {"userId": user_id},
+        {
+            "$push": {f"threads.{thread_id}.chats": {"$each": new_messages}},
+            "$set": {f"threads.{thread_id}.updatedAt": now},
+        },
+    )
 
     response = {
         "thread_id": thread_id,

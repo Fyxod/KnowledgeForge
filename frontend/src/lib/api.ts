@@ -30,7 +30,7 @@ export interface Chat {
   timestamp: string;
   // Enhanced metadata fields from Phase 1/2 backend
   suggested_questions?: string[];
-  confidence_score?: number;
+  confidence_score?: string | number; // Backend sends "high"/"medium"/"low"
   thought_process?: string; // For Deep Reasoning output
   sources?: {
     documents_used: Array<{
@@ -83,7 +83,7 @@ export interface QueryResponse {
   use_self_knowledge?: boolean;
   // Enhanced metadata fields
   suggested_questions?: string[];
-  confidence_score?: number;
+  confidence_score?: string | number;
   thought_process?: string;
   // Original shape (legacy)
   docs_used?: Array<{
@@ -412,14 +412,14 @@ export const api = {
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
-    
+
     const json = await response.json();
-    
+
     if (!response.ok || json.error) {
       const errorMessage = json.error || json.detail || 'Failed to upload files';
       throw new Error(errorMessage);
     }
-    
+
     return json;
   },
 
@@ -485,14 +485,14 @@ export const api = {
         xhr.onload = () => {
           try {
             const json: UploadResponse = JSON.parse(xhr.responseText);
-            
+
             // Check for errors in response
             if (xhr.status >= 400 || (json as any).error) {
               const errorMessage = (json as any).error || (json as any).detail || 'Failed to upload file';
               reject(new Error(errorMessage));
               return;
             }
-            
+
             if (!results.thread_id && json.thread_id) {
               results.thread_id = json.thread_id;
             }
@@ -530,12 +530,12 @@ export const api = {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await response.json();
-    
+
     if (!response.ok || data.error) {
       const errorMessage = data.error || data.detail || 'Failed to load thread';
       throw new Error(errorMessage);
     }
-    
+
     return data.thread;
   },
 
@@ -559,14 +559,14 @@ export const api = {
         use_self_knowledge: useSelfKnowledge,
       }),
     });
-    
+
     const data = await response.json();
-    
+
     if (!response.ok || data.error) {
       const errorMessage = data.error || data.detail || 'Failed to get response';
       throw new Error(errorMessage);
     }
-    
+
     return data;
   },
 

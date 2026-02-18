@@ -95,20 +95,29 @@ export const ChatMessage = ({ chat, onDelete, onSuggestionClick }: ChatMessagePr
         <p className="text-xs opacity-70 mt-2">{displayTime}</p>
 
         {/* Confidence Score Indicator */}
-        {!isUser && chat.confidence_score !== undefined && (
+        {!isUser && chat.confidence_score != null && (
           <div className="mt-2 flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-xs font-normal border-opacity-50",
-                chat.confidence_score > 0.8 ? "border-green-500 text-green-600 bg-green-500/10" :
-                  chat.confidence_score > 0.5 ? "border-yellow-500 text-yellow-600 bg-yellow-500/10" :
-                    "border-red-500 text-red-600 bg-red-500/10"
-              )}
-            >
-              {chat.confidence_score > 0.8 ? <Sparkles className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
-              Confidence: {Math.round(chat.confidence_score * 100)}%
-            </Badge>
+            {(() => {
+              // Backend sends "high"/"medium"/"low" string; normalise to a display label + colour
+              const raw = chat.confidence_score;
+              const level = typeof raw === 'string' ? raw.toLowerCase() : (raw > 0.8 ? 'high' : raw > 0.5 ? 'medium' : 'low');
+              const colorMap: Record<string, string> = {
+                high: "border-green-500 text-green-600 bg-green-500/10",
+                medium: "border-yellow-500 text-yellow-600 bg-yellow-500/10",
+                low: "border-red-500 text-red-600 bg-red-500/10",
+              };
+              const colors = colorMap[level] || colorMap.low;
+              const label = level.charAt(0).toUpperCase() + level.slice(1);
+              return (
+                <Badge
+                  variant="outline"
+                  className={cn("text-xs font-normal border-opacity-50", colors)}
+                >
+                  {level === 'high' ? <Sparkles className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+                  Confidence: {label}
+                </Badge>
+              );
+            })()}
           </div>
         )}
 
