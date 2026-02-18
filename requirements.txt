@@ -45,3 +45,4 @@ pdf2image
 easyocr
 python-docx
 rank-bm25
+einops
