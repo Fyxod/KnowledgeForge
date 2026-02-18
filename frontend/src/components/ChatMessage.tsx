@@ -155,25 +155,26 @@ export const ChatMessage = ({ chat, onDelete, onSuggestionClick }: ChatMessagePr
             </Accordion>
           </div>
         )}
-      </div>
 
-      {/* Suggested Follow-up Questions */}
-      {!isUser && chat.suggested_questions && chat.suggested_questions.length > 0 && (
-        <div className="flex flex-wrap gap-2 mt-2 ml-11 max-w-[80%]">
-          {chat.suggested_questions.map((q, idx) => (
-            <Button
-              key={idx}
-              variant="outline"
-              size="sm"
-              className="h-auto py-1.5 px-3 rounded-full text-xs bg-background/50 hover:bg-primary/10 border-primary/20 hover:border-primary/40 text-muted-foreground hover:text-primary whitespace-normal text-left"
-              onClick={() => onSuggestionClick?.(q)}
-            >
-              <Lightbulb className="w-3 h-3 mr-2 opacity-70" />
-              {q}
-            </Button>
-          ))}
-        </div>
-      )}
+        {/* Suggested Follow-up Questions (below answer, inside bubble) */}
+        {!isUser && chat.suggested_questions && chat.suggested_questions.length > 0 && (
+          <div className="flex flex-col gap-1.5 mt-3 pt-2 border-t border-border/30">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Follow-up</span>
+            {chat.suggested_questions.slice(0, 2).map((q, idx) => (
+              <Button
+                key={idx}
+                variant="ghost"
+                size="sm"
+                className="h-auto py-1.5 px-3 rounded-lg text-xs bg-muted/30 hover:bg-primary/10 text-muted-foreground hover:text-primary whitespace-normal text-left justify-start"
+                onClick={() => onSuggestionClick?.(q)}
+              >
+                <Lightbulb className="w-3 h-3 mr-2 opacity-70 flex-shrink-0" />
+                {q}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {isUser && (
         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">

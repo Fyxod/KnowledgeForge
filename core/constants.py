@@ -48,7 +48,7 @@ GPU_TECHNICAL_ROADMAP_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_INSIGHTS_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 
 IMAGE_PARSER_LLM = "gemma3:12b"
-VLM_MODEL = "qwen3-vl"  # Vision Language Model for slide/complex PDF extraction
+VLM_MODEL = "qwen3-vl:8b"  # Vision Language Model for slide/complex PDF extraction
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
 FALLBACK_GEMINI_MODEL = "gemini-2.5-flash"

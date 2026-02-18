@@ -95,9 +95,14 @@ async def retriever(state: AgentState) -> AgentState:
     # Compute confidence score from retrieval quality
     unique_docs = set(d["document_id"] for d in modified_docs if d["document_id"])
     num_chunks = len(modified_docs)
-    if num_chunks >= 5 and len(unique_docs) >= 2:
+    avg_rerank = 0.0
+    if modified_docs:
+        scores = [d.get("rerank_score", 0.0) for d in modified_docs]
+        avg_rerank = sum(scores) / len(scores) if scores else 0.0
+
+    if num_chunks >= 5 and len(unique_docs) >= 2 and avg_rerank >= 0.5:
         state.confidence_score = "high"
-    elif num_chunks >= 3:
+    elif num_chunks >= 3 and avg_rerank >= 0.3:
         state.confidence_score = "medium"
     else:
         state.confidence_score = "low"
