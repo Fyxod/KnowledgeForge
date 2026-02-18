@@ -16,16 +16,13 @@ python-dotenv
 python-multipart
 python-socketio
 torch
-uvicorn
 uvicorn[standard]
 aiofiles
 google-genai
 openai
-aiofiles
 matplotlib
 wordcloud
 nltk
-pydantic
 pydantic[email]
 sentence-transformers
 PyMuPDF
