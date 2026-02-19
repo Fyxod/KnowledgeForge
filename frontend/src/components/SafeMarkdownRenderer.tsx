@@ -2,7 +2,24 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import "highlight.js/styles/github-dark.css";
+
+// Extend GitHub's default sanitization schema to allow class attributes
+// on table elements for styling. Scripts, event handlers, etc. remain blocked.
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    table: [...(defaultSchema.attributes?.table || []), "className", "class"],
+    th: [...(defaultSchema.attributes?.th || []), "className", "class"],
+    td: [...(defaultSchema.attributes?.td || []), "className", "class"],
+    tr: [...(defaultSchema.attributes?.tr || []), "className", "class"],
+    thead: [...(defaultSchema.attributes?.thead || []), "className", "class"],
+    tbody: [...(defaultSchema.attributes?.tbody || []), "className", "class"],
+  },
+};
 
 type Props = {
   content: string;
@@ -18,7 +35,7 @@ export default function SafeMarkdownRenderer({ content, enableMarkdown = true }:
   <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed dark:text-zinc-100 text-zinc-800">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight as any]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeHighlight as any]}
         components={{
           h1: ({ node, ...props }) => (
             <h1 className="text-xl font-bold mb-2" {...props} />
@@ -76,6 +93,12 @@ export default function SafeMarkdownRenderer({ content, enableMarkdown = true }:
           ),
           td: ({ node, ...props }) => (
             <td className="border border-border px-3 py-1" {...props} />
+          ),
+          tr: ({ node, ...props }) => (
+            <tr className="border-b border-border" {...props} />
+          ),
+          tbody: ({ node, ...props }) => (
+            <tbody {...props} />
           ),
         }}
       >

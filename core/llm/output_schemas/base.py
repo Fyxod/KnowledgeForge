@@ -6,7 +6,8 @@ as a safety net after JSON parsing.
 """
 
 import re
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
+from core.utils.llm_output_sanitizer import normalize_answer_content
 
 
 # Unicode whitespace → regular space
@@ -43,3 +44,16 @@ class LLMOutputBase(BaseModel):
         if isinstance(v, list):
             return [_clean_str(item) if isinstance(item, str) else item for item in v]
         return v
+
+    @model_validator(mode="after")
+    def normalize_answer_field(self):
+        """
+        Post-construction normalization for the 'answer' field.
+        Fixes formatting artifacts from json_repair (double-escaped
+        newlines, quotes, etc.) that would break markdown rendering.
+
+        Uses hasattr check so schemas without 'answer' are unaffected.
+        """
+        if hasattr(self, "answer") and isinstance(self.answer, str):
+            self.answer = normalize_answer_content(self.answer)
+        return self

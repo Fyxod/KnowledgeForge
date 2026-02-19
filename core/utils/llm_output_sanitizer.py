@@ -193,3 +193,53 @@ def parse_llm_json(raw: str, schema: Type[T]) -> T:
         f"Failed to parse LLM output as {schema.__name__}. "
         f"Cleaned output (first 500 chars): {cleaned[:500]}"
     )
+
+
+# Regex to collapse 3+ consecutive newlines to 2
+_EXCESSIVE_NEWLINES_RE = re.compile(r"\n{3,}")
+
+
+def normalize_answer_content(text: str) -> str:
+    """
+    Post-process answer content after JSON parsing to fix common
+    formatting artifacts from json_repair and LLM output.
+
+    Handles:
+    - Double-escaped newlines (literal \\n -> actual newline)
+    - Double-escaped quotes (literal \\" -> actual ")
+    - Double-escaped backslashes (literal \\\\ -> single \\)
+    - Escaped forward slashes (\\/ -> /)
+    - Literal \\t -> actual tab
+    - Multiple consecutive blank lines -> max 2 newlines
+
+    This function is idempotent: running it on already-clean text
+    produces the same output (it matches literal 2-char escape
+    sequences, not actual control characters).
+    """
+    if not text:
+        return text
+
+    result = text
+
+    # Protect genuine escaped backslashes first (\\\\  -> placeholder)
+    result = result.replace("\\\\", "\x00BSLASH\x00")
+
+    # Double-escaped newlines -> actual newlines
+    result = result.replace("\\n", "\n")
+
+    # Double-escaped tabs -> actual tabs
+    result = result.replace("\\t", "\t")
+
+    # Double-escaped quotes -> actual quotes
+    result = result.replace('\\"', '"')
+
+    # Escaped forward slashes (common json_repair artifact)
+    result = result.replace("\\/", "/")
+
+    # Restore escaped backslashes
+    result = result.replace("\x00BSLASH\x00", "\\")
+
+    # Collapse excessive blank lines (3+ consecutive newlines -> 2)
+    result = _EXCESSIVE_NEWLINES_RE.sub("\n\n", result)
+
+    return result
