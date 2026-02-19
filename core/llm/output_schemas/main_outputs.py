@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 
+from core.llm.output_schemas.base import LLMOutputBase
+
 
 class ChunksUsed(BaseModel):
     document_id: str = Field(
@@ -13,7 +15,7 @@ class ChunksUsed(BaseModel):
     page_no: int = Field(description="The page_no of the document used.")
 
 
-class MainLLMOutputInternal(BaseModel):
+class MainLLMOutputInternal(LLMOutputBase):
     answer: str = Field(description="The answer to the user's question.")
     action: Literal[
         "answer",
@@ -40,7 +42,7 @@ class MainLLMOutputInternal(BaseModel):
     )
 
 
-class MainLLMOutputInternalWithFailure(BaseModel):
+class MainLLMOutputInternalWithFailure(LLMOutputBase):
     answer: str = Field(description="The answer to the user's question.")
     action: Literal[
         "answer",
@@ -68,7 +70,7 @@ class MainLLMOutputInternalWithFailure(BaseModel):
     )
 
 
-class MainLLMOutputExternal(BaseModel):
+class MainLLMOutputExternal(LLMOutputBase):
     answer: str = Field(description="The answer to the user's question.")
     action: Literal[
         "answer",
@@ -101,11 +103,11 @@ class MainLLMOutputExternal(BaseModel):
     )
 
 
-class SelfKnowledgeLLMOutput(BaseModel):
+class SelfKnowledgeLLMOutput(LLMOutputBase):
     answer: str = Field(description="The answer to the user's question.")
 
 
-class DecompositionLLMOutput(BaseModel):
+class DecompositionLLMOutput(LLMOutputBase):
     requires_decomposition: bool = Field(
         description="Indicates whether the query requires decomposition."
     )
@@ -117,5 +119,5 @@ class DecompositionLLMOutput(BaseModel):
     )
 
 
-class CombinationLLMOutput(BaseModel):
+class CombinationLLMOutput(LLMOutputBase):
     answer: str = Field(description="The combined answer from multiple sub-answers.")

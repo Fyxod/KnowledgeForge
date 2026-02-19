@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
+from core.llm.output_schemas.base import LLMOutputBase
+
 
 class OverallVision(BaseModel):
     goal: str = Field(
@@ -91,7 +93,7 @@ class LLMInferredAddition(BaseModel):
     content: str = Field(description="Summarized insight or recommendation")
 
 
-class TechnicalRoadmapLLMOutput(BaseModel):
+class TechnicalRoadmapLLMOutput(LLMOutputBase):
     roadmap_title: str = Field(
         description="Concise, professional title summarizing the technology direction"
     )

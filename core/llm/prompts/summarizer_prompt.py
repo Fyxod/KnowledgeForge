@@ -136,7 +136,12 @@ def global_summarization_prompt(summaries: str):
             "parts": (
                 f" **Summaries to Combine:**\n{summaries}\n\n"
                 "Generate a single, coherent, Markdown-formatted summary (500-1000 words) that merges recurring and essential ideas.\n\n"
-                "Return ONLY a valid JSON object matching the schema. No markdown fencing, no commentary."
+                "Return ONLY a valid JSON object matching the schema. No markdown fencing, no commentary.\n"
+                "CRITICAL JSON RULES:\n"
+                "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
+                "- Double quotes inside string values MUST be escaped as \\\".\n"
+                "- Backslashes inside string values MUST be escaped as \\\\.\n"
+                "- Do NOT use trailing commas after the last item in arrays or objects."
             ),
         },
     ]

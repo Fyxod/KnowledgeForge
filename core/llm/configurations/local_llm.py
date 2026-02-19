@@ -68,6 +68,9 @@ class MyServerLLM(LLM):
                 cleaned_text = re.sub(
                     r"<think>.*?</think>", "", response.content, flags=re.DOTALL
                 )
-                return cleaned_text
+                cleaned_text = re.sub(
+                    r"<reasoning>.*?</reasoning>", "", cleaned_text, flags=re.DOTALL
+                )
+                return cleaned_text.strip()
             except Exception as e:
                 raise RuntimeError(f"Failed to call Ollama locally: {e}") from e

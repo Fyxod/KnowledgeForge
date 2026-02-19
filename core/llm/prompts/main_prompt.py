@@ -221,13 +221,13 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
     # ── Table & Data Formatting ──
     table_fmt = (
         "\n### Table & Data Formatting\n"
-        "- When presenting **comparative data** across documents, features, or items, use **Markdown tables**.\n"
+        "- When presenting **comparative data** across documents, features, or items, use **HTML tables** for reliability.\n"
         "- Use tables when you have **3 or more comparable items** with shared attributes.\n"
         "- Use tables for any **numerical data, metrics, or statistics** that can be organized in rows/columns.\n"
-        "- Example:\n"
-        "  | Metric | 2024 | 2025 | Change |\n"
-        "  |--------|------|------|--------|\n"
-        "  | Revenue | $10M | $12M | +20% |\n"
+        "- **IMPORTANT**: Since your answer goes inside a JSON string, use HTML tables instead of Markdown pipe tables to avoid JSON parsing issues:\n"
+        "  <table><tr><th>Metric</th><th>2024</th><th>2025</th><th>Change</th></tr>"
+        "<tr><td>Revenue</td><td>$10M</td><td>$12M</td><td>+20%</td></tr></table>\n"
+        "- For simple inline comparisons (2-3 items), bullet points are also acceptable.\n"
     )
 
     # ── Output Structure Example ──
@@ -255,10 +255,9 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
             "### [Exact Document Name B]\n"
             "- Key points from this document [Document B, Page X]\n\n"
             "## Comparative Analysis\n"
-            "| Aspect | Document A | Document B |\n"
-            "|--------|-----------|-----------|\n"
-            "| Topic 1 | Position/Data | Position/Data |\n"
-            "| Topic 2 | Position/Data | Position/Data |\n\n"
+            "<table><tr><th>Aspect</th><th>Document A</th><th>Document B</th></tr>"
+            "<tr><td>Topic 1</td><td>Position/Data</td><td>Position/Data</td></tr>"
+            "<tr><td>Topic 2</td><td>Position/Data</td><td>Position/Data</td></tr></table>\n\n"
             "## Agreements\n"
             "- Points where documents align\n\n"
             "## Contradictions & Gaps\n"
@@ -517,7 +516,14 @@ def main_prompt(
         {
             "role": "user",
             "parts": (
-                "Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.\n"
+                "Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary, no text before or after the JSON.\n"
+                "CRITICAL JSON RULES:\n"
+                "- All string values MUST use double quotes and properly escape special characters.\n"
+                "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
+                "- Double quotes inside string values MUST be escaped as \\\".\n"
+                "- Backslashes inside string values MUST be escaped as \\\\.\n"
+                "- Do NOT use trailing commas after the last item in arrays or objects.\n"
+                "- For tables inside the answer field, use HTML <table> tags, NOT Markdown pipe tables.\n"
                 "IMPORTANT: Include 2-3 specific follow-up questions in the `suggested_questions` field that would "
                 "help the user explore the topic further based on the available documents."
             ),

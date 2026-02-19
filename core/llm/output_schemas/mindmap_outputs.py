@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
+from core.llm.output_schemas.base import LLMOutputBase
+
 
 class Node(BaseModel):
     id: str
@@ -19,7 +21,7 @@ class FlatNode(BaseModel):
     parent_id: Optional[str] = None
 
 
-class MindMapOutput(BaseModel):
+class MindMapOutput(LLMOutputBase):
     mind_map: List[FlatNode] = Field(description="The generated mind map structure.")
 
 
@@ -29,7 +31,7 @@ class FlatNodeWithDescription(BaseModel):
     description: str
 
 
-class FlatNodeWithDescriptionOutput(BaseModel):
+class FlatNodeWithDescriptionOutput(LLMOutputBase):
     mind_map: List[FlatNodeWithDescription]
 
 

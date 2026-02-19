@@ -6,6 +6,7 @@ from google import genai
 from openai import AsyncOpenAI
 from langchain_core.output_parsers import PydanticOutputParser
 from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
+from core.utils.llm_output_sanitizer import sanitize_llm_json, parse_llm_json
 
 if SWITCHES["REMOTE_GPU"]:
     import core.llm.configurations.remote_llm as llm_module
@@ -36,6 +37,27 @@ async def _next_api_key():
     async with _api_key_lock:
         return next(_api_key_cycle)
 
+
+def _try_parse(raw_output: str, parser, response_schema):
+    """
+    Attempt to parse LLM output with sanitization and repair fallbacks.
+
+    Strategy:
+    1. Sanitize + PydanticOutputParser.parse() (existing path, now with pre-processing)
+    2. parse_llm_json() with json_repair + model_validate (handles malformed JSON)
+
+    Returns parsed structured data or raises on failure.
+    """
+    cleaned = sanitize_llm_json(raw_output)
+
+    # Strategy 1: Sanitized output through existing parser
+    try:
+        return parser.parse(cleaned)
+    except Exception:
+        pass
+
+    # Strategy 2: json_repair + Pydantic model_validate (no LLM call needed)
+    return parse_llm_json(raw_output, response_schema)
 
 
 async def invoke_llm(
@@ -76,10 +98,10 @@ async def invoke_llm(
                 llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
                 e = time.time()
                 print(f"Success via GPU server, LLM call took {e - s:.2f}s")
-                structured = parser.parse(llm_output)
+                structured = _try_parse(llm_output, parser, response_schema)
                 return structured
             except Exception as e:
-                print(f"GPU server failed failed at port {port}: {e}")
+                print(f"GPU server failed at port {port}: {e}")
 
             if port == 11435:
                 temp_port = 11434
@@ -90,7 +112,7 @@ async def invoke_llm(
                     llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
                     e = time.time()
                     print(f"Success via GPU server, LLM call took {e - s:.2f}s")
-                    structured = parser.parse(llm_output)
+                    structured = _try_parse(llm_output, parser, response_schema)
                     return structured
                 except Exception as e:
                     print(f"GPU server failed at alternate port {temp_port}: {e}")
@@ -133,7 +155,7 @@ async def invoke_llm(
                     except Exception:
                         raw_output = str(response)
 
-                    structured = parser.parse(raw_output)
+                    structured = _try_parse(raw_output, parser, response_schema)
                     e = time.time()
                     print(f"Success via Gemini, LLM call took {e - s:.2f}s")
                     return structured
@@ -156,7 +178,7 @@ async def invoke_llm(
                 )
 
                 raw_output = response.choices[0].message.content
-                structured = parser.parse(raw_output)
+                structured = _try_parse(raw_output, parser, response_schema)
                 e = time.time()
                 print(f"Success via OpenAI, LLM call took {e - s:.2f}s")
                 return structured

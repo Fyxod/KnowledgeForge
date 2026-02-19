@@ -43,3 +43,4 @@ easyocr
 python-docx
 rank-bm25
 einops
+json-repair

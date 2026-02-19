@@ -1,22 +1,24 @@
 from pydantic import BaseModel, Field
 from typing import List
 
+from core.llm.output_schemas.base import LLMOutputBase
 
-class SummarizerLLMOutputSingle(BaseModel):
+
+class SummarizerLLMOutputSingle(LLMOutputBase):
     summary: str = Field(description="The summary of the document.")
 
 
-class SummarizerLLMOutputCombination(BaseModel):
+class SummarizerLLMOutputCombination(LLMOutputBase):
     summary: str = Field(description="The summary of the document.")
 
 
-class SummarizerLLMOutput(BaseModel):
+class SummarizerLLMOutput(LLMOutputBase):
     summaries: List[SummarizerLLMOutputSingle] = Field(
         description="List of summaries for each document."
     )
 
 
-class GlobalSummarizerLLMOutput(BaseModel):
+class GlobalSummarizerLLMOutput(LLMOutputBase):
     title: str = Field(
         description="A concise and descriptive title for the collection of documents."
     )

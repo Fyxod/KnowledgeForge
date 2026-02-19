@@ -79,7 +79,12 @@ def technical_roadmap_prompt(document: str | list[dict], n_years: int = 5):
                 f"{document}\n\n"
                 "TASK\n"
                 f"Generate a Technology Roadmap for the next {horizon} years following the above JSON schema.\n"
-                "Return ONLY a valid JSON object with all top-level keys present (use [] or null where needed)."
+                "Return ONLY a valid JSON object with all top-level keys present (use [] or null where needed).\n"
+                "CRITICAL JSON RULES:\n"
+                "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
+                "- Double quotes inside string values MUST be escaped as \\\".\n"
+                "- Backslashes inside string values MUST be escaped as \\\\.\n"
+                "- Do NOT use trailing commas after the last item in arrays or objects."
             ),
         },
     ]

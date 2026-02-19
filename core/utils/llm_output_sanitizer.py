@@ -1,0 +1,195 @@
+"""
+Centralized LLM output sanitization and JSON repair pipeline.
+
+Handles common LLM JSON output issues:
+- Markdown code fences wrapping JSON
+- Unicode whitespace characters (non-breaking spaces, thin spaces, etc.)
+- Preamble/postamble text around JSON
+- Malformed JSON (trailing commas, single quotes, unescaped chars)
+"""
+
+import json
+import re
+from typing import Type, TypeVar
+
+from pydantic import BaseModel
+
+try:
+    import json_repair
+except ImportError:
+    json_repair = None
+
+T = TypeVar("T", bound=BaseModel)
+
+# Unicode whitespace characters that have no semantic meaning in JSON
+# and can cause parsing failures
+_UNICODE_WHITESPACE_RE = re.compile(
+    r"[\u00a0\u2009\u200a\u202f\u00ad\u2002\u2003\u2004\u2005\u2006\u2007\u2008]"
+)
+
+# Zero-width characters that should be removed entirely
+_ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060\u180e]")
+
+# Markdown code fence patterns
+_CODE_FENCE_RE = re.compile(
+    r"```(?:json|JSON)?\s*\n?(.*?)\n?\s*```", re.DOTALL
+)
+
+
+def sanitize_llm_json(raw: str) -> str:
+    """
+    Pre-process raw LLM output to maximize JSON parsing success.
+
+    Pipeline (each step is fast string/regex ops):
+    1. Strip markdown code fences
+    2. Replace unicode whitespace with regular spaces
+    3. Remove zero-width characters
+    4. Normalize newlines
+    5. Extract JSON object/array from surrounding text
+
+    Args:
+        raw: Raw LLM output string
+
+    Returns:
+        Cleaned string ready for JSON parsing
+    """
+    if not raw or not raw.strip():
+        return raw
+
+    text = raw
+
+    # 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
+    fence_match = _CODE_FENCE_RE.search(text)
+    if fence_match:
+        text = fence_match.group(1)
+
+    # 2. Replace unicode whitespace with regular spaces
+    text = _UNICODE_WHITESPACE_RE.sub(" ", text)
+
+    # 3. Remove zero-width characters
+    text = _ZERO_WIDTH_RE.sub("", text)
+
+    # 4. Normalize newlines
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # 5. Extract JSON object/array from surrounding text
+    text = text.strip()
+    text = _extract_json_block(text)
+
+    return text
+
+
+def _extract_json_block(text: str) -> str:
+    """
+    Extract the outermost JSON object or array from text that may contain
+    preamble or postamble content.
+
+    Uses bracket counting to find the correct closing bracket,
+    properly handling strings (including escaped quotes).
+    """
+    # Find first { or [
+    start = -1
+    open_char = None
+    close_char = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            start = i
+            open_char = "{"
+            close_char = "}"
+            break
+        elif ch == "[":
+            start = i
+            open_char = "["
+            close_char = "]"
+            break
+
+    if start == -1:
+        return text  # No JSON structure found, return as-is
+
+    # Walk through to find matching close bracket, respecting strings
+    depth = 0
+    in_string = False
+    escape_next = False
+    end = len(text)
+
+    for i in range(start, len(text)):
+        ch = text[i]
+
+        if escape_next:
+            escape_next = False
+            continue
+
+        if ch == "\\":
+            if in_string:
+                escape_next = True
+            continue
+
+        if ch == '"':
+            in_string = not in_string
+            continue
+
+        if in_string:
+            continue
+
+        if ch == open_char:
+            depth += 1
+        elif ch == close_char:
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    return text[start:end]
+
+
+def parse_llm_json(raw: str, schema: Type[T]) -> T:
+    """
+    Parse and validate LLM output against a Pydantic schema with
+    multiple fallback strategies.
+
+    Strategies (in order):
+    1. Sanitize + json.loads + model_validate
+    2. json_repair.loads + model_validate (if json_repair available)
+    3. Raise with clear error
+
+    Args:
+        raw: Raw LLM output string
+        schema: Pydantic model class to validate against
+
+    Returns:
+        Validated Pydantic model instance
+
+    Raises:
+        ValueError: If all parsing strategies fail
+    """
+    cleaned = sanitize_llm_json(raw)
+
+    # Strategy 1: Standard json.loads after sanitization
+    try:
+        parsed = json.loads(cleaned)
+        return schema.model_validate(parsed)
+    except (json.JSONDecodeError, Exception):
+        pass
+
+    # Strategy 2: json_repair (handles structural issues)
+    if json_repair is not None:
+        try:
+            repaired = json_repair.loads(cleaned)
+            if isinstance(repaired, dict) or isinstance(repaired, list):
+                return schema.model_validate(repaired)
+        except Exception:
+            pass
+
+        # Try repair on the original raw input as well (in case our
+        # extraction mangled something)
+        try:
+            repaired = json_repair.loads(sanitize_llm_json(raw))
+            if isinstance(repaired, dict) or isinstance(repaired, list):
+                return schema.model_validate(repaired)
+        except Exception:
+            pass
+
+    raise ValueError(
+        f"Failed to parse LLM output as {schema.__name__}. "
+        f"Cleaned output (first 500 chars): {cleaned[:500]}"
+    )

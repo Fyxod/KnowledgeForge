@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import List
 
+from core.llm.output_schemas.base import LLMOutputBase
+
 
 class VisionAndEndGoal(BaseModel):
     description: str = Field(
@@ -63,7 +65,7 @@ class LLMInferredAddition(BaseModel):
     content: str = Field(description="Model-added insight or recommendation.")
 
 
-class StrategicRoadmapLLMOutput(BaseModel):
+class StrategicRoadmapLLMOutput(LLMOutputBase):
     roadmap_title: str = Field(description="Concise and visionary roadmap title.")
     vision_and_end_goal: VisionAndEndGoal = Field(
         description="Vision description and success criteria for the end goal."

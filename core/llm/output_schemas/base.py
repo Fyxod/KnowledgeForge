@@ -1,0 +1,45 @@
+"""
+Base class for LLM output schemas with common sanitization validators.
+
+Provides automatic Unicode whitespace normalization for all string fields
+as a safety net after JSON parsing.
+"""
+
+import re
+from pydantic import BaseModel, field_validator
+
+
+# Unicode whitespace → regular space
+_UNICODE_WS_RE = re.compile(
+    r"[\u00a0\u2009\u200a\u202f\u00ad\u2002\u2003\u2004\u2005\u2006\u2007\u2008]"
+)
+
+# Zero-width characters → remove
+_ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060\u180e]")
+
+
+def _clean_str(v: str) -> str:
+    """Normalize unicode whitespace and remove zero-width chars from a string."""
+    v = _UNICODE_WS_RE.sub(" ", v)
+    v = _ZERO_WIDTH_RE.sub("", v)
+    return v
+
+
+class LLMOutputBase(BaseModel):
+    """
+    Base class for all LLM output schemas.
+
+    Applies Unicode whitespace normalization to all string fields
+    via a 'before' validator, so even if the JSON parsed correctly
+    but string VALUES contain non-breaking spaces or zero-width chars,
+    they get cleaned during Pydantic validation.
+    """
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def normalize_unicode_whitespace(cls, v):
+        if isinstance(v, str):
+            return _clean_str(v)
+        if isinstance(v, list):
+            return [_clean_str(item) if isinstance(item, str) else item for item in v]
+        return v

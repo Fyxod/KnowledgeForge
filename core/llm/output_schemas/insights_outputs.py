@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
+from core.llm.output_schemas.base import LLMOutputBase
+
 
 class DocumentSummary(BaseModel):
     title: str = Field(description="Inferred or extracted title of the document(s).")
@@ -56,7 +58,7 @@ class LLMInferredAddition(BaseModel):
     content: str = Field(description="Model-added insight or recommendation.")
 
 
-class InsightsLLMOutput(BaseModel):
+class InsightsLLMOutput(LLMOutputBase):
     document_summary: DocumentSummary = Field(
         description="Summary of the document(s) including title, purpose, and key themes."
     )

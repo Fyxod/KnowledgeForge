@@ -44,8 +44,13 @@ class MyServerLLM(LLM):
                 "",
                 data.get("response", ""),
                 flags=re.DOTALL,
-                # r"<think>.*?</think>", "", data.get("content", ""), flags=re.DOTALL
             )
-            return cleaned_text
+            cleaned_text = re.sub(
+                r"<reasoning>.*?</reasoning>",
+                "",
+                cleaned_text,
+                flags=re.DOTALL,
+            )
+            return cleaned_text.strip()
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Failed to call GPU LLM server: {e}") from e

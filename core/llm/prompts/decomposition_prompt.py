@@ -220,6 +220,10 @@ query: "Explain both modules."
   ]
 }
 Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.
+CRITICAL JSON RULES:
+- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.
+- Double quotes inside string values MUST be escaped as \\\".
+- Do NOT use trailing commas after the last item in arrays or objects.
 
 """
 
