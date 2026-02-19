@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 
 from core.llm.output_schemas.base import LLMOutputBase
+from pydantic import field_validator
 
 
 class ChunksUsed(BaseModel):
@@ -41,6 +42,21 @@ class MainLLMOutputInternal(LLMOutputBase):
         description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
     )
 
+    @field_validator("action", mode="before")
+    @classmethod
+    def normalize_action(cls, v):
+        if hasattr(v, "lower"):
+            val = v.lower().strip()
+            # Map common hallucinations or partial matches
+            if val in ["search", "google", "web"]:
+                return "web_search"
+            if val in ["query", "database", "sql"]:
+                return "sql_query"
+            if val in ["summarize", "summary"]:
+                return "document_summarizer"
+            return val
+        return v
+
 
 class MainLLMOutputInternalWithFailure(LLMOutputBase):
     answer: str = Field(description="The answer to the user's question.")
@@ -68,6 +84,23 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
         default=None,
         description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
     )
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def normalize_action(cls, v):
+        if hasattr(v, "lower"):
+            val = v.lower().strip()
+            # Map common hallucinations or partial matches
+            if val in ["failure", "fail", "error"]:
+                return "failure"
+            if val in ["search", "google", "web"]:
+                return "web_search"
+            if val in ["query", "database", "sql"]:
+                return "sql_query"
+            if val in ["summarize", "summary"]:
+                return "document_summarizer"
+            return val
+        return v
 
 
 class MainLLMOutputExternal(LLMOutputBase):
@@ -101,6 +134,20 @@ class MainLLMOutputExternal(LLMOutputBase):
         default=None,
         description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
     )
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def normalize_action(cls, v):
+        if hasattr(v, "lower"):
+            val = v.lower().strip()
+            if val in ["search", "google", "web"]:
+                return "web_search"
+            if val in ["query", "database", "sql"]:
+                return "sql_query"
+            if val in ["summarize", "summary"]:
+                return "document_summarizer"
+            return val
+        return v
 
 
 class SelfKnowledgeLLMOutput(LLMOutputBase):
