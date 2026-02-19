@@ -76,7 +76,55 @@ def sanitize_llm_json(raw: str) -> str:
     text = text.strip()
     text = _extract_json_block(text)
 
+    # 6. Escape control characters within strings (e.g., literal newlines in JSON values)
+    text = _escape_control_chars_in_strings(text)
+
     return text
+
+
+def _escape_control_chars_in_strings(text: str) -> str:
+    """
+    Escapes control characters (newlines, tabs) only when they appear
+    inside double-quoted strings, to ensure valid JSON.
+    """
+    result = []
+    in_string = False
+    i = 0
+    n = len(text)
+    
+    while i < n:
+        char = text[i]
+        
+        if char == '"':
+            # Toggle string state, handling escaped quotes
+            if i > 0 and text[i-1] == '\\':
+                # Check for double backslash (escaped backslash) before quote
+                # If odd number of backslashes, the quote is escaped
+                bs_count = 0
+                j = i - 1
+                while j >= 0 and text[j] == '\\':
+                    bs_count += 1
+                    j -= 1
+                if bs_count % 2 == 0:
+                     in_string = not in_string
+            else:
+                in_string = not in_string
+        
+        if in_string:
+            if char == '\n':
+                result.append('\\n')
+            elif char == '\t':
+                result.append('\\t')
+            elif char == '\r':
+                pass # Skip carriage returns in strings
+            else:
+                result.append(char)
+        else:
+            result.append(char)
+            
+        i += 1
+        
+    return "".join(result)
 
 
 def _extract_json_block(text: str) -> str:

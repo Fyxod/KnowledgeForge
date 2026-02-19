@@ -84,6 +84,12 @@ async def invoke_llm(
 
     Input:
     {contents}
+
+    CRITICAL OUTPUT RULES:
+    1. Output must be valid JSON.
+    2. Escape newlines as \\n and tabs as \\t within JSON strings.
+    3. If you generate internal reasoning (e.g. inside <think> tags), you MUST produce the final JSON object AFTER the closing </think> tag.
+    4. Do not output any text before or after the JSON object.
     """
 
     for attempt in range(1, MAX_RETRIES + 1):

@@ -390,6 +390,7 @@ def main_prompt(
                     "text chunks are incomplete fragments and WILL give wrong or partial results. "
                     "The SQL database contains ALL rows and ALL columns and will give exact, complete results.\n"
                     "- Always provide the `sql_query` field in your response when choosing the `sql_query` action.\n"
+                    "- **VALIDATION RULE**: If you choose `action='sql_query'`, you **MUST** provide the `sql_query` field with the valid SQL statement. Failing to do so will cause a system error.\n"
                     "- Even if you see some spreadsheet data in the document chunks, ALWAYS use `sql_query` instead. "
                     "The document chunks are only text previews and do NOT contain the full dataset.\n"
                 ),
