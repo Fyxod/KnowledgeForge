@@ -191,7 +191,7 @@ def parse_llm_json(raw: str, schema: Type[T]) -> T:
 
     raise ValueError(
         f"Failed to parse LLM output as {schema.__name__}. "
-        f"Cleaned output (first 500 chars): {cleaned[:500]}"
+        f"Cleaned output: {cleaned}"
     )
 
 

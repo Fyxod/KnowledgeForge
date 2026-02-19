@@ -359,3 +359,48 @@ class SQLiteManager:
         if key not in cls._table_registry:
             return []
         return cls._table_registry[key].get(doc_id, [])
+
+    @classmethod
+    def reload_from_files(
+        cls, user_id: str, thread_id: str, files_info: List[dict]
+    ) -> None:
+        """
+        Reload spreadsheet data from files if not already in memory.
+        
+        Args:
+            user_id: The user ID.
+            thread_id: The thread ID.
+            files_info: List of dicts with {'path': str, 'file_name': str, 'doc_id': str}
+        """
+        # Ensure connection exists
+        cls.get_connection(user_id, thread_id)
+        key = (user_id, thread_id)
+        
+        # Check and load each file if needed
+        for file_info in files_info:
+            doc_id = file_info.get("doc_id")
+            
+            # If tables for this doc are already registered, skip it
+            if key in cls._table_registry and doc_id in cls._table_registry[key]:
+                continue
+                
+            file_path = file_info.get("path")
+            file_name = file_info.get("file_name")
+            
+            if not file_path or not os.path.exists(file_path):
+                print(f"[SQLiteManager] File not found for reload: {file_path}")
+                continue
+                
+            try:
+                # Load the file
+                print(f"[SQLiteManager] Reloading {file_name} for thread {thread_id}...")
+                cls.load_spreadsheet(
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    doc_id=doc_id,
+                    file_path=file_path,
+                    file_name=file_name,
+                )
+            except Exception as e:
+                print(f"[SQLiteManager] Error reloading {file_name}: {e}")
+                traceback.print_exc()

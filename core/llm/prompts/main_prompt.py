@@ -103,7 +103,7 @@ def detect_answer_style(question: str) -> str:
     return "detailed"
 
 
-def _build_system_prompt(mode: str, answer_style: str) -> str:
+def _build_system_prompt(mode: str, answer_style: str, has_spreadsheet: bool = False) -> str:
     """
     Build the system prompt from shared components.
     Eliminates the 4-way duplication (INTERNAL×brief, INTERNAL×detailed, EXTERNAL×brief, EXTERNAL×detailed).
@@ -135,6 +135,14 @@ def _build_system_prompt(mode: str, answer_style: str) -> str:
     else:
         role = (
             "You are an expert assistant that answers questions based on the provided **documents**.\n"
+        )
+    
+    if has_spreadsheet:
+        role += (
+            "\n**IMPORTANT: SQL ENGINE AVAILABLE**\n"
+            "You have access to a **SQL engine** that can query the uploaded spreadsheet data directly. "
+            "For ANY question regarding data in the spreadsheets (counting, filtering, aggregating, finding values), "
+            "you **MUST** use the `sql_query` tool. Do NOT attempt to answer these from text chunks.\n"
         )
 
     # ── Task ──
@@ -347,8 +355,46 @@ def main_prompt(
         raise ValueError("Invalid mode. Mode must be either 'INTERNAL' or 'EXTERNAL'.")
 
     # ── System prompt (built from shared components) ──
-    system_prompt = _build_system_prompt(mode, answer_style)
+    system_prompt = _build_system_prompt(mode, answer_style, has_spreadsheet=(spreadsheet_schema is not None))
     contents.append({"role": "system", "parts": system_prompt})
+
+    # ── Spreadsheet SQL schema (prioritized BEFORE chunks) ──
+    if spreadsheet_schema:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "### Spreadsheet Data (SQL Queryable)\n"
+                    "The user has uploaded spreadsheet files (Excel/CSV) that have been loaded into a SQL database. "
+                    "You can query this data using SQL SELECT statements.\n\n"
+                    "**Available Tables and Columns:**\n"
+                    f"```\n{spreadsheet_schema}\n```\n\n"
+                    "**SQL Query Guidelines:**\n"
+                    "- Use the `sql_query` action to run a SQL SELECT query against the spreadsheet data.\n"
+                    "- Write standard SQLite-compatible SQL queries.\n"
+                    "- Use aggregate functions like COUNT(), SUM(), AVG(), MIN(), MAX() for calculations.\n"
+                    "- Use GROUP BY and ORDER BY for grouping and sorting.\n"
+                    "- Use WHERE clauses to filter data.\n"
+                    "- Use LIKE with wildcards for partial text matching (e.g., WHERE column LIKE '%keyword%').\n"
+                    "- Column names and table names are case-sensitive and use underscores instead of spaces.\n"
+                    "- Only SELECT queries are allowed (no INSERT, UPDATE, DELETE).\n"
+                    "- **CRITICAL — SQL-FIRST RULE**: For ANY question whose answer could exist in the spreadsheet tables above, "
+                    "you MUST use the `sql_query` action. This includes but is NOT limited to:\n"
+                    "  * Looking up a specific person's details (address, email, phone, etc.)\n"
+                    "  * Finding or listing records that match a condition (e.g., students from a state, employees in a department)\n"
+                    "  * Searching for a name, value, or keyword in the data\n"
+                    "  * Counting, summing, averaging, ranking, or any aggregation\n"
+                    "  * Filtering, sorting, or comparing rows\n"
+                    "  * ANY data retrieval from tabular/spreadsheet content\n"
+                    "  NEVER answer from text chunks when the question relates to spreadsheet data — "
+                    "text chunks are incomplete fragments and WILL give wrong or partial results. "
+                    "The SQL database contains ALL rows and ALL columns and will give exact, complete results.\n"
+                    "- Always provide the `sql_query` field in your response when choosing the `sql_query` action.\n"
+                    "- Even if you see some spreadsheet data in the document chunks, ALWAYS use `sql_query` instead. "
+                    "The document chunks are only text previews and do NOT contain the full dataset.\n"
+                ),
+            }
+        )
 
     # ── Retrieved context ──
     if chunks:
@@ -417,43 +463,8 @@ def main_prompt(
         }
     )
 
-    # ── Spreadsheet SQL schema (if available) ──
-    if spreadsheet_schema:
-        contents.append(
-            {
-                "role": "system",
-                "parts": (
-                    "### Spreadsheet Data (SQL Queryable)\n"
-                    "The user has uploaded spreadsheet files (Excel/CSV) that have been loaded into a SQL database. "
-                    "You can query this data using SQL SELECT statements.\n\n"
-                    "**Available Tables and Columns:**\n"
-                    f"```\n{spreadsheet_schema}\n```\n\n"
-                    "**SQL Query Guidelines:**\n"
-                    "- Use the `sql_query` action to run a SQL SELECT query against the spreadsheet data.\n"
-                    "- Write standard SQLite-compatible SQL queries.\n"
-                    "- Use aggregate functions like COUNT(), SUM(), AVG(), MIN(), MAX() for calculations.\n"
-                    "- Use GROUP BY and ORDER BY for grouping and sorting.\n"
-                    "- Use WHERE clauses to filter data.\n"
-                    "- Use LIKE with wildcards for partial text matching (e.g., WHERE column LIKE '%keyword%').\n"
-                    "- Column names and table names are case-sensitive and use underscores instead of spaces.\n"
-                    "- Only SELECT queries are allowed (no INSERT, UPDATE, DELETE).\n"
-                    "- **CRITICAL — SQL-FIRST RULE**: For ANY question whose answer could exist in the spreadsheet tables above, "
-                    "you MUST use the `sql_query` action. This includes but is NOT limited to:\n"
-                    "  * Looking up a specific person's details (address, email, phone, etc.)\n"
-                    "  * Finding or listing records that match a condition (e.g., students from a state, employees in a department)\n"
-                    "  * Searching for a name, value, or keyword in the data\n"
-                    "  * Counting, summing, averaging, ranking, or any aggregation\n"
-                    "  * Filtering, sorting, or comparing rows\n"
-                    "  * ANY data retrieval from tabular/spreadsheet content\n"
-                    "  NEVER answer from text chunks when the question relates to spreadsheet data — "
-                    "text chunks are incomplete fragments and WILL give wrong or partial results. "
-                    "The SQL database contains ALL rows and ALL columns and will give exact, complete results.\n"
-                    "- Always provide the `sql_query` field in your response when choosing the `sql_query` action.\n"
-                    "- Even if you see some spreadsheet data in the document chunks, ALWAYS use `sql_query` instead. "
-                    "The document chunks are only text previews and do NOT contain the full dataset.\n"
-                ),
-            }
-        )
+    # ── Spreadsheet SQL schema (Moved to TOP) ──
+    # (Removed from here, placed before chunks)
 
     # ── SQL query result from a previous iteration ──
     if sql_result:

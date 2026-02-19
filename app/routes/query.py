@@ -58,6 +58,28 @@ async def query(request: Request, body: QueryRequest):
     confidence_scores = []
     suggested_questions = []
 
+    # Reload spreadsheet data if needed (handling server restarts/older chats)
+    try:
+        # Check if thread has documents that might be spreadsheets
+        thread_docs = thread.get("documents", [])
+        spreadsheet_files = []
+        for doc in thread_docs:
+            # Check file extension/type
+            fname = doc.get("file_name", "").lower()
+            if fname.endswith(".xlsx") or fname.endswith(".xls") or fname.endswith(".csv"):
+                # Construct path based on upload logic: data/{user_id}/threads/{thread_id}/uploads/{file_name}
+                file_path = f"data/{user_id}/threads/{thread_id}/uploads/{doc['file_name']}"
+                spreadsheet_files.append({
+                    "path": file_path,
+                    "file_name": doc['file_name'],
+                    "doc_id": doc.get("docId") # Use docId from DB
+                })
+        
+        if spreadsheet_files:
+             SQLiteManager.reload_from_files(user_id, thread_id, spreadsheet_files)
+    except Exception as e:
+        print(f"Error reloading spreadsheets: {e}")
+
     # Check if spreadsheet data is available for this thread
     has_spreadsheet = SQLiteManager.has_spreadsheet_data(user_id, thread_id)
     spreadsheet_schema = None
