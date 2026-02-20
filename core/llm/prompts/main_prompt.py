@@ -345,6 +345,7 @@ def main_prompt(
     use_self_knowledge: bool = False,
     spreadsheet_schema: Optional[str] = None,
     sql_result: Optional[str] = None,
+    original_query: Optional[str] = None,
 ):
     contents = []
 
@@ -469,15 +470,30 @@ def main_prompt(
 
     # ── SQL query result from a previous iteration ──
     if sql_result:
+        display_question = original_query or question
         contents.append(
             {
                 "role": "system",
                 "parts": (
                     "### SQL Query Result\n"
-                    "A SQL query was executed on the spreadsheet data. Here is the result:\n\n"
+                    "A SQL query was already executed on the spreadsheet data. Here is the result:\n\n"
                     f"{sql_result}\n\n"
-                    "Use this result to formulate your final answer to the user's question. "
-                    "Present the data clearly using Markdown tables or formatted text."
+                    f"**Original User Question:** {display_question}\n\n"
+                    "**CRITICAL — STOP AND EVALUATE BEFORE CHOOSING AN ACTION:**\n"
+                    "You have ALREADY received a SQL query result above. Follow these rules strictly:\n"
+                    "1. Compare the SQL result against the **Original User Question**.\n"
+                    "2. If the SQL result contains the data needed to answer the question (even partially), "
+                    "you **MUST** set `action` to `\"answer\"` and use the result to write your final answer. "
+                    "Do NOT request another SQL query.\n"
+                    "3. You should ONLY set `action` to `\"sql_query\"` again if ALL of these conditions are true:\n"
+                    "   - The SQL result above is an ERROR message (e.g., 'SQL execution error: ...'), OR\n"
+                    "   - The SQL query was clearly WRONG (e.g., queried the wrong column/table), OR\n"
+                    "   - The original question explicitly requires MULTIPLE SEPARATE pieces of data that cannot "
+                    "be retrieved in a single query and the current result only covers part of it.\n"
+                    "4. If the result is a valid number, table, or dataset — even if small or unexpected — "
+                    "that IS your answer. Present it clearly. Do NOT re-query to 'verify' or 'get more details'.\n"
+                    "5. An empty result set (0 rows) is still a valid answer (it means 'none found'). "
+                    "Do NOT re-query for empty results unless the query itself was incorrect.\n"
                 ),
             }
         )
@@ -485,12 +501,21 @@ def main_prompt(
     # ── Available actions ──
     sql_action_text = ""
     if spreadsheet_schema:
-        sql_action_text = (
-            "- **sql_query**: Execute a SQL SELECT query against the spreadsheet data. Use this for ANY question "
-            "that can be answered from the uploaded spreadsheet/CSV files — including lookups, searches, filters, "
-            "aggregations, listings, and data retrieval. Requires the `sql_query` field with a valid SQLite SELECT statement. "
-            "**This should be your DEFAULT choice whenever the question relates to spreadsheet data.**\n"
-        )
+        if sql_result:
+            # SQL result already available — discourage re-querying
+            sql_action_text = (
+                "- **sql_query**: Execute a SQL SELECT query against the spreadsheet data. "
+                "**A SQL query has ALREADY been executed and the result is shown above. "
+                "Only use this action again if the previous query returned an ERROR or was clearly wrong. "
+                "Otherwise, you MUST use `answer` to present the result.**\n"
+            )
+        else:
+            sql_action_text = (
+                "- **sql_query**: Execute a SQL SELECT query against the spreadsheet data. Use this for ANY question "
+                "that can be answered from the uploaded spreadsheet/CSV files — including lookups, searches, filters, "
+                "aggregations, listings, and data retrieval. Requires the `sql_query` field with a valid SQLite SELECT statement. "
+                "**This should be your DEFAULT choice whenever the question relates to spreadsheet data.**\n"
+            )
 
     contents.append(
         {
