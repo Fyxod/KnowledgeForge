@@ -80,9 +80,18 @@ async def get_technical_roadmap(
                 await f.write(
                     json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
                 )
-        except Exception:
-            # Silently ignore to avoid crashing the request path; a retry can be triggered by client
-            pass
+        except Exception as e:
+            # Clean up the lock file so the next poll triggers a retry
+            if os.path.exists(roadmap_path):
+                try:
+                    os.remove(roadmap_path)
+                except Exception:
+                    pass
+            print(f"Error generating technical roadmap: {e}")
+
+    # If regenerating, remove existing file so a fresh generation is triggered
+    if regenerate and os.path.exists(roadmap_path):
+        os.remove(roadmap_path)
 
     # If roadmap file already exists, inspect its contents
     if os.path.exists(roadmap_path):
@@ -154,6 +163,7 @@ async def technical_roadmap_global(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     thread_id = body.thread_id
+    regenerate = body.regenerate
 
     user_id = payload.userId
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
@@ -199,9 +209,18 @@ async def technical_roadmap_global(
                 await f.write(
                     json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
                 )
-        except Exception:
-            # Silently ignore to avoid crashing the request path; a retry can be triggered by client
-            pass
+        except Exception as e:
+            # Clean up lock file to allow retry
+            if os.path.exists(roadmap_path):
+                try:
+                    os.remove(roadmap_path)
+                except Exception:
+                    pass
+            print(f"Error generating global technical roadmap: {e}")
+
+    # If regenerating, remove existing file so a fresh generation is triggered
+    if regenerate and os.path.exists(roadmap_path):
+        os.remove(roadmap_path)
 
     # If roadmap file already exists, inspect its contents
     if os.path.exists(roadmap_path):

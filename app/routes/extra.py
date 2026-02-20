@@ -1,3 +1,4 @@
+import asyncio
 import aiofiles
 from fastapi import APIRouter, Body, Request, HTTPException
 import os
@@ -265,9 +266,8 @@ async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body
         os.remove(file_path)
 
     if not os.path.exists(file_path):
-        if regenerate:
-            from core.studio_features.summarizer import global_summarizer
-            asyncio.create_task(global_summarizer(user_id, thread_id))
+        from core.studio_features.summarizer import global_summarizer
+        asyncio.create_task(global_summarizer(user_id, thread_id))
 
         return {
             "status": False,

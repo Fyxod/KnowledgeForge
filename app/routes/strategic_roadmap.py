@@ -97,6 +97,10 @@ async def get_strategic_roadmap(
                 pass
             print(f"Error generating strategic roadmap: {error_details}")
 
+    # If regenerating, remove existing file so a fresh generation is triggered
+    if regenerate and os.path.exists(roadmap_path):
+        os.remove(roadmap_path)
+
     # If roadmap file already exists, inspect its contents
     if os.path.exists(roadmap_path):
         try:

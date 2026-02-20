@@ -803,7 +803,7 @@ export const api = {
     return data as TechnicalRoadmapResponse;
   },
 
-  async technicalRoadmapGlobal(threadId: string): Promise<TechnicalRoadmapResponse> {
+  async technicalRoadmapGlobal(threadId: string, regenerate: boolean = false): Promise<TechnicalRoadmapResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/technical_roadmap/global`, {
       method: 'POST',
@@ -811,7 +811,7 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId }),
+      body: JSON.stringify({ thread_id: threadId, regenerate }),
     });
     let data: any = null;
     try {
