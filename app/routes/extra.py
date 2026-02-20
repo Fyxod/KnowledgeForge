@@ -280,6 +280,12 @@ async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body
         data = json.loads(content)
 
         if isinstance(data, dict):
+            if "error" in data:
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+                return {"status": False, "error": data["error"]}
             return {"status": True, "summary": data.get("summary")}
     except Exception:
         pass

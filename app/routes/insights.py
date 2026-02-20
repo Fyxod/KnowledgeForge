@@ -78,9 +78,13 @@ async def get_insights(request: Request, body: InsightsRequest = Body(...)):
                 await f.write(
                     json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
                 )
-        except Exception:
-            print("Insights generation failed")
-            pass
+        except Exception as e:
+            if os.path.exists(insights_path):
+                try:
+                    os.remove(insights_path)
+                except Exception:
+                    pass
+            print(f"Insights generation failed: {e}")
 
     if regenerate and os.path.exists(insights_path):
         os.remove(insights_path)
@@ -201,8 +205,12 @@ async def insights_global(request: Request, body: InsightsGlobalRequest = Body(.
                     json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
                 )
         except Exception as e:
+            if os.path.exists(insights_path):
+                try:
+                    os.remove(insights_path)
+                except Exception:
+                    pass
             print("Global insights generation failed:", e)
-            pass
 
     if regenerate and os.path.exists(insights_path):
         os.remove(insights_path)

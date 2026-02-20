@@ -83,8 +83,19 @@ async def get_strategic_roadmap(
                     json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
                 )
         except Exception:
-            # Silently ignore to avoid crashing the request path; a retry can be triggered by client
-            print(f"Error generating strategic roadmap: {traceback.format_exc()}")
+            # Clean up the lock file so the next poll triggers a retry
+            if os.path.exists(roadmap_path):
+                try:
+                    os.remove(roadmap_path)
+                except Exception:
+                    pass
+            error_details = traceback.format_exc()
+            try:
+                with open(os.path.join(roadmap_dir, "error.txt"), "w") as ef:
+                    ef.write(f"Error in _generate_and_write: {error_details}")
+            except Exception:
+                pass
+            print(f"Error generating strategic roadmap: {error_details}")
 
     # If roadmap file already exists, inspect its contents
     if os.path.exists(roadmap_path):
@@ -205,8 +216,19 @@ async def strategic_roadmap_global(
                     json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
                 )
         except Exception:
-            # Silently ignore to avoid crashing the request path; a retry can be triggered by client
-            print(f"Error generating global strategic roadmap: {traceback.format_exc()}")
+            # Clean up lock file to allow retry
+            if os.path.exists(roadmap_path):
+                try:
+                    os.remove(roadmap_path)
+                except Exception:
+                    pass
+            error_details = traceback.format_exc()
+            try:
+                with open(os.path.join(roadmap_dir, "error_global.txt"), "w") as ef:
+                    ef.write(f"Error in _generate_and_write_global: {error_details}")
+            except Exception:
+                pass
+            print(f"Error generating global strategic roadmap: {error_details}")
 
     if regenerate and os.path.exists(roadmap_path):
         os.remove(roadmap_path)

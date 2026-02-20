@@ -244,6 +244,12 @@ async def global_summarizer(user_id: str, thread_id: str):
 
     if not summaries:
         print(f"No summaries found for thread {thread_id} for user {user_id}")
+        err_msg = "No individual summaries found. Please summarize individual documents before generating global summary."
+        try:
+            async with aiofiles.open(os.path.join(save_dir, "global_summary.json"), "w", encoding="utf-8") as f:
+                await f.write(json.dumps({"error": err_msg}, ensure_ascii=False))
+        except Exception:
+            pass
         await sio.emit(f"{user_id}/{thread_id}/global", {"status": False})
         return
 
@@ -279,6 +285,11 @@ async def global_summarizer(user_id: str, thread_id: str):
 
     except Exception as e:
         print(f"Error during global summarization: {e}")
+        try:
+            async with aiofiles.open(os.path.join(save_dir, "global_summary.json"), "w", encoding="utf-8") as f:
+                await f.write(json.dumps({"error": f"Summarization failed: {e}"}, ensure_ascii=False))
+        except Exception:
+            pass
 
 
 async def updateThread(user_id: str, thread_id: str, updated_title: str):

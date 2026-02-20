@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,14 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [progressMessages, setProgressMessages] = useState<string[]>([]);
+  const [view, setView] = useState<'select' | 'progress' | 'display'>('select');
+
+  const pollingActiveRef = useRef<boolean>(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPolledDocRef = useRef<string | null>(null);
+  const lastPolledIsRegenerateRef = useRef<boolean>(false);
 
   const handleToggle = (docId: string) => {
     setSelectedDoc(prev => (prev === docId ? null : docId));
@@ -38,42 +46,115 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
 
     setLoading(true);
     setSummary(null);
+    setMessage(null);
 
     try {
       const isAll = selectedDoc === ALL_DOCS_ID;
       const res = isAll ? await api.summaryGlobal(threadId, isRegenerate) : await api.summary(threadId, selectedDoc, isRegenerate);
+
       if (res?.status && res.summary) {
         setSummary(res.summary);
         toast.success('Summary generated');
-      } else if (typeof res?.error === 'string' && res.error) {
-        toast.error(res.error);
-      } else if (typeof res?.message === 'string' && res.message) {
-        // Treat informational messages from backend (e.g., disabled or generating) as info
-        const msg = res.message;
-        if (/disable|not enabled|generating/i.test(msg)) {
+        pollingActiveRef.current = false;
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setView('display');
+      } else if (res?.status === false && res.error) {
+        // We received an error indicating we need to poll (like "Generating...")
+        const msg = res.error;
+        if (/disable|not enabled/i.test(msg)) {
           toast.info(msg);
+          setLoading(false);
         } else {
-          toast.error(msg);
+          setMessage(msg);
+          setProgressMessages((msgs) => (msgs[msgs.length - 1] === msg ? msgs : [...msgs, msg]));
+          setView('progress');
+          // Only pass true to regenerate on the very first request
+          lastPolledDocRef.current = selectedDoc;
+          lastPolledIsRegenerateRef.current = false;
+          pollingActiveRef.current = true;
+          schedulePoll();
         }
       } else {
-        toast.error('Summary not yet generated. Generating...');
+        setMessage('Generating summary...');
+        setProgressMessages((msgs) => (msgs[msgs.length - 1] === 'Generating summary...' ? msgs : [...msgs, 'Generating summary...']));
+        setView('progress');
+        lastPolledDocRef.current = selectedDoc;
+        lastPolledIsRegenerateRef.current = false;
+        pollingActiveRef.current = true;
+        schedulePoll();
       }
     } catch (e) {
       console.error('Error generating summary:', e);
       toast.error('Failed to generate summary');
-    } finally {
       setLoading(false);
     }
+  };
+
+  const schedulePoll = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    timeoutRef.current = setTimeout(async () => {
+      if (!pollingActiveRef.current) return;
+      const docId = lastPolledDocRef.current;
+      if (!docId) return;
+      try {
+        const isAll = docId === ALL_DOCS_ID;
+        // poll with regenerate=false since generation is already scheduled
+        const res = isAll ? await api.summaryGlobal(threadId, false) : await api.summary(threadId, docId, false);
+        if (res?.status && res.summary) {
+          setSummary(res.summary);
+          setMessage(null);
+          pollingActiveRef.current = false;
+          setView('display');
+          setLoading(false);
+          return;
+        }
+        if (res?.error) {
+          setMessage(res.error);
+          setProgressMessages((msgs) => (msgs[msgs.length - 1] === res.error ? msgs : [...msgs, res.error!]));
+          setView('progress');
+        }
+      } catch (e) {
+        // non-fatal
+      }
+      if (pollingActiveRef.current) schedulePoll();
+    }, 5000);
   };
 
   const handleClose = (open: boolean) => {
     if (!open) {
       setSelectedDoc(null);
       setSummary(null);
+      setMessage(null);
+      setProgressMessages([]);
+      setView('select');
       setLoading(false);
+      pollingActiveRef.current = false;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      lastPolledDocRef.current = null;
     }
     onOpenChange(open);
   };
+
+  useEffect(() => {
+    if (!open) {
+      pollingActiveRef.current = false;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    }
+  }, [open]);
+
+  const selectedDocObj = selectedDoc && selectedDoc !== ALL_DOCS_ID ? documents.find(d => d.docId === selectedDoc) : null;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -81,11 +162,25 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
         <DialogHeader>
           <DialogTitle>Generate Summary</DialogTitle>
           <DialogDescription>
-            Select a document (or All Documents) and generate its summary
+            {view === 'select' && 'Select a document (or All Documents) and generate its summary'}
+            {view === 'progress' && (
+              <span>
+                Generating for: <span className="font-medium">{selectedDoc === ALL_DOCS_ID ? 'All Documents in Thread' : (selectedDocObj?.title || 'Selected Document')}</span>
+              </span>
+            )}
+            {view === 'display' && (
+              <span>
+                {selectedDoc === ALL_DOCS_ID ? (
+                  <>Scope: <span className="font-medium">All Documents in Thread</span></>
+                ) : selectedDocObj ? (
+                  <>Document: <span className="font-medium">{selectedDocObj.title}</span></>
+                ) : null}
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        {!summary ? (
+        {view === 'select' && (
           <div className="flex-1 overflow-hidden flex flex-col gap-6">
             {/* Document Selection */}
             <div className="space-y-3">
@@ -163,14 +258,55 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating...
+                  Requesting...
                 </>
               ) : (
                 'Generate Summary'
               )}
             </Button>
           </div>
-        ) : (
+        )}
+
+        {view === 'progress' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-primary animate-spin" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">{selectedDoc === ALL_DOCS_ID ? 'All Documents in Thread' : (selectedDocObj?.title || 'Selected Document')}</h3>
+              <div className="space-y-2">
+                {progressMessages.length > 0 ? (
+                  progressMessages.map((m, idx) => (
+                    <p key={idx} className="text-sm text-muted-foreground whitespace-pre-wrap">{m}</p>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">Generating summary…</p>
+                )}
+              </div>
+            </div>
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  pollingActiveRef.current = false;
+                  if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                    timeoutRef.current = null;
+                  }
+                  setView('select');
+                  setProgressMessages([]);
+                  setMessage(null);
+                  setSelectedDoc(null);
+                  setLoading(false);
+                }}
+              >
+                Back to documents
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {view === 'display' && summary && (
           <div className="flex-1 overflow-hidden flex flex-col gap-4">
             {/* Summary Display */}
             <ScrollArea className="flex-1 border rounded-lg p-4 bg-muted/30 h-[50vh] md:h-[60vh] overflow-auto">
