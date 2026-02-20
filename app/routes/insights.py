@@ -15,10 +15,12 @@ router = APIRouter(prefix="", tags=["extra"])
 class InsightsRequest(BaseModel):
     thread_id: str
     document_id: str
+    regenerate: bool = False
 
 
 class InsightsGlobalRequest(BaseModel):
     thread_id: str
+    regenerate: bool = False
 
 
 @router.post("/insights")
@@ -30,6 +32,7 @@ async def get_insights(request: Request, body: InsightsRequest = Body(...)):
 
     thread_id = body.thread_id
     document_id = body.document_id
+    regenerate = body.regenerate
 
     user_id = payload.userId
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
@@ -78,6 +81,9 @@ async def get_insights(request: Request, body: InsightsRequest = Body(...)):
         except Exception:
             print("Insights generation failed")
             pass
+
+    if regenerate and os.path.exists(insights_path):
+        os.remove(insights_path)
 
     # If insights file already exists, inspect its contents
     if os.path.exists(insights_path):
@@ -147,6 +153,7 @@ async def insights_global(request: Request, body: InsightsGlobalRequest = Body(.
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     thread_id = body.thread_id
+    regenerate = body.regenerate
 
     user_id = payload.userId
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
@@ -196,6 +203,9 @@ async def insights_global(request: Request, body: InsightsGlobalRequest = Body(.
         except Exception as e:
             print("Global insights generation failed:", e)
             pass
+
+    if regenerate and os.path.exists(insights_path):
+        os.remove(insights_path)
 
     # If insights file already exists, inspect its contents
     if os.path.exists(insights_path):

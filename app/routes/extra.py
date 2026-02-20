@@ -19,10 +19,12 @@ class WordCloudRequest(BaseModel):
 class MindMapRequest(BaseModel):
     thread_id: str
     document_id: str
+    regenerate: bool = False
 
 
 class GlobalSummaryRequest(BaseModel):
     thread_id: str
+    regenerate: bool = False
 
 
 @router.post("/wordcloud/{thread_id}")
@@ -172,6 +174,7 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
 
     thread_id = body.thread_id
     document_id = body.document_id
+    regenerate = body.regenerate
     print(f"Fetching summary for document_id: {document_id} in thread_id: {thread_id}")
 
     user_id = payload.userId
@@ -195,6 +198,35 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                     content = await f.read()
                 data = json.loads(content)
                 if isinstance(data, dict) and data.get("id") == document_id:
+                    if regenerate:
+                        from core.studio_features.summarizer import process_document_with_chunks
+                        from core.models.document import Document
+                        
+                        # Clear existing summary to lock the UI
+                        data["summary"] = ""
+                        async with aiofiles.open(file_path, "w", encoding="utf-8") as write_f:
+                            await write_f.write(json.dumps(data, ensure_ascii=False))
+
+                        async def _regenerate_summary():
+                            try:
+                                doc = Document.model_validate(data)
+                                await process_document_with_chunks(doc)
+                                # load latest state to avoid race condition
+                                async with aiofiles.open(file_path, "r", encoding="utf-8") as reread_f:
+                                    reread_content = await reread_f.read()
+                                reread_data = json.loads(reread_content)
+                                reread_data["summary"] = doc.summary or ""
+                                async with aiofiles.open(file_path, "w", encoding="utf-8") as resave_f:
+                                    await resave_f.write(json.dumps(reread_data, ensure_ascii=False))
+                            except Exception as e:
+                                print(f"Failed regenerating individual summary: {e}")
+
+                        asyncio.create_task(_regenerate_summary())
+                        return {"status": False, "error": "Summary not yet generated. Generating..."}
+
+                    if not data.get("summary"):
+                        return {"status": False, "error": "Summary not yet generated. Generating..."}
+                    
                     return {"status": True, "summary": data.get("summary")}
             except Exception as e:
                 continue
@@ -214,6 +246,7 @@ async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body
         return {"message": "Summarization feature is disabled"}
 
     thread_id = body.thread_id
+    regenerate = body.regenerate
     print(f"Fetching global summary for thread_id: {thread_id}")
 
     user_id = payload.userId
@@ -228,7 +261,14 @@ async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body
     thread_dir = f"data/{user_id}/threads/{thread_id}"
     file_path = os.path.join(thread_dir, "global_summary.json")
 
+    if regenerate and os.path.exists(file_path):
+        os.remove(file_path)
+
     if not os.path.exists(file_path):
+        if regenerate:
+            from core.studio_features.summarizer import global_summarizer
+            asyncio.create_task(global_summarizer(user_id, thread_id))
+
         return {
             "status": False,
             "error": "Global Summary not yet generated. Generating...",

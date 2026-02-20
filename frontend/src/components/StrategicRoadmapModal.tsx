@@ -22,6 +22,7 @@ import {
   ListChecks,
   CheckCircle2,
   ArrowRight,
+  RefreshCcw,
 } from 'lucide-react';
 import { Document, StrategicRoadmapLLMOutput, api } from '@/lib/api';
 import { downloadStrategicRoadmapPdf } from '@/lib/strategic-roadmap-pdf';
@@ -273,7 +274,7 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
     setSelectedDoc(prev => (prev === docId ? null : docId));
   };
 
-  const requestRoadmap = async () => {
+  const requestRoadmap = async (isRegenerate: boolean = false) => {
     if (!selectedDoc) {
       toast.error('Please select a document');
       return;
@@ -285,8 +286,8 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
     try {
       const isAll = selectedDoc === ALL_DOCS_ID;
       const res = isAll
-        ? await api.strategicRoadmapGlobal(threadId)
-        : await api.strategicRoadmap(threadId, selectedDoc);
+        ? await api.strategicRoadmapGlobal(threadId, isRegenerate)
+        : await api.strategicRoadmap(threadId, selectedDoc, isRegenerate);
       if (res?.status && res.strategic_roadmap) {
         setRoadmap(res.strategic_roadmap);
         toast.success('Strategic roadmap ready');
@@ -506,10 +507,9 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
               </p>
             </div>
 
-            {/* Generate Button */}
             <div className="flex items-center gap-3">
               <Button
-                onClick={requestRoadmap}
+                onClick={() => requestRoadmap(false)}
                 disabled={loading || !selectedDoc}
                 className="bg-gradient-primary"
               >
@@ -602,6 +602,14 @@ const StrategicRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
 
             {/* Action Buttons */}
             <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="mr-auto"
+                onClick={() => requestRoadmap(true)}
+              >
+                <RefreshCcw className="w-4 h-4 mr-2" />
+                Regenerate
+              </Button>
               <Button
                 variant="outline"
                 className="ml-auto"

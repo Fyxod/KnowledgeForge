@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Cpu, Wrench, ShieldAlert, Rocket, MapPin, TrendingUp, BarChart3 } from 'lucide-react';
+import { Loader2, Cpu, Wrench, ShieldAlert, Rocket, MapPin, TrendingUp, BarChart3, RefreshCcw } from 'lucide-react';
 import { Document, TechnicalRoadmapLLMOutput, api } from '@/lib/api';
 import { toast } from 'sonner';
 import { downloadTechnicalRoadmapPdf } from '@/lib/technical-roadmap-pdf';
@@ -178,7 +178,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
     setSelectedDoc(prev => (prev === docId ? null : docId));
   };
 
-  const requestRoadmap = async () => {
+  const requestRoadmap = async (isRegenerate: boolean = false) => {
     if (!selectedDoc) {
       toast.error('Please select a document');
       return;
@@ -189,7 +189,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
 
     try {
       const isAll = selectedDoc === ALL_DOCS_ID;
-      const res = isAll ? await api.technicalRoadmapGlobal(threadId) : await api.technicalRoadmap(threadId, selectedDoc);
+      const res = isAll ? await api.technicalRoadmapGlobal(threadId, isRegenerate) : await api.technicalRoadmap(threadId, selectedDoc, isRegenerate);
       if (res?.status && res.technical_roadmap) {
         setRoadmap(res.technical_roadmap);
         toast.success('Technical roadmap ready');
@@ -367,7 +367,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
             </div>
 
             <div className="flex items-center gap-3">
-              <Button onClick={requestRoadmap} disabled={loading || !selectedDoc} className="bg-gradient-primary">
+              <Button onClick={() => requestRoadmap(false)} disabled={loading || !selectedDoc} className="bg-gradient-primary">
                 {loading ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Requesting...</>) : 'Generate Technical Roadmap'}
               </Button>
             </div>
@@ -420,6 +420,14 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
             </ScrollArea>
 
             <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="mr-auto"
+                onClick={() => requestRoadmap(true)}
+              >
+                <RefreshCcw className="w-4 h-4 mr-2" />
+                Regenerate
+              </Button>
               <Button
                 variant="outline"
                 className="ml-auto"

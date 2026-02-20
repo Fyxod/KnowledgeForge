@@ -646,7 +646,7 @@ export const api = {
     return response.json();
   },
 
-  async summary(threadId: string, documentId: string): Promise<SummaryResponse> {
+  async summary(threadId: string, documentId: string, regenerate: boolean = false): Promise<SummaryResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/summary`, {
       method: 'POST',
@@ -654,7 +654,7 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId, regenerate }),
     });
     let data: any = null;
     try {
@@ -669,7 +669,7 @@ export const api = {
     return data as SummaryResponse;
   },
 
-  async summaryGlobal(threadId: string): Promise<SummaryResponse> {
+  async summaryGlobal(threadId: string, regenerate: boolean = false): Promise<SummaryResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/summary/global`, {
       method: 'POST',
@@ -677,7 +677,7 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId }),
+      body: JSON.stringify({ thread_id: threadId, regenerate }),
     });
     let data: any = null;
     try {
@@ -691,7 +691,7 @@ export const api = {
     return data as SummaryResponse;
   },
 
-  async strategicRoadmap(threadId: string, documentId: string): Promise<StrategicRoadmapResponse> {
+  async strategicRoadmap(threadId: string, documentId: string, regenerate: boolean = false): Promise<StrategicRoadmapResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/strategic_roadmap`, {
       method: 'POST',
@@ -699,7 +699,7 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId, regenerate }),
     });
     let data: any = null;
     try {
@@ -715,7 +715,7 @@ export const api = {
   },
 
   // Generate strategic roadmap across ALL documents in a thread
-  async strategicRoadmapGlobal(threadId: string): Promise<StrategicRoadmapResponse> {
+  async strategicRoadmapGlobal(threadId: string, regenerate: boolean = false): Promise<StrategicRoadmapResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/strategic_roadmap/global`, {
       method: 'POST',
@@ -723,7 +723,7 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId }),
+      body: JSON.stringify({ thread_id: threadId, regenerate }),
     });
     let data: any = null;
     try {
@@ -737,7 +737,7 @@ export const api = {
     return data as StrategicRoadmapResponse;
   },
 
-  async insights(threadId: string, documentId: string): Promise<InsightsResponse> {
+  async insights(threadId: string, documentId: string, regenerate: boolean = false): Promise<InsightsResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/insights`, {
       method: 'POST',
@@ -745,7 +745,7 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId, regenerate }),
     });
     let data: any = null;
     try {
@@ -759,7 +759,7 @@ export const api = {
     return data as InsightsResponse; // Expected: { status:false,message } or { status:true, insights }
   },
 
-  async insightsGlobal(threadId: string): Promise<InsightsResponse> {
+  async insightsGlobal(threadId: string, regenerate: boolean = false): Promise<InsightsResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/insights/global`, {
       method: 'POST',
@@ -767,7 +767,7 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId }),
+      body: JSON.stringify({ thread_id: threadId, regenerate }),
     });
     let data: any = null;
     try {
@@ -781,7 +781,7 @@ export const api = {
     return data as InsightsResponse;
   },
 
-  async technicalRoadmap(threadId: string, documentId: string): Promise<TechnicalRoadmapResponse> {
+  async technicalRoadmap(threadId: string, documentId: string, regenerate: boolean = false): Promise<TechnicalRoadmapResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/technical_roadmap`, {
       method: 'POST',
@@ -789,7 +789,7 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId, document_id: documentId }),
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId, regenerate }),
     });
     let data: any = null;
     try {

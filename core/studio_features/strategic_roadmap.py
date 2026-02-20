@@ -72,9 +72,10 @@ def fetch_document_content(document: Document | list[Document]) -> str:
             prompt_offset=2500,
         )
         # Join all compressed docs into one string
-        return "Multiple Documents\n\n".join(
+        docs_string = "\n\n".join(
             f"Title - {d['title']}\n\nContent - {d['content']}" for d in compressed
         )
+        return f"Multiple Documents\n\n{docs_string}"
 
 
 def word_count(text: str) -> int:

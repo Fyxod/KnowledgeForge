@@ -15,8 +15,8 @@ import {
   Code2,
   Sparkles,
   ThumbsUp,
-  AlertTriangle,
   Rocket,
+  RefreshCcw,
 } from 'lucide-react';
 import { Document, InsightsLLMOutput, api } from '@/lib/api';
 import { downloadInsightsPdf } from '@/lib/insights-pdf';
@@ -46,15 +46,15 @@ const PillList: React.FC<{ items?: string[]; className?: string }> = ({ items = 
 
 const SectionHeader: React.FC<{ icon: React.ReactNode; title: string; tone?: 'emerald' | 'amber' | 'violet' | 'sky' | 'rose' | 'pink' }>
   = ({ icon, title, tone = 'violet' }) => (
-  <div className="flex items-center gap-2 mb-2">
-    <div className={
-      `p-2 rounded-md bg-${tone}-100 text-${tone}-700 dark:bg-${tone}-900/40 dark:text-${tone}-300`
-    }>
-      {icon}
+    <div className="flex items-center gap-2 mb-2">
+      <div className={
+        `p-2 rounded-md bg-${tone}-100 text-${tone}-700 dark:bg-${tone}-900/40 dark:text-${tone}-300`
+      }>
+        {icon}
+      </div>
+      <h4 className="font-semibold">{title}</h4>
     </div>
-    <h4 className="font-semibold">{title}</h4>
-  </div>
-);
+  );
 
 const InsightsRenderer: React.FC<{ insights: InsightsLLMOutput }> = ({ insights }) => {
   const doc = insights.document_summary;
@@ -222,7 +222,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
     setSelectedDoc(prev => (prev === docId ? null : docId));
   };
 
-  const requestInsights = async () => {
+  const requestInsights = async (isRegenerate: boolean = false) => {
     if (!selectedDoc) {
       toast.error('Please select a document');
       return;
@@ -233,7 +233,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
 
     try {
       const isAll = selectedDoc === ALL_DOCS_ID;
-      const res = isAll ? await api.insightsGlobal(threadId) : await api.insights(threadId, selectedDoc);
+      const res = isAll ? await api.insightsGlobal(threadId, isRegenerate) : await api.insights(threadId, selectedDoc, isRegenerate);
       if (res?.status && res.insights) {
         setInsights(res.insights);
         toast.success('Insights ready');
@@ -426,7 +426,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
             {/* Generate Button */}
             <div className="flex items-center gap-3">
               <Button
-                onClick={requestInsights}
+                onClick={() => requestInsights(false)}
                 disabled={loading || !selectedDoc}
                 className="bg-gradient-primary"
               >
@@ -443,7 +443,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
           </div>
         )}
 
-            {view === 'progress' && (
+        {view === 'progress' && (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
               <Loader2 className="w-6 h-6 text-primary animate-spin" />
@@ -489,6 +489,14 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
 
             {/* Action Buttons */}
             <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="mr-auto"
+                onClick={() => requestInsights(true)}
+              >
+                <RefreshCcw className="w-4 h-4 mr-2" />
+                Regenerate
+              </Button>
               <Button
                 variant="outline"
                 className="ml-auto"

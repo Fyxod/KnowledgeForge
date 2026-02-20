@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCcw } from 'lucide-react';
 import { Document, api } from '@/lib/api';
 import { toast } from 'sonner';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
@@ -30,7 +30,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
     setSelectedDoc(prev => (prev === docId ? null : docId));
   };
 
-  const generateSummary = async () => {
+  const generateSummary = async (isRegenerate: boolean = false) => {
     if (!selectedDoc) {
       toast.error('Please select a document');
       return;
@@ -41,7 +41,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
 
     try {
       const isAll = selectedDoc === ALL_DOCS_ID;
-      const res = isAll ? await api.summaryGlobal(threadId) : await api.summary(threadId, selectedDoc);
+      const res = isAll ? await api.summaryGlobal(threadId, isRegenerate) : await api.summary(threadId, selectedDoc, isRegenerate);
       if (res?.status && res.summary) {
         setSummary(res.summary);
         toast.success('Summary generated');
@@ -156,7 +156,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
 
             {/* Generate Button */}
             <Button
-              onClick={generateSummary}
+              onClick={() => generateSummary(false)}
               disabled={loading || !selectedDoc}
               className="w-full bg-gradient-primary"
             >
@@ -179,6 +179,14 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
 
             {/* Action Button */}
             <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="mr-auto"
+                onClick={() => generateSummary(true)}
+              >
+                <RefreshCcw className="w-4 h-4 mr-2" />
+                Regenerate
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => {

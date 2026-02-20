@@ -15,10 +15,12 @@ router = APIRouter(prefix="", tags=["extra"])
 class TechnicalRoadmapRequest(BaseModel):
     thread_id: str
     document_id: str
+    regenerate: bool = False
 
 
 class TechnicalRoadmapGlobalRequest(BaseModel):
     thread_id: str
+    regenerate: bool = False
 
 
 @router.post("/technical_roadmap")
@@ -32,6 +34,7 @@ async def get_technical_roadmap(
 
     thread_id = body.thread_id
     document_id = body.document_id
+    regenerate = body.regenerate
 
     user_id = payload.userId
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})

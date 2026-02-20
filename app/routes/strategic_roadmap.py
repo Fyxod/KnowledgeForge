@@ -2,6 +2,7 @@ import aiofiles
 import asyncio
 import os
 import json
+import traceback
 from fastapi import APIRouter, Body, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -16,10 +17,12 @@ router = APIRouter(prefix="", tags=["extra"])
 class StrategicRoadmapRequest(BaseModel):
     thread_id: str
     document_id: str
+    regenerate: bool = False
 
 
 class StrategicRoadmapGlobalRequest(BaseModel):
     thread_id: str
+    regenerate: bool = False
 
 
 @router.post("/strategic_roadmap")
@@ -33,6 +36,7 @@ async def get_strategic_roadmap(
 
     thread_id = body.thread_id
     document_id = body.document_id
+    regenerate = body.regenerate
 
     user_id = payload.userId
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
@@ -80,7 +84,7 @@ async def get_strategic_roadmap(
                 )
         except Exception:
             # Silently ignore to avoid crashing the request path; a retry can be triggered by client
-            pass
+            print(f"Error generating strategic roadmap: {traceback.format_exc()}")
 
     # If roadmap file already exists, inspect its contents
     if os.path.exists(roadmap_path):
@@ -152,6 +156,7 @@ async def strategic_roadmap_global(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     thread_id = body.thread_id
+    regenerate = body.regenerate
 
     user_id = payload.userId
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
@@ -201,7 +206,10 @@ async def strategic_roadmap_global(
                 )
         except Exception:
             # Silently ignore to avoid crashing the request path; a retry can be triggered by client
-            pass
+            print(f"Error generating global strategic roadmap: {traceback.format_exc()}")
+
+    if regenerate and os.path.exists(roadmap_path):
+        os.remove(roadmap_path)
 
     # If roadmap file already exists, inspect its contents
     if os.path.exists(roadmap_path):
