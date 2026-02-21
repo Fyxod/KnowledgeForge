@@ -205,11 +205,12 @@ async def failure(state: AgentState) -> AgentState:
 
 
 async def self_knowledge(state: AgentState) -> AgentState:
-    if state.mode == EXTERNAL:
-        state.answer = (
-            "I am unable to answer your question at this time. "
-            "Please try rephrasing or asking a different question."
-        )
+    if state.mode == EXTERNAL or not state.use_self_knowledge:
+        if not state.answer or not state.answer.strip():
+            state.answer = (
+                "I am unable to answer your question at this time. "
+                "Please try rephrasing or asking a different question."
+            )
         return state
 
     print("Using self-knowledge to answer the question.")
