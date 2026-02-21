@@ -17,6 +17,7 @@ import {
   ThumbsUp,
   Rocket,
   RefreshCcw,
+  AlertTriangle,
 } from 'lucide-react';
 import { Document, InsightsLLMOutput, api } from '@/lib/api';
 import { downloadInsightsPdf } from '@/lib/insights-pdf';
