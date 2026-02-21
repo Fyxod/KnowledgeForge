@@ -9,7 +9,7 @@ import StrategicRoadmapModal from './StrategicRoadmapModal';
 import TechnicalRoadmapModal from './TechnicalRoadmapModal';
 import InsightsModal from './InsightsModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Thread, getAuthToken, api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { toast } from 'sonner';
@@ -249,9 +249,8 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
             <DialogTitle>Documents</DialogTitle>
             <DialogDescription>Documents in this thread</DialogDescription>
           </DialogHeader>
-          <div className="mt-2 min-w-0 overflow-hidden flex-1">
-            <ScrollArea className="h-64 border rounded-md p-2">
-              <div className="w-full overflow-hidden">
+          <div className="mt-2 overflow-hidden flex-1">
+            <div className="h-64 border rounded-md p-2 overflow-y-auto">
                 {documents.length === 0 ? (
                   <p className="text-sm text-muted-foreground p-4">No documents in this thread.</p>
                 ) : (
@@ -260,13 +259,6 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                       const href = user && threadId
                         ? buildDocumentUrl(user.userId, threadId, d.file_name, authToken ?? undefined)
                         : undefined;
-
-                      const content = (
-                        <div className="flex-1 min-w-0 overflow-hidden">
-                          <div className="font-medium truncate block w-full" title={d.title}>{d.title}</div>
-                          <div className="text-sm text-muted-foreground">{d.type} &bull; {new Date(d.time_uploaded).toLocaleDateString()}</div>
-                        </div>
-                      );
 
                       return (
                         <div key={d.docId} className="flex items-center gap-2 p-2 rounded hover:bg-accent/60 dark:hover:bg-accent/30">
@@ -277,15 +269,13 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                               rel="noopener noreferrer"
                               className="flex-1 min-w-0 overflow-hidden"
                             >
-                              <div className="flex items-start gap-3 min-w-0 overflow-hidden">
-                                {content}
-                              </div>
+                              <div className="font-medium truncate" title={d.title}>{d.title}</div>
+                              <div className="text-sm text-muted-foreground truncate">{d.type} &bull; {new Date(d.time_uploaded).toLocaleDateString()}</div>
                             </a>
                           ) : (
                             <div className="flex-1 min-w-0 overflow-hidden">
-                              <div className="flex items-start gap-3 min-w-0 overflow-hidden">
-                                {content}
-                              </div>
+                              <div className="font-medium truncate" title={d.title}>{d.title}</div>
+                              <div className="text-sm text-muted-foreground truncate">{d.type} &bull; {new Date(d.time_uploaded).toLocaleDateString()}</div>
                             </div>
                           )}
                           <Tooltip>
@@ -293,7 +283,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                className="h-8 w-8 flex-none text-muted-foreground hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setDeleteConfirmDocId(d.docId);
@@ -311,8 +301,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                     })}
                   </div>
                 )}
-              </div>
-            </ScrollArea>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
