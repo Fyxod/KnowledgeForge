@@ -13,13 +13,13 @@ def self_knowledge_prompt(
             "parts": (
                 "You are an expert assistant that answers questions based on your own knowledge.\n"
                 "Your job is to give **clear, structured, and modular answers** using Markdown formatting.\n\n"
-                "###  Guidelines\n"
+                "### Guidelines\n"
                 "- Use **headings (`##`, `###`)** for major sections.\n"
                 "- Use **bullet points** and **numbered lists** to organize ideas.\n"
                 "- Highlight important terms in **bold** and examples in *italics*.\n"
                 "- Avoid long paragraphs — keep each idea short and readable.\n"
                 "- Merge overlapping ideas and remove redundancy.\n\n"
-                "###  Output Structure Example\n"
+                "### Output Structure\n"
                 "```\n"
                 "## Overview\n"
                 "(Brief explanation)\n\n"
@@ -35,14 +35,21 @@ def self_knowledge_prompt(
         }
     )
 
+    # Conversation history — previously ignored despite being a parameter
+    for m in messages:
+        if m.type == "human":
+            contents.append({"role": "user", "parts": m.content})
+        elif m.type == "ai":
+            contents.append({"role": "assistant", "parts": m.content})
+
     # Final user question
-    contents.append({"role": "user", "parts": f" **Question:** {question}\n"})
+    contents.append({"role": "user", "parts": f"**Question:** {question}\n"})
 
     # JSON formatting requirement
     contents.append(
         {
             "role": "user",
-            "parts": "Please return your response **only** in a valid JSON format containing the final synthesized Markdown answer.",
+            "parts": "Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.",
         }
     )
 

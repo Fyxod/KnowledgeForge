@@ -11,6 +11,7 @@ import os
 import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from core.parsers.excel_utils import find_header_row
 
 
 def _clean_dataframe_unicode(df: pd.DataFrame) -> pd.DataFrame:
@@ -136,7 +137,9 @@ class SQLiteManager:
                     xls = pd.ExcelFile(file_path, engine="xlrd")
 
                 for sheet_name in xls.sheet_names:
-                    df = pd.read_excel(xls, sheet_name=sheet_name)
+                    # Detect Header to ensure correct columns
+                    header_idx, _ = find_header_row(file_path, sheet_name)
+                    df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
 
                     # Clean unicode whitespace from all cells
                     df = _clean_dataframe_unicode(df)

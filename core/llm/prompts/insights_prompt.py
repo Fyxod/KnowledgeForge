@@ -1,3 +1,7 @@
+import json
+from core.llm.output_schemas.insights_outputs import InsightsLLMOutput
+
+
 def insights_prompt(document: str | list[dict]):
     """
     Build a chat prompt to generate an Insights summary strictly as JSON,
@@ -9,6 +13,8 @@ def insights_prompt(document: str | list[dict]):
     Returns:
             A list of chat messages (role/parts) ready for the LLM client.
     """
+    # Auto-generate JSON schema from Pydantic model
+    schema_json = json.dumps(InsightsLLMOutput.model_json_schema(), indent=2)
 
     contents = [
         {
@@ -17,8 +23,10 @@ def insights_prompt(document: str | list[dict]):
                 "You are an expert analyst specializing in extracting insights, critiques, and innovation directions from technical and strategic documents.\n\n"
                 "Your task is to analyze the provided document(s) and generate a JSON-structured summary of insights, covering discussion points, strengths, improvement areas, and innovation opportunities. You may also propose pseudocode or algorithmic outlines if applicable.\n\n"
                 "OUTPUT REQUIREMENT:\n"
-                "Return the entire response strictly as a valid JSON object.\n"
+                "Return the entire response strictly as a valid JSON object matching the schema below.\n"
                 "Do NOT include markdown, comments, or text outside the JSON object.\n\n"
+                "OUTPUT SCHEMA:\n"
+                f"```json\n{schema_json}\n```\n\n"
                 "OUTPUT RULES\n"
                 "- Output must be valid JSON only, no markdown or trailing commas.\n"
                 "- Include all top-level keys, even if some arrays are empty.\n"

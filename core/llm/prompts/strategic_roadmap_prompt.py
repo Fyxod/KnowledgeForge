@@ -1,4 +1,6 @@
+import json
 from typing import List
+from core.llm.output_schemas.strategic_roadmap_outputs import StrategicRoadmapLLMOutput
 
 
 def strategic_roadmap_prompt(document: str | list[dict], n_years: int):
@@ -13,6 +15,9 @@ def strategic_roadmap_prompt(document: str | list[dict], n_years: int):
     Returns:
         A list of chat messages (role/parts) ready for the LLM client.
     """
+    # Auto-generate JSON schema pattern
+    schema_json = json.dumps(StrategicRoadmapLLMOutput.model_json_schema(), indent=2)
+
     contents = [
         {
             "role": "system",
@@ -29,6 +34,9 @@ def strategic_roadmap_prompt(document: str | list[dict], n_years: int):
         {
             "role": "system",
             "parts": (
+                f"OUTPUT REQUIREMENT:\n"
+                f"Return the response strictly as a valid JSON object matching this schema:\n"
+                f"```json\n{schema_json}\n```\n\n"
                 "STRUCTURE AND CONTENT RULES (Map the following to the schema fields):\n"
                 f"- Roadmap horizon: next {n_years} years.\n"
                 "- roadmap_title: Auto-generate a concise, professional title summarizing the vision.\n"

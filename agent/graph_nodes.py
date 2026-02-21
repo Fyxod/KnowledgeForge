@@ -42,9 +42,11 @@ async def retriever(state: AgentState) -> AgentState:
 
     # Use the new robust retrieval function that ensures document diversity
     # Uses adaptive scaling based on document count
+    query = state.query or state.resolved_query or state.original_query
     retrieved_docs = await get_thread_documents_retriever(
         user_id=state.user_id,
         thread_id=state.thread_id,
+        query=query,
         k=None,  # None enables adaptive scaling
         min_chunks_per_doc=MIN_CHUNKS_PER_DOC,
         max_total_chunks=MAX_TOTAL_CHUNKS
@@ -56,7 +58,6 @@ async def retriever(state: AgentState) -> AgentState:
     )
 
     # Re-rank chunks for better relevance and diversity
-    query = state.query or state.resolved_query or state.original_query
     rerank_start = time.time()
     reranked_docs = rerank_chunks(
         query=query,
@@ -82,6 +83,7 @@ async def retriever(state: AgentState) -> AgentState:
                 "document_id": doc_id,
                 "title": doc_title,
                 "page_no": metadata.get("page_no", 1),
+                "file_name": metadata.get("file_name", ""),
                 "content": formatted_content,
             }
         )
@@ -229,11 +231,14 @@ async def document_summarizer(state: AgentState) -> AgentState:
     os.makedirs(parsed_dir, exist_ok=True)
 
     for doc in state.chunks:
-        if doc["metadata"]["document_id"] == document_id:
-            file_name = doc["metadata"]["file_name"]
-            title = doc["metadata"]["title"]
+        # Support both flat chunk format (from retriever) and legacy metadata format
+        meta = doc.get("metadata", {})
+        doc_id = doc.get("document_id") or meta.get("document_id", "")
+        if doc_id == document_id:
+            file_name = doc.get("file_name") or meta.get("file_name", "")
+            title = doc.get("title") or meta.get("title", "Unknown Title")
             if not file_name:
-                print(f"Document {doc['id']} has no file name, skipping...")
+                print(f"Document {doc_id} has no file name, skipping...")
                 continue
 
             name, _ = os.path.splitext(file_name)

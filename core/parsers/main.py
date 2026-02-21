@@ -13,11 +13,14 @@ import io
 import re
 from app.socket_handler import sio
 from core.parsers.image import image_parser
+from core.parsers.excel_utils import find_header_row, enrich_dataframe_with_metadata
 from core.models.document import Document, Page
 from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
 from core.services.sqlite_manager import SQLiteManager
-from core.parsers.slide_export import convert_ppt_to_pptx, export_and_ocr_ppt_with_fallback
+from core.parsers.slide_export import convert_ppt_to_pptx, export_and_ocr_ppt_with_fallback, get_libreoffice_command
 from pptx import Presentation
+from docx import Document as DocxDocument
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
 import traceback
 import olefile
 import xml.etree.ElementTree as ET
@@ -36,6 +39,35 @@ def _clean_ppt_text(text: str) -> str:
     if not text:
         return ""
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _extract_shapes_recursive(shapes, slide_part, depth=0) -> list[str]:
+    """Recursively extract text from all shapes, including GroupShape containers."""
+    texts = []
+    for shape in shapes:
+        try:
+            # Recurse into grouped shapes (flowcharts, org charts, etc.)
+            if hasattr(shape, "shapes"):
+                texts.extend(_extract_shapes_recursive(shape.shapes, slide_part, depth + 1))
+                continue
+
+            table_block = _extract_table_block(shape)
+            if table_block:
+                texts.append(table_block)
+                continue
+
+            smartart_block = _extract_smartart_block(shape, slide_part)
+            if smartart_block:
+                texts.append(smartart_block)
+                continue
+
+            if hasattr(shape, "text"):
+                cleaned_text = _clean_ppt_text(getattr(shape, "text", ""))
+                if cleaned_text:
+                    texts.append(cleaned_text)
+        except Exception:
+            traceback.print_exc()
+    return texts
 
 
 def _extract_table_block(shape) -> str:
@@ -311,17 +343,39 @@ async def extract_document(
     if ext in {".xls", ".xlsx", ".csv"}:
         try:
             # Read Excel or CSV file into DataFrame(s)
-            sheets = {}
+            # Read Excel or CSV file into DataFrame(s)
+            sheets_data = {} # Tuples of (df, context_text)
+            
             if ext == ".xlsx":
+                # Use robust parsing for modern Excel
                 xls = pd.ExcelFile(file_path, engine="openpyxl")
                 for sheet_name in xls.sheet_names:
-                    sheets[sheet_name] = pd.read_excel(xls, sheet_name=sheet_name)
+                    # 1. Detect Header & Context
+                    header_idx, context = find_header_row(file_path, sheet_name)
+                    
+                    # 2. Read DataFrame with correct header
+                    df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
+                    
+                    # 3. Enrich with Metadata (Colors, Comments)
+                    # Note: We pass header_idx so we know where data starts
+                    df = enrich_dataframe_with_metadata(df, file_path, sheet_name, header_idx)
+                    
+                    sheets_data[sheet_name] = (df, context)
+
             elif ext == ".xls":
+                # Legacy Excel (less features supported, no openpyxl enrichment)
                 xls = pd.ExcelFile(file_path, engine="xlrd")
                 for sheet_name in xls.sheet_names:
-                    sheets[sheet_name] = pd.read_excel(xls, sheet_name=sheet_name)
+                    # Heuristic for header might still work if we adapt it for xlrd, 
+                    # but current utility uses openpyxl. 
+                    # Fallback to standard read for .xls to avoid complexity deps
+                    df = pd.read_excel(xls, sheet_name=sheet_name) 
+                    sheets_data[sheet_name] = (df, None)
+
             else:
-                sheets["Sheet1"] = pd.read_csv(file_path)
+                # CSV
+                df = pd.read_csv(file_path)
+                sheets_data["Sheet1"] = (df, None)
 
             # --- Load into SQLite for structured querying ---
             try:
@@ -341,13 +395,23 @@ async def extract_document(
                 print(f"[SQLite] Failed to load {safe_file_name} into SQLite: {e}")
                 traceback.print_exc()
 
+            # --- Generate Global Workbook Context (Phase 3) ---
+            # Create a summary of all sheets to give the LLM a "Table of Contents"
+            workbook_summary_lines = ["# Workbook Structure Summary"]
+            for s_name, (s_df, _) in sheets_data.items():
+                col_list = ", ".join([str(c) for c in s_df.columns[:10]]) # Limit cols to avoid huge headers
+                if len(s_df.columns) > 10:
+                    col_list += ", ..."
+                workbook_summary_lines.append(f"- Sheet '{s_name}': {len(s_df)} rows. Columns: [{col_list}]")
+            
+            workbook_summary = "\n".join(workbook_summary_lines) + "\n\n"
+
             # --- Also generate text representation for RAG/vector store ---
-            # Use a structured text format so the LLM has some context about the data
             text_parts = []
             pages = []
             page_num = 1
 
-            for sheet_name, df in sheets.items():
+            for sheet_name, (df, context_text) in sheets_data.items():
                 # Drop fully empty rows
                 df = df.dropna(how="all")
 
@@ -409,8 +473,16 @@ async def extract_document(
 
                 # Build a text summary: schema + data
                 col_info = ", ".join([str(col) for col in df.columns])
+                
+                # Prepend the context (pre-header text) if it exists
+                context_block = ""
+                if context_text:
+                    context_block = f"Context/Metadata:\n{context_text}\n"
+
                 sheet_header = (
                     f"=== Spreadsheet: {safe_file_name} | Sheet: {sheet_name} ===\n"
+                    f"{workbook_summary}"  # <--- Global Context
+                    f"{context_block}"     # <--- Local Sheet Context
                     f"Columns: {col_info}\n"
                     f"Total rows: {len(df)}\n"
                 )
@@ -462,35 +534,67 @@ async def extract_document(
             traceback.print_exc()
             return None
 
-    # --- Handle legacy Word .doc files (single page, no image parsing) ---
+    # --- Handle legacy Word .doc files ---
+    # Convert to .docx via LibreOffice first, then fall through to the DOCX handler
     if ext == ".doc":
-        try:
-            await safe_emit(
-                f"{user_id}/progress",
-                {"message": f"{title} is a legacy .doc, extracting text..."},
-            )
-            text = extract_text_from_doc(file_path)
-        except Exception as e:
-            print(f"Error processing .doc file {safe_file_name}: {str(e)}")
-            traceback.print_exc()
-            return None
-
         await safe_emit(
             f"{user_id}/progress",
-            {"message": f"Processed {safe_file_name} (.doc) successfully"},
+            {"message": f"Converting {title} (.doc) to modern format..."},
         )
-        end_time = time.time()
-        print(
-            f"Time taken to process {safe_file_name} (.doc): {end_time - start_time} seconds"
-        )
-        return Document(
-            id=doc_id,
-            type=ext[1:],
-            file_name=safe_file_name,
-            content=[Page(number=1, text=text)],
-            title=title,
-            full_text=text,
-        )
+
+        # Try LibreOffice conversion (same approach as PPT → PPTX)
+        converted_path = None
+        libreoffice_cmd = get_libreoffice_command()
+        if not libreoffice_cmd:
+            print("[DOC] LibreOffice not found for DOC→DOCX conversion.")
+        else:
+            try:
+                doc_dir = os.path.dirname(file_path)
+                proc = await asyncio.create_subprocess_exec(
+                    libreoffice_cmd, "--headless", "--convert-to", "docx",
+                    "--outdir", doc_dir, file_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await asyncio.wait_for(proc.communicate(), timeout=120)
+                if proc.returncode == 0:
+                    expected = os.path.splitext(file_path)[0] + ".docx"
+                    if os.path.exists(expected):
+                        converted_path = expected
+            except Exception as e:
+                print(f"[DOC] LibreOffice conversion failed: {e}")
+                traceback.print_exc()
+
+        if converted_path:
+            # Remove original .doc, update path, and fall through to .docx handler
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+            file_path = converted_path
+            ext = ".docx"
+            # Fall through — the .docx handler is below
+        else:
+            # Fallback: legacy binary extraction (best-effort)
+            try:
+                text = extract_text_from_doc(file_path)
+            except Exception as e:
+                print(f"Error processing .doc file {safe_file_name}: {str(e)}")
+                traceback.print_exc()
+                return None
+
+            await safe_emit(
+                f"{user_id}/progress",
+                {"message": f"Processed {safe_file_name} (.doc) with basic extraction"},
+            )
+            return Document(
+                id=doc_id,
+                type="doc",
+                file_name=safe_file_name,
+                content=[Page(number=1, text=text)],
+                title=title,
+                full_text=text,
+            )
 
     # --- Handle PowerPoint files ---
     if ext in {".ppt", ".pptx"}:
@@ -550,26 +654,8 @@ async def extract_document(
 
         try:
             for slide_number, slide in enumerate(prs.slides, start=1):
-                # Extract text
-                slide_text = []
-                for shape in slide.shapes:
-                    try:
-                        table_block = _extract_table_block(shape)
-                        if table_block:
-                            slide_text.append(table_block)
-                            continue
-
-                        smartart_block = _extract_smartart_block(shape, slide.part)
-                        if smartart_block:
-                            slide_text.append(smartart_block)
-                            continue
-
-                        if hasattr(shape, "text"):
-                            cleaned_text = _clean_ppt_text(getattr(shape, "text", ""))
-                            if cleaned_text:
-                                slide_text.append(cleaned_text)
-                    except Exception:
-                        traceback.print_exc()
+                # Extract text recursively (handles GroupShape for flowcharts etc.)
+                slide_text = _extract_shapes_recursive(slide.shapes, slide.part)
                 page_text = "\n".join(slide_text)
 
                 # Add exported full-slide OCR if available.
@@ -650,7 +736,154 @@ async def extract_document(
             full_text="\n".join(combined_texts),
         )
 
-    # --- Handle PDFs ---
+    # --- Handle Word .docx files with python-docx for full structure extraction ---
+    if ext == ".docx":
+        try:
+            await safe_emit(
+                f"{user_id}/progress",
+                {"message": f"Parsing {title} (Word document)..."},
+            )
+            docx_doc = DocxDocument(file_path)
+
+            pages_text = []
+            image_names_all = []
+            ocr_tasks = {}
+            image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+            try:
+                os.makedirs(image_dir, exist_ok=True)
+            except Exception:
+                traceback.print_exc()
+
+            # --- Extract body elements in document order (paragraphs + tables) ---
+            body_parts = []
+            for element in docx_doc.element.body:
+                tag = element.tag.split("}")[-1] if "}" in element.tag else element.tag
+                if tag == "p":
+                    # Find the matching Paragraph object
+                    for para in docx_doc.paragraphs:
+                        if para._element is element:
+                            text = para.text.strip()
+                            if not text:
+                                break
+                            style_name = para.style.name if para.style else ""
+                            if style_name.startswith("Heading"):
+                                try:
+                                    level = int(style_name.replace("Heading ", "").replace("Heading", "1"))
+                                except (ValueError, TypeError):
+                                    level = 1
+                                body_parts.append(f"{'#' * level} {text}")
+                            else:
+                                body_parts.append(text)
+                            break
+                elif tag == "tbl":
+                    # Find the matching Table object
+                    for table in docx_doc.tables:
+                        if table._element is element:
+                            try:
+                                table_rows = []
+                                # Build header
+                                if table.rows:
+                                    header_cells = [cell.text.strip().replace("|", "\\|") for cell in table.rows[0].cells]
+                                    table_rows.append("| " + " | ".join(header_cells) + " |")
+                                    table_rows.append("| " + " | ".join(["---"] * len(header_cells)) + " |")
+                                    # Data rows
+                                    for row in table.rows[1:]:
+                                        row_cells = [cell.text.strip().replace("|", "\\|") for cell in row.cells]
+                                        table_rows.append("| " + " | ".join(row_cells) + " |")
+                                if table_rows:
+                                    body_parts.append(f"[Table]\n" + "\n".join(table_rows) + f"\n[/Table]")
+                            except Exception:
+                                traceback.print_exc()
+                            break
+
+            page_text = "\n\n".join(body_parts)
+
+            # --- Extract embedded images ---
+            img_index = 0
+            MIN_IMAGE_SIZE = 50
+            for rel in docx_doc.part.rels.values():
+                try:
+                    if "image" in rel.reltype:
+                        img_index += 1
+                        image_part = rel.target_part
+                        image_bytes = image_part.blob
+                        image_ext = image_part.content_type.split("/")[-1]
+                        if image_ext == "jpeg":
+                            image_ext = "jpg"
+
+                        img = Image.open(io.BytesIO(image_bytes))
+                        if img.width < MIN_IMAGE_SIZE or img.height < MIN_IMAGE_SIZE:
+                            continue
+
+                        image_name = f"docx_img{img_index}.{image_ext}"
+                        image_path = os.path.join(image_dir, image_name)
+                        try:
+                            img.save(image_path)
+                        except Exception:
+                            traceback.print_exc()
+                            continue
+
+                        image_names_all.append(image_name)
+                        placeholder = f"{{PENDING_{image_name}}}"
+                        page_text += f"\n\n{placeholder}"
+                        ocr_tasks[placeholder] = asyncio.create_task(
+                            image_parser(image_path)
+                        )
+                except Exception:
+                    traceback.print_exc()
+
+            # --- Wait for OCR tasks ---
+            for placeholder, task in ocr_tasks.items():
+                try:
+                    image_text = await task
+                except Exception as e:
+                    print(f"Error parsing DOCX image: {e}")
+                    traceback.print_exc()
+                    image_text = "[Image OCR failed]"
+                page_text = page_text.replace(placeholder, image_text, 1)
+
+            # --- Build pages (treat entire document as pages of ~3000 chars) ---
+            # For simplicity, treat as single page if short, else split
+            if len(page_text) <= 5000:
+                pages = [Page(number=1, text=page_text, images=image_names_all)]
+            else:
+                # Split by double newlines into logical sections
+                sections = page_text.split("\n\n")
+                current_page = ""
+                page_num = 1
+                pages = []
+                for section in sections:
+                    if len(current_page) + len(section) > 3000 and current_page:
+                        pages.append(Page(number=page_num, text=current_page.strip()))
+                        page_num += 1
+                        current_page = section
+                    else:
+                        current_page += "\n\n" + section if current_page else section
+                if current_page.strip():
+                    pages.append(Page(number=page_num, text=current_page.strip(), images=image_names_all))
+
+            await safe_emit(
+                f"{user_id}/progress",
+                {"message": f"Processed {safe_file_name} (Word) successfully"},
+            )
+            end_time = time.time()
+            print(f"Time taken to process {safe_file_name} (.docx): {end_time - start_time} seconds")
+            return Document(
+                id=doc_id,
+                type="docx",
+                file_name=safe_file_name,
+                content=pages,
+                title=title,
+                full_text=page_text,
+            )
+
+        except Exception as e:
+            print(f"Error processing DOCX file {safe_file_name}: {str(e)}")
+            traceback.print_exc()
+            return None
+
+    # --- Handle PDFs and other fitz-supported formats ---
+    # NOTE: .docx is handled separately above with python-docx for better table/heading extraction
     if ext in [
         ".pdf",
         ".xlsx",
@@ -658,7 +891,6 @@ async def extract_document(
         ".odt",
         ".txt",
         ".rtf",
-        ".docx",
         ".html",
         ".xml",
     ]:
@@ -673,14 +905,64 @@ async def extract_document(
         ocr_tasks = {}
 
         image_dir_base = f"data/{user_id}/threads/{thread_id}/images/{name}"
+        MIN_IMAGE_SIZE = 50  # Skip images smaller than 50px (icons, bullets)
 
         for page_number in range(len(doc)):
+            page = doc.load_page(page_number)
+
+            # --- Table-aware text extraction ---
+            table_blocks = []
             try:
-                page = doc.load_page(page_number)
-                page_text = page.get_text("text")
+                tables = page.find_tables()
+                for table in tables.tables:
+                    try:
+                        table_md = table.to_markdown()
+                        if table_md and table_md.strip():
+                            table_blocks.append(f"[Table]\n{table_md}\n[/Table]")
+                    except Exception:
+                        traceback.print_exc()
             except Exception:
                 traceback.print_exc()
-                page_text = ""
+
+            # Extract text excluding table regions
+            try:
+                # Get table bounding boxes to exclude from text extraction
+                table_rects = []
+                try:
+                    for table in tables.tables:
+                        table_rects.append(fitz.Rect(table.bbox))
+                except Exception:
+                    pass
+
+                if table_rects:
+                    # Get text blocks and filter out those overlapping with tables
+                    text_dict = page.get_text("dict")
+                    non_table_lines = []
+                    for block in text_dict.get("blocks", []):
+                        if block.get("type") != 0:  # Only text blocks
+                            continue
+                        block_rect = fitz.Rect(block["bbox"])
+                        # Check if this block overlaps with any table
+                        overlaps_table = any(
+                            block_rect.intersects(tr) for tr in table_rects
+                        )
+                        if not overlaps_table:
+                            for line in block.get("lines", []):
+                                line_text = " ".join(
+                                    span["text"] for span in line.get("spans", [])
+                                )
+                                if line_text.strip():
+                                    non_table_lines.append(line_text.strip())
+                    page_text = "\n".join(non_table_lines)
+                else:
+                    page_text = page.get_text("text")
+            except Exception:
+                traceback.print_exc()
+                page_text = page.get_text("text")
+
+            # Append table blocks after the regular text
+            if table_blocks:
+                page_text += "\n\n" + "\n\n".join(table_blocks)
 
             image_names = []
             image_dir = image_dir_base
@@ -689,7 +971,7 @@ async def extract_document(
             except Exception:
                 traceback.print_exc()
 
-            # Extract embedded raster images and schedule OCR only for these images
+            # Extract embedded raster images and schedule OCR
             try:
                 image_list = page.get_images(full=True)
             except Exception:
@@ -705,6 +987,10 @@ async def extract_document(
                     if not image_bytes:
                         continue
                     image = Image.open(io.BytesIO(image_bytes))
+
+                    # Skip tiny decorative images (icons, bullets, logos)
+                    if image.width < MIN_IMAGE_SIZE or image.height < MIN_IMAGE_SIZE:
+                        continue
 
                     image_name = f"page{page_number + 1}_img{img_index + 1}.{image_ext}"
                     image_path = os.path.join(image_dir, image_name)

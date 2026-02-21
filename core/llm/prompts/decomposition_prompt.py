@@ -219,7 +219,7 @@ query: "Explain both modules."
     "Explain module 3.2 (Soft Skills Enhancement)"
   ]
 }
-Respond ONLY with valid JSON. Do not include explanations, reasoning, or extra text. 
+Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.
 
 """
 

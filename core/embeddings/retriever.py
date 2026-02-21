@@ -1,4 +1,4 @@
-from core.embeddings.vectorstore import get_vectorstore
+from core.embeddings.vectorstore import get_vectorstore, search_bm25
 from typing import List, Dict, Any
 import math
 from sentence_transformers import CrossEncoder
@@ -18,6 +18,51 @@ def get_cross_encoder():
     return _cross_encoder
 
 
+def reciprocal_rank_fusion(
+    result_lists: List[List[Dict[str, Any]]],
+    k: int = 60
+) -> List[Dict[str, Any]]:
+    """
+    Merge multiple ranked result lists using Reciprocal Rank Fusion (RRF).
+
+    RRF assigns a score to each document based on its rank in each list:
+        score(d) = sum(1 / (k + rank_i)) for each list i that contains d
+
+    Args:
+        result_lists: List of ranked result lists (each is a list of dicts with metadata)
+        k: RRF constant (default 60, standard in literature)
+
+    Returns:
+        Merged and deduplicated results sorted by RRF score
+    """
+    scores = {}
+    doc_map = {}
+
+    for result_list in result_lists:
+        for rank, doc in enumerate(result_list):
+            # Create a unique key for deduplication
+            doc_id = doc.get("metadata", {}).get("document_id", "")
+            page_no = doc.get("metadata", {}).get("page_no", 0)
+            chunk_idx = doc.get("metadata", {}).get("chunk_index", rank)
+            key = f"{doc_id}_p{page_no}_c{chunk_idx}"
+
+            rrf_score = 1.0 / (k + rank + 1)
+            scores[key] = scores.get(key, 0) + rrf_score
+            if key not in doc_map:
+                doc_map[key] = doc
+
+    # Sort by RRF score descending
+    sorted_keys = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+
+    results = []
+    for key in sorted_keys:
+        doc = doc_map[key].copy()
+        doc["rrf_score"] = scores[key]
+        results.append(doc)
+
+    return results
+
+
 def rerank_chunks(
     query: str,
     chunks: List[Dict[str, Any]],
@@ -29,7 +74,7 @@ def rerank_chunks(
 
     This function:
     1. Re-ranks chunks based on query relevance using cross-encoder
-    2. Ensures diversity across documents (MMR - Maximal Marginal Relevance)
+    2. Ensures diversity across documents using embedding-based MMR
     3. Removes redundant chunks
     4. Balances representation across documents
 
@@ -73,7 +118,7 @@ def rerank_chunks(
         for i, chunk in enumerate(chunks):
             chunk["relevance_score"] = 1.0 - (i / len(chunks))  # Decreasing scores
 
-    # Step 2: Maximal Marginal Relevance (MMR) for diversity
+    # Step 2: MMR with cosine similarity for diversity
     reranked_chunks = []
     selected_indices = set()
 
@@ -83,6 +128,9 @@ def rerank_chunks(
         key=lambda i: chunks[i]["relevance_score"],
         reverse=True
     )
+
+    # Pre-compute TF-IDF-like vectors for cosine similarity (lightweight)
+    chunk_vectors = _compute_tfidf_vectors(chunks)
 
     # Select chunks using MMR
     for _ in range(min(top_k, len(chunks))):
@@ -96,25 +144,16 @@ def rerank_chunks(
             # Relevance score
             relevance = chunks[idx]["relevance_score"]
 
-            # Diversity penalty (similarity to already selected chunks)
+            # Diversity penalty using cosine similarity
             diversity_penalty = 0.0
             if reranked_chunks:
-                for selected_chunk in reranked_chunks:
-                    # Simple similarity based on document_id and content overlap
-                    doc_similarity = 1.0 if chunks[idx].get("metadata", {}).get("document_id") == selected_chunk.get("metadata", {}).get("document_id") else 0.0
+                max_similarity = 0.0
+                for sel_idx in selected_indices:
+                    sim = _cosine_similarity(chunk_vectors[idx], chunk_vectors[sel_idx])
+                    max_similarity = max(max_similarity, sim)
+                diversity_penalty = max_similarity
 
-                    # Content similarity (Jaccard similarity on words)
-                    content1 = set(chunks[idx].get("page_content", "").lower().split())
-                    content2 = set(selected_chunk.get("page_content", "").lower().split())
-
-                    if content1 and content2:
-                        content_similarity = len(content1 & content2) / len(content1 | content2)
-                    else:
-                        content_similarity = 0.0
-
-                    diversity_penalty += 0.5 * doc_similarity + 0.5 * content_similarity
-
-            # MMR score
+            # MMR score: balance relevance and diversity
             mmr_score = (1 - diversity_lambda) * relevance - diversity_lambda * diversity_penalty
 
             if mmr_score > best_score:
@@ -127,8 +166,7 @@ def rerank_chunks(
 
     print(f"Re-ranking complete. Selected {len(reranked_chunks)} chunks.")
 
-    # Step 3: Ensure document diversity
-    # Count chunks per document
+    # Step 3: Log document diversity
     doc_counts = {}
     for chunk in reranked_chunks:
         doc_id = chunk.get("metadata", {}).get("document_id", "unknown")
@@ -139,6 +177,55 @@ def rerank_chunks(
         print(f"  Document {doc_id}: {count} chunks")
 
     return reranked_chunks
+
+
+def _compute_tfidf_vectors(chunks: List[Dict[str, Any]]) -> List[Dict[str, float]]:
+    """Compute simple TF-IDF-like word frequency vectors for cosine similarity."""
+    from collections import Counter
+
+    # Build vocabulary from all chunks
+    all_words = set()
+    chunk_word_counts = []
+    for chunk in chunks:
+        words = chunk.get("page_content", "").lower().split()
+        word_counts = Counter(words)
+        chunk_word_counts.append(word_counts)
+        all_words.update(words)
+
+    # Compute document frequency
+    doc_freq = Counter()
+    for wc in chunk_word_counts:
+        for word in wc:
+            doc_freq[word] += 1
+
+    n_docs = len(chunks)
+    vectors = []
+    for wc in chunk_word_counts:
+        vec = {}
+        for word, count in wc.items():
+            tf = count / max(sum(wc.values()), 1)
+            idf = math.log((n_docs + 1) / (doc_freq[word] + 1))
+            vec[word] = tf * idf
+        vectors.append(vec)
+
+    return vectors
+
+
+def _cosine_similarity(vec_a: Dict[str, float], vec_b: Dict[str, float]) -> float:
+    """Compute cosine similarity between two sparse TF-IDF vectors."""
+    # Find common words
+    common_words = set(vec_a.keys()) & set(vec_b.keys())
+    if not common_words:
+        return 0.0
+
+    dot_product = sum(vec_a[w] * vec_b[w] for w in common_words)
+    norm_a = math.sqrt(sum(v ** 2 for v in vec_a.values()))
+    norm_b = math.sqrt(sum(v ** 2 for v in vec_b.values()))
+
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+
+    return dot_product / (norm_a * norm_b)
 
 
 def get_user_retriever(
@@ -178,10 +265,64 @@ def get_user_retriever(
     return retriever
 
 
+async def hybrid_retrieve(
+    user_id: str,
+    thread_id: str,
+    query: str,
+    vector_k: int = 30,
+    bm25_k: int = 20,
+) -> List[Dict[str, Any]]:
+    """
+    Hybrid retrieval combining vector search (ChromaDB) and BM25 keyword search.
+
+    Uses Reciprocal Rank Fusion (RRF) to merge results from both retrievers,
+    providing both semantic understanding and keyword matching.
+
+    Args:
+        user_id: User identifier
+        thread_id: Thread identifier
+        query: The user's search query
+        vector_k: Number of results from vector search
+        bm25_k: Number of results from BM25 search
+
+    Returns:
+        Merged and deduplicated results sorted by RRF score
+    """
+    import asyncio
+
+    # Run vector search and BM25 search in parallel
+    vector_retriever = get_user_retriever(user_id, thread_id, k=vector_k)
+
+    async def get_vector_results():
+        docs = await vector_retriever.ainvoke(query)
+        return [doc.model_dump() for doc in docs]
+
+    async def get_bm25_results():
+        return await asyncio.to_thread(search_bm25, user_id, thread_id, query, bm25_k)
+
+    vector_results, bm25_results = await asyncio.gather(
+        get_vector_results(),
+        get_bm25_results(),
+    )
+
+    print(f"Hybrid search: {len(vector_results)} vector + {len(bm25_results)} BM25 results")
+
+    # If BM25 returns no results, just use vector search
+    if not bm25_results:
+        return vector_results
+
+    # Merge using Reciprocal Rank Fusion
+    fused = reciprocal_rank_fusion([vector_results, bm25_results])
+    print(f"RRF fusion produced {len(fused)} unique results")
+
+    return fused
+
+
 async def get_multi_document_retriever(
     user_id: str,
     thread_id: str,
     document_ids: List[str],
+    query: str = "",
     k_per_document: int = 6,
     total_k: int = 12
 ) -> List[Dict[str, Any]]:
@@ -197,6 +338,7 @@ async def get_multi_document_retriever(
         user_id: User identifier
         thread_id: Thread identifier
         document_ids: List of document IDs to retrieve from
+        query: The user query for semantic similarity search
         k_per_document: Minimum chunks to retrieve per document
         total_k: Maximum total chunks to return
 
@@ -204,10 +346,8 @@ async def get_multi_document_retriever(
         List of retrieved document chunks with metadata
     """
     if not document_ids:
-        # Fallback to thread-level retrieval if no documents specified
-        retriever = get_user_retriever(user_id, thread_id, k=total_k)
-        retrieved_docs = await retriever.ainvoke("")
-        return [doc.model_dump() for doc in retrieved_docs]
+        # Fallback to hybrid retrieval if no documents specified
+        return await hybrid_retrieve(user_id, thread_id, query, vector_k=total_k)
 
     num_documents = len(document_ids)
 
@@ -236,7 +376,7 @@ async def get_multi_document_retriever(
         )
 
         try:
-            retrieved_docs = await retriever.ainvoke("")
+            retrieved_docs = await retriever.ainvoke(query)
             all_retrieved_docs.extend([doc.model_dump() for doc in retrieved_docs])
             print(f"Retrieved {len(retrieved_docs)} chunks from document {doc_id}")
         except Exception as e:
@@ -250,7 +390,7 @@ async def get_multi_document_retriever(
 
         # Get additional chunks without document filter
         retriever = get_user_retriever(user_id, thread_id, k=additional_chunks_needed)
-        additional_docs = await retriever.ainvoke("")
+        additional_docs = await retriever.ainvoke(query)
 
         # Filter out documents we already have enough chunks from
         existing_doc_ids = set(doc.get("metadata", {}).get("document_id") for doc in all_retrieved_docs)
@@ -270,12 +410,14 @@ async def get_multi_document_retriever(
 async def get_thread_documents_retriever(
     user_id: str,
     thread_id: str,
+    query: str = "",
     k: int = None,
     min_chunks_per_doc: int = 3,
     max_total_chunks: int = 50
 ) -> List[Dict[str, Any]]:
     """
     Get retriever for all documents in a thread with adaptive document diversity.
+    Uses hybrid search (vector + BM25) for improved recall.
 
     This function uses an adaptive strategy that:
     1. Ensures minimum chunks per document (min_chunks_per_doc)
@@ -283,15 +425,10 @@ async def get_thread_documents_retriever(
     3. Respects maximum total chunks limit (max_total_chunks)
     4. Provides balanced representation across all documents
 
-    Adaptive Strategy:
-    - 1-2 documents: 12 chunks total (6 per doc)
-    - 3-5 documents: 20 chunks total (4-6 per doc)
-    - 6-10 documents: 30 chunks total (3-5 per doc)
-    - 10+ documents: 40-50 chunks total (3-5 per doc)
-
     Args:
         user_id: User identifier
         thread_id: Thread identifier
+        query: The user query for semantic similarity search
         k: Total number of chunks to retrieve (None for adaptive)
         min_chunks_per_doc: Minimum chunks to retrieve per document
         max_total_chunks: Maximum total chunks to return
@@ -299,10 +436,12 @@ async def get_thread_documents_retriever(
     Returns:
         List of retrieved document chunks with metadata
     """
-    # First, get all chunks to understand document distribution
-    retriever = get_user_retriever(user_id, thread_id, k=max_total_chunks * 2)
-    retrieved_docs = await retriever.ainvoke("")
-    retrieved_docs = [doc.model_dump() for doc in retrieved_docs]
+    # Use hybrid retrieval (vector + BM25) for better recall
+    retrieved_docs = await hybrid_retrieve(
+        user_id, thread_id, query,
+        vector_k=max_total_chunks * 2,
+        bm25_k=max_total_chunks,
+    )
 
     # Group by document_id
     docs_by_document: Dict[str, List[Dict[str, Any]]] = {}
@@ -318,15 +457,14 @@ async def get_thread_documents_retriever(
 
     # Adaptive k calculation based on document count
     if k is None:
-        # Calculate adaptive k based on document count
         if num_documents <= 2:
-            k = 20  # 10 chunks per doc
+            k = 20
         elif num_documents <= 5:
-            k = 50  # 10 chunks per doc
+            k = 50
         elif num_documents <= 10:
-            k = 100  # 10 chunks per doc
+            k = 100
         else:
-            k = min(max_total_chunks, num_documents * 10)  # 10 chunks per doc, max 100
+            k = min(max_total_chunks, num_documents * 10)
 
     print(f"Adaptive k={k} for {num_documents} documents")
 

@@ -6,6 +6,10 @@ from langchain_core.prompts import (
 
 
 def summarize_documents_prompt(document: str):
+    """
+    Builds a prompt for summarizing a single document into valid Markdown.
+    Includes a 1-shot example for better adherence to the structure.
+    """
     contents = [
         {
             "role": "system",
@@ -36,6 +40,25 @@ def summarize_documents_prompt(document: str):
                 "- Summary length: **300-1000 words**\n"
                 "- Do **not** omit significant details.\n"
                 "- Please provide the summary in **valid parsable Markdown format only**.\n"
+            ),
+        },
+        {
+            "role": "user",
+            "parts": (
+                "**Example Input:**\n"
+                "The 'Project Apollo' initiative aims to reduce server costs by 20% through optimization. "
+                "Phase 1 involves audits, Phase 2 implements caching, and Phase 3 is monitoring. "
+                "Key risks include downtime during migration.\n\n"
+                "**Example Output:**\n"
+                "# Project Apollo Cost Reduction\n\n"
+                "## Overview\n"
+                "Initiative to cut server costs by 20% via infrastructure optimization.\n\n"
+                "## Implementation Phases\n"
+                "- **Phase 1:** System audits.\n"
+                "- **Phase 2:** Caching implementation.\n"
+                "- **Phase 3:** Continuous monitoring.\n\n"
+                "## Risks\n"
+                "- **Migration Downtime:** Potential service interruption during updates.\n"
             ),
         },
         {
@@ -113,7 +136,7 @@ def global_summarization_prompt(summaries: str):
             "parts": (
                 f" **Summaries to Combine:**\n{summaries}\n\n"
                 "Generate a single, coherent, Markdown-formatted summary (500-1000 words) that merges recurring and essential ideas.\n\n"
-                "Return a valid JSON object containing your final Markdown summary."
+                "Return ONLY a valid JSON object matching the schema. No markdown fencing, no commentary."
             ),
         },
     ]

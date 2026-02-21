@@ -1,4 +1,6 @@
+import json
 from typing import List
+from core.llm.output_schemas.technical_roadmap_outputs import TechnicalRoadmapLLMOutput
 
 
 def technical_roadmap_prompt(document: str | list[dict], n_years: int = 5):
@@ -15,6 +17,8 @@ def technical_roadmap_prompt(document: str | list[dict], n_years: int = 5):
             A list of chat messages (role/parts) ready for the LLM client.
     """
     horizon = max(int(n_years), 5)
+    # Auto-generate JSON schema pattern
+    schema_json = json.dumps(TechnicalRoadmapLLMOutput.model_json_schema(), indent=2)
 
     contents = [
         {
@@ -29,8 +33,10 @@ def technical_roadmap_prompt(document: str | list[dict], n_years: int = 5):
             "role": "system",
             "parts": (
                 "OUTPUT REQUIREMENT\n"
-                "Return the entire response strictly as a valid JSON object.\n"
+                "Return the entire response strictly as a valid JSON object matching the schema below.\n"
                 "No markdown, explanations, or comments outside the JSON.\n\n"
+                "OUTPUT SCHEMA\n"
+                f"```json\n{schema_json}\n```\n\n"
                 "OUTPUT RULES\n"
                 "- Output must be valid JSON (no markdown or trailing commas).\n"
                 "- Include all top-level keys even if empty (use [] or null).\n"

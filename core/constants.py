@@ -7,7 +7,7 @@ SWITCHES = {
     # For Cpu based testing we suggest to keep both False to avoid much load on CPU
     "SUMMARIZATION": False,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
     "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
-    "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
+    "FALLBACK_TO_OPENAI": True,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
                             # This can be turned off if all the queries are independent and do not need context from previous chats.
 

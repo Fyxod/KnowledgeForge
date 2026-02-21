@@ -1,29 +1,42 @@
 import json
 
-def combination_prompt(query: str, sub_answers: list) -> str:
+
+def combination_prompt(query: str, sub_answers: list) -> list:
+    """
+    Build a chat prompt to synthesize multiple sub-answers into one coherent response.
+    Returns the standard message-list format [{role, parts}] used by all other prompts.
+    """
     sub_answers_json = json.dumps(sub_answers, indent=2, ensure_ascii=False)
-    prompt = f"""
-You are an expert assistant for a Retrieval-Augmented Generation (RAG) system.
 
-Your job is to synthesize multiple partial answers into one coherent, well-structured response.
+    contents = [
+        {
+            "role": "system",
+            "parts": (
+                "You are an expert assistant for a Retrieval-Augmented Generation (RAG) system.\n\n"
+                "Your job is to synthesize multiple partial answers into one coherent, well-structured response.\n\n"
+                "### Rules\n"
+                "1. Use the Resolved_query as the *main question* you are answering.\n"
+                "2. Read all Sub_answers carefully.\n"
+                "3. Combine them into a single, natural response that directly answers the Resolved_query.\n"
+                "4. Remove redundancy, but keep all distinct insights.\n"
+                "5. If Sub_answers contradict, note the discrepancy clearly.\n"
+                "6. If any Sub_answer is missing or empty, state that information was not found.\n"
+                "7. Maintain clarity, conciseness, and factual tone.\n"
+                "8. Retain the formatting of any lists/headings/bullets from Sub_answers.\n"
+                "9. Ensure the final answer is in **clear, structured Markdown** with headings, bullet points, and bold text for readability.\n"
+                "10. Synthesize ONLY from the provided sub-answers. Do not add external knowledge.\n\n"
+                "### Output\n"
+                "Return only the final synthesized answer, written for the end user, without repeating the Resolved_query.\n"
+            ),
+        },
+        {
+            "role": "user",
+            "parts": (
+                f"**Resolved_query:** \"{query}\"\n\n"
+                f"**Sub_answers:**\n{sub_answers_json}\n\n"
+                "Synthesize these into a single, coherent Markdown answer."
+            ),
+        },
+    ]
 
-Inputs:
-- Resolved_query: "{query}"
-- Sub_answers:
-{sub_answers_json}  
-
-Instructions:
-1. Use the Resolved_query as the *main question* you are answering.
-2. Read all Sub_answers carefully.
-3. Combine them into a single, natural response that directly answers the Resolved_query.
-4. Remove redundancy, but keep all distinct insights.
-5. If Sub_answers contradict, note the discrepancy clearly.
-6. If any Sub_answer is missing or empty, state that information was not found.
-7. Maintain clarity, conciseness, and factual tone.
-8. Retain the formatting of any lists/headings/bullets etc from Sub_answers.
-9. Ensure the final answer is in **clear, structured Markdown** with good headings, bullet points, bold text etc wherever applicable for readability.
-Output:
-Return only the final synthesized answer, written for the end user, without repeating the Resolved_query.
-"""
-
-    return prompt
+    return contents
