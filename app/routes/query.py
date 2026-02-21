@@ -25,6 +25,7 @@ class QueryRequest(BaseModel):
     question: str
     mode: Literal[f"{INTERNAL}", f"{EXTERNAL}"] = EXTERNAL
     use_self_knowledge: bool = False
+    use_context: bool = False
 
 
 @router.post("/")
@@ -38,9 +39,10 @@ async def query(request: Request, body: QueryRequest):
     question = body.question
     mode = body.mode
     use_self_knowledge = body.use_self_knowledge
+    use_context = body.use_context
 
     print(
-        f"Received query for thread_id: {thread_id} with question: {question} and mode: {mode} (use_self_knowledge={use_self_knowledge})"
+        f"Received query for thread_id: {thread_id} with question: {question} and mode: {mode} (use_self_knowledge={use_self_knowledge}, use_context={use_context})"
     )
 
     user_id = payload.userId
@@ -53,6 +55,13 @@ async def query(request: Request, body: QueryRequest):
         return {"error": "Thread not found"}
 
     messages = []
+    if use_context:
+        # Build messages from previous chat history in the thread
+        for chat in thread.get("chats", []):
+            if chat.get("type") == "user":
+                messages.append(HumanMessage(content=chat.get("content", "")))
+            elif chat.get("type") == "agent":
+                messages.append(AIMessage(content=chat.get("content", "")))
     chunks = []
     chunks_used = []
     confidence_scores = []
@@ -66,17 +75,25 @@ async def query(request: Request, body: QueryRequest):
         for doc in thread_docs:
             # Check file extension/type
             fname = doc.get("file_name", "").lower()
-            if fname.endswith(".xlsx") or fname.endswith(".xls") or fname.endswith(".csv"):
+            if (
+                fname.endswith(".xlsx")
+                or fname.endswith(".xls")
+                or fname.endswith(".csv")
+            ):
                 # Construct path based on upload logic: data/{user_id}/threads/{thread_id}/uploads/{file_name}
-                file_path = f"data/{user_id}/threads/{thread_id}/uploads/{doc['file_name']}"
-                spreadsheet_files.append({
-                    "path": file_path,
-                    "file_name": doc['file_name'],
-                    "doc_id": doc.get("docId") # Use docId from DB
-                })
-        
+                file_path = (
+                    f"data/{user_id}/threads/{thread_id}/uploads/{doc['file_name']}"
+                )
+                spreadsheet_files.append(
+                    {
+                        "path": file_path,
+                        "file_name": doc["file_name"],
+                        "doc_id": doc.get("docId"),  # Use docId from DB
+                    }
+                )
+
         if spreadsheet_files:
-             SQLiteManager.reload_from_files(user_id, thread_id, spreadsheet_files)
+            SQLiteManager.reload_from_files(user_id, thread_id, spreadsheet_files)
     except Exception as e:
         print(f"Error reloading spreadsheets: {e}")
 
@@ -381,7 +398,9 @@ async def query(request: Request, body: QueryRequest):
     confidence_priority = {"low": 0, "medium": 1, "high": 2}
     final_confidence = "low"
     if confidence_scores:
-        final_confidence = min(confidence_scores, key=lambda c: confidence_priority.get(c, 0))
+        final_confidence = min(
+            confidence_scores, key=lambda c: confidence_priority.get(c, 0)
+        )
 
     # Deduplicate suggested questions
     seen_questions = set()

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check, Trash2 } from 'lucide-react';
+import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check, Trash2, MessageSquare } from 'lucide-react';
 import { api, Chat, Thread } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { ChatMessage } from '@/components/ChatMessage';
@@ -52,9 +52,14 @@ const ThreadView = () => {
   const [mindMapOpen, setMindMapOpen] = useState(false);
   const [wordCloudOpen, setWordCloudOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [useContext, setUseContext] = useState(false);
 
   const selfKnowledgePreferenceKey = user?.userId
     ? `selfKnowledgePreference:${user.userId}`
+    : null;
+
+  const contextPreferenceKey = user?.userId && threadId
+    ? `contextPreference:${user.userId}:${threadId}`
     : null;
 
   const updateUserThreadState = useCallback(
@@ -101,6 +106,16 @@ const ThreadView = () => {
     const storedPreference = window.localStorage.getItem(selfKnowledgePreferenceKey);
     setUseSelfKnowledge(storedPreference === 'true');
   }, [selfKnowledgePreferenceKey]);
+
+  useEffect(() => {
+    if (!contextPreferenceKey || typeof window === 'undefined') {
+      setUseContext(false);
+      return;
+    }
+
+    const storedContextPref = window.localStorage.getItem(contextPreferenceKey);
+    setUseContext(storedContextPref === 'true');
+  }, [contextPreferenceKey]);
 
   useEffect(() => {
     scrollToBottom();
@@ -317,7 +332,8 @@ const ThreadView = () => {
         threadId,
         userMessage.content,
         mode,
-        mode === 'Internal' ? useSelfKnowledge : false
+        mode === 'Internal' ? useSelfKnowledge : false,
+        useContext
       );
 
       // Support both legacy shape and new `sources` wrapper; default to empty arrays
@@ -394,6 +410,16 @@ const ThreadView = () => {
     window.localStorage.setItem(selfKnowledgePreferenceKey, String(checked));
   };
 
+  const handleContextToggle = (checked: boolean) => {
+    setUseContext(checked);
+
+    if (!contextPreferenceKey || typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(contextPreferenceKey, String(checked));
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -430,6 +456,17 @@ const ThreadView = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+            <Label htmlFor="context-toggle" className="text-sm">
+              Chat Context
+            </Label>
+            <Switch
+              id="context-toggle"
+              checked={useContext}
+              onCheckedChange={handleContextToggle}
+            />
+          </div>
           <Button
             variant="outline"
             size="sm"

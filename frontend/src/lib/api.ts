@@ -543,7 +543,8 @@ export const api = {
     threadId: string,
     question: string,
     mode: 'Internal' | 'External',
-    useSelfKnowledge: boolean
+    useSelfKnowledge: boolean,
+    useContext: boolean = false
   ): Promise<QueryResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/query`, {
@@ -557,6 +558,7 @@ export const api = {
         question,
         mode,
         use_self_knowledge: useSelfKnowledge,
+        use_context: useContext,
       }),
     });
 
