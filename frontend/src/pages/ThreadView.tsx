@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check, Trash2, MessageSquare } from 'lucide-react';
+import { Upload, Send, FileText, Brain, Globe, Loader2, X, Edit2, Check, Trash2, MessageSquare, ListChecks } from 'lucide-react';
 import { api, Chat, Thread } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { ChatMessage } from '@/components/ChatMessage';
@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog';
 import MindMapModal from '@/components/MindMapModal';
 import WordCloudModal from '@/components/WordCloudModal';
+import ThreadInstructionsModal from '@/components/ThreadInstructionsModal';
 
 const ThreadView = () => {
   const { threadId } = useParams();
@@ -53,6 +54,7 @@ const ThreadView = () => {
   const [wordCloudOpen, setWordCloudOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [useContext, setUseContext] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
 
   const selfKnowledgePreferenceKey = user?.userId
     ? `selfKnowledgePreference:${user.userId}`
@@ -456,6 +458,16 @@ const ThreadView = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setInstructionsOpen(true)}
+            disabled={!threadId}
+            title="Thread Instructions"
+          >
+            <ListChecks className="w-4 h-4 mr-2" />
+            Instructions
+          </Button>
           <div className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-muted-foreground" />
             <Label htmlFor="context-toggle" className="text-sm">
@@ -651,6 +663,15 @@ const ThreadView = () => {
           onOpenChange={setWordCloudOpen}
           threadId={threadId}
           documents={documents}
+        />
+      )}
+
+      {/* Thread Instructions Modal */}
+      {threadId && (
+        <ThreadInstructionsModal
+          open={instructionsOpen}
+          onOpenChange={setInstructionsOpen}
+          threadId={threadId}
         />
       )}
 

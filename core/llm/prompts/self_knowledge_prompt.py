@@ -1,10 +1,12 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from core.constants import INTERNAL, EXTERNAL
+from core.llm.prompts.thread_context import build_thread_context_block
 
 
 def self_knowledge_prompt(
     messages: list,
     question: str,
+    thread_instructions: Optional[List[str]] = None,
 ):
     contents = []
     contents.append(
@@ -34,6 +36,11 @@ def self_knowledge_prompt(
             ),
         }
     )
+
+    # Thread-level user context
+    thread_ctx = build_thread_context_block(thread_instructions)
+    if thread_ctx:
+        contents.append(thread_ctx)
 
     # Conversation history (disabled — messages is always empty now)
     if messages:

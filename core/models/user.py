@@ -7,6 +7,8 @@ from bson import ObjectId
 from pydantic import BaseModel, EmailStr, Field, GetCoreSchemaHandler
 from pydantic_core import core_schema
 
+from core.models.thread import ThreadInstruction
+
 
 class MongoModel(BaseModel):
     model_config = {
@@ -52,6 +54,7 @@ class Thread(BaseModel):
     thread_name: str
     documents: List[ThreadDocument]
     chats: List[ChatMessage]
+    instructions: List["ThreadInstruction"] = Field(default_factory=list)
     createdAt: datetime
     updatedAt: datetime
 

@@ -8,12 +8,19 @@ export interface User {
   threads: Record<string, Thread>;
 }
 
+export interface ThreadInstruction {
+  id: string;
+  text: string;
+  selected: boolean;
+}
+
 export interface Thread {
   thread_name: string;
   createdAt: string;
   updatedAt: string;
   documents: Document[];
   chats: Chat[];
+  instructions?: ThreadInstruction[];
 }
 
 export interface Document {
@@ -825,6 +832,76 @@ export const api = {
       return { status: false, error: data?.detail || data?.message || 'Technical roadmap (global) request failed' };
     }
     return data as TechnicalRoadmapResponse;
+  },
+
+  // ── Thread Instructions ──
+
+  async getInstructions(threadId: string): Promise<ThreadInstruction[]> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/thread/${threadId}/instructions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Failed to load instructions');
+    }
+    return data.instructions ?? [];
+  },
+
+  async addInstruction(threadId: string, text: string): Promise<ThreadInstruction> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/thread/${threadId}/instructions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ text }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Failed to add instruction');
+    }
+    return data.instruction;
+  },
+
+  async updateInstruction(
+    threadId: string,
+    instructionId: string,
+    updates: { text?: string; selected?: boolean }
+  ): Promise<ThreadInstruction> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/thread/${threadId}/instructions/${instructionId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      }
+    );
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Failed to update instruction');
+    }
+    return data.instruction;
+  },
+
+  async deleteInstruction(threadId: string, instructionId: string): Promise<void> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/thread/${threadId}/instructions/${instructionId}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Failed to delete instruction');
+    }
   },
 };
 

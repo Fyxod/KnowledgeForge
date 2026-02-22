@@ -45,6 +45,7 @@ def build_main_prompt(state: AgentState):
         spreadsheet_schema=state.spreadsheet_schema or None,
         sql_result=state.sql_result or None,
         original_query=state.original_query or None,
+        thread_instructions=state.thread_instructions or [],
     )
 
 
@@ -58,4 +59,5 @@ def build_self_knowledge_prompt(
     return self_knowledge_prompt(
         messages=[],
         question=state.query or state.resolved_query or state.original_query,
+        thread_instructions=state.thread_instructions or [],
     )

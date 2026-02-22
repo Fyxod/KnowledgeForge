@@ -30,11 +30,10 @@ class AgentState(BaseModel):
     chunks_used: List[ChunksUsed] = Field(default_factory=list)
     confidence_score: Optional[str] = Field(
         default=None,
-        description="Confidence level of the answer: 'high', 'medium', or 'low'."
+        description="Confidence level of the answer: 'high', 'medium', or 'low'.",
     )
     suggested_questions: Optional[List[str]] = Field(
-        default=None,
-        description="Follow-up questions suggested by the LLM."
+        default=None, description="Follow-up questions suggested by the LLM."
     )
 
     attempts: int = 0
@@ -74,3 +73,7 @@ class AgentState(BaseModel):
         default_factory=list
     )  # to store initial web search results
     use_self_knowledge: bool = False
+    thread_instructions: List[str] = Field(
+        default_factory=list,
+        description="User-defined instructions that apply to every message in this thread.",
+    )

@@ -122,6 +122,19 @@ user_schema = {
                             "bsonType": "bool",
                             "description": "Mindmap feature enabled for this thread",
                         },
+                        "instructions": {
+                            "bsonType": "array",
+                            "description": "User-defined instructions for this thread",
+                            "items": {
+                                "bsonType": "object",
+                                "required": ["id", "text", "selected"],
+                                "properties": {
+                                    "id": {"bsonType": "string"},
+                                    "text": {"bsonType": "string"},
+                                    "selected": {"bsonType": "bool"},
+                                },
+                            },
+                        },
                     },
                 },
             },

@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 from core.constants import INTERNAL, EXTERNAL
+from core.llm.prompts.thread_context import build_thread_context_block
 
 
 def detect_answer_style(question: str) -> str:
@@ -103,7 +104,12 @@ def detect_answer_style(question: str) -> str:
     return "detailed"
 
 
-def _build_system_prompt(mode: str, answer_style: str, has_spreadsheet: bool = False) -> str:
+def _build_system_prompt(
+    mode: str,
+    answer_style: str,
+    has_spreadsheet: bool = False,
+    use_self_knowledge: bool = False,
+) -> str:
     """
     Build the system prompt from shared components.
     Eliminates the 4-way duplication (INTERNAL×brief, INTERNAL×detailed, EXTERNAL×brief, EXTERNAL×detailed).
@@ -133,10 +139,8 @@ def _build_system_prompt(mode: str, answer_style: str, has_spreadsheet: bool = F
             "Your analysis must always be grounded in the data — never speculate beyond what the evidence supports.\n"
         )
     else:
-        role = (
-            "You are an expert assistant that answers questions based on the provided **documents**.\n"
-        )
-    
+        role = "You are an expert assistant that answers questions based on the provided **documents**.\n"
+
     if has_spreadsheet:
         role += (
             "\n**IMPORTANT: SQL ENGINE AVAILABLE**\n"
@@ -188,9 +192,24 @@ def _build_system_prompt(mode: str, answer_style: str, has_spreadsheet: bool = F
     # ── Grounding Rules (single authoritative block) ──
     grounding = (
         "\n### Grounding Rules\n"
-        "- Rely **strictly** on the supplied data (documents, summaries, conversation history). "
-        "Never use self-knowledge or unstated assumptions.\n"
-        "- Do NOT fabricate, infer beyond the supplied information, or use knowledge not present in the provided data.\n"
+        "- Rely on the supplied data (documents, summaries, conversation history, "
+        "and any user-provided context for this thread).\n"
+        "- Do NOT fabricate or infer beyond the supplied information.\n"
+        "- **User-provided context** (such as names, preferences, background info) is first-class supplied data. "
+        "Treat it as if the user stated it directly in their question.\n"
+    )
+    if use_self_knowledge:
+        grounding += (
+            "- **Self-knowledge mode is ON.** You MAY use your own general knowledge to complement the supplied data. "
+            "Combine user-provided context with your knowledge and documents to answer as fully as possible. "
+            "Still prioritize document content when it is available and relevant.\n"
+        )
+    else:
+        grounding += (
+            "- Do NOT use your own world knowledge or unstated assumptions. "
+            "Only use information explicitly present in the supplied data.\n"
+        )
+    grounding += (
         "- If the provided data is insufficient to answer, clearly state: "
         "*I cannot answer based on the provided data.*\n"
     )
@@ -346,6 +365,7 @@ def main_prompt(
     spreadsheet_schema: Optional[str] = None,
     sql_result: Optional[str] = None,
     original_query: Optional[str] = None,
+    thread_instructions: Optional[List[str]] = None,
 ):
     contents = []
 
@@ -356,8 +376,18 @@ def main_prompt(
         raise ValueError("Invalid mode. Mode must be either 'INTERNAL' or 'EXTERNAL'.")
 
     # ── System prompt (built from shared components) ──
-    system_prompt = _build_system_prompt(mode, answer_style, has_spreadsheet=(spreadsheet_schema is not None))
+    system_prompt = _build_system_prompt(
+        mode,
+        answer_style,
+        has_spreadsheet=(spreadsheet_schema is not None),
+        use_self_knowledge=use_self_knowledge,
+    )
     contents.append({"role": "system", "parts": system_prompt})
+
+    # ── Thread-level context (user-provided guidance, always included) ──
+    thread_ctx = build_thread_context_block(thread_instructions)
+    if thread_ctx:
+        contents.append(thread_ctx)
 
     # ── Spreadsheet SQL schema (prioritized BEFORE chunks) ──
     if spreadsheet_schema:
@@ -483,9 +513,9 @@ def main_prompt(
                     "You have ALREADY received a SQL query result above. Follow these rules strictly:\n"
                     "1. Compare the SQL result against the **Original User Question**.\n"
                     "2. If the SQL result contains the data needed to answer the question (even partially), "
-                    "you **MUST** set `action` to `\"answer\"` and use the result to write your final answer. "
+                    'you **MUST** set `action` to `"answer"` and use the result to write your final answer. '
                     "Do NOT request another SQL query.\n"
-                    "3. You should ONLY set `action` to `\"sql_query\"` again if ALL of these conditions are true:\n"
+                    '3. You should ONLY set `action` to `"sql_query"` again if ALL of these conditions are true:\n'
                     "   - The SQL result above is an ERROR message (e.g., 'SQL execution error: ...'), OR\n"
                     "   - The SQL query was clearly WRONG (e.g., queried the wrong column/table), OR\n"
                     "   - The original question explicitly requires MULTIPLE SEPARATE pieces of data that cannot "
@@ -557,7 +587,7 @@ def main_prompt(
                 "CRITICAL JSON RULES:\n"
                 "- All string values MUST use double quotes and properly escape special characters.\n"
                 "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
-                "- Double quotes inside string values MUST be escaped as \\\".\n"
+                '- Double quotes inside string values MUST be escaped as \\".\n'
                 "- Backslashes inside string values MUST be escaped as \\\\.\n"
                 "- Do NOT use trailing commas after the last item in arrays or objects.\n"
                 "- For tables inside the answer field, use HTML <table> tags, NOT Markdown pipe tables.\n"

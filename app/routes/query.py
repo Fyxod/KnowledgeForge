@@ -54,6 +54,13 @@ async def query(request: Request, body: QueryRequest):
     if not thread:
         return {"error": "Thread not found"}
 
+    # Collect selected thread instructions
+    thread_instructions = [
+        ins["text"]
+        for ins in thread.get("instructions", [])
+        if ins.get("selected", False)
+    ]
+
     messages = []
     if use_context:
         # Build messages from previous chat history in the thread
@@ -151,6 +158,7 @@ async def query(request: Request, body: QueryRequest):
                         use_self_knowledge=use_self_knowledge,
                         has_spreadsheet_data=has_spreadsheet,
                         spreadsheet_schema=spreadsheet_schema,
+                        thread_instructions=thread_instructions,
                     )
                 )
 
@@ -320,6 +328,7 @@ async def query(request: Request, body: QueryRequest):
                 use_self_knowledge=use_self_knowledge,
                 has_spreadsheet_data=has_spreadsheet,
                 spreadsheet_schema=spreadsheet_schema,
+                thread_instructions=thread_instructions,
             )
         )
 
