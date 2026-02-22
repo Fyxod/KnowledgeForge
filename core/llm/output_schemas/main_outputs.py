@@ -22,6 +22,7 @@ class MainLLMOutputInternal(LLMOutputBase):
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
         "global_summarizer",
+        "failure",
         "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
     ] = Field(
         description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data."
@@ -35,7 +36,8 @@ class MainLLMOutputInternal(LLMOutputBase):
         description="List of 2-3 follow-up questions the user might want to ask based on the answer and available documents.",
     )
     document_id: Optional[str] = Field(
-        description="The ID of the document to summarize if using document_summarizer, if applicable."
+        default=None,
+        description="The ID of the document to summarize if using document_summarizer, if applicable.",
     )
     sql_query: Optional[str] = Field(
         default=None,
@@ -48,6 +50,8 @@ class MainLLMOutputInternal(LLMOutputBase):
         if hasattr(v, "lower"):
             val = v.lower().strip()
             # Map common hallucinations or partial matches
+            if val in ["failure", "fail", "error"]:
+                return "failure"
             if val in ["search", "google", "web"]:
                 return "web_search"
             if val in ["query", "database", "sql"]:
@@ -78,7 +82,8 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
         description="List of 2-3 follow-up questions the user might want to ask based on the answer and available documents.",
     )
     document_id: Optional[str] = Field(
-        description="The ID of the document to summarize if using document_summarizer, if applicable."
+        default=None,
+        description="The ID of the document to summarize if using document_summarizer, if applicable.",
     )
     sql_query: Optional[str] = Field(
         default=None,
@@ -128,7 +133,8 @@ class MainLLMOutputExternal(LLMOutputBase):
         description="List of 2-3 web search queries used to generate the answer, if applicable.",
     )
     document_id: Optional[str] = Field(
-        description="The ID of the document to summarize if using document_summarizer, if applicable."
+        default=None,
+        description="The ID of the document to summarize if using document_summarizer, if applicable.",
     )
     sql_query: Optional[str] = Field(
         default=None,

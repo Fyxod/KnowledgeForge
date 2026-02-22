@@ -99,6 +99,13 @@ const ThreadView = () => {
     loadThread();
   }, [threadId, user?.userId]);
 
+  // Sync local documents state when user context changes (e.g. after document deletion from RightSidebar)
+  useEffect(() => {
+    if (!threadId || !user?.threads?.[threadId]) return;
+    const contextDocs = user.threads[threadId].documents || [];
+    setDocuments(contextDocs);
+  }, [threadId, user?.threads?.[threadId]?.documents]);
+
   useEffect(() => {
     if (!selfKnowledgePreferenceKey || typeof window === 'undefined') {
       setUseSelfKnowledge(false);

@@ -222,6 +222,47 @@ def search_bm25(user_id: str, thread_id: str, query: str, top_k: int = 20):
     return results
 
 
+async def delete_document_from_chroma(user_id: str, thread_id: str, document_id: str):
+    """Delete all chunks belonging to a document from the ChromaDB collection."""
+    vectorstore = await asyncio.to_thread(get_vectorstore, user_id, thread_id)
+    try:
+        await asyncio.to_thread(
+            vectorstore._collection.delete,
+            where={"document_id": document_id},
+        )
+        print(f"Deleted ChromaDB chunks for document {document_id} in thread {thread_id}")
+    except Exception as e:
+        print(f"Error deleting ChromaDB chunks for document {document_id}: {e}")
+        raise
+
+
+def rebuild_bm25_after_deletion(user_id: str, thread_id: str, document_id: str):
+    """Rebuild BM25 index excluding chunks from a deleted document."""
+    bm25_data = load_bm25(user_id, thread_id)
+    if bm25_data is None:
+        return
+
+    remaining = [
+        (cid, text, meta)
+        for cid, text, meta in zip(
+            bm25_data["chunk_ids"],
+            bm25_data["chunk_texts"],
+            bm25_data["chunk_metadatas"],
+        )
+        if meta.get("document_id") != document_id
+    ]
+
+    if not remaining:
+        bm25_path = _get_bm25_path(user_id, thread_id)
+        if os.path.exists(bm25_path):
+            os.remove(bm25_path)
+        print(f"BM25 index removed (no chunks remain) for thread {thread_id}")
+        return
+
+    _build_and_save_bm25(remaining, user_id, thread_id)
+    print(f"BM25 index rebuilt for thread {thread_id} after removing document {document_id}")
+
+
 async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
     start_time = time.time()
     vectorstore = await asyncio.to_thread(get_vectorstore, user_id, thread_id)

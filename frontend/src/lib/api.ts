@@ -68,6 +68,14 @@ export interface ClearChatsResponse {
   chats: Chat[];
 }
 
+export interface DeleteDocumentResponse {
+  status: string;
+  message: string;
+  thread_id: string;
+  deleted_doc_id: string;
+  documents: Document[];
+}
+
 export interface LoginResponse {
   status: string;
   message: string;
@@ -587,6 +595,24 @@ export const api = {
         Authorization: `Bearer ${token}`,
       },
     });
+
+    return response.json();
+  },
+
+  async deleteDocument(threadId: string, docId: string): Promise<DeleteDocumentResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/thread/${threadId}/document/${docId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      const errorMessage = errorData.error || errorData.detail || 'Failed to delete document';
+      throw new Error(errorMessage);
+    }
 
     return response.json();
   },

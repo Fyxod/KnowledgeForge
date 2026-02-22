@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2 } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
@@ -9,9 +9,20 @@ import StrategicRoadmapModal from './StrategicRoadmapModal';
 import TechnicalRoadmapModal from './TechnicalRoadmapModal';
 import InsightsModal from './InsightsModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Thread, getAuthToken } from '@/lib/api';
+
+import { Thread, getAuthToken, api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { API_URL } from '../../config';
 
 interface Props {
@@ -40,6 +51,27 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [techRoadmapOpen, setTechRoadmapOpen] = React.useState(false);
   const [summaryOpen, setSummaryOpen] = React.useState(false);
   const [insightsOpen, setInsightsOpen] = React.useState(false);
+  const [deleteConfirmDocId, setDeleteConfirmDocId] = React.useState<string | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
+
+  const handleDeleteDocument = async (docId: string) => {
+    if (!threadId || deleting) return;
+    setDeleting(true);
+    try {
+      const response = await api.deleteDocument(threadId, docId);
+      if (response?.status === 'success') {
+        toast.success('Document deleted');
+        await refreshUser();
+      } else {
+        toast.error('Failed to delete document');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete document');
+    } finally {
+      setDeleting(false);
+      setDeleteConfirmDocId(null);
+    }
+  };
 
   const documents = React.useMemo(() => {
     if (!threadId) return [];
@@ -217,9 +249,8 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
             <DialogTitle>Documents</DialogTitle>
             <DialogDescription>Documents in this thread</DialogDescription>
           </DialogHeader>
-          <div className="mt-2 min-w-0 overflow-hidden flex-1">
-            <ScrollArea className="h-64 border rounded-md p-2">
-              <div className="w-full overflow-hidden">
+          <div className="mt-2 overflow-hidden flex-1">
+            <div className="h-64 border rounded-md p-2 overflow-y-auto">
                 {documents.length === 0 ? (
                   <p className="text-sm text-muted-foreground p-4">No documents in this thread.</p>
                 ) : (
@@ -229,40 +260,77 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                         ? buildDocumentUrl(user.userId, threadId, d.file_name, authToken ?? undefined)
                         : undefined;
 
-                      const content = (
-                        <div className="flex-1 min-w-0 overflow-hidden">
-                          <div className="font-medium truncate block w-full group-hover:text-primary-foreground" title={d.title}>{d.title}</div>
-                          <div className="text-sm text-muted-foreground group-hover:text-primary-foreground/90">{d.type} • {new Date(d.time_uploaded).toLocaleDateString()}</div>
-                        </div>
-                      );
-
-                      return href ? (
-                        <a
-                          key={d.docId}
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30"
-                        >
-                          <div className="flex items-start gap-3 min-w-0 overflow-hidden">
-                            {content}
-                          </div>
-                        </a>
-                      ) : (
-                        <div key={d.docId} className="block p-2 rounded group hover:bg-accent/60 dark:hover:bg-accent/30">
-                          <div className="flex items-start gap-3 min-w-0 overflow-hidden">
-                            {content}
-                          </div>
+                      return (
+                        <div key={d.docId} className="flex items-center gap-2 p-2 rounded hover:bg-accent/60 dark:hover:bg-accent/30">
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 min-w-0 overflow-hidden"
+                            >
+                              <div className="font-medium truncate" title={d.title}>{d.title}</div>
+                              <div className="text-sm text-muted-foreground truncate">{d.type} &bull; {new Date(d.time_uploaded).toLocaleDateString()}</div>
+                            </a>
+                          ) : (
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                              <div className="font-medium truncate" title={d.title}>{d.title}</div>
+                              <div className="text-sm text-muted-foreground truncate">{d.type} &bull; {new Date(d.time_uploaded).toLocaleDateString()}</div>
+                            </div>
+                          )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 flex-none text-muted-foreground hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirmDocId(d.docId);
+                                }}
+                                disabled={deleting}
+                                aria-label={`Delete ${d.title}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete document</TooltipContent>
+                          </Tooltip>
                         </div>
                       );
                     })}
                   </div>
                 )}
-              </div>
-            </ScrollArea>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteConfirmDocId} onOpenChange={(open) => { if (!open) setDeleteConfirmDocId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the document, its parsed data, and all associated embeddings. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={async () => {
+                if (deleteConfirmDocId) {
+                  await handleDeleteDocument(deleteConfirmDocId);
+                }
+              }}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <StrategicRoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
       <TechnicalRoadmapModal open={techRoadmapOpen} onOpenChange={setTechRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
