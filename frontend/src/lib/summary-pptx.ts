@@ -5,7 +5,10 @@ import {
     s, SlideWriter,
 } from './pptx-slide-writer';
 
+// ── Color palette (no # prefix for pptxgenjs) ───────────────────────────────
 const colors = {
+    bannerBg: '6D28D9',       // violet-700
+    violet:  { bg: 'EDE9FE', text: '6D28D9' },
     slate800: '1F2937',
 };
 
@@ -24,7 +27,7 @@ function sanitize(str: string): string {
 }
 
 function markdownToBlocks(md: string): Block[] {
-    let src = (md || '')
+    const src = (md || '')
         .replace(/([:\.\)])\s*-\s+/g, '$1\n- ')
         .replace(/\s{2,}-\s+/g, '\n- ');
 
@@ -48,8 +51,9 @@ function markdownToBlocks(md: string): Block[] {
         const h3 = line.match(/^###\s+(.+)$/);
         if (h3) { blocks.push({ type: 'subheading', content: s(h3[1]) }); continue; }
 
+        // Bold-only lines → subheading (inline, no new slide)
         const boldOnly = line.match(/^\*\*(.+?)\*\*:?$/);
-        if (boldOnly) { blocks.push({ type: 'sectionTitle', content: s(boldOnly[1]) }); continue; }
+        if (boldOnly) { blocks.push({ type: 'subheading', content: s(boldOnly[1]) }); continue; }
 
         const ul = line.match(/^[-*]\s+(.+)$/);
         if (ul) { blocks.push({ type: 'bullet', content: sanitize(ul[1]) }); continue; }
@@ -71,17 +75,16 @@ export function downloadSummaryPptx(markdown: string, filename?: string, opts?: 
     const title = opts?.title || (firstTitle ? firstTitle.content : 'Document Summary');
 
     const pptx = new PptxGenJS();
-    pptx.defineLayout({ name: 'LETTER_PORTRAIT', width: PAGE_W, height: PAGE_H });
-    pptx.layout = 'LETTER_PORTRAIT';
-    pptx.author = 'NotebookLM';
+    pptx.defineLayout({ name: 'WIDE', width: PAGE_W, height: PAGE_H });
+    pptx.layout = 'WIDE';
+    pptx.author = 'Knowledge Synthesis Platform';
     pptx.subject = 'Summary';
     pptx.title = title;
 
     const w = new SlideWriter(pptx);
-    w.newSlide();
 
-    // Centered title
-    w.addTitle(title);
+    // Title slide
+    w.addBanner(title, '', colors.bannerBg);
 
     // Collect consecutive bullets for batch rendering
     let bulletBatch: string[] = [];
@@ -92,7 +95,6 @@ export function downloadSummaryPptx(markdown: string, filename?: string, opts?: 
         if (bulletType === 'bullet') {
             w.addBullets(bulletBatch);
         } else {
-            // Ordered list — render as numbered text
             const items = bulletBatch.map((t, i) => `${i + 1}. ${t}`);
             for (const item of items) {
                 w.addText(item);
@@ -102,24 +104,26 @@ export function downloadSummaryPptx(markdown: string, filename?: string, opts?: 
     };
 
     for (const block of blocks) {
-        // Skip the title we already rendered
+        // Skip the title already rendered in the banner
         if (block.type === 'title' && block.content === title) continue;
 
-        // Flush bullets if next block is not a matching list type
         if (block.type !== 'bullet' && block.type !== 'ordered') {
             flushBullets();
         }
 
         switch (block.type) {
             case 'title':
-                w.addTitle(block.content);
+                // Additional h1 → new slide with section header
+                w.addSectionBlock(block.content, colors.violet.bg, colors.violet.text);
                 break;
 
             case 'sectionTitle':
-                w.addSectionHeader(block.content, colors.slate800);
+                // h2 → new slide with section header
+                w.addSectionBlock(block.content, colors.violet.bg, colors.violet.text);
                 break;
 
             case 'subheading':
+                // h3 / bold-only → inline subheading (no new slide)
                 w.addSubheading(block.content);
                 break;
 
@@ -138,7 +142,7 @@ export function downloadSummaryPptx(markdown: string, filename?: string, opts?: 
                 break;
 
             case 'code':
-                w.addText(block.content, { fontSize: FONT.code });
+                w.addCodeBlock(block.content);
                 break;
 
             case 'blank':
@@ -154,7 +158,7 @@ export function downloadSummaryPptx(markdown: string, filename?: string, opts?: 
     if (w.pageNum === 0) {
         const fallback = pptx.addSlide();
         fallback.addText(s(markdown).slice(0, 2000), {
-            x: ML, y: 0.83, w: CW, h: 9,
+            x: ML, y: 0.4, w: CW, h: 6.5,
             fontSize: FONT.body, color: colors.slate800, valign: 'top',
         } as any);
     }

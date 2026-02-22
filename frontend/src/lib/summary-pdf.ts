@@ -14,32 +14,82 @@ if (g?.pdfMake?.vfs) {
     (pdfMake as any).vfs = g.pdfMake.vfs;
 }
 
+// ── Color palette (matches UI Tailwind colors) ──────────────────────────────
 const colors = {
+    bannerBg: '#6D28D9',      // violet-700
+    violet:  { bg: '#EDE9FE', text: '#6D28D9' },
     slate600: '#475569',
     slate800: '#1F2937',
     slate500: '#64748B',
+    codeBg: '#F1F5F9',
 };
 
 function sanitizeText(s: string | undefined | null): string {
     if (!s) return '';
     return String(s)
-        .replace(/≥/g, '>=')
-        .replace(/≤/g, '<=')
-        .replace(/×/g, 'x')
-        .replace(/±/g, '+/-')
-        .replace(/[–—]/g, '-')
-        .replace(/[“”]/g, '"')
-        .replace(/ /g, ' ')
-        .replace(/’/g, "'")
-        .replace(/‑/g, '-');
+        .replace(/≥/g, '>=').replace(/≤/g, '<=').replace(/×/g, 'x')
+        .replace(/±/g, '+/-').replace(/[–—]/g, '-').replace(/[""]/g, '"')
+        .replace(/\u202F/g, ' ').replace(/'/g, "'").replace(/‑/g, '-');
+}
+
+// ── PDF helpers ─────────────────────────────────────────────────────────────
+
+/** Colored banner block */
+function banner(title: string): Content {
+    return {
+        table: {
+            widths: ['*'],
+            body: [[{
+                text: sanitizeText(title),
+                fontSize: 20, bold: true, color: '#FFFFFF',
+                fillColor: colors.bannerBg,
+                alignment: 'center',
+                margin: [12, 14, 12, 14],
+            }]],
+        },
+        layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+        margin: [0, 0, 0, 10],
+    };
+}
+
+/** Section header with tinted background */
+function sectionBlock(title: string): Content {
+    return {
+        table: {
+            widths: ['*'],
+            body: [[{
+                text: sanitizeText(title),
+                fontSize: 13, bold: true, color: colors.violet.text,
+                fillColor: colors.violet.bg,
+                margin: [10, 6, 10, 6],
+            }]],
+        },
+        layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+        margin: [0, 14, 0, 8],
+    };
+}
+
+/** Code block with gray background */
+function codeBlock(text: string): Content {
+    return {
+        table: {
+            widths: ['*'],
+            body: [[{
+                text: sanitizeText(text),
+                fontSize: 9, color: colors.slate800,
+                fillColor: colors.codeBg,
+                margin: [8, 6, 8, 6],
+            }]],
+        },
+        layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+        margin: [0, 2, 0, 2],
+    };
 }
 
 // Normalize some common inline markdown patterns into more parseable lines
 function preprocessMarkdown(src: string): string {
     let s = src || '';
-    // Turn patterns like ":- " or ".- " or ")- " into real new line bullets
     s = s.replace(/([:\.\)])\s*-\s+/g, '$1\n- ');
-    // Collapse accidental double spaces before dashes
     s = s.replace(/\s{2,}-\s+/g, '\n- ');
     return s;
 }
@@ -63,7 +113,7 @@ function parseInlineChunks(text: string): any[] {
         } else if (token.startsWith('*')) {
             chunks.push({ text: sanitizeText(token.slice(1, -1)), italics: true });
         } else if (token.startsWith('`')) {
-            chunks.push({ text: sanitizeText(token.slice(1, -1)), style: 'codeInline' });
+            chunks.push({ text: sanitizeText(token.slice(1, -1)), fontSize: 9, color: colors.slate800, background: colors.codeBg });
         }
         lastIndex = re.lastIndex;
     }
@@ -74,7 +124,7 @@ function parseInlineChunks(text: string): any[] {
     return chunks;
 }
 
-// Very small markdown-to-pdfmake converter, supporting headings, lists, inline emphasis
+// Very small markdown-to-pdfmake converter
 function markdownToPdfContent(markdown: string): Content[] {
     const lines = preprocessMarkdown(markdown).split(/\r?\n/);
     const content: Content[] = [];
@@ -93,7 +143,7 @@ function markdownToPdfContent(markdown: string): Content[] {
         }
     };
 
-    for (let raw of lines) {
+    for (const raw of lines) {
         const line = raw.trimEnd();
 
         // Fenced code blocks
@@ -104,51 +154,48 @@ function markdownToPdfContent(markdown: string): Content[] {
 
         if (inCode) {
             flushLists();
-            content.push({ text: sanitizeText(raw), style: 'code' });
+            content.push(codeBlock(raw));
             continue;
         }
 
         if (!line.trim()) {
-            // blank line -> break paragraph / lists
             flushLists();
             content.push({ text: ' ', margin: [0, 4, 0, 0] });
             continue;
         }
 
-        // Headings
+        // Headings → section blocks
         const h1 = line.match(/^#\s+(.+)$/);
         if (h1) {
             flushLists();
-            content.push({ text: sanitizeText(h1[1]), style: 'title', margin: [0, 8, 0, 4] });
+            content.push(sectionBlock(h1[1]));
             continue;
         }
         const h2 = line.match(/^##\s+(.+)$/);
         if (h2) {
             flushLists();
-            content.push({ text: sanitizeText(h2[1]), style: 'sectionTitle', margin: [0, 10, 0, 4] });
+            content.push(sectionBlock(h2[1]));
             continue;
         }
         const h3 = line.match(/^###\s+(.+)$/);
         if (h3) {
             flushLists();
-            content.push({ text: sanitizeText(h3[1]), style: 'subheading', margin: [0, 8, 0, 2] });
+            content.push({ text: sanitizeText(h3[1]), fontSize: 11, bold: true, margin: [0, 8, 0, 2] });
             continue;
         }
 
-        // Bold-only line used as pseudo-heading e.g. **Experience**:
+        // Bold-only line used as pseudo-heading
         const boldOnly = line.match(/^\*\*(.+?)\*\*:?$/);
         if (boldOnly) {
             flushLists();
-            content.push({ text: sanitizeText(boldOnly[1]), style: 'sectionTitle', margin: [0, 10, 0, 4] });
+            content.push(sectionBlock(boldOnly[1]));
             continue;
         }
 
         // Unordered list
         const ulMatch = line.match(/^[-*]\s+(.+)$/);
         if (ulMatch) {
-            if (ol.length) {
-                flushLists();
-            }
+            if (ol.length) flushLists();
             ul.push(ulMatch[1]);
             continue;
         }
@@ -156,9 +203,7 @@ function markdownToPdfContent(markdown: string): Content[] {
         // Ordered list
         const olMatch = line.match(/^\d+\.\s+(.+)$/);
         if (olMatch) {
-            if (ul.length) {
-                flushLists();
-            }
+            if (ul.length) flushLists();
             ol.push(olMatch[1]);
             continue;
         }
@@ -181,7 +226,7 @@ function buildDocDefinition(markdown: string, explicitTitle?: string): TDocument
     return {
         info: {
             title: `${title} - Summary`,
-            author: 'NotebookLM',
+            author: 'Knowledge Synthesis Platform',
             subject: 'Summary',
             keywords: 'summary, document',
         },
@@ -194,16 +239,9 @@ function buildDocDefinition(markdown: string, explicitTitle?: string): TDocument
             margin: [40, 10, 40, 0],
         }),
         content: [
-            { text: title, style: 'title', alignment: 'center', margin: [0, 0, 0, 8] },
+            banner(title),
             ...markdownToPdfContent(markdown || ''),
         ],
-        styles: {
-            title: { fontSize: 20, bold: true, color: colors.slate800, margin: [0, 0, 0, 4] },
-            sectionTitle: { fontSize: 13, bold: true },
-            subheading: { fontSize: 11, bold: true, margin: [0, 6, 0, 2] },
-            code: { fontSize: 9, color: colors.slate800 },
-            codeInline: { fontSize: 9, color: colors.slate800 },
-        },
         defaultStyle: {
             fontSize: 10,
             color: colors.slate800,
