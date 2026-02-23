@@ -46,14 +46,20 @@ class LLMOutputBase(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def normalize_answer_field(self):
+    def normalize_string_fields(self):
         """
-        Post-construction normalization for the 'answer' field.
+        Post-construction normalization for ALL string fields.
         Fixes formatting artifacts from json_repair (double-escaped
-        newlines, quotes, etc.) that would break markdown rendering.
-
-        Uses hasattr check so schemas without 'answer' are unaffected.
+        newlines, quotes, etc.) that would break markdown rendering
+        in summary, answer, description, and other text fields.
         """
-        if hasattr(self, "answer") and isinstance(self.answer, str):
-            self.answer = normalize_answer_content(self.answer)
+        for field_name in self.model_fields:
+            value = getattr(self, field_name, None)
+            if isinstance(value, str):
+                setattr(self, field_name, normalize_answer_content(value))
+            elif isinstance(value, list):
+                setattr(self, field_name, [
+                    normalize_answer_content(item) if isinstance(item, str) else item
+                    for item in value
+                ])
         return self
