@@ -179,6 +179,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
   };
 
   const requestRoadmap = async (isRegenerate: boolean = false) => {
+    if (loading) return;
     if (!selectedDoc) {
       toast.error('Please select a document');
       return;
@@ -424,6 +425,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
                 variant="outline"
                 className="mr-auto"
                 onClick={() => requestRoadmap(true)}
+                disabled={loading}
               >
                 <RefreshCcw className="w-4 h-4 mr-2" />
                 Regenerate

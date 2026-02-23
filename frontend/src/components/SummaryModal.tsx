@@ -39,6 +39,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
   };
 
   const generateSummary = async (isRegenerate: boolean = false) => {
+    if (loading) return;
     if (!selectedDoc) {
       toast.error('Please select a document');
       return;
@@ -319,6 +320,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                 variant="outline"
                 className="mr-auto"
                 onClick={() => generateSummary(true)}
+                disabled={loading}
               >
                 <RefreshCcw className="w-4 h-4 mr-2" />
                 Regenerate

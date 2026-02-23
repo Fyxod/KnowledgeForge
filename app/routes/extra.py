@@ -266,6 +266,13 @@ async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body
         os.remove(file_path)
 
     if not os.path.exists(file_path):
+        # Create empty lock file to prevent duplicate tasks from subsequent polls
+        try:
+            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+                await f.write("")
+        except Exception:
+            pass
+
         from core.studio_features.summarizer import global_summarizer
         asyncio.create_task(global_summarizer(user_id, thread_id))
 

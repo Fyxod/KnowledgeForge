@@ -224,6 +224,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
   };
 
   const requestInsights = async (isRegenerate: boolean = false) => {
+    if (loading) return;
     if (!selectedDoc) {
       toast.error('Please select a document');
       return;
@@ -494,6 +495,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
                 variant="outline"
                 className="mr-auto"
                 onClick={() => requestInsights(true)}
+                disabled={loading}
               >
                 <RefreshCcw className="w-4 h-4 mr-2" />
                 Regenerate
