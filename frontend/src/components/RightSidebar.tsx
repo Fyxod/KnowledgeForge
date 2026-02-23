@@ -1,13 +1,15 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2 } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
 import StrategicRoadmapModal from './StrategicRoadmapModal';
 import TechnicalRoadmapModal from './TechnicalRoadmapModal';
 import InsightsModal from './InsightsModal';
+import StrategicAnalysisModal from './StrategicAnalysisModal';
+import TechnicalAnalysisModal from './TechnicalAnalysisModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 import { Thread, getAuthToken, api } from '@/lib/api';
@@ -51,6 +53,8 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [techRoadmapOpen, setTechRoadmapOpen] = React.useState(false);
   const [summaryOpen, setSummaryOpen] = React.useState(false);
   const [insightsOpen, setInsightsOpen] = React.useState(false);
+  const [stratAnalysisOpen, setStratAnalysisOpen] = React.useState(false);
+  const [techAnalysisOpen, setTechAnalysisOpen] = React.useState(false);
   const [deleteConfirmDocId, setDeleteConfirmDocId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState(false);
 
@@ -143,6 +147,22 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setStratAnalysisOpen)} disabled={!threadId} aria-label="Strategic Analysis">
+                  <BookOpen className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Strategic Analysis</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setTechAnalysisOpen)} disabled={!threadId} aria-label="Technical Analysis">
+                  <ScanSearch className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Technical Analysis</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setMindOpen)} disabled={!threadId} aria-label="Mind Map">
                   <MapIcon className="w-5 h-5" />
                 </Button>
@@ -205,6 +225,12 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </Button>
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setInsightsOpen)} disabled={!threadId}>
                 <Lightbulb className="w-4 h-4 mr-2" /> Insights
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setStratAnalysisOpen)} disabled={!threadId}>
+                <BookOpen className="w-4 h-4 mr-2" /> Strategic Analysis
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setTechAnalysisOpen)} disabled={!threadId}>
+                <ScanSearch className="w-4 h-4 mr-2" /> Technical Analysis
               </Button>
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setMindOpen)} disabled={!threadId}>
                 <MapIcon className="w-4 h-4 mr-2" /> Mind Map
@@ -333,6 +359,8 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
 
       <StrategicRoadmapModal open={roadmapOpen} onOpenChange={setRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
       <TechnicalRoadmapModal open={techRoadmapOpen} onOpenChange={setTechRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
+      <StrategicAnalysisModal open={stratAnalysisOpen} onOpenChange={setStratAnalysisOpen} threadId={threadId ?? ''} documents={documents} />
+      <TechnicalAnalysisModal open={techAnalysisOpen} onOpenChange={setTechAnalysisOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
   );
 };

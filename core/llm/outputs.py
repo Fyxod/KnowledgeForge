@@ -58,3 +58,13 @@ from .output_schemas.insights_outputs import (
 from .output_schemas.technical_roadmap_outputs import (
     TechnicalRoadmapLLMOutput,
 )
+
+# Strategic analysis outputs
+from .output_schemas.strategic_analysis_outputs import (
+    StrategicAnalysisLLMOutput,
+)
+
+# Technical analysis outputs
+from .output_schemas.technical_analysis_outputs import (
+    TechnicalAnalysisLLMOutput,
+)

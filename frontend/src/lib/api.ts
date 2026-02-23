@@ -365,6 +365,141 @@ export interface InsightsResponse {
   error?: string;
 }
 
+// Strategic Analysis types (mirror backend Pydantic models)
+export interface StrategicIntent {
+  vision_statement: string;
+  stated_objectives: string[];
+  implicit_aspirations: string[];
+}
+
+export interface StrategicPositioning {
+  current_position: string;
+  target_position: string;
+  competitive_landscape: string;
+}
+
+export interface StrategicTheme {
+  theme: string;
+  description: string;
+  evidence_from_document: string;
+}
+
+export interface StakeholderInsight {
+  stakeholder: string;
+  role_or_interest: string;
+  influence_level: string;
+}
+
+export interface ResourceAndCapability {
+  resource: string;
+  current_state: string;
+  strategic_relevance: string;
+}
+
+export interface IdentifiedRisk {
+  risk: string;
+  severity: string;
+  context: string;
+}
+
+export interface ForwardLookingAssessment {
+  opportunities: string[];
+  recommended_next_steps: string[];
+  potential_challenges: string[];
+  overall_assessment: string;
+}
+
+export interface StrategicAnalysisLLMOutput {
+  analysis_title: string;
+  executive_overview: string;
+  strategic_intent: StrategicIntent;
+  strategic_positioning: StrategicPositioning;
+  key_strategic_themes: StrategicTheme[];
+  stakeholder_insights: StakeholderInsight[];
+  resources_and_capabilities: ResourceAndCapability[];
+  identified_risks: IdentifiedRisk[];
+  strategic_gaps_and_observations: string[];
+  forward_looking_assessment: ForwardLookingAssessment;
+  llm_inferred_additions?: LLMInferredAddition[] | null;
+}
+
+export interface StrategicAnalysisResponse {
+  status?: boolean;
+  strategic_analysis?: StrategicAnalysisLLMOutput;
+  message?: string;
+  error?: string;
+}
+
+// Technical Analysis types (mirror backend Pydantic models)
+export interface TechnicalScope {
+  domains_covered: string[];
+  technology_stack: string[];
+  architecture_overview: string;
+}
+
+export interface TechnicalDecision {
+  decision: string;
+  rationale: string;
+  implications: string;
+}
+
+export interface TechnicalStrength {
+  aspect: string;
+  evidence: string;
+}
+
+export interface TechnicalConcern {
+  concern: string;
+  impact: string;
+  evidence: string;
+}
+
+export interface TechnicalInnovation {
+  element: string;
+  description: string;
+  maturity: string;
+}
+
+export interface TechnicalAspirations {
+  stated_goals: string[];
+  implied_direction: string;
+  alignment_assessment: string;
+}
+
+export interface ImplementationReadiness {
+  ready_components: string[];
+  gaps_to_address: string[];
+  dependencies: string[];
+}
+
+export interface TechnicalForwardAssessment {
+  scalability_outlook: string;
+  technology_evolution: string;
+  recommended_focus_areas: string[];
+  overall_assessment: string;
+}
+
+export interface TechnicalAnalysisLLMOutput {
+  analysis_title: string;
+  executive_overview: string;
+  technical_scope: TechnicalScope;
+  technical_decisions: TechnicalDecision[];
+  technical_strengths: TechnicalStrength[];
+  technical_concerns: TechnicalConcern[];
+  innovation_elements: TechnicalInnovation[];
+  technical_aspirations: TechnicalAspirations;
+  implementation_readiness: ImplementationReadiness;
+  forward_looking_assessment: TechnicalForwardAssessment;
+  llm_inferred_additions?: LLMInferredAddition[] | null;
+}
+
+export interface TechnicalAnalysisResponse {
+  status?: boolean;
+  technical_analysis?: TechnicalAnalysisLLMOutput;
+  message?: string;
+  error?: string;
+}
+
 // Auth helpers
 export const getAuthToken = () => localStorage.getItem('auth_token');
 export const setAuthToken = (token: string) => localStorage.setItem('auth_token', token);
@@ -858,6 +993,98 @@ export const api = {
       return { status: false, error: data?.detail || data?.message || 'Technical roadmap (global) request failed' };
     }
     return data as TechnicalRoadmapResponse;
+  },
+
+  // ── Strategic Analysis ──
+
+  async strategicAnalysis(threadId: string, documentId: string, regenerate: boolean = false): Promise<StrategicAnalysisResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/strategic_analysis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId, regenerate }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse strategic analysis response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Strategic analysis request failed' };
+    }
+    return data as StrategicAnalysisResponse;
+  },
+
+  async strategicAnalysisGlobal(threadId: string, regenerate: boolean = false): Promise<StrategicAnalysisResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/strategic_analysis/global`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId, regenerate }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse strategic analysis (global) response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Strategic analysis (global) request failed' };
+    }
+    return data as StrategicAnalysisResponse;
+  },
+
+  // ── Technical Analysis ──
+
+  async technicalAnalysis(threadId: string, documentId: string, regenerate: boolean = false): Promise<TechnicalAnalysisResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/technical_analysis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId, document_id: documentId, regenerate }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse technical analysis response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Technical analysis request failed' };
+    }
+    return data as TechnicalAnalysisResponse;
+  },
+
+  async technicalAnalysisGlobal(threadId: string, regenerate: boolean = false): Promise<TechnicalAnalysisResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/technical_analysis/global`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ thread_id: threadId, regenerate }),
+    });
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch (_) {
+      return { status: false, error: `Failed to parse technical analysis (global) response (${response.status})` };
+    }
+    if (!response.ok) {
+      return { status: false, error: data?.detail || data?.message || 'Technical analysis (global) request failed' };
+    }
+    return data as TechnicalAnalysisResponse;
   },
 
   // ── Thread Instructions ──

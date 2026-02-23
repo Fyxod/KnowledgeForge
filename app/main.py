@@ -16,6 +16,8 @@ from app.routes import (
     extra,
     strategic_roadmap,
     technical_roadmap,
+    strategic_analysis,
+    technical_analysis,
     documents,
     export,
 )
@@ -48,6 +50,8 @@ fastapi_app.include_router(extra.router)
 fastapi_app.include_router(strategic_roadmap.router)
 fastapi_app.include_router(insights.router)
 fastapi_app.include_router(technical_roadmap.router)
+fastapi_app.include_router(strategic_analysis.router)
+fastapi_app.include_router(technical_analysis.router)
 fastapi_app.include_router(documents.router)
 fastapi_app.include_router(export.router)
 
