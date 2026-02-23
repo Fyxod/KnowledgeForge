@@ -10,5 +10,7 @@ auth_paths = [
     "/strategic_roadmap",
     "/technical_roadmap",
     "/insights",
+    "/strategic_analysis",
+    "/technical_analysis",
     "/export",
 ]
