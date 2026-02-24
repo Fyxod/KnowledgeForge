@@ -4,19 +4,26 @@ Routes for thread management functionality.
 
 import asyncio
 import datetime
+import json
 import os
 import shutil
 import uuid
 from fastapi import APIRouter, Request
 from fastapi.encoders import jsonable_encoder
 from core.database import db
+from core.models.document import Document, Page
 from core.models.thread import (
+    AddExistingDocumentRequest,
     InstructionCreateRequest,
     InstructionUpdateRequest,
     ThreadCreateRequest,
     ThreadUpdateRequest,
 )
-from core.embeddings.vectorstore import delete_document_from_chroma, rebuild_bm25_after_deletion
+from core.embeddings.vectorstore import (
+    add_existing_document_to_store,
+    delete_document_from_chroma,
+    rebuild_bm25_after_deletion,
+)
 
 router = APIRouter(prefix="/thread", tags=["thread"])
 
@@ -284,6 +291,147 @@ async def delete_document(request: Request, thread_id: str, doc_id: str):
     except Exception as e:
         print(f"Error deleting document {doc_id} from thread {thread_id}: {e}")
         return {"error": f"Failed to delete document: {str(e)}"}
+
+
+@router.post("/{thread_id}/documents/add-existing")
+async def add_existing_document(
+    request: Request,
+    thread_id: str,
+    body: AddExistingDocumentRequest,
+):
+    """Add an existing document from another thread without re-parsing/OCR."""
+
+    payload, user, error_response = _get_authenticated_user(request)
+    if error_response:
+        return error_response
+
+    user_id = payload.userId
+    source_thread_id = body.source_thread_id
+    doc_id = body.doc_id
+
+    # Validate target thread exists
+    if thread_id not in user.get("threads", {}):
+        return {"error": "Target thread not found"}
+
+    # Validate source thread exists
+    source_thread = user.get("threads", {}).get(source_thread_id)
+    if not source_thread:
+        return {"error": "Source thread not found"}
+
+    # Cannot add to same thread
+    if thread_id == source_thread_id:
+        return {"error": "Source and target thread cannot be the same"}
+
+    # Find document in source thread
+    source_docs = source_thread.get("documents", [])
+    doc_entry = next((d for d in source_docs if d.get("docId") == doc_id), None)
+    if not doc_entry:
+        return {"error": "Document not found in source thread"}
+
+    # Prevent duplicates in target thread
+    target_docs = user["threads"][thread_id].get("documents", [])
+    if any(d.get("docId") == doc_id for d in target_docs):
+        return {"error": "Document already exists in target thread"}
+
+    file_name = doc_entry.get("file_name", "")
+    if not file_name:
+        return {"error": "Document has no associated file"}
+
+    # Load parsed JSON from source thread
+    name_without_ext = os.path.splitext(file_name)[0]
+    source_parsed_path = os.path.join(
+        "data", user_id, "threads", source_thread_id, "parsed",
+        f"{name_without_ext}.json",
+    )
+    if not os.path.exists(source_parsed_path):
+        return {"error": "Parsed document data not found. Please re-upload the document."}
+
+    try:
+        with open(source_parsed_path, "r", encoding="utf-8") as f:
+            doc_data = json.load(f)
+    except Exception as e:
+        return {"error": f"Failed to read parsed document: {str(e)}"}
+
+    # Reconstruct Document object (handle both key conventions)
+    pages_raw = doc_data.get("content", doc_data.get("pages", []))
+    pages = []
+    for p in pages_raw:
+        page_number = p.get("number", p.get("page_number", 1))
+        page_text = p.get("text", "")
+        page_images = p.get("images", [])
+        pages.append(Page(number=page_number, text=page_text, images=page_images))
+
+    doc_obj = Document(
+        id=doc_data.get("id", doc_id),
+        type=doc_data.get("type", doc_entry.get("type", "unknown")),
+        file_name=file_name,
+        content=pages,
+        title=doc_data.get("title", doc_entry.get("title", "Untitled")),
+        full_text=doc_data.get("full_text", ""),
+    )
+
+    try:
+        # 1. Embed and index in vectorstore + BM25 (fast, no OCR)
+        await add_existing_document_to_store(doc_obj, user_id, thread_id)
+
+        # 2. Copy uploaded file to target thread
+        source_upload = os.path.join(
+            "data", user_id, "threads", source_thread_id, "uploads", file_name
+        )
+        target_upload_dir = os.path.join(
+            "data", user_id, "threads", thread_id, "uploads"
+        )
+        os.makedirs(target_upload_dir, exist_ok=True)
+        target_upload = os.path.join(target_upload_dir, file_name)
+        if os.path.exists(source_upload) and not os.path.exists(target_upload):
+            shutil.copy2(source_upload, target_upload)
+
+        # 3. Copy parsed JSON to target thread
+        target_parsed_dir = os.path.join(
+            "data", user_id, "threads", thread_id, "parsed"
+        )
+        os.makedirs(target_parsed_dir, exist_ok=True)
+        target_parsed = os.path.join(target_parsed_dir, f"{name_without_ext}.json")
+        if not os.path.exists(target_parsed):
+            shutil.copy2(source_parsed_path, target_parsed)
+
+        # 4. Copy images directory if it exists
+        source_images_dir = os.path.join(
+            "data", user_id, "threads", source_thread_id, "images", name_without_ext
+        )
+        target_images_dir = os.path.join(
+            "data", user_id, "threads", thread_id, "images", name_without_ext
+        )
+        if os.path.isdir(source_images_dir) and not os.path.isdir(target_images_dir):
+            shutil.copytree(source_images_dir, target_images_dir)
+
+        # 5. Add document entry to MongoDB target thread
+        now = datetime.datetime.now(datetime.timezone.utc)
+        new_doc_entry = {
+            "docId": doc_id,
+            "title": doc_entry.get("title", "Untitled"),
+            "type": doc_entry.get("type", "unknown"),
+            "time_uploaded": now,
+            "file_name": file_name,
+        }
+        db.users.update_one(
+            {"userId": user_id},
+            {
+                "$push": {f"threads.{thread_id}.documents": new_doc_entry},
+                "$set": {f"threads.{thread_id}.updatedAt": now},
+            },
+        )
+
+        return {
+            "status": "success",
+            "message": "Document added to thread successfully",
+            "thread_id": thread_id,
+            "document": jsonable_encoder(new_doc_entry),
+        }
+
+    except Exception as e:
+        print(f"Error adding existing document {doc_id} to thread {thread_id}: {e}")
+        return {"error": f"Failed to add document: {str(e)}"}
 
 
 @router.delete("/{thread_id}/chats/{chat_index}")

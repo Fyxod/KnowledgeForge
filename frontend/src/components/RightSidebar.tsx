@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
@@ -11,6 +11,7 @@ import InsightsModal from './InsightsModal';
 import StrategicAnalysisModal from './StrategicAnalysisModal';
 import TechnicalAnalysisModal from './TechnicalAnalysisModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { Thread, getAuthToken, api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
@@ -57,6 +58,9 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [techAnalysisOpen, setTechAnalysisOpen] = React.useState(false);
   const [deleteConfirmDocId, setDeleteConfirmDocId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
+  const [selectedSourceThread, setSelectedSourceThread] = React.useState<string>('');
+  const [addingDocId, setAddingDocId] = React.useState<string | null>(null);
 
   const handleDeleteDocument = async (docId: string) => {
     if (!threadId || deleting) return;
@@ -83,6 +87,39 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
     return t?.documents || [];
   }, [threadId, threads]);
   const authToken = React.useMemo(() => getAuthToken(), [user?.userId]);
+
+  // Other threads with documents (for import feature)
+  const otherThreads = React.useMemo(() => {
+    if (!threadId) return [];
+    return Object.entries(threads)
+      .filter(([id]) => id !== threadId)
+      .filter(([, t]) => t.documents && t.documents.length > 0);
+  }, [threadId, threads]);
+
+  const sourceDocuments = React.useMemo(() => {
+    if (!selectedSourceThread) return [];
+    return threads[selectedSourceThread]?.documents || [];
+  }, [selectedSourceThread, threads]);
+
+  // Exclude docs already in current thread
+  const availableSourceDocs = React.useMemo(() => {
+    const existingIds = new Set(documents.map((d: any) => d.docId));
+    return sourceDocuments.filter((d: any) => !existingIds.has(d.docId));
+  }, [sourceDocuments, documents]);
+
+  const handleAddExisting = async (docId: string) => {
+    if (!threadId || !selectedSourceThread || addingDocId) return;
+    setAddingDocId(docId);
+    try {
+      await api.addExistingDocument(threadId, selectedSourceThread, docId);
+      toast.success('Document added to thread');
+      await refreshUser();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to add document');
+    } finally {
+      setAddingDocId(null);
+    }
+  };
 
   const openAfterRefresh = async (setter: (v: boolean) => void) => {
     try {
@@ -328,6 +365,76 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                   </div>
                 )}
             </div>
+            {/* Import from Another Thread */}
+            {otherThreads.length > 0 && (
+              <div className="mt-3 border-t pt-3">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setSelectedSourceThread('');
+                    setImportOpen(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-2" /> Import from Another Thread
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Document Dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Import Document from Another Thread</DialogTitle>
+            <DialogDescription>
+              Select a thread and choose a document to add without re-processing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <Select value={selectedSourceThread} onValueChange={setSelectedSourceThread}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select source thread..." />
+              </SelectTrigger>
+              <SelectContent>
+                {otherThreads.map(([id, t]) => (
+                  <SelectItem key={id} value={id}>
+                    {t.thread_name} ({t.documents.length} docs)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {selectedSourceThread && (
+              <div className="h-48 border rounded-md p-2 overflow-y-auto space-y-2">
+                {availableSourceDocs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground p-2">
+                    {sourceDocuments.length > 0
+                      ? 'All documents from this thread already exist here.'
+                      : 'No documents in this thread.'}
+                  </p>
+                ) : (
+                  availableSourceDocs.map((d: any) => (
+                    <div key={d.docId} className="flex items-center gap-2 p-2 rounded hover:bg-accent/60">
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div className="font-medium truncate text-sm" title={d.title}>{d.title}</div>
+                        <div className="text-xs text-muted-foreground">{d.type}</div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleAddExisting(d.docId)}
+                        disabled={addingDocId === d.docId}
+                      >
+                        {addingDocId === d.docId ? 'Adding...' : 'Add'}
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

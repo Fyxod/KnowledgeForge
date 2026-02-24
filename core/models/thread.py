@@ -41,3 +41,8 @@ class InstructionUpdateRequest(BaseModel):
 class InstructionBulkSelectRequest(BaseModel):
     instruction_ids: List[str]
     selected: bool
+
+
+class AddExistingDocumentRequest(BaseModel):
+    source_thread_id: str
+    doc_id: str

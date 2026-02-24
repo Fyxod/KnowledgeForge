@@ -223,12 +223,17 @@ def search_bm25(user_id: str, thread_id: str, query: str, top_k: int = 20):
 
 
 async def delete_document_from_chroma(user_id: str, thread_id: str, document_id: str):
-    """Delete all chunks belonging to a document from the ChromaDB collection."""
+    """Delete all chunks belonging to a document in a specific thread from ChromaDB."""
     vectorstore = await asyncio.to_thread(get_vectorstore, user_id, thread_id)
     try:
         await asyncio.to_thread(
             vectorstore._collection.delete,
-            where={"document_id": document_id},
+            where={
+                "$and": [
+                    {"document_id": document_id},
+                    {"thread_id": thread_id},
+                ]
+            },
         )
         print(f"Deleted ChromaDB chunks for document {document_id} in thread {thread_id}")
     except Exception as e:
@@ -344,3 +349,86 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     raise
 
     print(f"Saved {len(chunk_data)} chunks to Chroma for user {user_id}")
+
+
+async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
+    """
+    Add an already-parsed document to a thread's vector/BM25 stores.
+    Skips OCR/parsing entirely — only re-chunks, re-embeds, and indexes.
+
+    Uses thread-prefixed chunk IDs to avoid collisions when the same document
+    exists in multiple threads within the same user's ChromaDB collection.
+    """
+    start_time = time.time()
+    vectorstore = await asyncio.to_thread(get_vectorstore, user_id, thread_id)
+
+    chunk_data = []
+    for page in doc.content:
+        chunks = await asyncio.to_thread(chunk_page_text, page.text)
+        for i, chunk in enumerate(chunks):
+            # Thread-prefixed ID prevents collision with same doc in other threads
+            chunk_id = f"{thread_id}_{doc.id}_page{page.number}_chunk{i}"
+            enriched_chunk = f"Document: {doc.title}\nPage {page.number}\n\n{chunk}"
+            metadata = {
+                "user_id": user_id,
+                "thread_id": thread_id,
+                "document_id": doc.id,
+                "page_no": page.number,
+                "chunk_index": i,
+                "file_name": doc.file_name,
+                "title": doc.title,
+            }
+            chunk_data.append((chunk_id, enriched_chunk, metadata))
+
+    if not chunk_data:
+        print(f"No chunks to store for document {doc.id} in thread {thread_id}")
+        return
+
+    print(f"Adding {len(chunk_data)} chunks for doc {doc.id} to thread {thread_id}")
+
+    # Merge with existing BM25 data (BM25 is per-thread, rebuild includes all docs)
+    existing_bm25 = load_bm25(user_id, thread_id)
+    if existing_bm25:
+        existing_chunks = list(zip(
+            existing_bm25["chunk_ids"],
+            existing_bm25["chunk_texts"],
+            existing_bm25["chunk_metadatas"],
+        ))
+        all_bm25_chunks = existing_chunks + chunk_data
+    else:
+        all_bm25_chunks = chunk_data
+
+    await asyncio.to_thread(_build_and_save_bm25, all_bm25_chunks, user_id, thread_id)
+
+    # Batch embed and upsert to ChromaDB
+    batch_size = 5000
+    total_batches = math.ceil(len(chunk_data) / batch_size)
+
+    for batch_idx in range(total_batches):
+        batch = chunk_data[batch_idx * batch_size : (batch_idx + 1) * batch_size]
+        batch_ids, batch_texts, batch_metadatas = zip(*batch)
+
+        embeddings = await asyncio.to_thread(
+            vectorstore.embeddings.embed_documents, list(batch_texts)
+        )
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                await asyncio.to_thread(
+                    vectorstore._collection.upsert,
+                    embeddings=embeddings,
+                    documents=list(batch_texts),
+                    metadatas=list(batch_metadatas),
+                    ids=list(batch_ids),
+                )
+                break
+            except Exception as e:
+                if "locked" in str(e).lower() and attempt < max_retries - 1:
+                    wait = 2 ** attempt
+                    await asyncio.sleep(wait)
+                else:
+                    raise
+
+    elapsed = time.time() - start_time
+    print(f"Added {len(chunk_data)} chunks for doc {doc.id} to thread {thread_id} in {elapsed:.2f}s")

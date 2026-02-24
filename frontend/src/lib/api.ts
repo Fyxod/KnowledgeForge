@@ -76,6 +76,13 @@ export interface DeleteDocumentResponse {
   documents: Document[];
 }
 
+export interface AddExistingDocumentResponse {
+  status: string;
+  message: string;
+  thread_id: string;
+  document: Document;
+}
+
 export interface LoginResponse {
   status: string;
   message: string;
@@ -750,6 +757,34 @@ export const api = {
     }
 
     return response.json();
+  },
+
+  async addExistingDocument(
+    targetThreadId: string,
+    sourceThreadId: string,
+    docId: string,
+  ): Promise<AddExistingDocumentResponse> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/thread/${targetThreadId}/documents/add-existing`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          source_thread_id: sourceThreadId,
+          doc_id: docId,
+        }),
+      },
+    );
+
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || data.detail || 'Failed to add document');
+    }
+    return data;
   },
 
   async updateThread(threadId: string, data: { thread_name: string }): Promise<{ status: string; message: string; thread_id: string; thread_name: string }> {
