@@ -11,13 +11,20 @@ Follows the project's async httpx pattern (see core/llm/unload_ollama_model.py).
 import asyncio
 import httpx
 import base64
+import io
 import time
 import traceback
+
+from PIL import Image
 
 from core.config import settings
 from core.constants import PORT1, VLM_MODEL
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
+
+# Max image dimension (pixels) for VLM input — smaller images process faster and more reliably on 8B VLMs
+VLM_MAX_IMAGE_DIM = 1280
+VLM_RETRY_IMAGE_DIM = 800  # Even smaller for retry attempts
 
 # Prompt tuned for slide/document extraction
 VLM_EXTRACTION_PROMPT = (
@@ -32,16 +39,43 @@ VLM_EXTRACTION_PROMPT = (
     "- Output ONLY the extracted Markdown. No filler text like 'Here is the content'."
 )
 
+# Simpler prompt for retry — less instruction overhead helps smaller VLMs focus
+VLM_RETRY_PROMPT = (
+    "Extract all text content from this image. "
+    "Include titles, bullet points, table data, and any text visible in charts or diagrams. "
+    "Output as Markdown. No filler text."
+)
 
-def _encode_image_base64(image_input) -> str:
-    """Encode an image file path or raw bytes to a base64 string."""
+
+def _resize_image(image_bytes: bytes, max_dim: int) -> bytes:
+    """Resize image so its longest side is at most max_dim pixels. Returns PNG bytes."""
+    img = Image.open(io.BytesIO(image_bytes))
+    w, h = img.size
+    if max(w, h) <= max_dim:
+        return image_bytes  # Already small enough
+
+    scale = max_dim / max(w, h)
+    new_w, new_h = int(w * scale), int(h * scale)
+    img = img.resize((new_w, new_h), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    print(f"[VLM] Resized image {w}x{h} → {new_w}x{new_h} (max_dim={max_dim})")
+    return buf.getvalue()
+
+
+def _encode_image_base64(image_input, max_dim: int = VLM_MAX_IMAGE_DIM) -> str:
+    """Encode an image file path or raw bytes to a base64 string, resizing if needed."""
     if isinstance(image_input, str):
         with open(image_input, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
+            raw = f.read()
     elif isinstance(image_input, bytes):
-        return base64.b64encode(image_input).decode("utf-8")
+        raw = image_input
     else:
         raise TypeError(f"Expected str (path) or bytes, got {type(image_input)}")
+
+    resized = _resize_image(raw, max_dim)
+    return base64.b64encode(resized).decode("utf-8")
 
 
 async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
@@ -76,7 +110,7 @@ async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
 
         print(f"[VLM] Sending page to Ollama ({VLM_MODEL}) on port {port}...")
 
-        async with httpx.AsyncClient(timeout=120) as client:  # Reduced from 240s: if >2min, fall back to OCR
+        async with httpx.AsyncClient(timeout=240) as client:  # 4 min timeout for complex visual pages
             response = await client.post(url, json=payload)
             response.raise_for_status()
 
@@ -95,7 +129,7 @@ async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
         )
         return ""
     except httpx.TimeoutException:
-        print(f"[VLM] Request timed out after 120s for model {VLM_MODEL}.")
+        print(f"[VLM] Request timed out after 240s for model {VLM_MODEL}.")
         return ""
     except httpx.HTTPStatusError as e:
         print(f"[VLM] HTTP error: {e}")

@@ -171,10 +171,7 @@ def rerank_chunks(
             selected_indices.add(best_idx)
             reranked_chunks.append(chunks[best_idx])
 
-    # Step 3: Filter out clearly irrelevant chunks (relevance score threshold)
-    reranked_chunks = [c for c in reranked_chunks if c.get("relevance_score", 0) >= 0.01]
-
-    print(f"Re-ranking complete. Selected {len(reranked_chunks)} chunks (after relevance threshold).")
+    print(f"Re-ranking complete. Selected {len(reranked_chunks)} chunks.")
 
     # Step 4: Log document diversity
     doc_counts = {}

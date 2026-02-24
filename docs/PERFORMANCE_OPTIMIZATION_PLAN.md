@@ -114,7 +114,7 @@ NOT a code change — needs evaluation. PaddleOCR PP-OCRv4 is 10-30x faster than
 
 Changes:
 - `num_predict`: 4096 → 2048 (most slide content fits in 1000-1500 tokens)
-- `timeout`: 240s → 120s (fall back to OCR for stuck pages)
+- `timeout`: Kept at 240s (120s was tested but caused too many empty page results on visually dense slides)
 - Keep `max_concurrent=3` (VRAM-limited)
 
 **Quality impact:** Minimal — slides rarely produce >2048 output tokens.
@@ -251,7 +251,7 @@ With JSON sanitizer + json_repair already implemented, most parse errors recover
 
 Changes:
 - `MAX_TOTAL_CHUNKS`: 100 → 50
-- Add relevance score threshold after cross-encoder reranking (drop chunks < 0.01)
+- ~~Relevance score threshold (>= 0.01)~~: **Removed** — cross-encoder outputs raw logits (range -11 to +11), not probabilities. A 0.01 cutoff rejected nearly all chunks. The MMR + top-k selection already ensures quality.
 
 **Expected impact:** 20-40% reduction in generation time for multi-document queries.
 
