@@ -18,6 +18,7 @@ import {
   Rocket,
   RefreshCcw,
   AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react';
 import { Document, InsightsLLMOutput, api } from '@/lib/api';
 import { downloadInsightsPdf } from '@/lib/insights-pdf';
@@ -208,16 +209,19 @@ const InsightsRenderer: React.FC<{ insights: InsightsLLMOutput }> = ({ insights 
 
 const ALL_DOCS_ID = '__ALL_DOCS__';
 
+const MAX_POLL_COUNT = 60; // 60 × 5 s = 5 min client-side timeout
+
 const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [insights, setInsights] = useState<InsightsLLMOutput | null>(null);
-  const [view, setView] = useState<'select' | 'progress' | 'display'>('select');
+  const [view, setView] = useState<'select' | 'progress' | 'display' | 'error'>('select');
   const [progressMessages, setProgressMessages] = useState<string[]>([]);
   const pollingActiveRef = useRef<boolean>(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPolledDocRef = useRef<string | null>(null);
+  const pollCountRef = useRef<number>(0);
 
   const handleToggle = (docId: string) => {
     setSelectedDoc(prev => (prev === docId ? null : docId));
@@ -245,6 +249,12 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
           timeoutRef.current = null;
         }
         setView('display');
+      } else if (res?.failed) {
+        pollingActiveRef.current = false;
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+        setMessage(res.error || 'Generation failed');
+        toast.error(res.error || 'Generation failed');
+        setView('error');
       } else if (res?.status === false && res.message) {
         setMessage(res.message);
         setProgressMessages((msgs) => (msgs[msgs.length - 1] === res.message ? msgs : [...msgs, res.message!]));
@@ -252,6 +262,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
         setView('progress');
         lastPolledDocRef.current = selectedDoc;
         pollingActiveRef.current = true;
+        pollCountRef.current = 0;
         schedulePoll();
       } else if (res?.error) {
         toast.error(res.error);
@@ -261,6 +272,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
         setView('progress');
         lastPolledDocRef.current = selectedDoc;
         pollingActiveRef.current = true;
+        pollCountRef.current = 0;
         schedulePoll();
       }
     } catch (e) {
@@ -281,6 +293,13 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
       const docId = lastPolledDocRef.current;
       if (!docId) return;
       try {
+        pollCountRef.current += 1;
+        if (pollCountRef.current >= MAX_POLL_COUNT) {
+          pollingActiveRef.current = false;
+          setMessage('Generation timed out. Please try again.');
+          setView('error');
+          return;
+        }
         const isAll = docId === ALL_DOCS_ID;
         const res = isAll ? await api.insightsGlobal(threadId) : await api.insights(threadId, docId);
         if (res?.status && res.insights) {
@@ -288,6 +307,12 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
           setMessage(null);
           pollingActiveRef.current = false;
           setView('display');
+          return;
+        }
+        if (res?.failed) {
+          pollingActiveRef.current = false;
+          setMessage(res.error || 'Generation failed');
+          setView('error');
           return;
         }
         if (res?.message) {
@@ -316,6 +341,7 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
         timeoutRef.current = null;
       }
       lastPolledDocRef.current = null;
+      pollCountRef.current = 0;
     }
     onOpenChange(open);
   };
@@ -478,6 +504,26 @@ const InsightsModal: React.FC<Props> = ({ open, onOpenChange, threadId, document
                 }}
               >
                 Back to documents
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {view === 'error' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <ShieldAlert className="w-6 h-6 text-destructive" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Generation Failed</h3>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{message || 'An unexpected error occurred.'}</p>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <Button variant="outline" onClick={() => { setView('select'); setMessage(null); setProgressMessages([]); setSelectedDoc(null); }}>
+                Back to documents
+              </Button>
+              <Button onClick={() => requestInsights(true)} disabled={loading}>
+                {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Retrying...</> : <><RefreshCcw className="w-4 h-4 mr-2" />Retry</>}
               </Button>
             </div>
           </div>

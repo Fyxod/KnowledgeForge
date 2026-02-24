@@ -160,6 +160,7 @@ export interface SummaryResponse {
   summary?: string;
   message?: string;
   error?: string;
+  failed?: boolean;
 }
 
 // Roadmap types (mirror backend Pydantic models)
@@ -232,6 +233,7 @@ export interface StrategicRoadmapResponse {
   strategic_roadmap?: StrategicRoadmapLLMOutput;
   message?: string;
   error?: string;
+  failed?: boolean;
 }
 
 // Technical Roadmap types (mirror backend Pydantic models provided)
@@ -314,6 +316,7 @@ export interface TechnicalRoadmapResponse {
   technical_roadmap?: TechnicalRoadmapLLMOutput;
   message?: string;
   error?: string;
+  failed?: boolean;
 }
 
 // Insights types (mirror backend Pydantic models)
@@ -370,6 +373,7 @@ export interface InsightsResponse {
   insights?: InsightsLLMOutput;
   message?: string;
   error?: string;
+  failed?: boolean;
 }
 
 // Strategic Analysis types (mirror backend Pydantic models)
@@ -435,6 +439,7 @@ export interface StrategicAnalysisResponse {
   strategic_analysis?: StrategicAnalysisLLMOutput;
   message?: string;
   error?: string;
+  failed?: boolean;
 }
 
 // Technical Analysis types (mirror backend Pydantic models)
@@ -505,6 +510,7 @@ export interface TechnicalAnalysisResponse {
   technical_analysis?: TechnicalAnalysisLLMOutput;
   message?: string;
   error?: string;
+  failed?: boolean;
 }
 
 // Auth helpers

@@ -8,6 +8,12 @@ from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
 from core.studio_features.technical_roadmap import generate_technical_roadmap
+from core.utils.generation_status import (
+    write_pending_status,
+    write_failed_status,
+    write_result,
+    read_generation_status,
+)
 
 router = APIRouter(prefix="", tags=["extra"])
 
@@ -76,55 +82,21 @@ async def get_technical_roadmap(
             doc = Document.model_validate(document_data)
             result = await generate_technical_roadmap(doc)
             # Persist the technical roadmap output
-            async with aiofiles.open(roadmap_path, "w", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
-                )
+            await write_result(roadmap_path, result.model_dump())
         except Exception as e:
-            # Clean up the lock file so the next poll triggers a retry
-            if os.path.exists(roadmap_path):
-                try:
-                    os.remove(roadmap_path)
-                except Exception:
-                    pass
+            await write_failed_status(roadmap_path, str(e))
             print(f"Error generating technical roadmap: {e}")
 
     # If regenerating, remove existing file so a fresh generation is triggered
     if regenerate and os.path.exists(roadmap_path):
         os.remove(roadmap_path)
 
-    # If roadmap file already exists, inspect its contents
+    # If roadmap file already exists, inspect its status
     if os.path.exists(roadmap_path):
-        try:
-            async with aiofiles.open(roadmap_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-            if not content.strip():
-                # File exists but is empty => generation in progress
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Technical Roadmap for {document_data.get('title', 'Untitled')}",
-                    },
-                )
-            # Non-empty: try to parse and return
-            try:
-                data = json.loads(content)
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={"status": True, "technical_roadmap": data},
-                )
-            except json.JSONDecodeError:
-                # Treat invalid JSON as still generating
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Technical Roadmap for {document_data.get('title', 'Untitled')}",
-                    },
-                )
-        except Exception:
-            # On read errors, fall back to treating as generating
+        gen_status = await read_generation_status(roadmap_path)
+        if gen_status is None:
+            pass  # fall through to create pending
+        elif gen_status["state"] == "pending":
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -132,14 +104,23 @@ async def get_technical_roadmap(
                     "message": f"Generating Technical Roadmap for {document_data.get('title', 'Untitled')}",
                 },
             )
+        elif gen_status["state"] == "failed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": False,
+                    "error": gen_status["error"],
+                    "failed": True,
+                },
+            )
+        elif gen_status["state"] == "completed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"status": True, "technical_roadmap": gen_status["data"]},
+            )
 
-    # File does not exist: create it empty (acts as a lock) and kick off generation
-    try:
-        async with aiofiles.open(roadmap_path, "w", encoding="utf-8") as f:
-            await f.write("")
-    except Exception:
-        # If file creation fails, still proceed to schedule generation
-        pass
+    # Write pending status and kick off generation
+    await write_pending_status(roadmap_path)
 
     # Schedule background generation without blocking the response
     asyncio.create_task(_generate_and_write())
@@ -205,55 +186,21 @@ async def technical_roadmap_global(
         try:
             # Pass a list[Document] to the generator
             result = await generate_technical_roadmap(documents)
-            async with aiofiles.open(roadmap_path, "w", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
-                )
+            await write_result(roadmap_path, result.model_dump())
         except Exception as e:
-            # Clean up lock file to allow retry
-            if os.path.exists(roadmap_path):
-                try:
-                    os.remove(roadmap_path)
-                except Exception:
-                    pass
+            await write_failed_status(roadmap_path, str(e))
             print(f"Error generating global technical roadmap: {e}")
 
     # If regenerating, remove existing file so a fresh generation is triggered
     if regenerate and os.path.exists(roadmap_path):
         os.remove(roadmap_path)
 
-    # If roadmap file already exists, inspect its contents
+    # If roadmap file already exists, inspect its status
     if os.path.exists(roadmap_path):
-        try:
-            async with aiofiles.open(roadmap_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-            if not content.strip():
-                # File exists but is empty => generation in progress
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Global Technical Roadmap for thread {thread_id}",
-                    },
-                )
-            # Non-empty: try to parse and return
-            try:
-                data = json.loads(content)
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={"status": True, "technical_roadmap": data},
-                )
-            except json.JSONDecodeError:
-                # Treat invalid JSON as still generating
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Global Technical Roadmap for thread {thread_id}",
-                    },
-                )
-        except Exception:
-            # On read errors, fall back to treating as generating
+        gen_status = await read_generation_status(roadmap_path)
+        if gen_status is None:
+            pass  # fall through to create pending
+        elif gen_status["state"] == "pending":
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -261,14 +208,23 @@ async def technical_roadmap_global(
                     "message": f"Generating Global Technical Roadmap for thread {thread_id}",
                 },
             )
+        elif gen_status["state"] == "failed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": False,
+                    "error": gen_status["error"],
+                    "failed": True,
+                },
+            )
+        elif gen_status["state"] == "completed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"status": True, "technical_roadmap": gen_status["data"]},
+            )
 
-    # File does not exist: create it empty (acts as a lock) and kick off generation
-    try:
-        async with aiofiles.open(roadmap_path, "w", encoding="utf-8") as f:
-            await f.write("")
-    except Exception:
-        # If file creation fails, still proceed to schedule generation
-        pass
+    # Write pending status and kick off generation
+    await write_pending_status(roadmap_path)
 
     # Schedule background generation without blocking the response
     asyncio.create_task(_generate_and_write_global())

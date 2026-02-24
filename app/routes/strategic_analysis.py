@@ -9,6 +9,12 @@ from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
 from core.studio_features.strategic_analysis import generate_strategic_analysis
+from core.utils.generation_status import (
+    write_pending_status,
+    write_failed_status,
+    write_result,
+    read_generation_status,
+)
 
 router = APIRouter(prefix="", tags=["extra"])
 
@@ -69,9 +75,7 @@ async def get_strategic_analysis(
     # Prepare strategic analysis file path
     analysis_dir = f"data/{user_id}/threads/{thread_id}/strategic_analyses"
     os.makedirs(analysis_dir, exist_ok=True)
-    analysis_path = os.path.join(
-        analysis_dir, f"strategic_analysis_{document_id}.json"
-    )
+    analysis_path = os.path.join(analysis_dir, f"strategic_analysis_{document_id}.json")
 
     # Helper to schedule generation and respond with progress
     async def _generate_and_write():
@@ -79,65 +83,22 @@ async def get_strategic_analysis(
             doc = Document.model_validate(document_data)
             result = await generate_strategic_analysis(doc)
             # Persist the strategic analysis output
-            async with aiofiles.open(analysis_path, "w", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
-                )
+            await write_result(analysis_path, result.model_dump())
         except Exception:
-            # Clean up the lock file so the next poll triggers a retry
-            if os.path.exists(analysis_path):
-                try:
-                    os.remove(analysis_path)
-                except Exception:
-                    pass
             error_details = traceback.format_exc()
-            try:
-                with open(
-                    os.path.join(analysis_dir, "error.txt"), "w"
-                ) as ef:
-                    ef.write(
-                        f"Error in _generate_and_write: {error_details}"
-                    )
-            except Exception:
-                pass
+            await write_failed_status(analysis_path, error_details)
             print(f"Error generating strategic analysis: {error_details}")
 
     # If regenerating, remove existing file so a fresh generation is triggered
     if regenerate and os.path.exists(analysis_path):
         os.remove(analysis_path)
 
-    # If analysis file already exists, inspect its contents
+    # If analysis file already exists, inspect its status
     if os.path.exists(analysis_path):
-        try:
-            async with aiofiles.open(analysis_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-            if not content.strip():
-                # File exists but is empty => generation in progress
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Strategic Analysis for {document_data.get('title', 'Untitled')}",
-                    },
-                )
-            # Non-empty: try to parse and return
-            try:
-                data = json.loads(content)
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={"status": True, "strategic_analysis": data},
-                )
-            except json.JSONDecodeError:
-                # Treat invalid JSON as still generating
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Strategic Analysis for {document_data.get('title', 'Untitled')}",
-                    },
-                )
-        except Exception:
-            # On read errors, fall back to treating as generating
+        gen_status = await read_generation_status(analysis_path)
+        if gen_status is None:
+            pass  # fall through to create pending
+        elif gen_status["state"] == "pending":
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -145,14 +106,23 @@ async def get_strategic_analysis(
                     "message": f"Generating Strategic Analysis for {document_data.get('title', 'Untitled')}",
                 },
             )
+        elif gen_status["state"] == "failed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": False,
+                    "error": gen_status["error"],
+                    "failed": True,
+                },
+            )
+        elif gen_status["state"] == "completed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"status": True, "strategic_analysis": gen_status["data"]},
+            )
 
-    # File does not exist: create it empty (acts as a lock) and kick off generation
-    try:
-        async with aiofiles.open(analysis_path, "w", encoding="utf-8") as f:
-            await f.write("")
-    except Exception:
-        # If file creation fails, still proceed to schedule generation
-        pass
+    # Write pending status and kick off generation
+    await write_pending_status(analysis_path)
 
     # Schedule background generation without blocking the response
     asyncio.create_task(_generate_and_write())
@@ -210,9 +180,7 @@ async def strategic_analysis_global(
                     continue
 
     if not documents:
-        raise HTTPException(
-            status_code=404, detail="No documents found for thread"
-        )
+        raise HTTPException(status_code=404, detail="No documents found for thread")
 
     # Prepare global strategic analysis file path
     analysis_dir = f"data/{user_id}/threads/{thread_id}/strategic_analyses"
@@ -222,62 +190,21 @@ async def strategic_analysis_global(
     async def _generate_and_write_global():
         try:
             result = await generate_strategic_analysis(documents)
-            async with aiofiles.open(analysis_path, "w", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
-                )
+            await write_result(analysis_path, result.model_dump())
         except Exception:
-            # Clean up lock file to allow retry
-            if os.path.exists(analysis_path):
-                try:
-                    os.remove(analysis_path)
-                except Exception:
-                    pass
             error_details = traceback.format_exc()
-            try:
-                with open(
-                    os.path.join(analysis_dir, "error_global.txt"), "w"
-                ) as ef:
-                    ef.write(
-                        f"Error in _generate_and_write_global: {error_details}"
-                    )
-            except Exception:
-                pass
-            print(
-                f"Error generating global strategic analysis: {error_details}"
-            )
+            await write_failed_status(analysis_path, error_details)
+            print(f"Error generating global strategic analysis: {error_details}")
 
     if regenerate and os.path.exists(analysis_path):
         os.remove(analysis_path)
 
-    # If analysis file already exists, inspect its contents
+    # If analysis file already exists, inspect its status
     if os.path.exists(analysis_path):
-        try:
-            async with aiofiles.open(analysis_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-            if not content.strip():
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Global Strategic Analysis for thread {thread_id}",
-                    },
-                )
-            try:
-                data = json.loads(content)
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={"status": True, "strategic_analysis": data},
-                )
-            except json.JSONDecodeError:
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Global Strategic Analysis for thread {thread_id}",
-                    },
-                )
-        except Exception:
+        gen_status = await read_generation_status(analysis_path)
+        if gen_status is None:
+            pass  # fall through to create pending
+        elif gen_status["state"] == "pending":
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -285,13 +212,23 @@ async def strategic_analysis_global(
                     "message": f"Generating Global Strategic Analysis for thread {thread_id}",
                 },
             )
+        elif gen_status["state"] == "failed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": False,
+                    "error": gen_status["error"],
+                    "failed": True,
+                },
+            )
+        elif gen_status["state"] == "completed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"status": True, "strategic_analysis": gen_status["data"]},
+            )
 
-    # File does not exist: create it empty (acts as a lock) and kick off generation
-    try:
-        async with aiofiles.open(analysis_path, "w", encoding="utf-8") as f:
-            await f.write("")
-    except Exception:
-        pass
+    # Write pending status and kick off generation
+    await write_pending_status(analysis_path)
 
     asyncio.create_task(_generate_and_write_global())
 

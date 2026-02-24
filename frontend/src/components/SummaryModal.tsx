@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, RefreshCcw } from 'lucide-react';
+import { Loader2, RefreshCcw, ShieldAlert } from 'lucide-react';
 import { Document, api } from '@/lib/api';
 import { toast } from 'sonner';
 import SafeMarkdownRenderer from './SafeMarkdownRenderer';
@@ -21,18 +21,21 @@ type Props = {
 
 const ALL_DOCS_ID = '__ALL_DOCS__';
 
+const MAX_POLL_COUNT = 60;
+
 const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [progressMessages, setProgressMessages] = useState<string[]>([]);
-  const [view, setView] = useState<'select' | 'progress' | 'display'>('select');
+  const [view, setView] = useState<'select' | 'progress' | 'display' | 'error'>('select');
 
   const pollingActiveRef = useRef<boolean>(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPolledDocRef = useRef<string | null>(null);
   const lastPolledIsRegenerateRef = useRef<boolean>(false);
+  const pollCountRef = useRef<number>(0);
 
   const handleToggle = (docId: string) => {
     setSelectedDoc(prev => (prev === docId ? null : docId));
@@ -62,8 +65,14 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
           timeoutRef.current = null;
         }
         setView('display');
+      } else if (res?.failed) {
+        const err = res.error || 'Generation failed';
+        setMessage(err);
+        toast.error(err);
+        pollingActiveRef.current = false;
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+        setView('error');
       } else if (res?.status === false && res.error) {
-        // We received an error indicating we need to poll (like "Generating...")
         const msg = res.error;
         if (/disable|not enabled/i.test(msg)) {
           toast.info(msg);
@@ -72,10 +81,10 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
           setMessage(msg);
           setProgressMessages((msgs) => (msgs[msgs.length - 1] === msg ? msgs : [...msgs, msg]));
           setView('progress');
-          // Only pass true to regenerate on the very first request
           lastPolledDocRef.current = selectedDoc;
           lastPolledIsRegenerateRef.current = false;
           pollingActiveRef.current = true;
+          pollCountRef.current = 0;
           schedulePoll();
         }
       } else {
@@ -85,6 +94,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
         lastPolledDocRef.current = selectedDoc;
         lastPolledIsRegenerateRef.current = false;
         pollingActiveRef.current = true;
+        pollCountRef.current = 0;
         schedulePoll();
       }
     } catch (e) {
@@ -104,14 +114,28 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
       const docId = lastPolledDocRef.current;
       if (!docId) return;
       try {
+        pollCountRef.current += 1;
+        if (pollCountRef.current >= MAX_POLL_COUNT) {
+          pollingActiveRef.current = false;
+          setMessage('Generation timed out. Please try again.');
+          setView('error');
+          setLoading(false);
+          return;
+        }
         const isAll = docId === ALL_DOCS_ID;
-        // poll with regenerate=false since generation is already scheduled
         const res = isAll ? await api.summaryGlobal(threadId, false) : await api.summary(threadId, docId, false);
         if (res?.status && res.summary) {
           setSummary(res.summary);
           setMessage(null);
           pollingActiveRef.current = false;
           setView('display');
+          setLoading(false);
+          return;
+        }
+        if (res?.failed) {
+          pollingActiveRef.current = false;
+          setMessage(res.error || 'Generation failed');
+          setView('error');
           setLoading(false);
           return;
         }
@@ -141,6 +165,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
         timeoutRef.current = null;
       }
       lastPolledDocRef.current = null;
+      pollCountRef.current = 0;
     }
     onOpenChange(open);
   };
@@ -302,6 +327,26 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
                 }}
               >
                 Back to documents
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {view === 'error' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <ShieldAlert className="w-6 h-6 text-destructive" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Generation Failed</h3>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{message || 'An unexpected error occurred.'}</p>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <Button variant="outline" onClick={() => { pollingActiveRef.current = false; if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; } setView('select'); setProgressMessages([]); setMessage(null); setSelectedDoc(null); setLoading(false); }}>
+                Back to documents
+              </Button>
+              <Button onClick={() => generateSummary(true)} disabled={loading}>
+                {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Retrying...</> : <><RefreshCcw className="w-4 h-4 mr-2" />Retry</>}
               </Button>
             </div>
           </div>

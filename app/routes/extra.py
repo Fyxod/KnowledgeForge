@@ -8,6 +8,12 @@ from core.database import db
 from core.studio_features.word_cloud import generate_word_cloud
 from app.socket_handler import sio
 from core.constants import SWITCHES
+from core.utils.generation_status import (
+    write_pending_status,
+    write_failed_status,
+    write_result,
+    read_generation_status,
+)
 
 router = APIRouter(prefix="", tags=["extra"])
 
@@ -200,12 +206,17 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                 data = json.loads(content)
                 if isinstance(data, dict) and data.get("id") == document_id:
                     if regenerate:
-                        from core.studio_features.summarizer import process_document_with_chunks
+                        from core.studio_features.summarizer import (
+                            process_document_with_chunks,
+                        )
                         from core.models.document import Document
-                        
-                        # Clear existing summary to lock the UI
+
+                        # Mark summary as regenerating with a status marker
                         data["summary"] = ""
-                        async with aiofiles.open(file_path, "w", encoding="utf-8") as write_f:
+                        data["_summary_status"] = "pending"
+                        async with aiofiles.open(
+                            file_path, "w", encoding="utf-8"
+                        ) as write_f:
                             await write_f.write(json.dumps(data, ensure_ascii=False))
 
                         async def _regenerate_summary():
@@ -213,21 +224,70 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                                 doc = Document.model_validate(data)
                                 await process_document_with_chunks(doc)
                                 # load latest state to avoid race condition
-                                async with aiofiles.open(file_path, "r", encoding="utf-8") as reread_f:
+                                async with aiofiles.open(
+                                    file_path, "r", encoding="utf-8"
+                                ) as reread_f:
                                     reread_content = await reread_f.read()
                                 reread_data = json.loads(reread_content)
                                 reread_data["summary"] = doc.summary or ""
-                                async with aiofiles.open(file_path, "w", encoding="utf-8") as resave_f:
-                                    await resave_f.write(json.dumps(reread_data, ensure_ascii=False))
+                                reread_data.pop("_summary_status", None)
+                                async with aiofiles.open(
+                                    file_path, "w", encoding="utf-8"
+                                ) as resave_f:
+                                    await resave_f.write(
+                                        json.dumps(reread_data, ensure_ascii=False)
+                                    )
                             except Exception as e:
+                                # Mark as failed instead of leaving empty
+                                try:
+                                    async with aiofiles.open(
+                                        file_path, "r", encoding="utf-8"
+                                    ) as err_f:
+                                        err_content = await err_f.read()
+                                    err_data = json.loads(err_content)
+                                    err_data["_summary_status"] = "failed"
+                                    err_data["_summary_error"] = str(e)
+                                    async with aiofiles.open(
+                                        file_path, "w", encoding="utf-8"
+                                    ) as err_wf:
+                                        await err_wf.write(
+                                            json.dumps(err_data, ensure_ascii=False)
+                                        )
+                                except Exception:
+                                    pass
                                 print(f"Failed regenerating individual summary: {e}")
 
                         asyncio.create_task(_regenerate_summary())
-                        return {"status": False, "error": "Summary not yet generated. Generating..."}
+                        return {
+                            "status": False,
+                            "error": "Summary not yet generated. Generating...",
+                        }
+
+                    # Check if summary generation failed
+                    if data.get("_summary_status") == "failed":
+                        return {
+                            "status": False,
+                            "error": data.get(
+                                "_summary_error", "Summary generation failed"
+                            ),
+                            "failed": True,
+                        }
+
+                    # Check if summary is being generated (pending)
+                    if data.get("_summary_status") == "pending" or (
+                        not data.get("summary") and data.get("summary") == ""
+                    ):
+                        return {
+                            "status": False,
+                            "error": "Summary not yet generated. Generating...",
+                        }
 
                     if not data.get("summary"):
-                        return {"status": False, "error": "Summary not yet generated. Generating..."}
-                    
+                        return {
+                            "status": False,
+                            "error": "Summary not yet generated. Generating...",
+                        }
+
                     return {"status": True, "summary": data.get("summary")}
             except Exception as e:
                 continue
@@ -266,14 +326,11 @@ async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body
         os.remove(file_path)
 
     if not os.path.exists(file_path):
-        # Create empty lock file to prevent duplicate tasks from subsequent polls
-        try:
-            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                await f.write("")
-        except Exception:
-            pass
+        # Write pending status to prevent duplicate tasks from subsequent polls
+        await write_pending_status(file_path)
 
         from core.studio_features.summarizer import global_summarizer
+
         asyncio.create_task(global_summarizer(user_id, thread_id))
 
         return {
@@ -281,21 +338,29 @@ async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body
             "error": "Global Summary not yet generated. Generating...",
         }
 
-    try:
-        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-            content = await f.read()
-        data = json.loads(content)
-
+    gen_status = await read_generation_status(file_path)
+    if gen_status is None:
+        return {
+            "status": False,
+            "error": "Global Summary not yet generated. Generating...",
+        }
+    elif gen_status["state"] == "pending":
+        return {
+            "status": False,
+            "error": "Global Summary not yet generated. Generating...",
+        }
+    elif gen_status["state"] == "failed":
+        return {
+            "status": False,
+            "error": gen_status["error"],
+            "failed": True,
+        }
+    elif gen_status["state"] == "completed":
+        data = gen_status["data"]
         if isinstance(data, dict):
             if "error" in data:
-                try:
-                    os.remove(file_path)
-                except Exception:
-                    pass
-                return {"status": False, "error": data["error"]}
+                return {"status": False, "error": data["error"], "failed": True}
             return {"status": True, "summary": data.get("summary")}
-    except Exception:
-        pass
 
     return {
         "status": False,

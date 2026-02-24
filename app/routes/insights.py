@@ -8,6 +8,12 @@ from pydantic import BaseModel
 from core.database import db
 from core.models.document import Document
 from core.studio_features.insights import generate_insights
+from core.utils.generation_status import (
+    write_pending_status,
+    write_failed_status,
+    write_result,
+    read_generation_status,
+)
 
 router = APIRouter(prefix="", tags=["extra"])
 
@@ -74,53 +80,20 @@ async def get_insights(request: Request, body: InsightsRequest = Body(...)):
             doc = Document.model_validate(document_data)
             result = await generate_insights(doc)
             # Persist the insights output
-            async with aiofiles.open(insights_path, "w", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
-                )
+            await write_result(insights_path, result.model_dump())
         except Exception as e:
-            if os.path.exists(insights_path):
-                try:
-                    os.remove(insights_path)
-                except Exception:
-                    pass
+            await write_failed_status(insights_path, str(e))
             print(f"Insights generation failed: {e}")
 
     if regenerate and os.path.exists(insights_path):
         os.remove(insights_path)
 
-    # If insights file already exists, inspect its contents
+    # If insights file already exists, inspect its status
     if os.path.exists(insights_path):
-        try:
-            async with aiofiles.open(insights_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-            if not content.strip():
-                # File exists but is empty => generation in progress
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Insights for {document_data.get('title', 'Untitled')}",
-                    },
-                )
-            # Non-empty: try to parse and return
-            try:
-                data = json.loads(content)
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={"status": True, "insights": data},
-                )
-            except json.JSONDecodeError:
-                # Treat invalid JSON as still generating
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Insights for {document_data.get('title', 'Untitled')}",
-                    },
-                )
-        except Exception:
-            # On read errors, fall back to treating as generating
+        gen_status = await read_generation_status(insights_path)
+        if gen_status is None:
+            pass  # fall through to create pending
+        elif gen_status["state"] == "pending":
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -128,14 +101,23 @@ async def get_insights(request: Request, body: InsightsRequest = Body(...)):
                     "message": f"Generating Insights for {document_data.get('title', 'Untitled')}",
                 },
             )
+        elif gen_status["state"] == "failed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": False,
+                    "error": gen_status["error"],
+                    "failed": True,
+                },
+            )
+        elif gen_status["state"] == "completed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"status": True, "insights": gen_status["data"]},
+            )
 
-    # File does not exist: create it empty (acts as a lock) and kick off generation
-    try:
-        async with aiofiles.open(insights_path, "w", encoding="utf-8") as f:
-            await f.write("")
-    except Exception:
-        # If file creation fails, still proceed to schedule generation
-        pass
+    # Write pending status and kick off generation
+    await write_pending_status(insights_path)
 
     # Schedule background generation without blocking the response
     asyncio.create_task(_generate_and_write())
@@ -200,53 +182,20 @@ async def insights_global(request: Request, body: InsightsGlobalRequest = Body(.
         try:
             result = await generate_insights(documents)
             # Persist the insights output
-            async with aiofiles.open(insights_path, "w", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps(result.model_dump(), ensure_ascii=False, indent=2)
-                )
+            await write_result(insights_path, result.model_dump())
         except Exception as e:
-            if os.path.exists(insights_path):
-                try:
-                    os.remove(insights_path)
-                except Exception:
-                    pass
+            await write_failed_status(insights_path, str(e))
             print("Global insights generation failed:", e)
 
     if regenerate and os.path.exists(insights_path):
         os.remove(insights_path)
 
-    # If insights file already exists, inspect its contents
+    # If insights file already exists, inspect its status
     if os.path.exists(insights_path):
-        try:
-            async with aiofiles.open(insights_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-            if not content.strip():
-                # File exists but is empty => generation in progress
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Global Insights for thread {thread_id}",
-                    },
-                )
-            # Non-empty: try to parse and return
-            try:
-                data = json.loads(content)
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={"status": True, "insights": data},
-                )
-            except json.JSONDecodeError:
-                # Treat invalid JSON as still generating
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "status": False,
-                        "message": f"Generating Global Insights for thread {thread_id}",
-                    },
-                )
-        except Exception:
-            # On read errors, fall back to treating as generating
+        gen_status = await read_generation_status(insights_path)
+        if gen_status is None:
+            pass  # fall through to create pending
+        elif gen_status["state"] == "pending":
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -254,14 +203,23 @@ async def insights_global(request: Request, body: InsightsGlobalRequest = Body(.
                     "message": f"Generating Global Insights for thread {thread_id}",
                 },
             )
+        elif gen_status["state"] == "failed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "status": False,
+                    "error": gen_status["error"],
+                    "failed": True,
+                },
+            )
+        elif gen_status["state"] == "completed":
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"status": True, "insights": gen_status["data"]},
+            )
 
-    # File does not exist: create it empty (acts as a lock) and kick off generation
-    try:
-        async with aiofiles.open(insights_path, "w", encoding="utf-8") as f:
-            await f.write("")
-    except Exception:
-        # If file creation fails, still proceed to schedule generation
-        pass
+    # Write pending status and kick off generation
+    await write_pending_status(insights_path)
 
     # Schedule background generation without blocking the response
     asyncio.create_task(_generate_and_write_global())

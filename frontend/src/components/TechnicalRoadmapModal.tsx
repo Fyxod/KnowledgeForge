@@ -163,6 +163,8 @@ const TechnicalRoadmapRenderer: React.FC<{ roadmap: TechnicalRoadmapLLMOutput }>
 
 const ALL_DOCS_ID = '__ALL_DOCS__';
 
+const MAX_POLL_COUNT = 60;
+
 const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -173,6 +175,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
   const pollingActiveRef = useRef<boolean>(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPolledDocRef = useRef<string | null>(null);
+  const pollCountRef = useRef<number>(0);
 
   const handleToggle = (docId: string) => {
     setSelectedDoc(prev => (prev === docId ? null : docId));
@@ -200,8 +203,15 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
           timeoutRef.current = null;
         }
         setView('display');
+      } else if (res?.failed) {
+        const err = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
+        setMessage(err || 'Generation failed');
+        setProgressMessages([]);
+        toast.error(err || 'Generation failed');
+        pollingActiveRef.current = false;
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+        setView('error');
       } else if (res?.error) {
-        // Backend returned an explicit error
         const err = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
         setMessage(err);
         setProgressMessages([]);
@@ -219,6 +229,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
         setView('progress');
         lastPolledDocRef.current = selectedDoc;
         pollingActiveRef.current = true;
+        pollCountRef.current = 0;
         schedulePoll();
       } else {
         setMessage('Generating technical roadmap...');
@@ -226,6 +237,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
         setView('progress');
         lastPolledDocRef.current = selectedDoc;
         pollingActiveRef.current = true;
+        pollCountRef.current = 0;
         schedulePoll();
       }
     } catch (e) {
@@ -246,6 +258,13 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
       const docId = lastPolledDocRef.current;
       if (!docId) return;
       try {
+        pollCountRef.current += 1;
+        if (pollCountRef.current >= MAX_POLL_COUNT) {
+          pollingActiveRef.current = false;
+          setMessage('Generation timed out. Please try again.');
+          setView('error');
+          return;
+        }
         const isAll = docId === ALL_DOCS_ID;
         const res = isAll ? await api.technicalRoadmapGlobal(threadId) : await api.technicalRoadmap(threadId, docId);
         if (res?.status && res.technical_roadmap) {
@@ -253,6 +272,13 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
           setMessage(null);
           pollingActiveRef.current = false;
           setView('display');
+          return;
+        }
+        if (res?.failed) {
+          const err = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
+          pollingActiveRef.current = false;
+          setMessage(err || 'Generation failed');
+          setView('error');
           return;
         }
         if (res?.error) {
@@ -290,6 +316,7 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
         timeoutRef.current = null;
       }
       lastPolledDocRef.current = null;
+      pollCountRef.current = 0;
     }
     onOpenChange(open);
   };
@@ -394,21 +421,19 @@ const TechnicalRoadmapModal: React.FC<Props> = ({ open, onOpenChange, threadId, 
 
         {view === 'error' && (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
-            <div className="text-rose-600 font-semibold">An error occurred</div>
-            <div className="max-w-xl">
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{message || 'Unknown error'}</p>
+            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <ShieldAlert className="w-6 h-6 text-destructive" />
             </div>
-            <div className="mt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setView('select');
-                  setMessage(null);
-                  setProgressMessages([]);
-                  setSelectedDoc(null);
-                }}
-              >
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Generation Failed</h3>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{message || 'An unexpected error occurred.'}</p>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <Button variant="outline" onClick={() => { setView('select'); setMessage(null); setProgressMessages([]); setSelectedDoc(null); }}>
                 Back to documents
+              </Button>
+              <Button onClick={() => requestRoadmap(true)} disabled={loading}>
+                {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Retrying...</> : <><RefreshCcw className="w-4 h-4 mr-2" />Retry</>}
               </Button>
             </div>
           </div>
