@@ -7,6 +7,14 @@ import easyocr
 
 from core.constants import EASYOCR_WORKERS, TESSERACT_WORKERS, EASYOCR_GPU
 
+# Enable cuDNN benchmark for consistent image sizes (auto-tunes GPU kernels)
+if EASYOCR_GPU:
+    try:
+        import torch
+        torch.backends.cudnn.benchmark = True
+    except Exception:
+        pass
+
 # Optional for Windows if Tesseract throws errors:
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
@@ -64,8 +72,10 @@ async def image_parser(image_path: str) -> str:
             semaphore = await get_easyocr_semaphore()
             async with semaphore:
                 reader = await _get_easyocr_reader()
+                # batch_size=8 for GPU (processes multiple text regions in parallel)
+                batch_size = 8 if EASYOCR_GPU else 1
                 result = await asyncio.to_thread(
-                    lambda: reader.readtext(image_path)
+                    lambda: reader.readtext(image_path, batch_size=batch_size)
                 )
 
                 if not result:

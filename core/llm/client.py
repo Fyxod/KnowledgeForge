@@ -15,6 +15,18 @@ else:
 
 MyServerLLM = llm_module.MyServerLLM
 
+# Cache LLM client instances to avoid repeated initialization overhead
+_llm_cache = {}
+
+
+def _get_cached_llm(model: str, port: int) -> MyServerLLM:
+    """Return a cached MyServerLLM instance, creating one if needed."""
+    key = (model, port)
+    if key not in _llm_cache:
+        _llm_cache[key] = MyServerLLM(model=model, port=port)
+    return _llm_cache[key]
+
+
 API_KEYS = [
     settings.API_KEY_1,
     settings.API_KEY_2,
@@ -25,7 +37,7 @@ API_KEYS = [
 ]
 
 openai_client = AsyncOpenAI(api_key=settings.OPENAI_API)
-MAX_RETRIES = 8  # Total attempts across all LLMs
+MAX_RETRIES = 4  # Reduced from 8: JSON sanitizer + json_repair handles most parse errors on first attempt
 
 # Thread-safe API key cycling
 _api_key_cycle = itertools.cycle(API_KEYS)
@@ -99,7 +111,7 @@ async def invoke_llm(
         if gpu_model:
             try:
                 print("Trying GPU server...")
-                gpu_llm = MyServerLLM(model=gpu_model, port=port)
+                gpu_llm = _get_cached_llm(gpu_model, port)
                 s = time.time()
                 llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
                 e = time.time()
@@ -113,7 +125,7 @@ async def invoke_llm(
                 temp_port = 11434
                 try:
                     print(f"Retrying GPU server on alternate port {temp_port}...")
-                    gpu_llm = MyServerLLM(model=gpu_model, port=temp_port)
+                    gpu_llm = _get_cached_llm(gpu_model, temp_port)
                     s = time.time()
                     llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
                     e = time.time()

@@ -2,13 +2,17 @@ from langchain_ollama import ChatOllama
 from langchain_core.language_models import LLM
 from typing import Optional, List, Tuple, Dict
 from pydantic import PrivateAttr
+import os
 import re
 import threading
 from contextlib import contextmanager
 from core.config import settings
 
-# Global dictionary of locks per (model, port)
-_locks: Dict[Tuple[str, int], threading.Lock] = {}
+# Concurrency limit per (model, port) — should match OLLAMA_NUM_PARALLEL
+OLLAMA_CONCURRENCY = int(os.environ.get("OLLAMA_NUM_PARALLEL", 2))
+
+# Global dictionary of semaphores per (model, port)
+_locks: Dict[Tuple[str, int], threading.Semaphore] = {}
 _locks_global_lock = threading.Lock()  # Protects access to the _locks dict
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
@@ -16,28 +20,29 @@ LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 @contextmanager
 def model_port_lock(model: str, port: int):
     """
-    Context manager that ensures only one request per (model, port)
-    is processed at a time. Blocks others until the lock is released.
+    Context manager that allows up to OLLAMA_CONCURRENCY concurrent requests
+    per (model, port). Uses a semaphore instead of a lock to enable parallel
+    requests when Ollama is configured with OLLAMA_NUM_PARALLEL > 1.
     """
     key = (model, port)
 
-    # Ensure thread-safe creation of locks
+    # Ensure thread-safe creation of semaphores
     with _locks_global_lock:
         if key not in _locks:
-            _locks[key] = threading.Lock()
+            _locks[key] = threading.Semaphore(OLLAMA_CONCURRENCY)
 
-    lock = _locks[key]
-    lock.acquire()
+    semaphore = _locks[key]
+    semaphore.acquire()
     try:
         yield
     finally:
-        lock.release()
+        semaphore.release()
 
 
 class MyServerLLM(LLM):
     """
     Custom LLM wrapper using ChatOllama to call a locally running Ollama model.
-    Ensures only one request per (model, port) is processed at a time.
+    Uses semaphore to limit concurrent requests per (model, port) to OLLAMA_CONCURRENCY.
     """
 
     model: str
@@ -59,7 +64,7 @@ class MyServerLLM(LLM):
     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
         """
         Call the local Ollama model using ChatOllama.
-        Blocks concurrent requests for the same (model, port).
+        Limits concurrent requests per (model, port) via semaphore.
         """
         with model_port_lock(self.model, self.port):
             print(f"Processing request for model={self.model}, port={self.port}")

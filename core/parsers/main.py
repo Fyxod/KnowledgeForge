@@ -1077,6 +1077,7 @@ async def extract_document(
 
         image_dir_base = f"data/{user_id}/threads/{thread_id}/images/{name}"
         MIN_IMAGE_SIZE = 50  # Skip images smaller than 50px (icons, bullets)
+        _ocr_xref_cache = {}  # Cache OCR results by image xref to skip duplicates
 
         for page_number in range(len(doc)):
             page = doc.load_page(page_number)
@@ -1189,6 +1190,14 @@ async def extract_document(
                     if image.width < MIN_IMAGE_SIZE or image.height < MIN_IMAGE_SIZE:
                         continue
 
+                    # Duplicate image detection: reuse OCR results for same xref
+                    # (e.g. repeated headers/footers/logos across pages)
+                    if xref in _ocr_xref_cache:
+                        cached_text = _ocr_xref_cache[xref]
+                        if cached_text:
+                            page_text += f"\n\n{cached_text}"
+                        continue
+
                     image_name = f"page{page_number + 1}_img{img_index + 1}.{image_ext}"
                     image_path = os.path.join(image_dir, image_name)
                     try:
@@ -1202,9 +1211,14 @@ async def extract_document(
                     page_text += f"\n\n{placeholder}"
                     image_names.append(image_name)
 
-                    # OCR only raster image files
+                    # OCR raster images, cache result by xref to avoid re-processing duplicates
+                    async def _ocr_and_cache(path, xref_id):
+                        result = await image_parser(path)
+                        _ocr_xref_cache[xref_id] = result
+                        return result
+
                     ocr_tasks[placeholder] = asyncio.create_task(
-                        image_parser(image_path)
+                        _ocr_and_cache(image_path, xref)
                     )
                 except Exception:
                     traceback.print_exc()

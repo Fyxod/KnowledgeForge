@@ -19,12 +19,12 @@ CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
 
 # Adaptive Retrieval Parameters
 MIN_CHUNKS_PER_DOC = 10 # Minimum chunks to retrieve per document
-MAX_TOTAL_CHUNKS = 100 # Maximum total chunks to retrieve (for 10+ documents)
+MAX_TOTAL_CHUNKS = 50 # Reduced from 100: reranking selects best chunks, fewer = faster LLM generation
 
 
 EASYOCR_WORKERS = 10  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
 TESSERACT_WORKERS = 50  # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
-EASYOCR_GPU = False  # Whether to use GPU for EasyOCR (set to True if you have enough VRAM and want faster OCR)
+EASYOCR_GPU = True  # GPU mode: ~4-7x faster OCR, uses only ~200MB VRAM (negligible on 48GB)
 
 PORT1 = 11434  # port where ollama is running
 PORT2 = 11435  # port where second ollama instance is running

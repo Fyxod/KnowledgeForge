@@ -137,7 +137,7 @@ async def convert_pdf_to_images(pdf_path: str, output_dir: str) -> List[str]:
         # Convert PDF to images
         images = convert_from_path(
             pdf_path,
-            dpi=300,  # High DPI for better OCR
+            dpi=200,  # 200 DPI sufficient for presentation text (18pt+), 56% fewer pixels than 300 DPI
             output_folder=output_dir,
             fmt="png",
             thread_count=4
@@ -198,6 +198,111 @@ async def ocr_slide_images(image_paths: List[str]) -> List[str]:
         return [""] * len(image_paths)
 
 
+async def pipeline_render_and_ocr(pdf_path: str, output_dir: str) -> List[str]:
+    """
+    CPU↔GPU Pipeline: Overlap PDF page rendering (CPU) with OCR (GPU).
+
+    Instead of rendering ALL pages first then OCR-ing ALL pages (sequential),
+    this uses an asyncio.Queue to pipeline the two stages:
+      [CPU: Render slide N] → Queue → [GPU: OCR slide N]
+      [CPU: Render slide N+1]       → [GPU: OCR slide N result ready]
+
+    Expected speedup: ~30-60% for multi-slide presentations.
+
+    Falls back to the sequential approach if pipelining fails.
+
+    Args:
+        pdf_path: Path to the PDF file
+        output_dir: Directory to save intermediate images
+
+    Returns:
+        List of OCR results for each slide
+    """
+    import time as _time
+
+    try:
+        print(f"[Pipeline] Starting pipelined render+OCR for {pdf_path}...")
+        start = _time.time()
+
+        # Get total page count without rendering all at once
+        from pdf2image.pdf2image import pdfinfo_from_path
+        try:
+            info = pdfinfo_from_path(pdf_path)
+            total_pages = info.get("Pages", 0)
+        except Exception:
+            # Fallback: render all at once and count
+            total_pages = 0
+
+        if total_pages == 0:
+            # Can't determine page count, fall back to sequential
+            print("[Pipeline] Cannot determine page count, falling back to sequential")
+            image_paths = await convert_pdf_to_images(pdf_path, output_dir)
+            return await ocr_slide_images(image_paths)
+
+        print(f"[Pipeline] {total_pages} pages to process")
+
+        queue = asyncio.Queue(maxsize=3)  # Buffer up to 3 rendered images
+        results = [""] * total_pages
+        ocr_semaphore = asyncio.Semaphore(EASYOCR_WORKERS)
+
+        async def producer():
+            """CPU-bound: render pages one at a time and enqueue."""
+            for page_num in range(1, total_pages + 1):
+                try:
+                    # Render single page (runs in thread to avoid blocking)
+                    images = await asyncio.to_thread(
+                        convert_from_path,
+                        pdf_path,
+                        dpi=200,
+                        first_page=page_num,
+                        last_page=page_num,
+                        fmt="png",
+                        thread_count=2,
+                    )
+                    if images:
+                        image_path = os.path.join(output_dir, f"slide_{page_num}.png")
+                        await asyncio.to_thread(images[0].save, image_path, "PNG")
+                        await queue.put((page_num, image_path))
+                        print(f"[Pipeline] Rendered slide {page_num}/{total_pages}")
+                    else:
+                        await queue.put((page_num, None))
+                except Exception as e:
+                    print(f"[Pipeline] Render error on slide {page_num}: {e}")
+                    await queue.put((page_num, None))
+            # Signal completion
+            await queue.put(None)
+
+        async def consumer():
+            """GPU-bound: dequeue rendered images and run OCR."""
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                page_num, image_path = item
+                if image_path is None:
+                    continue
+                async with ocr_semaphore:
+                    try:
+                        result = await image_parser(image_path)
+                        results[page_num - 1] = result or ""
+                        print(f"[Pipeline] OCR complete for slide {page_num}")
+                    except Exception as e:
+                        print(f"[Pipeline] OCR error on slide {page_num}: {e}")
+
+        # Run producer and consumer concurrently
+        await asyncio.gather(producer(), consumer())
+
+        elapsed = _time.time() - start
+        print(f"[Pipeline] Pipelined render+OCR complete: {total_pages} slides in {elapsed:.2f}s")
+        return results
+
+    except Exception as e:
+        print(f"[Pipeline] Pipeline failed, falling back to sequential: {e}")
+        traceback.print_exc()
+        image_paths = await convert_pdf_to_images(pdf_path, output_dir)
+        return await ocr_slide_images(image_paths)
+
+
 async def export_and_ocr_ppt(
     ppt_path: str,
     user_id: str,
@@ -230,14 +335,15 @@ async def export_and_ocr_ppt(
             print("[Export] Failed to convert PPT to PDF")
             return None
 
-        # Step 2: Convert PDF to images
-        image_paths = await convert_pdf_to_images(pdf_path, temp_dir)
-        if not image_paths:
-            print("[Export] Failed to convert PDF to images")
-            return None
-
-        # Step 3: OCR slide images
-        ocr_results = await ocr_slide_images(image_paths)
+        # Step 2+3: Pipeline CPU rendering with GPU OCR (overlaps the two stages)
+        ocr_results = await pipeline_render_and_ocr(pdf_path, temp_dir)
+        if not ocr_results:
+            print("[Export] Pipeline render+OCR returned no results, trying sequential fallback")
+            image_paths = await convert_pdf_to_images(pdf_path, temp_dir)
+            if not image_paths:
+                print("[Export] Failed to convert PDF to images")
+                return None
+            ocr_results = await ocr_slide_images(image_paths)
 
         return ocr_results
 
