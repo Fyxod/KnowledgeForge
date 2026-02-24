@@ -48,3 +48,40 @@ dependencies = [
     "wordcloud>=1.9.6",
     "xlrd>=2.0.2",
 ]
+
+[tool.coverage.run]
+source = ["app", "core", "agent"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+    "*/venv/*",
+    "*/parthenv/*",
+    "core/llm/configurations/*",
+    "core/llm/unload_ollama_model.py",
+    "core/parsers/vlm.py",
+    "core/parsers/image.py",
+    "core/parsers/slide_export.py",
+    "core/llm/prompts/*",
+    "core/llm/output_schemas/*",
+]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+precision = 2
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"

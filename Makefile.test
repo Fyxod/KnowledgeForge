@@ -1,0 +1,61 @@
+# ==============================================================================
+# Test Runner — Makefile
+# ==============================================================================
+# Usage:
+#   make test          — Run all tests with coverage
+#   make test-unit     — Run only unit tests
+#   make test-int      — Run only integration tests
+#   make test-e2e      — Run only E2E tests
+#   make test-fast     — Parallel run (requires pytest-xdist)
+#   make coverage      — Generate HTML coverage report
+#   make lint          — Run linting (ruff)
+#
+# Coverage Threshold: 90%  (configured in pytest.ini)
+# ==============================================================================
+
+.PHONY: test test-unit test-int test-e2e test-fast coverage lint install-test clean-test
+
+# ---------------------------------------------------------------------------
+# Dependency installation
+# ---------------------------------------------------------------------------
+install-test:
+	pip install -r requirements-test.txt
+
+# ---------------------------------------------------------------------------
+# Test execution
+# ---------------------------------------------------------------------------
+test:
+	python -m pytest -v --tb=short --cov --cov-report=term-missing
+
+test-unit:
+	python -m pytest tests/unit -v --tb=short -m unit
+
+test-int:
+	python -m pytest tests/integration -v --tb=short -m integration
+
+test-e2e:
+	python -m pytest tests/e2e -v --tb=short -m e2e
+
+test-fast:
+	python -m pytest -v --tb=short -n auto --cov --cov-report=term-missing
+
+# ---------------------------------------------------------------------------
+# Coverage reporting
+# ---------------------------------------------------------------------------
+coverage:
+	python -m pytest --cov --cov-report=html --cov-report=term-missing
+	@echo ""
+	@echo ">>> HTML report: htmlcov/index.html"
+
+# ---------------------------------------------------------------------------
+# Linting (optional)
+# ---------------------------------------------------------------------------
+lint:
+	ruff check app/ core/ agent/ tests/
+
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
+clean-test:
+	rm -rf htmlcov .coverage .pytest_cache tests/__pycache__
+	find tests -name "__pycache__" -type d -exec rm -rf {} +
