@@ -1,11 +1,13 @@
-import aiofiles
 import asyncio
-import os
 import json
+import os
 import traceback
-from fastapi import APIRouter, Body, Request, HTTPException, status
+
+import aiofiles
+from fastapi import APIRouter, Body, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
 from core.database import db
 from core.models.document import Document
 from core.studio_features.technical_analysis import generate_technical_analysis

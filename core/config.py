@@ -1,5 +1,5 @@
-from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
 
 load_dotenv()
 
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     MAIN_MODEL: str
     REMOTE_GPU: bool = False
     USE_VISION_MODEL: bool = False  # Set to True in .env to force VLM for all PDF pages
-    LOCAL_BASE_URL : str = "http://localhost"
+    LOCAL_BASE_URL: str = "http://localhost"
 
     class Config:
         env_file = ".env"

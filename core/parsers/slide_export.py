@@ -12,20 +12,20 @@ and perform OCR on them. This captures ALL content including:
 - Everything visible on the slide
 """
 
+import asyncio
 import os
-import subprocess
-import tempfile
-import shutil
 from pathlib import Path
-from typing import List, Optional
 import platform
 import shutil
-import asyncio
+import subprocess
+import tempfile
 import traceback
+from typing import List, Optional
+
 from pdf2image import convert_from_path
 
-from core.parsers.image import image_parser
 from core.constants import EASYOCR_WORKERS
+from core.parsers.image import image_parser
 
 
 def get_libreoffice_command() -> Optional[str]:
@@ -50,7 +50,6 @@ def get_libreoffice_command() -> Optional[str]:
 
     # Linux / macOS
     return shutil.which("libreoffice") or shutil.which("soffice")
-
 
 
 async def export_ppt_to_pdf(ppt_path: str, output_dir: str) -> Optional[str]:
@@ -81,8 +80,10 @@ async def export_ppt_to_pdf(ppt_path: str, output_dir: str) -> Optional[str]:
             "--nolockcheck",
             "--nodefault",
             "--nofirststartwizard",
-            "--convert-to", "pdf",
-            "--outdir", output_dir,
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            output_dir,
             ppt_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -140,7 +141,7 @@ async def convert_pdf_to_images(pdf_path: str, output_dir: str) -> List[str]:
             dpi=200,  # 200 DPI sufficient for presentation text (18pt+), 56% fewer pixels than 300 DPI
             output_folder=output_dir,
             fmt="png",
-            thread_count=4
+            thread_count=4,
         )
 
         # Save images
@@ -226,6 +227,7 @@ async def pipeline_render_and_ocr(pdf_path: str, output_dir: str) -> List[str]:
 
         # Get total page count without rendering all at once
         from pdf2image.pdf2image import pdfinfo_from_path
+
         try:
             info = pdfinfo_from_path(pdf_path)
             total_pages = info.get("Pages", 0)
@@ -293,7 +295,9 @@ async def pipeline_render_and_ocr(pdf_path: str, output_dir: str) -> List[str]:
         await asyncio.gather(producer(), consumer())
 
         elapsed = _time.time() - start
-        print(f"[Pipeline] Pipelined render+OCR complete: {total_pages} slides in {elapsed:.2f}s")
+        print(
+            f"[Pipeline] Pipelined render+OCR complete: {total_pages} slides in {elapsed:.2f}s"
+        )
         return results
 
     except Exception as e:
@@ -304,9 +308,7 @@ async def pipeline_render_and_ocr(pdf_path: str, output_dir: str) -> List[str]:
 
 
 async def export_and_ocr_ppt(
-    ppt_path: str,
-    user_id: str,
-    thread_id: str
+    ppt_path: str, user_id: str, thread_id: str
 ) -> Optional[List[str]]:
     """
     Export PowerPoint slides as images and perform OCR.
@@ -338,7 +340,9 @@ async def export_and_ocr_ppt(
         # Step 2+3: Pipeline CPU rendering with GPU OCR (overlaps the two stages)
         ocr_results = await pipeline_render_and_ocr(pdf_path, temp_dir)
         if not ocr_results:
-            print("[Export] Pipeline render+OCR returned no results, trying sequential fallback")
+            print(
+                "[Export] Pipeline render+OCR returned no results, trying sequential fallback"
+            )
             image_paths = await convert_pdf_to_images(pdf_path, temp_dir)
             if not image_paths:
                 print("[Export] Failed to convert PDF to images")
@@ -362,9 +366,7 @@ async def export_and_ocr_ppt(
 
 
 async def export_and_ocr_ppt_with_fallback(
-    ppt_path: str,
-    user_id: str,
-    thread_id: str
+    ppt_path: str, user_id: str, thread_id: str
 ) -> List[str]:
     """
     Export PowerPoint slides as images and perform OCR with fallback.
@@ -390,6 +392,7 @@ async def export_and_ocr_ppt_with_fallback(
         print(f"[Export] Exception in export_and_ocr_ppt_with_fallback: {e}")
         return []
 
+
 async def convert_ppt_to_pptx(ppt_path: str) -> Optional[str]:
     """
     Convert .ppt to .pptx using LibreOffice.
@@ -410,8 +413,10 @@ async def convert_ppt_to_pptx(ppt_path: str) -> Optional[str]:
         process = await asyncio.create_subprocess_exec(
             libreoffice_cmd,
             "--headless",
-            "--convert-to", "pptx",
-            "--outdir", output_dir,
+            "--convert-to",
+            "pptx",
+            "--outdir",
+            output_dir,
             ppt_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

@@ -1,25 +1,24 @@
-import socketio
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import socketio
+
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.auth_paths import auth_paths
-
 from app.routes import (
-    insights,
-    query,
-    user,
-    upload,
-    health,
-    thread,
-    extra,
-    strategic_roadmap,
-    technical_roadmap,
-    strategic_analysis,
-    technical_analysis,
     documents,
     export,
+    extra,
+    health,
+    insights,
+    query,
+    strategic_analysis,
+    strategic_roadmap,
+    technical_analysis,
+    technical_roadmap,
+    thread,
+    upload,
+    user,
 )
 from app.socket_handler import sio
 

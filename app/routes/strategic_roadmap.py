@@ -1,15 +1,17 @@
-import aiofiles
 import asyncio
-import os
 import json
+import os
 import traceback
-from fastapi import APIRouter, Body, Request, HTTPException, status
+
+import aiofiles
+from fastapi import APIRouter, Body, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from app.socket_handler import sio
 from core.database import db
 from core.models.document import Document
 from core.studio_features.strategic_roadmap import generate_strategic_roadmap
-from app.socket_handler import sio
 from core.utils.generation_status import (
     write_pending_status,
     write_failed_status,

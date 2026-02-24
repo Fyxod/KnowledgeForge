@@ -1,9 +1,10 @@
 from typing import Optional
-from core.llm.prompts.decomposition_prompt import decomposition_prompt
+
 from agent.graph_helpers import get_recent_history
-from core.llm.outputs import DecompositionLLMOutput
-from core.llm.client import invoke_llm
 from core.constants import GPU_DECOMPOSITION_LLM
+from core.llm.client import invoke_llm
+from core.llm.outputs import DecompositionLLMOutput
+from core.llm.prompts.decomposition_prompt import decomposition_prompt
 
 
 async def decomposition_node(

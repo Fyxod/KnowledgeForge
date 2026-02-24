@@ -1,31 +1,43 @@
-import pandas as pd
-import uuid
-import os
-import shutil
-from pathlib import Path
 import asyncio
-import fitz
-import time
-import markdown
-from bs4 import BeautifulSoup
-from PIL import Image
 import io
+import os
+from pathlib import Path
 import re
-from app.socket_handler import sio
-from core.parsers.image import image_parser
-from core.parsers.excel_utils import find_header_row, enrich_dataframe_with_metadata, detect_merged_header_rows, flatten_multiindex_columns, deduplicate_columns
-from core.models.document import Document, Page
-from core.parsers.extensions import SUPPORTED_EXTENSIONS, IMAGE_EXTENSIONS
-from core.services.sqlite_manager import SQLiteManager
-from core.parsers.slide_export import convert_ppt_to_pptx, export_and_ocr_ppt_with_fallback, get_libreoffice_command
-from core.parsers.vlm import vlm_parse_slide, vlm_parse_concurrent
-from core.config import settings
-from pptx import Presentation
+import shutil
+import time
+import traceback
+import uuid
+import xml.etree.ElementTree as ET
+
+from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
-import traceback
+import fitz
+import markdown
 import olefile
-import xml.etree.ElementTree as ET
+import pandas as pd
+from PIL import Image
+from pptx import Presentation
+
+from app.socket_handler import sio
+from core.config import settings
+from core.models.document import Document, Page
+from core.parsers.excel_utils import (
+    deduplicate_columns,
+    detect_merged_header_rows,
+    enrich_dataframe_with_metadata,
+    find_header_row,
+    flatten_multiindex_columns,
+)
+from core.parsers.extensions import IMAGE_EXTENSIONS, SUPPORTED_EXTENSIONS
+from core.parsers.image import image_parser
+from core.parsers.slide_export import (
+    convert_ppt_to_pptx,
+    export_and_ocr_ppt_with_fallback,
+    get_libreoffice_command,
+)
+from core.parsers.vlm import vlm_parse_concurrent, vlm_parse_slide
+from core.services.sqlite_manager import SQLiteManager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
@@ -50,7 +62,9 @@ def _extract_shapes_recursive(shapes, slide_part, depth=0) -> list[str]:
         try:
             # Recurse into grouped shapes (flowcharts, org charts, etc.)
             if hasattr(shape, "shapes"):
-                texts.extend(_extract_shapes_recursive(shape.shapes, slide_part, depth + 1))
+                texts.extend(
+                    _extract_shapes_recursive(shape.shapes, slide_part, depth + 1)
+                )
                 continue
 
             table_block = _extract_table_block(shape)
@@ -152,7 +166,9 @@ def _extract_smartart_block(shape, slide_part) -> str:
         if not deduped_lines:
             return ""
 
-        return "[SmartArt Diagram]\n" + "\n".join(deduped_lines) + "\n[/SmartArt Diagram]"
+        return (
+            "[SmartArt Diagram]\n" + "\n".join(deduped_lines) + "\n[/SmartArt Diagram]"
+        )
     except Exception:
         traceback.print_exc()
         return ""
@@ -346,40 +362,48 @@ async def extract_document(
         try:
             # Read Excel or CSV file into DataFrame(s)
             # Read Excel or CSV file into DataFrame(s)
-            sheets_data = {} # Tuples of (df, context_text)
-            
+            sheets_data = {}  # Tuples of (df, context_text)
+
             if ext == ".xlsx":
                 # Use robust parsing for modern Excel
                 xls = pd.ExcelFile(file_path, engine="openpyxl")
                 for sheet_name in xls.sheet_names:
                     # 1. Detect Header & Context
                     header_idx, context = find_header_row(file_path, sheet_name)
-                    
+
                     # 2. Detect multi-level headers from merged cells
-                    header_param = detect_merged_header_rows(file_path, sheet_name, header_idx)
-                    
+                    header_param = detect_merged_header_rows(
+                        file_path, sheet_name, header_idx
+                    )
+
                     # 3. Read DataFrame with correct header(s)
                     df = pd.read_excel(xls, sheet_name=sheet_name, header=header_param)
-                    
+
                     # 4. Flatten MultiIndex columns if multi-level headers detected
                     if isinstance(header_param, list):
                         df = flatten_multiindex_columns(df)
-                    
+
                     # 5. Enrich with Metadata (Colors, Comments)
                     # Note: We pass header_idx so we know where data starts
-                    enrichment_header = header_param[-1] if isinstance(header_param, list) else header_param
-                    df = enrich_dataframe_with_metadata(df, file_path, sheet_name, enrichment_header)
-                    
+                    enrichment_header = (
+                        header_param[-1]
+                        if isinstance(header_param, list)
+                        else header_param
+                    )
+                    df = enrich_dataframe_with_metadata(
+                        df, file_path, sheet_name, enrichment_header
+                    )
+
                     sheets_data[sheet_name] = (df, context)
 
             elif ext == ".xls":
                 # Legacy Excel (less features supported, no openpyxl enrichment)
                 xls = pd.ExcelFile(file_path, engine="xlrd")
                 for sheet_name in xls.sheet_names:
-                    # Heuristic for header might still work if we adapt it for xlrd, 
-                    # but current utility uses openpyxl. 
+                    # Heuristic for header might still work if we adapt it for xlrd,
+                    # but current utility uses openpyxl.
                     # Fallback to standard read for .xls to avoid complexity deps
-                    df = pd.read_excel(xls, sheet_name=sheet_name) 
+                    df = pd.read_excel(xls, sheet_name=sheet_name)
                     sheets_data[sheet_name] = (df, None)
 
             else:
@@ -409,11 +433,15 @@ async def extract_document(
             # Create a summary of all sheets to give the LLM a "Table of Contents"
             workbook_summary_lines = ["# Workbook Structure Summary"]
             for s_name, (s_df, _) in sheets_data.items():
-                col_list = ", ".join([str(c) for c in s_df.columns[:10]]) # Limit cols to avoid huge headers
+                col_list = ", ".join(
+                    [str(c) for c in s_df.columns[:10]]
+                )  # Limit cols to avoid huge headers
                 if len(s_df.columns) > 10:
                     col_list += ", ..."
-                workbook_summary_lines.append(f"- Sheet '{s_name}': {len(s_df)} rows. Columns: [{col_list}]")
-            
+                workbook_summary_lines.append(
+                    f"- Sheet '{s_name}': {len(s_df)} rows. Columns: [{col_list}]"
+                )
+
             workbook_summary = "\n".join(workbook_summary_lines) + "\n\n"
 
             # --- Also generate text representation for RAG/vector store ---
@@ -486,7 +514,7 @@ async def extract_document(
 
                 # Build a text summary: schema + data
                 col_info = ", ".join([str(col) for col in df.columns])
-                
+
                 # Prepend the context (pre-header text) if it exists
                 context_block = ""
                 if context_text:
@@ -495,7 +523,7 @@ async def extract_document(
                 sheet_header = (
                     f"=== Spreadsheet: {safe_file_name} | Sheet: {sheet_name} ===\n"
                     f"{workbook_summary}"  # <--- Global Context
-                    f"{context_block}"     # <--- Local Sheet Context
+                    f"{context_block}"  # <--- Local Sheet Context
                     f"Columns: {col_info}\n"
                     f"Total rows: {len(df)}\n"
                 )
@@ -564,8 +592,13 @@ async def extract_document(
             try:
                 doc_dir = os.path.dirname(file_path)
                 proc = await asyncio.create_subprocess_exec(
-                    libreoffice_cmd, "--headless", "--convert-to", "docx",
-                    "--outdir", doc_dir, file_path,
+                    libreoffice_cmd,
+                    "--headless",
+                    "--convert-to",
+                    "docx",
+                    "--outdir",
+                    doc_dir,
+                    file_path,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -603,7 +636,9 @@ async def extract_document(
             # --- VLM Enhancement for DOCX (Optimized) ---
             if settings.USE_VISION_MODEL:
                 try:
-                    print(f"[DOCX] VLM enhancement enabled for {safe_file_name}. Converting to PDF...")
+                    print(
+                        f"[DOCX] VLM enhancement enabled for {safe_file_name}. Converting to PDF..."
+                    )
                     await safe_emit(
                         f"{user_id}/progress",
                         {"message": f"Running VLM enhancement on {safe_file_name}..."},
@@ -616,8 +651,13 @@ async def extract_document(
                             # Use LibreOffice to convert DOCX to PDF
                             docx_dir = os.path.dirname(file_path)
                             proc = await asyncio.create_subprocess_exec(
-                                libreoffice_cmd, "--headless", "--convert-to", "pdf",
-                                "--outdir", docx_dir, file_path,
+                                libreoffice_cmd,
+                                "--headless",
+                                "--convert-to",
+                                "pdf",
+                                "--outdir",
+                                docx_dir,
+                                file_path,
                                 stdout=asyncio.subprocess.PIPE,
                                 stderr=asyncio.subprocess.PIPE,
                             )
@@ -635,7 +675,7 @@ async def extract_document(
                             pdf_doc = fitz.open(pdf_path)
                             vlm_images = []
                             vlm_labels = []
-                            
+
                             # Collect pages (Limit to 50 to avoid massive batch for huge docs?)
                             # For now, process all. 150 DPI is manageable.
                             for pg_num in range(len(pdf_doc)):
@@ -649,18 +689,21 @@ async def extract_document(
                                 vlm_results = await vlm_parse_concurrent(
                                     images=vlm_images,
                                     page_labels=vlm_labels,
-                                    max_concurrent=3
+                                    max_concurrent=3,
                                 )
 
                                 vlm_combined = "\n\n".join(
-                                    f"[VLM Page {i+1}]\n{r}" 
-                                    for i, r in enumerate(vlm_results) if r
+                                    f"[VLM Page {i+1}]\n{r}"
+                                    for i, r in enumerate(vlm_results)
+                                    if r
                                 )
 
                                 if vlm_combined:
                                     enhancement = f"\n\n[VLM Enhanced Content]\n{vlm_combined}\n[/VLM Enhanced Content]"
                                     text += enhancement
-                                    print(f"[DOCX] VLM enhancement added ({len(vlm_combined)} chars)")
+                                    print(
+                                        f"[DOCX] VLM enhancement added ({len(vlm_combined)} chars)"
+                                    )
 
                         except Exception as e:
                             print(f"[DOCX] VLM processing failed: {e}")
@@ -673,7 +716,9 @@ async def extract_document(
                                 except:
                                     pass
                     else:
-                        print("[DOCX] Skipping VLM: LibreOffice conversion failed or not available")
+                        print(
+                            "[DOCX] Skipping VLM: LibreOffice conversion failed or not available"
+                        )
                 except Exception as e:
                     print(f"[DOCX] VLM enhancement error: {e}")
                     traceback.print_exc()
@@ -715,7 +760,7 @@ async def extract_document(
 
         full_slide_ocr_results = []
         try:
-            
+
             await safe_emit(
                 f"{user_id}/progress",
                 {"message": f"Running full-slide OCR export for {safe_file_name}..."},
@@ -751,11 +796,11 @@ async def extract_document(
 
                 # Add exported full-slide OCR if available.
                 if slide_number - 1 < len(full_slide_ocr_results):
-                    full_slide_text = (full_slide_ocr_results[slide_number - 1] or "").strip()
+                    full_slide_text = (
+                        full_slide_ocr_results[slide_number - 1] or ""
+                    ).strip()
                     if full_slide_text:
-                        page_text += (
-                            f"\n\n[Full Slide OCR]\n{full_slide_text}\n[/Full Slide OCR]"
-                        )
+                        page_text += f"\n\n[Full Slide OCR]\n{full_slide_text}\n[/Full Slide OCR]"
 
                 image_names = []
 
@@ -796,7 +841,9 @@ async def extract_document(
             # --- Optimised VLM Enhancement for PPT ---
             if settings.USE_VISION_MODEL:
                 try:
-                    print(f"[PPT] VLM enhancement enabled for {safe_file_name}. Converting to PDF...")
+                    print(
+                        f"[PPT] VLM enhancement enabled for {safe_file_name}. Converting to PDF..."
+                    )
                     await safe_emit(
                         f"{user_id}/progress",
                         {"message": f"Running VLM enhancement on {safe_file_name}..."},
@@ -809,8 +856,13 @@ async def extract_document(
                             # Use LibreOffice to convert PPTX to PDF
                             ppt_dir = os.path.dirname(file_path)
                             proc = await asyncio.create_subprocess_exec(
-                                libreoffice_cmd, "--headless", "--convert-to", "pdf",
-                                "--outdir", ppt_dir, file_path,
+                                libreoffice_cmd,
+                                "--headless",
+                                "--convert-to",
+                                "pdf",
+                                "--outdir",
+                                ppt_dir,
+                                file_path,
                                 stdout=asyncio.subprocess.PIPE,
                                 stderr=asyncio.subprocess.PIPE,
                             )
@@ -828,16 +880,16 @@ async def extract_document(
                             pdf_doc = fitz.open(pdf_path)
                             vlm_images = []
                             vlm_labels = []
-                            
+
                             # Ensure we don't process more pages than we have slides/pages
                             num_pdf_pages = len(pdf_doc)
                             num_slides = len(pages)
-                            
+
                             process_count = min(num_pdf_pages, num_slides)
-                            
+
                             for pg_num in range(process_count):
                                 pg = pdf_doc.load_page(pg_num)
-                                pix = pg.get_pixmap(dpi=150) # 150 DPI optimized
+                                pix = pg.get_pixmap(dpi=150)  # 150 DPI optimized
                                 vlm_images.append(pix.tobytes("png"))
                                 vlm_labels.append(f"Slide {pg_num + 1}")
                             pdf_doc.close()
@@ -846,7 +898,7 @@ async def extract_document(
                                 vlm_results = await vlm_parse_concurrent(
                                     images=vlm_images,
                                     page_labels=vlm_labels,
-                                    max_concurrent=3
+                                    max_concurrent=3,
                                 )
 
                                 # Append results to corresponding pages
@@ -855,7 +907,9 @@ async def extract_document(
                                         enhancement = f"\n\n[VLM Enhanced Content]\n{vlm_text}\n[/VLM Enhanced Content]"
                                         pages[i].text += enhancement
                                         combined_texts[i] += enhancement
-                                        print(f"[PPT] VLM enhancement added to Slide {i+1} ({len(vlm_text)} chars)")
+                                        print(
+                                            f"[PPT] VLM enhancement added to Slide {i+1} ({len(vlm_text)} chars)"
+                                        )
 
                         except Exception as e:
                             print(f"[PPT] VLM processing failed: {e}")
@@ -938,7 +992,11 @@ async def extract_document(
                             style_name = para.style.name if para.style else ""
                             if style_name.startswith("Heading"):
                                 try:
-                                    level = int(style_name.replace("Heading ", "").replace("Heading", "1"))
+                                    level = int(
+                                        style_name.replace("Heading ", "").replace(
+                                            "Heading", "1"
+                                        )
+                                    )
                                 except (ValueError, TypeError):
                                     level = 1
                                 body_parts.append(f"{'#' * level} {text}")
@@ -953,15 +1011,33 @@ async def extract_document(
                                 table_rows = []
                                 # Build header
                                 if table.rows:
-                                    header_cells = [cell.text.strip().replace("|", "\\|") for cell in table.rows[0].cells]
-                                    table_rows.append("| " + " | ".join(header_cells) + " |")
-                                    table_rows.append("| " + " | ".join(["---"] * len(header_cells)) + " |")
+                                    header_cells = [
+                                        cell.text.strip().replace("|", "\\|")
+                                        for cell in table.rows[0].cells
+                                    ]
+                                    table_rows.append(
+                                        "| " + " | ".join(header_cells) + " |"
+                                    )
+                                    table_rows.append(
+                                        "| "
+                                        + " | ".join(["---"] * len(header_cells))
+                                        + " |"
+                                    )
                                     # Data rows
                                     for row in table.rows[1:]:
-                                        row_cells = [cell.text.strip().replace("|", "\\|") for cell in row.cells]
-                                        table_rows.append("| " + " | ".join(row_cells) + " |")
+                                        row_cells = [
+                                            cell.text.strip().replace("|", "\\|")
+                                            for cell in row.cells
+                                        ]
+                                        table_rows.append(
+                                            "| " + " | ".join(row_cells) + " |"
+                                        )
                                 if table_rows:
-                                    body_parts.append(f"[Table]\n" + "\n".join(table_rows) + f"\n[/Table]")
+                                    body_parts.append(
+                                        f"[Table]\n"
+                                        + "\n".join(table_rows)
+                                        + f"\n[/Table]"
+                                    )
                             except Exception:
                                 traceback.print_exc()
                             break
@@ -1030,14 +1106,22 @@ async def extract_document(
                     else:
                         current_page += "\n\n" + section if current_page else section
                 if current_page.strip():
-                    pages.append(Page(number=page_num, text=current_page.strip(), images=image_names_all))
+                    pages.append(
+                        Page(
+                            number=page_num,
+                            text=current_page.strip(),
+                            images=image_names_all,
+                        )
+                    )
 
             await safe_emit(
                 f"{user_id}/progress",
                 {"message": f"Processed {safe_file_name} (Word) successfully"},
             )
             end_time = time.time()
-            print(f"Time taken to process {safe_file_name} (.docx): {end_time - start_time} seconds")
+            print(
+                f"Time taken to process {safe_file_name} (.docx): {end_time - start_time} seconds"
+            )
             return Document(
                 id=doc_id,
                 type="docx",
@@ -1132,26 +1216,30 @@ async def extract_document(
                 # --- VLM candidate detection (Phase 1: collect, don't process yet) ---
                 use_vlm = settings.USE_VISION_MODEL
                 if not use_vlm:
-                    # Auto-detect "slide" characteristics: 
+                    # Auto-detect "slide" characteristics:
                     # 1. Low text density
                     # 2. Landscape orientation (width > height) often indicates slides
                     is_landscape = page.rect.width > page.rect.height
                     if len(page_text.strip()) < 100 and is_landscape:
                         use_vlm = True
-                
+
                 if use_vlm:
                     try:
                         # Render page to image at 150 DPI (optimized: lower than 200 for speed)
                         pix = page.get_pixmap(dpi=150)
                         img_bytes = pix.tobytes("png")
-                        vlm_candidates.append({
-                            "page_index": page_number,  # 0-based index into pages[]
-                            "page_number": page_number + 1,  # 1-based for display
-                            "image_bytes": img_bytes,
-                            "original_text": page_text,
-                        })
+                        vlm_candidates.append(
+                            {
+                                "page_index": page_number,  # 0-based index into pages[]
+                                "page_number": page_number + 1,  # 1-based for display
+                                "image_bytes": img_bytes,
+                                "original_text": page_text,
+                            }
+                        )
                     except Exception as e:
-                        print(f"[PDF] Failed to render page {page_number + 1} for VLM: {e}")
+                        print(
+                            f"[PDF] Failed to render page {page_number + 1} for VLM: {e}"
+                        )
                         traceback.print_exc()
 
             except Exception:
@@ -1230,10 +1318,14 @@ async def extract_document(
 
         # --- Phase 2: Concurrent VLM processing for candidate pages ---
         if vlm_candidates:
-            print(f"[PDF] {len(vlm_candidates)} pages queued for concurrent VLM processing")
+            print(
+                f"[PDF] {len(vlm_candidates)} pages queued for concurrent VLM processing"
+            )
             await safe_emit(
                 f"{user_id}/progress",
-                {"message": f"Running VLM on {len(vlm_candidates)} pages of {safe_file_name}..."},
+                {
+                    "message": f"Running VLM on {len(vlm_candidates)} pages of {safe_file_name}..."
+                },
             )
 
             vlm_images = [c["image_bytes"] for c in vlm_candidates]
@@ -1262,12 +1354,18 @@ async def extract_document(
                     should_use = True
 
                 if should_use:
-                    enhanced_text = f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
+                    enhanced_text = (
+                        f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
+                    )
                     pages[page_idx].text = enhanced_text
                     combined_texts[page_idx] = enhanced_text
-                    print(f"[PDF] VLM content used for page {candidate['page_number']} ({len(vlm_text)} chars)")
+                    print(
+                        f"[PDF] VLM content used for page {candidate['page_number']} ({len(vlm_text)} chars)"
+                    )
                 else:
-                    print(f"[PDF] VLM returned less than PyMuPDF for page {candidate['page_number']}, keeping original")
+                    print(
+                        f"[PDF] VLM returned less than PyMuPDF for page {candidate['page_number']}, keeping original"
+                    )
 
         # Wait for OCR tasks from the embedded raster images only
         for placeholder, task in ocr_tasks.items():

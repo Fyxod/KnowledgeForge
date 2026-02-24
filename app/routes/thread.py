@@ -8,9 +8,16 @@ import json
 import os
 import shutil
 import uuid
+
 from fastapi import APIRouter, Request
 from fastapi.encoders import jsonable_encoder
+
 from core.database import db
+from core.embeddings.vectorstore import (
+    add_existing_document_to_store,
+    delete_document_from_chroma,
+    rebuild_bm25_after_deletion,
+)
 from core.models.document import Document, Page
 from core.models.thread import (
     AddExistingDocumentRequest,
@@ -18,11 +25,6 @@ from core.models.thread import (
     InstructionUpdateRequest,
     ThreadCreateRequest,
     ThreadUpdateRequest,
-)
-from core.embeddings.vectorstore import (
-    add_existing_document_to_store,
-    delete_document_from_chroma,
-    rebuild_bm25_after_deletion,
 )
 
 router = APIRouter(prefix="/thread", tags=["thread"])
@@ -255,7 +257,11 @@ async def delete_document(request: Request, thread_id: str, doc_id: str):
         if file_name:
             name_without_ext = os.path.splitext(file_name)[0]
             parsed_path = os.path.join(
-                "data", user_id, "threads", thread_id, "parsed",
+                "data",
+                user_id,
+                "threads",
+                thread_id,
+                "parsed",
                 f"{name_without_ext}.json",
             )
             if os.path.exists(parsed_path):
@@ -271,9 +277,7 @@ async def delete_document(request: Request, thread_id: str, doc_id: str):
                 shutil.rmtree(images_dir, ignore_errors=True)
 
         # Return updated documents list
-        updated_user = db.users.find_one(
-            {"userId": user_id}, {"_id": 0, "password": 0}
-        )
+        updated_user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
         updated_docs = (
             updated_user.get("threads", {}).get(thread_id, {}).get("documents", [])
             if updated_user
@@ -340,11 +344,17 @@ async def add_existing_document(
     # Load parsed JSON from source thread
     name_without_ext = os.path.splitext(file_name)[0]
     source_parsed_path = os.path.join(
-        "data", user_id, "threads", source_thread_id, "parsed",
+        "data",
+        user_id,
+        "threads",
+        source_thread_id,
+        "parsed",
         f"{name_without_ext}.json",
     )
     if not os.path.exists(source_parsed_path):
-        return {"error": "Parsed document data not found. Please re-upload the document."}
+        return {
+            "error": "Parsed document data not found. Please re-upload the document."
+        }
 
     try:
         with open(source_parsed_path, "r", encoding="utf-8") as f:

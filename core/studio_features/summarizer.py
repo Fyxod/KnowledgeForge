@@ -1,31 +1,33 @@
 import asyncio
-import os
-import json
-import aiofiles
 import datetime
-from typing import List
-from core.llm.client import invoke_llm
-from core.models.document import Documents, Document
-from core.llm.outputs import (
-    GlobalSummarizerLLMOutput,
-    SummarizerLLMOutputSingle,
-    SummarizerLLMOutputCombination,
-)
-from core.llm.prompts.summarizer_prompt import (
-    global_summarization_prompt,
-    summarize_documents_prompt,
-    combine_summaries_prompt,
-)
+import json
+import os
+import re
 import time
+from typing import List
+
+import aiofiles
+
 from app.socket_handler import sio
-from core.studio_features.mind_map import create_mind_map_global
-from core.database import db
 from core.constants import (
     GPU_DOC_SUMMARIZER_LLM,
     GPU_GLOBAL_SUMMARIZER_LLM,
+    SWITCHES,
 )
-from core.constants import SWITCHES
-import re
+from core.database import db
+from core.llm.client import invoke_llm
+from core.llm.outputs import (
+    GlobalSummarizerLLMOutput,
+    SummarizerLLMOutputCombination,
+    SummarizerLLMOutputSingle,
+)
+from core.llm.prompts.summarizer_prompt import (
+    combine_summaries_prompt,
+    global_summarization_prompt,
+    summarize_documents_prompt,
+)
+from core.models.document import Document, Documents
+from core.studio_features.mind_map import create_mind_map_global
 
 
 def limit_words(text, max_words=15000):
@@ -246,7 +248,9 @@ async def global_summarizer(user_id: str, thread_id: str):
         print(f"No summaries found for thread {thread_id} for user {user_id}")
         err_msg = "No individual summaries found. Please summarize individual documents before generating global summary."
         try:
-            async with aiofiles.open(os.path.join(save_dir, "global_summary.json"), "w", encoding="utf-8") as f:
+            async with aiofiles.open(
+                os.path.join(save_dir, "global_summary.json"), "w", encoding="utf-8"
+            ) as f:
                 await f.write(json.dumps({"error": err_msg}, ensure_ascii=False))
         except Exception:
             pass
@@ -286,8 +290,14 @@ async def global_summarizer(user_id: str, thread_id: str):
     except Exception as e:
         print(f"Error during global summarization: {e}")
         try:
-            async with aiofiles.open(os.path.join(save_dir, "global_summary.json"), "w", encoding="utf-8") as f:
-                await f.write(json.dumps({"error": f"Summarization failed: {e}"}, ensure_ascii=False))
+            async with aiofiles.open(
+                os.path.join(save_dir, "global_summary.json"), "w", encoding="utf-8"
+            ) as f:
+                await f.write(
+                    json.dumps(
+                        {"error": f"Summarization failed: {e}"}, ensure_ascii=False
+                    )
+                )
         except Exception:
             pass
 

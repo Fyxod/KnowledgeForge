@@ -1,11 +1,13 @@
-from langchain_ollama import ChatOllama
-from langchain_core.language_models import LLM
-from typing import Optional, List, Tuple, Dict
-from pydantic import PrivateAttr
+from contextlib import contextmanager
 import os
 import re
 import threading
-from contextlib import contextmanager
+from typing import Dict, List, Optional, Tuple
+
+from langchain_core.language_models import LLM
+from langchain_ollama import ChatOllama
+from pydantic import PrivateAttr
+
 from core.config import settings
 
 # Concurrency limit per (model, port) — should match OLLAMA_NUM_PARALLEL
@@ -16,6 +18,7 @@ _locks: Dict[Tuple[str, int], threading.Semaphore] = {}
 _locks_global_lock = threading.Lock()  # Protects access to the _locks dict
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
+
 
 @contextmanager
 def model_port_lock(model: str, port: int):

@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 from pymongo.errors import CollectionInvalid
+
 from core.config import settings
 
 MONGO_URI = settings.DATABASE_URL

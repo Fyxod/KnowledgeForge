@@ -1,26 +1,29 @@
+from io import BytesIO
 import json
 import os
 import re
 import time
-from io import BytesIO
 from typing import List
+
 import aiofiles
-from pydantic import Field, BaseModel
-from wordcloud import WordCloud
 import matplotlib
-from core.config import settings
-import nltk
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import nltk
 from nltk.corpus import stopwords
-from core.constants import GPU_STOP_WORDS_EXTRACTION_LLM
-from core.models.document import Documents
-from app.socket_handler import sio
+from pydantic import BaseModel, Field
+from wordcloud import WordCloud
 
+from app.socket_handler import sio
+from core.config import settings
+from core.constants import GPU_STOP_WORDS_EXTRACTION_LLM
 from core.llm.client import invoke_llm
+from core.models.document import Documents
 
 if settings.MODE == "development":
     nltk.download("stopwords")
+
 
 async def generate_word_cloud(text: str, stop_words: list[str], max_words: int = 1000):
     """
@@ -228,4 +231,3 @@ Guidelines:
                 continue
 
     return list(stopwords_set)
-

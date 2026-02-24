@@ -1,12 +1,14 @@
 import asyncio
-import time
 import itertools
-from core.config import settings
+import time
+
 from google import genai
-from openai import AsyncOpenAI
 from langchain_core.output_parsers import PydanticOutputParser
-from core.constants import SWITCHES, FALLBACK_OPENAI_MODEL, FALLBACK_GEMINI_MODEL
-from core.utils.llm_output_sanitizer import sanitize_llm_json, parse_llm_json
+from openai import AsyncOpenAI
+
+from core.config import settings
+from core.constants import FALLBACK_GEMINI_MODEL, FALLBACK_OPENAI_MODEL, SWITCHES
+from core.utils.llm_output_sanitizer import parse_llm_json, sanitize_llm_json
 
 if SWITCHES["REMOTE_GPU"]:
     import core.llm.configurations.remote_llm as llm_module
@@ -108,7 +110,7 @@ async def invoke_llm(
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
 
         # === 1. GPU SERVER ===
-        if gpu_model:
+        if False:
             try:
                 print("Trying GPU server...")
                 gpu_llm = _get_cached_llm(gpu_model, port)

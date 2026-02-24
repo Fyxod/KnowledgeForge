@@ -1,5 +1,6 @@
-import socketio
 import asyncio
+
+import socketio
 
 active_connections = set()
 sio = socketio.AsyncServer(

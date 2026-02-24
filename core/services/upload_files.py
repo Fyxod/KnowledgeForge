@@ -1,8 +1,10 @@
-import os
 from datetime import datetime
+import os
 from typing import List
-from app.socket_handler import sio
+
 import aiofiles
+
+from app.socket_handler import sio
 
 
 async def upload_files(files, user_id: str, thread_id: str) -> List[dict]:

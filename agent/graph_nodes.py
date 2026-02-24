@@ -1,20 +1,19 @@
-import json
-import time
-import os
-import aiofiles
 import asyncio
+import json
+import os
+import time
 
+import aiofiles
 from langchain_core.messages import AIMessage, HumanMessage
 
 from agent.graph_helpers import (
     build_main_prompt,
-    parallel_search,
     build_self_knowledge_prompt,
+    parallel_search,
 )
 from agent.state import AgentState
 from agent.tools.search import search_tavily as search_tool
 from agent.tools.sql_query import execute_sql_query
-
 from core.constants import *
 from core.embeddings.retriever import get_thread_documents_retriever, rerank_chunks
 from core.llm.client import invoke_llm
@@ -49,7 +48,7 @@ async def retriever(state: AgentState) -> AgentState:
         query=query,
         k=None,  # None enables adaptive scaling
         min_chunks_per_doc=MIN_CHUNKS_PER_DOC,
-        max_total_chunks=MAX_TOTAL_CHUNKS
+        max_total_chunks=MAX_TOTAL_CHUNKS,
     )
 
     end_time = time.time()
@@ -63,7 +62,7 @@ async def retriever(state: AgentState) -> AgentState:
         query=query,
         chunks=retrieved_docs,
         top_k=len(retrieved_docs),
-        diversity_lambda=0.5  # Balance between relevance and diversity
+        diversity_lambda=0.5,  # Balance between relevance and diversity
     )
     rerank_end = time.time()
     print(f"Re-ranking completed in {rerank_end - rerank_start:.2f} seconds")
@@ -148,7 +147,9 @@ async def generate(state: AgentState) -> AgentState:
             state.answer = result.answer
             state.action = result.action
             state.chunks_used = result.chunks_used or []
-            state.suggested_questions = getattr(result, "suggested_questions", None) or []
+            state.suggested_questions = (
+                getattr(result, "suggested_questions", None) or []
+            )
             state.web_search_queries = getattr(result, "web_search_queries", []) or []
             state.attempts += 1
             state.document_id = result.document_id or None

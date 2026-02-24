@@ -6,7 +6,9 @@ as a safety net after JSON parsing.
 """
 
 import re
+
 from pydantic import BaseModel, field_validator, model_validator
+
 from core.utils.llm_output_sanitizer import normalize_answer_content
 
 
@@ -58,8 +60,16 @@ class LLMOutputBase(BaseModel):
             if isinstance(value, str):
                 setattr(self, field_name, normalize_answer_content(value))
             elif isinstance(value, list):
-                setattr(self, field_name, [
-                    normalize_answer_content(item) if isinstance(item, str) else item
-                    for item in value
-                ])
+                setattr(
+                    self,
+                    field_name,
+                    [
+                        (
+                            normalize_answer_content(item)
+                            if isinstance(item, str)
+                            else item
+                        )
+                        for item in value
+                    ],
+                )
         return self

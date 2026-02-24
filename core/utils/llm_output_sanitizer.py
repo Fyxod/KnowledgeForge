@@ -14,6 +14,7 @@ from typing import Type, TypeVar
 
 from pydantic import BaseModel
 
+
 try:
     import json_repair
 except ImportError:
@@ -31,9 +32,7 @@ _UNICODE_WHITESPACE_RE = re.compile(
 _ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060\u180e]")
 
 # Markdown code fence patterns
-_CODE_FENCE_RE = re.compile(
-    r"```(?:json|JSON)?\s*\n?(.*?)\n?\s*```", re.DOTALL
-)
+_CODE_FENCE_RE = re.compile(r"```(?:json|JSON)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 
 
 def sanitize_llm_json(raw: str) -> str:
@@ -91,39 +90,39 @@ def _escape_control_chars_in_strings(text: str) -> str:
     in_string = False
     i = 0
     n = len(text)
-    
+
     while i < n:
         char = text[i]
-        
+
         if char == '"':
             # Toggle string state, handling escaped quotes
-            if i > 0 and text[i-1] == '\\':
+            if i > 0 and text[i - 1] == "\\":
                 # Check for double backslash (escaped backslash) before quote
                 # If odd number of backslashes, the quote is escaped
                 bs_count = 0
                 j = i - 1
-                while j >= 0 and text[j] == '\\':
+                while j >= 0 and text[j] == "\\":
                     bs_count += 1
                     j -= 1
                 if bs_count % 2 == 0:
-                     in_string = not in_string
+                    in_string = not in_string
             else:
                 in_string = not in_string
-        
+
         if in_string:
-            if char == '\n':
-                result.append('\\n')
-            elif char == '\t':
-                result.append('\\t')
-            elif char == '\r':
-                pass # Skip carriage returns in strings
+            if char == "\n":
+                result.append("\\n")
+            elif char == "\t":
+                result.append("\\t")
+            elif char == "\r":
+                pass  # Skip carriage returns in strings
             else:
                 result.append(char)
         else:
             result.append(char)
-            
+
         i += 1
-        
+
     return "".join(result)
 
 

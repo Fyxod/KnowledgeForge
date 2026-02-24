@@ -1,9 +1,12 @@
 import copy
 import math
+
 from core.utils.count_tokens import count_tokens
 
 
-def compress_global_file_data(data: list[dict], max_tokens: int, gpu_model: str, prompt_offset: int = 0):
+def compress_global_file_data(
+    data: list[dict], max_tokens: int, gpu_model: str, prompt_offset: int = 0
+):
     """
     Compresses the 'content' field of each dict in the list 'data' so that the total token count
     does not exceed (max_tokens - prompt_offset). Uses count_tokens(text, gpu_model) to count tokens.

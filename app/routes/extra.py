@@ -1,13 +1,15 @@
 import asyncio
-import aiofiles
-from fastapi import APIRouter, Body, Request, HTTPException
-import os
 import json
+import os
+
+import aiofiles
+from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel
-from core.database import db
-from core.studio_features.word_cloud import generate_word_cloud
+
 from app.socket_handler import sio
 from core.constants import SWITCHES
+from core.database import db
+from core.studio_features.word_cloud import generate_word_cloud
 from core.utils.generation_status import (
     write_pending_status,
     write_failed_status,

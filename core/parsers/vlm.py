@@ -9,12 +9,12 @@ Follows the project's async httpx pattern (see core/llm/unload_ollama_model.py).
 """
 
 import asyncio
-import httpx
 import base64
 import io
 import time
 import traceback
 
+import httpx
 from PIL import Image
 
 from core.config import settings
@@ -100,17 +100,19 @@ async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
             "prompt": VLM_EXTRACTION_PROMPT,
             "images": [image_b64],
             "stream": False,
-            "keep_alive": 300,    # Keep model loaded for 5 min between calls
+            "keep_alive": 300,  # Keep model loaded for 5 min between calls
             "options": {
-                "temperature": 0.1,   # Low temp for factual extraction
-                "num_ctx": 8192,      # More context for complex pages
+                "temperature": 0.1,  # Low temp for factual extraction
+                "num_ctx": 8192,  # More context for complex pages
                 "num_predict": 2048,  # Reduced from 4096: most slide content fits in 1000-1500 tokens
             },
         }
 
         print(f"[VLM] Sending page to Ollama ({VLM_MODEL}) on port {port}...")
 
-        async with httpx.AsyncClient(timeout=240) as client:  # 4 min timeout for complex visual pages
+        async with httpx.AsyncClient(
+            timeout=240
+        ) as client:  # 4 min timeout for complex visual pages
             response = await client.post(url, json=payload)
             response.raise_for_status()
 
@@ -198,5 +200,7 @@ async def vlm_parse_concurrent(
 
     elapsed = time.time() - overall_start
     extracted = sum(1 for r in final if r)
-    print(f"[VLM] Concurrent processing complete: {extracted}/{total} pages in {elapsed:.2f}s")
+    print(
+        f"[VLM] Concurrent processing complete: {extracted}/{total} pages in {elapsed:.2f}s"
+    )
     return final

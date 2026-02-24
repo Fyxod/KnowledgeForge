@@ -1,5 +1,8 @@
 import json
-from core.llm.output_schemas.technical_analysis_outputs import TechnicalAnalysisLLMOutput
+
+from core.llm.output_schemas.technical_analysis_outputs import (
+    TechnicalAnalysisLLMOutput,
+)
 
 
 def technical_analysis_prompt(document: str | list[dict]):
@@ -18,9 +21,7 @@ def technical_analysis_prompt(document: str | list[dict]):
     Returns:
         A list of chat messages (role/parts) ready for the LLM client.
     """
-    schema_json = json.dumps(
-        TechnicalAnalysisLLMOutput.model_json_schema(), indent=2
-    )
+    schema_json = json.dumps(TechnicalAnalysisLLMOutput.model_json_schema(), indent=2)
 
     contents = [
         {
@@ -97,7 +98,7 @@ def technical_analysis_prompt(document: str | list[dict]):
                 "Return ONLY valid JSON.\n"
                 "CRITICAL JSON RULES:\n"
                 "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
-                "- Double quotes inside string values MUST be escaped as \\\".\n"
+                '- Double quotes inside string values MUST be escaped as \\".\n'
                 "- Backslashes inside string values MUST be escaped as \\\\.\n"
                 "- Do NOT use trailing commas after the last item in arrays or objects."
             ),

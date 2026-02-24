@@ -1,11 +1,10 @@
 import asyncio
-import os
-import time
-import pickle
-import math
 import gc
+import math
+import os
+import pickle
+import time
 from typing import List
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # ── FUSE Filesystem Compatibility ──
 # Must be set BEFORE any chromadb/sqlite3 imports.
@@ -24,12 +23,15 @@ os.environ.setdefault("CHROMA_SQLITE_MMAP_SIZE", "0")
 
 
 from langchain_chroma import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from core.embeddings.embeddings import get_embedding_function
 from core.models.document import Documents
 
 try:
     import nltk
     from nltk.tokenize import sent_tokenize
+
     nltk.download("punkt_tab", quiet=True)
     _HAS_NLTK = True
 except ImportError:
@@ -58,7 +60,11 @@ def chunk_page_text(page_text: str) -> List[str]:
             if len(current_chunk) + len(sentence) + 1 > CHUNK_SIZE and current_chunk:
                 chunks.append(current_chunk.strip())
                 # Keep overlap from the end of the last chunk
-                overlap_text = current_chunk[-CHUNK_OVERLAP:] if len(current_chunk) > CHUNK_OVERLAP else current_chunk
+                overlap_text = (
+                    current_chunk[-CHUNK_OVERLAP:]
+                    if len(current_chunk) > CHUNK_OVERLAP
+                    else current_chunk
+                )
                 current_chunk = overlap_text + " " + sentence
             else:
                 current_chunk = (current_chunk + " " + sentence).strip()
@@ -111,7 +117,11 @@ def _check_and_migrate_chroma(persist_path: str, user_id: str):
             collection = client.get_collection("user_docs")
             if collection.count() > 0:
                 sample = collection.get(limit=1, include=["embeddings"])
-                if sample and sample.get("embeddings") and len(sample["embeddings"]) > 0:
+                if (
+                    sample
+                    and sample.get("embeddings")
+                    and len(sample["embeddings"]) > 0
+                ):
                     existing_dim = len(sample["embeddings"][0])
                     expected_dim = _get_expected_dim()
                     if existing_dim != expected_dim:
@@ -209,16 +219,20 @@ def search_bm25(user_id: str, thread_id: str, query: str, top_k: int = 20):
     scores = bm25_data["bm25"].get_scores(tokenized_query)
 
     # Get top_k indices sorted by score
-    top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+    top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[
+        :top_k
+    ]
 
     results = []
     for idx in top_indices:
         if scores[idx] > 0:  # Only include results with positive BM25 score
-            results.append({
-                "page_content": bm25_data["chunk_texts"][idx],
-                "metadata": bm25_data["chunk_metadatas"][idx],
-                "bm25_score": float(scores[idx]),
-            })
+            results.append(
+                {
+                    "page_content": bm25_data["chunk_texts"][idx],
+                    "metadata": bm25_data["chunk_metadatas"][idx],
+                    "bm25_score": float(scores[idx]),
+                }
+            )
     return results
 
 
@@ -235,7 +249,9 @@ async def delete_document_from_chroma(user_id: str, thread_id: str, document_id:
                 ]
             },
         )
-        print(f"Deleted ChromaDB chunks for document {document_id} in thread {thread_id}")
+        print(
+            f"Deleted ChromaDB chunks for document {document_id} in thread {thread_id}"
+        )
     except Exception as e:
         print(f"Error deleting ChromaDB chunks for document {document_id}: {e}")
         raise
@@ -265,7 +281,9 @@ def rebuild_bm25_after_deletion(user_id: str, thread_id: str, document_id: str):
         return
 
     _build_and_save_bm25(remaining, user_id, thread_id)
-    print(f"BM25 index rebuilt for thread {thread_id} after removing document {document_id}")
+    print(
+        f"BM25 index rebuilt for thread {thread_id} after removing document {document_id}"
+    )
 
 
 async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str):
@@ -338,12 +356,16 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     ids=list(batch_ids),
                 )
                 end_time = time.time()
-                print(f"Upserted batch {batch_idx + 1} in {end_time - start_time:.2f} seconds")
+                print(
+                    f"Upserted batch {batch_idx + 1} in {end_time - start_time:.2f} seconds"
+                )
                 break
             except Exception as e:
                 if "locked" in str(e).lower() and attempt < max_retries - 1:
-                    wait = 2 ** attempt  # 1s, 2s, 4s
-                    print(f"[ChromaDB] Lock detected on batch {batch_idx + 1}, retrying in {wait}s (attempt {attempt + 1}/{max_retries})...")
+                    wait = 2**attempt  # 1s, 2s, 4s
+                    print(
+                        f"[ChromaDB] Lock detected on batch {batch_idx + 1}, retrying in {wait}s (attempt {attempt + 1}/{max_retries})..."
+                    )
                     await asyncio.sleep(wait)
                 else:
                     raise
@@ -389,11 +411,13 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
     # Merge with existing BM25 data (BM25 is per-thread, rebuild includes all docs)
     existing_bm25 = load_bm25(user_id, thread_id)
     if existing_bm25:
-        existing_chunks = list(zip(
-            existing_bm25["chunk_ids"],
-            existing_bm25["chunk_texts"],
-            existing_bm25["chunk_metadatas"],
-        ))
+        existing_chunks = list(
+            zip(
+                existing_bm25["chunk_ids"],
+                existing_bm25["chunk_texts"],
+                existing_bm25["chunk_metadatas"],
+            )
+        )
         all_bm25_chunks = existing_chunks + chunk_data
     else:
         all_bm25_chunks = chunk_data
@@ -425,10 +449,12 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
                 break
             except Exception as e:
                 if "locked" in str(e).lower() and attempt < max_retries - 1:
-                    wait = 2 ** attempt
+                    wait = 2**attempt
                     await asyncio.sleep(wait)
                 else:
                     raise
 
     elapsed = time.time() - start_time
-    print(f"Added {len(chunk_data)} chunks for doc {doc.id} to thread {thread_id} in {elapsed:.2f}s")
+    print(
+        f"Added {len(chunk_data)} chunks for doc {doc.id} to thread {thread_id} in {elapsed:.2f}s"
+    )

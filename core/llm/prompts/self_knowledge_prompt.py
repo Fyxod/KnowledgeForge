@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+
 from core.constants import INTERNAL, EXTERNAL
 from core.llm.prompts.thread_context import build_thread_context_block
 

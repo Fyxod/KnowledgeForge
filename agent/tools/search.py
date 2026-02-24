@@ -1,11 +1,11 @@
-from tavily import TavilyClient
 import asyncio
+
+from tavily import TavilyClient
 
 from core.config import settings
 
 # Initialize Tavily client
 client = TavilyClient(api_key=getattr(settings, "TAVILY_API_KEY", None))
-
 
 
 async def search_tavily(query: str, max_results: int = 5, depth: str = "advanced"):

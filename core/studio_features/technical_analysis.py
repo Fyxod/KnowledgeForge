@@ -1,9 +1,10 @@
 import os
-from core.llm.prompts.technical_analysis_prompt import technical_analysis_prompt
-from core.models.document import Document
+
+from core.constants import GPU_TECHNICAL_ANALYSIS_LLM
 from core.llm.client import invoke_llm
 from core.llm.outputs import TechnicalAnalysisLLMOutput
-from core.constants import GPU_TECHNICAL_ANALYSIS_LLM
+from core.llm.prompts.technical_analysis_prompt import technical_analysis_prompt
+from core.models.document import Document
 from core.utils.compress_data import compress_global_file_data
 
 os.makedirs("DEBUG", exist_ok=True)

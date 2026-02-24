@@ -1,9 +1,10 @@
 import os
-from core.llm.prompts.insights_prompt import insights_prompt
-from core.models.document import Document
+
+from core.constants import GPU_INSIGHTS_LLM
 from core.llm.client import invoke_llm
 from core.llm.outputs import InsightsLLMOutput
-from core.constants import GPU_INSIGHTS_LLM
+from core.llm.prompts.insights_prompt import insights_prompt
+from core.models.document import Document
 from core.utils.compress_data import compress_global_file_data
 
 os.makedirs("DEBUG", exist_ok=True)
@@ -14,7 +15,7 @@ async def generate_insights(document: Document | list[Document]) -> InsightsLLMO
     document_text = fetch_document_content(document)
 
     prompt = build_insights_prompt(document_text)
-    
+
     response: InsightsLLMOutput = await invoke_llm(
         gpu_model=GPU_INSIGHTS_LLM.model,
         response_schema=InsightsLLMOutput,

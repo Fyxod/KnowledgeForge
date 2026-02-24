@@ -11,9 +11,9 @@ Status file contents:
   - Completed: <actual result JSON — no _status key>
 """
 
+from datetime import datetime, timezone
 import json
 import os
-from datetime import datetime, timezone
 
 import aiofiles
 

@@ -1,8 +1,9 @@
 import datetime
-import jwt
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request
+import jwt
+
 from core.config import settings
 from core.database import db
 from core.models.user import (
@@ -12,6 +13,7 @@ from core.models.user import (
     UserResponseModel,
 )
 from core.utils.bcrypt import hash_password, verify_password
+
 router = APIRouter(prefix="/user", tags=["user"])
 
 
@@ -31,7 +33,7 @@ def create_user(user_input: UserCreateModel):
     user_dict["threads"] = {}
 
     result = db.users.insert_one(user_dict)
-    
+
     print("User created with ID:", result.inserted_id)
 
     created_user = db.users.find_one(
@@ -74,14 +76,16 @@ def login_user(user_input: UserLoginModel):
         raise HTTPException(status_code=400, detail="Invalid email or password")
 
     token_payload = UserJwtPayload(
-            userId=user["userId"],
-            name=user["name"],
-            email=user["email"],
-            is_active=user.get("is_active", True),
-        ).model_dump()
+        userId=user["userId"],
+        name=user["name"],
+        email=user["email"],
+        is_active=user.get("is_active", True),
+    ).model_dump()
 
     # Add expiry — tokens valid for 24 hours
-    token_payload["exp"] = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+    token_payload["exp"] = datetime.datetime.now(
+        datetime.timezone.utc
+    ) + datetime.timedelta(hours=24)
 
     token = jwt.encode(
         token_payload,

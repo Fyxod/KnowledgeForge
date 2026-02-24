@@ -1,14 +1,14 @@
+import asyncio
 import json
 import os
+import time
 from typing import List
 
 import aiofiles
-import asyncio
 
 from app.socket_handler import sio
 from core.models.document import Documents
 from core.parsers.main import extract_document
-import time
 
 
 # ppt, pdf, xlsx, docx, txt, html, png, jpeg, jpg, md

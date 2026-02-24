@@ -1,8 +1,10 @@
-import pandas as pd
-from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Font, Alignment
-from openpyxl.comments import Comment
 import os
+
+from openpyxl import Workbook
+from openpyxl.comments import Comment
+from openpyxl.styles import Alignment, Font, PatternFill
+import pandas as pd
+
 
 def create_dirty_excel(filename="dirty_test.xlsx"):
     wb = Workbook()
@@ -22,7 +24,9 @@ def create_dirty_excel(filename="dirty_test.xlsx"):
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=header_row, column=col_num, value=header)
         cell.font = Font(bold=True)
-        cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        cell.fill = PatternFill(
+            start_color="CCCCCC", end_color="CCCCCC", fill_type="solid"
+        )
 
     # --- Add Data ---
     data = [
@@ -30,21 +34,27 @@ def create_dirty_excel(filename="dirty_test.xlsx"):
         [102, "Widget B", "South", 3200, "Pending"],
         [103, "Gadget X", "East", 8100, "Rejected"],
         [104, "Gadget Y", "West", 4500, "Approved"],
-        [None, None, None, None, None], # Empty row
+        [None, None, None, None, None],  # Empty row
         [105, "Gizmo Z", "North", 1200, "Approved"],
     ]
 
     for i, row_data in enumerate(data, 1):
         for j, value in enumerate(row_data, 1):
             cell = ws.cell(row=header_row + i, column=j, value=value)
-            
+
             # Add semantic colors
             if value == "Approved":
-                cell.fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid") # Green
+                cell.fill = PatternFill(
+                    start_color="00FF00", end_color="00FF00", fill_type="solid"
+                )  # Green
             elif value == "Rejected":
-                cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid") # Red
+                cell.fill = PatternFill(
+                    start_color="FF0000", end_color="FF0000", fill_type="solid"
+                )  # Red
             elif value == "Pending":
-                 cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid") # Yellow
+                cell.fill = PatternFill(
+                    start_color="FFFF00", end_color="FFFF00", fill_type="solid"
+                )  # Yellow
 
             # Add comment
             if value == 8100:
@@ -62,6 +72,7 @@ def create_dirty_excel(filename="dirty_test.xlsx"):
     # --- Save ---
     wb.save(filename)
     print(f"Created {filename}")
+
 
 if __name__ == "__main__":
     create_dirty_excel()

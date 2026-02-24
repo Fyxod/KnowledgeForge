@@ -1,16 +1,15 @@
-from core.models.gpu_config import GPULLMConfig
 from core.config import settings
+from core.models.gpu_config import GPULLMConfig
 
 # SETTINGS
 SWITCHES = {
     "MIND_MAP": False,  # For long documents, mind map will be better if SUMMARIZATION = True
     # For Cpu based testing we suggest to keep both False to avoid much load on CPU
     "SUMMARIZATION": False,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
-    "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
-    "FALLBACK_TO_OPENAI": True,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
+    "FALLBACK_TO_GEMINI": True,  # Fallback to Gemini if Ollama fails
+    "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
-                            # This can be turned off if all the queries are independent and do not need context from previous chats.
-
+    # This can be turned off if all the queries are independent and do not need context from previous chats.
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
 }
@@ -18,18 +17,28 @@ SWITCHES = {
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
 
 # Adaptive Retrieval Parameters
-MIN_CHUNKS_PER_DOC = 10 # Minimum chunks to retrieve per document
-MAX_TOTAL_CHUNKS = 50 # Reduced from 100: reranking selects best chunks, fewer = faster LLM generation
+MIN_CHUNKS_PER_DOC = 10  # Minimum chunks to retrieve per document
+MAX_TOTAL_CHUNKS = (
+    50  # Reduced from 100: reranking selects best chunks, fewer = faster LLM generation
+)
 
 
-EASYOCR_WORKERS = 10  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
-TESSERACT_WORKERS = 50  # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
-EASYOCR_GPU = True  # GPU mode: ~4-7x faster OCR, uses only ~200MB VRAM (negligible on 48GB)
+EASYOCR_WORKERS = (
+    10  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
+)
+TESSERACT_WORKERS = (
+    50  # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
+)
+EASYOCR_GPU = (
+    True  # GPU mode: ~4-7x faster OCR, uses only ~200MB VRAM (negligible on 48GB)
+)
 
 PORT1 = 11434  # port where ollama is running
 PORT2 = 11435  # port where second ollama instance is running
 
-MAIN_MODEL = settings.MAIN_MODEL # Set in .env file, e.g. "gpt-oss:20b-50k-8k" or "qwen3:14b-39500-8k"
+MAIN_MODEL = (
+    settings.MAIN_MODEL
+)  # Set in .env file, e.g. "gpt-oss:20b-50k-8k" or "qwen3:14b-39500-8k"
 # MAIN_MODEL = "gpt-oss:20b-50k-8k"
 # QWEN3_14B = "qwen3:14b-39500-8k"
 

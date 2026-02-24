@@ -1,9 +1,12 @@
-import httpx
 import asyncio
-from core.constants import SWITCHES
+
+import httpx
+
 from core.config import settings
+from core.constants import SWITCHES
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
+
 
 async def unload_ollama_model(model: str, port: int = 11434):
     """

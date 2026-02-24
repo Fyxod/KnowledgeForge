@@ -1,16 +1,18 @@
-import os
 import asyncio
+import os
 import time
+
+import easyocr
 from PIL import Image, ImageEnhance
 import pytesseract
-import easyocr
 
-from core.constants import EASYOCR_WORKERS, TESSERACT_WORKERS, EASYOCR_GPU
+from core.constants import EASYOCR_GPU, EASYOCR_WORKERS, TESSERACT_WORKERS
 
 # Enable cuDNN benchmark for consistent image sizes (auto-tunes GPU kernels)
 if EASYOCR_GPU:
     try:
         import torch
+
         torch.backends.cudnn.benchmark = True
     except Exception:
         pass
@@ -83,10 +85,7 @@ async def image_parser(image_path: str) -> str:
 
                 # Sort by Y-position (top→bottom), then X (left→right)
                 # This preserves table row order and flowchart structure
-                sorted_results = sorted(
-                    result,
-                    key=lambda x: (x[0][0][1], x[0][0][0])
-                )
+                sorted_results = sorted(result, key=lambda x: (x[0][0][1], x[0][0][0]))
 
                 text_lines = [item[1] for item in sorted_results]
                 return "\n".join(text_lines)
@@ -122,7 +121,9 @@ async def image_parser(image_path: str) -> str:
         easyocr_result = await easyocr_parse()
         if easyocr_result and easyocr_result.strip():
             elapsed = time.time() - start_time
-            print(f"[EasyOCR] Succeeded in {elapsed:.2f}s for {os.path.basename(image_path)}")
+            print(
+                f"[EasyOCR] Succeeded in {elapsed:.2f}s for {os.path.basename(image_path)}"
+            )
             return easyocr_result.strip()
     except Exception as e:
         print(f"[EasyOCR] Exception: {e}")
@@ -135,7 +136,9 @@ async def image_parser(image_path: str) -> str:
         start_time = time.time()
         result = (await tesseract_parse()).strip()
         elapsed = time.time() - start_time
-        print(f"[Tesseract] Completed in {elapsed:.2f}s for {os.path.basename(image_path)}")
+        print(
+            f"[Tesseract] Completed in {elapsed:.2f}s for {os.path.basename(image_path)}"
+        )
         return result
     except Exception as e:
         print(f"[Tesseract] Fatal exception: {e}")

@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
 from typing import List, Optional
+
+from pydantic import BaseModel, Field
 
 from core.llm.output_schemas.base import LLMOutputBase
 
@@ -17,7 +18,9 @@ class TechnicalScope(BaseModel):
 
 
 class TechnicalDecision(BaseModel):
-    decision: str = Field(description="A technical decision identified in the document.")
+    decision: str = Field(
+        description="A technical decision identified in the document."
+    )
     rationale: str = Field(description="The rationale behind this decision.")
     implications: str = Field(
         description="Implications of this decision going forward."
@@ -64,9 +67,7 @@ class ImplementationReadiness(BaseModel):
     gaps_to_address: List[str] = Field(
         description="Technical gaps that need to be addressed."
     )
-    dependencies: List[str] = Field(
-        description="Key dependencies for implementation."
-    )
+    dependencies: List[str] = Field(description="Key dependencies for implementation.")
 
 
 class TechnicalForwardAssessment(BaseModel):

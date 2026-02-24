@@ -27,23 +27,23 @@ POST /upload/
                 "error": <error_message>
 """
 
-import datetime
-import uuid
 import asyncio
+import datetime
 from typing import List, Optional
+import uuid
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
 
+from app.socket_handler import sio
+from core.constants import SWITCHES
 from core.database import db
 from core.embeddings.vectorstore import save_documents_to_store
+from core.models.document import Documents
 from core.parsers.process_files import process_files
 from core.services.upload_files import upload_files
-from core.models.document import Documents
 from core.studio_features.summarizer import summarize_documents
 from core.studio_features.word_cloud import create_stop_words
-from app.socket_handler import sio
 from core.utils.extra_done_check import mark_extra_done
-from core.constants import SWITCHES
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 

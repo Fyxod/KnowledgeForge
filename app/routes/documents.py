@@ -3,9 +3,9 @@ import os
 from typing import Dict, Optional
 from urllib.parse import quote
 
-import jwt
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
+import jwt
 from jwt import ExpiredSignatureError, InvalidTokenError
 
 from core.config import settings

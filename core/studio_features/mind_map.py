@@ -1,11 +1,12 @@
+import asyncio
+import json
 import os
 import time
-import json
-import asyncio
 from typing import List
 
 import aiofiles
 
+from app.socket_handler import sio
 from core.constants import (
     GPU_NODE_DESCRIPTION_LLM,
     GPU_NODE_GENERATION_LLM,
@@ -14,14 +15,13 @@ from core.embeddings.retriever import get_user_retriever
 from core.llm.client import invoke_llm
 from core.llm.outputs import (
     FlatNodeWithDescriptionOutput,
+    GlobalMindMap,
     MindMapOutput,
     Node,
-    GlobalMindMap,
 )
-from core.models.document import Documents
-from app.socket_handler import sio
-from core.utils.extra_done_check import mark_extra_done
 from core.llm.unload_ollama_model import unload_ollama_model
+from core.models.document import Documents
+from core.utils.extra_done_check import mark_extra_done
 
 
 # Constants

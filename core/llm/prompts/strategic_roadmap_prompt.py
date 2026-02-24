@@ -1,5 +1,6 @@
 import json
 from typing import List
+
 from core.llm.output_schemas.strategic_roadmap_outputs import StrategicRoadmapLLMOutput
 
 
@@ -74,7 +75,7 @@ def strategic_roadmap_prompt(document: str | list[dict], n_years: int):
                 f"TASK: Generate a {n_years}-year strategic roadmap following the rules above and return ONLY valid JSON.\n"
                 "CRITICAL JSON RULES:\n"
                 "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
-                "- Double quotes inside string values MUST be escaped as \\\".\n"
+                '- Double quotes inside string values MUST be escaped as \\".\n'
                 "- Backslashes inside string values MUST be escaped as \\\\.\n"
                 "- Do NOT use trailing commas after the last item in arrays or objects."
             ),

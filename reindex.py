@@ -13,11 +13,12 @@ Usage:
 This will clear old ChromaDB data and rebuild everything from parsed documents.
 """
 
-import os
-import sys
-import json
-import shutil
 import asyncio
+import json
+import math
+import os
+import shutil
+import sys
 import time
 
 # Add root to path
@@ -25,12 +26,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.database import db
 from core.embeddings.vectorstore import (
-    get_vectorstore,
-    chunk_page_text,
     _build_and_save_bm25,
+    chunk_page_text,
     embedding_function,
+    get_vectorstore,
 )
-import math
 
 
 async def reindex_user(user_id: str):
@@ -137,7 +137,9 @@ async def reindex_user(user_id: str):
                 embedding_function.embed_documents, list(batch_texts)
             )
             elapsed = time.time() - start
-            print(f"    [EMBED] Batch {batch_idx + 1}/{total_batches} in {elapsed:.2f}s")
+            print(
+                f"    [EMBED] Batch {batch_idx + 1}/{total_batches} in {elapsed:.2f}s"
+            )
 
             await asyncio.to_thread(
                 vectorstore._collection.upsert,

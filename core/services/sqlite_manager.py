@@ -4,14 +4,21 @@ Manages per-user, per-thread in-memory SQLite databases that store
 spreadsheet data as queryable SQL tables.
 """
 
-import sqlite3
-import pandas as pd
-import re
 import os
-import traceback
 from pathlib import Path
+import re
+import sqlite3
+import traceback
 from typing import Dict, List, Optional, Tuple
-from core.parsers.excel_utils import find_header_row, detect_merged_header_rows, flatten_multiindex_columns, deduplicate_columns
+
+import pandas as pd
+
+from core.parsers.excel_utils import (
+    deduplicate_columns,
+    detect_merged_header_rows,
+    find_header_row,
+    flatten_multiindex_columns,
+)
 
 
 def _clean_dataframe_unicode(df: pd.DataFrame) -> pd.DataFrame:
@@ -144,7 +151,9 @@ class SQLiteManager:
 
                     # Detect multi-level headers from merged cells (.xlsx only)
                     if ext == ".xlsx":
-                        header_param = detect_merged_header_rows(file_path, sheet_name, header_idx)
+                        header_param = detect_merged_header_rows(
+                            file_path, sheet_name, header_idx
+                        )
                     else:
                         header_param = header_idx
 
@@ -366,7 +375,7 @@ class SQLiteManager:
     ) -> None:
         """
         Reload spreadsheet data from files if not already in memory.
-        
+
         Args:
             user_id: The user ID.
             thread_id: The thread ID.
@@ -375,25 +384,27 @@ class SQLiteManager:
         # Ensure connection exists
         cls.get_connection(user_id, thread_id)
         key = (user_id, thread_id)
-        
+
         # Check and load each file if needed
         for file_info in files_info:
             doc_id = file_info.get("doc_id")
-            
+
             # If tables for this doc are already registered, skip it
             if key in cls._table_registry and doc_id in cls._table_registry[key]:
                 continue
-                
+
             file_path = file_info.get("path")
             file_name = file_info.get("file_name")
-            
+
             if not file_path or not os.path.exists(file_path):
                 print(f"[SQLiteManager] File not found for reload: {file_path}")
                 continue
-                
+
             try:
                 # Load the file
-                print(f"[SQLiteManager] Reloading {file_name} for thread {thread_id}...")
+                print(
+                    f"[SQLiteManager] Reloading {file_name} for thread {thread_id}..."
+                )
                 cls.load_spreadsheet(
                     user_id=user_id,
                     thread_id=thread_id,

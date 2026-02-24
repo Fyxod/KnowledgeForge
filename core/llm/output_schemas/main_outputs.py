@@ -1,8 +1,8 @@
-from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 
+from pydantic import BaseModel, Field, field_validator
+
 from core.llm.output_schemas.base import LLMOutputBase
-from pydantic import field_validator
 
 
 class ChunksUsed(BaseModel):

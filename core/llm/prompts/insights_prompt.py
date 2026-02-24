@@ -1,4 +1,5 @@
 import json
+
 from core.llm.output_schemas.insights_outputs import InsightsLLMOutput
 
 
@@ -30,7 +31,7 @@ def insights_prompt(document: str | list[dict]):
                 "OUTPUT RULES\n"
                 "- Output must be valid JSON only, no markdown fencing or trailing commas.\n"
                 "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
-                "- Double quotes inside string values MUST be escaped as \\\".\n"
+                '- Double quotes inside string values MUST be escaped as \\".\n'
                 "- Backslashes inside string values MUST be escaped as \\\\.\n"
                 "- Include all top-level keys, even if some arrays are empty.\n"
                 "- Synthesize from document content and enrich with relevant domain knowledge.\n"

@@ -1,21 +1,23 @@
 import asyncio
+from datetime import datetime, timezone
 import json
 import time
-from datetime import datetime, timezone
+from typing import Literal
+
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
 from langchain_core.messages import AIMessage, HumanMessage
-from core.llm.outputs import DecompositionLLMOutput
+from pydantic import BaseModel
+
 from agent.builder import Agent, AgentState
-from agent.decomposition import decomposition_node
 from agent.combination import combination_node
-from core.database import db
-from core.utils.extra_done_check import is_extra_done
-from core.constants import GPU_QUERY_LLM, GPU_QUERY_LLM2, INTERNAL, EXTERNAL, SWITCHES
+from agent.decomposition import decomposition_node
 from agent.tools.search import search_tavily as search_tool
 from agent.tools.sql_query import get_sql_schema
+from core.constants import EXTERNAL, GPU_QUERY_LLM, GPU_QUERY_LLM2, INTERNAL, SWITCHES
+from core.database import db
+from core.llm.outputs import DecompositionLLMOutput
 from core.services.sqlite_manager import SQLiteManager
-from typing import Literal
+from core.utils.extra_done_check import is_extra_done
 
 router = APIRouter(prefix="/query", tags=["query"])
 

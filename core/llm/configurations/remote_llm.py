@@ -1,7 +1,9 @@
-import requests
-from langchain_core.language_models import LLM
-from typing import Optional, List
 import re
+from typing import List, Optional
+
+from langchain_core.language_models import LLM
+import requests
+
 from core.config import settings
 
 QUERY_URL = settings.QUERY_URL

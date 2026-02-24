@@ -1,9 +1,10 @@
 import os
-from core.llm.prompts.strategic_roadmap_prompt import strategic_roadmap_prompt
-from core.models.document import Document
+
+from core.constants import GPU_STRATEGIC_ROADMAP_LLM
 from core.llm.client import invoke_llm
 from core.llm.outputs import StrategicRoadmapLLMOutput
-from core.constants import GPU_STRATEGIC_ROADMAP_LLM
+from core.llm.prompts.strategic_roadmap_prompt import strategic_roadmap_prompt
+from core.models.document import Document
 from core.utils.compress_data import compress_global_file_data
 
 os.makedirs("DEBUG", exist_ok=True)
