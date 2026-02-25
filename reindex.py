@@ -91,9 +91,9 @@ async def reindex_user(user_id: str):
             with open(json_file, "r", encoding="utf-8") as f:
                 doc_data = json.load(f)
 
-            pages = doc_data.get("pages", [])
+            pages = doc_data.get("content", [])
             for page in pages:
-                page_no = page.get("page_number", 1)
+                page_no = page.get("number", 1)
                 page_text = page.get("text", "")
                 if not page_text.strip():
                     continue
