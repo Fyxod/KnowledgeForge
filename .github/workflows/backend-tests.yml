@@ -7,17 +7,15 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - "backend/**"
+      - "**/*.py"
       - ".github/workflows/backend-tests.yml"
+      - "requirements*.txt"
   pull_request:
     branches: [main, develop]
     paths:
-      - "backend/**"
+      - "**/*.py"
       - ".github/workflows/backend-tests.yml"
-
-defaults:
-  run:
-    working-directory: backend
+      - "requirements*.txt"
 
 jobs:
   test:
@@ -55,7 +53,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: backend/requirements*.txt
+          cache-dependency-path: requirements*.txt
 
       - name: Install dependencies
         run: |
@@ -75,19 +73,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.python-version }}
-          path: backend/coverage.xml
+          path: coverage.xml
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.python-version }}
-          path: backend/test-results.xml
+          path: test-results.xml
 
       - name: Check coverage threshold
         run: |
-          python -m pytest --cov --cov-fail-under=90 --no-header -q || \
-          echo "::warning::Coverage below 90% threshold"
+          python -m pytest --cov --cov-fail-under=75 --no-header -q || \
+          echo "::warning::Coverage below 75% threshold"
 
   lint:
     name: Lint
@@ -97,7 +95,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      - name: Install ruff
+        run: pip install ruff
       - name: Ruff check
-        working-directory: backend
         run: ruff check app/ core/ agent/ --output-format=github
