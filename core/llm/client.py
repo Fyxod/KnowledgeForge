@@ -110,7 +110,7 @@ async def invoke_llm(
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
 
         # === 1. GPU SERVER ===
-        if False:
+        if gpu_model:
             try:
                 print("Trying GPU server...")
                 gpu_llm = _get_cached_llm(gpu_model, port)
