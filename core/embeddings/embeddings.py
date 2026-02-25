@@ -13,7 +13,11 @@ def get_embedding_function():
             "batch_size": 128,
         },
         # nomic-embed-text-v1.5 requires task-specific prefixes for optimal embeddings.
-        # query_instruction is prepended only to embed_query() calls (search-time),
+        # "prompt" is passed to sentence_transformers.encode() and prepended to text.
+        # query_encode_kwargs applies ONLY to embed_query() calls (search-time),
         # NOT to embed_documents() calls (index-time — handled in vectorstore.py).
-        query_instruction="search_query: ",
+        query_encode_kwargs={
+            "prompt": "search_query: ",
+        },
     )
+
