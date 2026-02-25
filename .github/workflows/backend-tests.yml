@@ -4,18 +4,19 @@
 name: Backend Tests
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - "**/*.py"
-      - ".github/workflows/backend-tests.yml"
-      - "requirements*.txt"
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - "**/*.py"
-      - ".github/workflows/backend-tests.yml"
-      - "requirements*.txt"
+  workflow_dispatch: # Manual trigger only — re-enable auto triggers below when ready
+  # push:
+  #   branches: [main, develop]
+  #   paths:
+  #     - "**/*.py"
+  #     - ".github/workflows/backend-tests.yml"
+  #     - "requirements*.txt"
+  # pull_request:
+  #   branches: [main, develop]
+  #   paths:
+  #     - "**/*.py"
+  #     - ".github/workflows/backend-tests.yml"
+  #     - "requirements*.txt"
 
 jobs:
   test:
