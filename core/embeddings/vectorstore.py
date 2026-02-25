@@ -3,6 +3,7 @@ import gc
 import math
 import os
 import pickle
+import re
 import time
 from typing import List
 
@@ -44,6 +45,10 @@ print("Embedding model loaded.")
 # Improved chunking parameters (512 chars, ~20% overlap)
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 100
+
+# nomic-embed-text-v1.5 task prefix for document embeddings.
+# Queries use "search_query: " (configured in embeddings.py via query_instruction).
+SEARCH_DOCUMENT_PREFIX = "search_document: "
 
 
 def chunk_page_text(page_text: str) -> List[str]:
@@ -183,8 +188,8 @@ def _build_and_save_bm25(chunk_data: list, user_id: str, thread_id: str):
         print("rank_bm25 not installed, skipping BM25 index creation.")
         return
 
-    # Tokenize documents for BM25
-    tokenized_docs = [text.lower().split() for (_, text, _) in chunk_data]
+    # Tokenize documents for BM25 (with punctuation stripping for better matching)
+    tokenized_docs = [_tokenize_for_bm25(text) for (_, text, _) in chunk_data]
     bm25 = BM25Okapi(tokenized_docs)
 
     bm25_data = {
@@ -209,13 +214,20 @@ def load_bm25(user_id: str, thread_id: str):
         return pickle.load(f)
 
 
+def _tokenize_for_bm25(text: str) -> list:
+    """Tokenize text for BM25: lowercase, strip punctuation, split on whitespace."""
+    text = text.lower()
+    text = re.sub(r"[^\w\s]", " ", text)  # replace punctuation with space
+    return text.split()
+
+
 def search_bm25(user_id: str, thread_id: str, query: str, top_k: int = 20):
     """Search the BM25 index for the given query."""
     bm25_data = load_bm25(user_id, thread_id)
     if bm25_data is None:
         return []
 
-    tokenized_query = query.lower().split()
+    tokenized_query = _tokenize_for_bm25(query)
     scores = bm25_data["bm25"].get_scores(tokenized_query)
 
     # Get top_k indices sorted by score
@@ -305,7 +317,8 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                 chunk_id = f"{doc.id}_page{page.number}_chunk{i}"
 
                 # Contextual enrichment: prepend title + page for better embeddings
-                enriched_chunk = f"Document: {doc.title}\nPage {page.number}\n\n{chunk}"
+                # search_document prefix is required by nomic-embed-text-v1.5
+                enriched_chunk = f"{SEARCH_DOCUMENT_PREFIX}Document: {doc.title}\nPage {page.number}\n\n{chunk}"
 
                 metadata = {
                     "user_id": user_id,
@@ -390,7 +403,8 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
         for i, chunk in enumerate(chunks):
             # Thread-prefixed ID prevents collision with same doc in other threads
             chunk_id = f"{thread_id}_{doc.id}_page{page.number}_chunk{i}"
-            enriched_chunk = f"Document: {doc.title}\nPage {page.number}\n\n{chunk}"
+            # search_document prefix is required by nomic-embed-text-v1.5
+            enriched_chunk = f"{SEARCH_DOCUMENT_PREFIX}Document: {doc.title}\nPage {page.number}\n\n{chunk}"
             metadata = {
                 "user_id": user_id,
                 "thread_id": thread_id,

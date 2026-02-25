@@ -12,4 +12,8 @@ def get_embedding_function():
             "normalize_embeddings": True,
             "batch_size": 128,
         },
+        # nomic-embed-text-v1.5 requires task-specific prefixes for optimal embeddings.
+        # query_instruction is prepended only to embed_query() calls (search-time),
+        # NOT to embed_documents() calls (index-time — handled in vectorstore.py).
+        query_instruction="search_query: ",
     )

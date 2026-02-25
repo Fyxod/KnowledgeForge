@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.database import db
 from core.embeddings.vectorstore import (
+    SEARCH_DOCUMENT_PREFIX,
     _build_and_save_bm25,
     chunk_page_text,
     embedding_function,
@@ -101,8 +102,8 @@ async def reindex_user(user_id: str):
                 for i, chunk in enumerate(chunks):
                     chunk_id = f"{doc_id}_page{page_no}_chunk{i}"
 
-                    # Contextual enrichment
-                    enriched_chunk = f"Document: {title}\nPage {page_no}\n\n{chunk}"
+                    # Contextual enrichment with search_document prefix
+                    enriched_chunk = f"{SEARCH_DOCUMENT_PREFIX}Document: {title}\nPage {page_no}\n\n{chunk}"
 
                     metadata = {
                         "user_id": user_id,
@@ -158,10 +159,10 @@ async def main():
     print("=" * 60)
     print()
     print("This will re-index all documents with:")
-    print("  - New embedding model: nomic-ai/nomic-embed-text-v1.5")
+    print("  - nomic-embed-text-v1.5 search_document/search_query prefixes")
     print("  - Smaller chunks: 512 chars (was 1000)")
     print("  - Contextual enrichment: title + page prepended")
-    print("  - BM25 index for hybrid search")
+    print("  - BM25 index with improved tokenization")
     print()
 
     # Get all users
