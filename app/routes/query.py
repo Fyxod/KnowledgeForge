@@ -112,6 +112,15 @@ async def query(request: Request, body: QueryRequest):
         spreadsheet_schema = get_sql_schema(user_id, thread_id)
         print(f"[SQL] Spreadsheet data available for thread {thread_id}")
 
+    # Determine if the thread contains ONLY spreadsheet documents (no PDFs, PPTX, etc.)
+    # When True, the retriever will skip RAG to avoid wasted latency and LLM confusion
+    thread_docs = thread.get("documents", [])
+    spreadsheet_extensions = {".xlsx", ".xls", ".csv"}
+    spreadsheet_only = has_spreadsheet and len(thread_docs) > 0 and all(
+        any(doc.get("file_name", "").lower().endswith(ext) for ext in spreadsheet_extensions)
+        for doc in thread_docs
+    )
+
     ds = time.time()
     if SWITCHES["DECOMPOSITION"]:
         decomposition_result: DecompositionLLMOutput = await decomposition_node(
@@ -158,6 +167,7 @@ async def query(request: Request, body: QueryRequest):
                         mode=mode,
                         use_self_knowledge=use_self_knowledge,
                         has_spreadsheet_data=has_spreadsheet,
+                        spreadsheet_only=spreadsheet_only,
                         spreadsheet_schema=spreadsheet_schema,
                         thread_instructions=thread_instructions,
                     )
@@ -325,6 +335,7 @@ async def query(request: Request, body: QueryRequest):
                 initial_search_results=search_result.get("results", []),
                 use_self_knowledge=use_self_knowledge,
                 has_spreadsheet_data=has_spreadsheet,
+                spreadsheet_only=spreadsheet_only,
                 spreadsheet_schema=spreadsheet_schema,
                 thread_instructions=thread_instructions,
             )

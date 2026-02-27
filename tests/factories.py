@@ -182,6 +182,7 @@ def make_agent_state_dict(
         "sql_result": None,
         "sql_attempts": 0,
         "has_spreadsheet_data": False,
+        "spreadsheet_only": False,
         "spreadsheet_schema": None,
         "action": None,
         "next": None,

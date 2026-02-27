@@ -37,6 +37,17 @@ async def retriever(state: AgentState) -> AgentState:
     3. Better coverage when multiple documents are present
     4. Re-ranking for optimal relevance and diversity
     """
+    # Skip RAG retrieval when the thread contains only spreadsheet files.
+    # Spreadsheet data is queried via SQL which is faster and more accurate
+    # than text chunks extracted from spreadsheet cells.
+    if state.has_spreadsheet_data and state.spreadsheet_only:
+        print(
+            f"[retriever] Skipping RAG — spreadsheet-only thread for user {state.user_id}"
+        )
+        state.chunks = []
+        state.confidence_score = "high"
+        return state
+
     start_time = time.time()
 
     # Use the new robust retrieval function that ensures document diversity

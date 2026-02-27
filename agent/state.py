@@ -41,6 +41,7 @@ class AgentState(BaseModel):
     sql_result: Optional[str] = None
     sql_attempts: int = 0
     has_spreadsheet_data: bool = False
+    spreadsheet_only: bool = False  # True when ALL thread documents are spreadsheets
     spreadsheet_schema: Optional[str] = None
 
     action: Optional[
