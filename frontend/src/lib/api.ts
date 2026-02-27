@@ -36,7 +36,6 @@ export interface Chat {
   content: string;
   timestamp: string;
   // Enhanced metadata fields from Phase 1/2 backend
-  suggested_questions?: string[];
   confidence_score?: string | number; // Backend sends "high"/"medium"/"low"
   thought_process?: string; // For Deep Reasoning output
   sources?: {
@@ -104,7 +103,6 @@ export interface QueryResponse {
   answer: string;
   use_self_knowledge?: boolean;
   // Enhanced metadata fields
-  suggested_questions?: string[];
   confidence_score?: string | number;
   thought_process?: string;
   // Original shape (legacy)

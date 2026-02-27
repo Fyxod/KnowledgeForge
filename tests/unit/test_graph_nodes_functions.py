@@ -165,7 +165,6 @@ class TestGenerateNode:
                 {"document_id": "d1", "page_no": 1, "title": "Doc1"},
                 {"document_id": "d2", "page_no": 2, "title": "Doc2"},
             ],
-            "suggested_questions": ["Q1?"],
             "web_search_queries": [],
         }
 

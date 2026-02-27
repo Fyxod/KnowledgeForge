@@ -112,12 +112,15 @@ def rerank_chunks(
         # Prepare query-chunk pairs
         pairs = [(query, chunk.get("page_content", "")) for chunk in chunks]
 
-        # Get relevance scores
+        # Get relevance scores (raw logits, typically -10 to +10)
         scores = cross_encoder.predict(pairs)
 
-        # Add scores to chunks
+        # Normalize to 0-1 range using sigmoid
+        def _sigmoid(x):
+            return 1.0 / (1.0 + math.exp(-float(x)))
+
         for i, chunk in enumerate(chunks):
-            chunk["relevance_score"] = float(scores[i])
+            chunk["relevance_score"] = _sigmoid(scores[i])
 
         print(f"Cross-encoder re-ranking completed.")
 
@@ -171,7 +174,9 @@ def rerank_chunks(
 
         if best_idx is not None:
             selected_indices.add(best_idx)
-            reranked_chunks.append(chunks[best_idx])
+            chunk = chunks[best_idx]
+            chunk["rerank_score"] = chunks[best_idx]["relevance_score"]
+            reranked_chunks.append(chunk)
 
     print(f"Re-ranking complete. Selected {len(reranked_chunks)} chunks.")
 

@@ -176,13 +176,13 @@ def make_agent_state_dict(
         "answer": None,
         "chunks_used": [],
         "confidence_score": None,
-        "suggested_questions": None,
         "attempts": 0,
         "web_search_attempts": 0,
         "sql_query": None,
         "sql_result": None,
         "sql_attempts": 0,
         "has_spreadsheet_data": False,
+        "spreadsheet_only": False,
         "spreadsheet_schema": None,
         "action": None,
         "next": None,
@@ -218,13 +218,11 @@ def make_main_llm_output(
     answer: str = "Test answer",
     action: str = "answer",
     chunks_used: Optional[List] = None,
-    suggested_questions: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     return {
         "answer": answer,
         "action": action,
         "chunks_used": chunks_used or [],
         "document_id": None,
-        "suggested_questions": suggested_questions or ["Follow-up question?"],
         "web_search_queries": [],
     }

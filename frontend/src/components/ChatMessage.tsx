@@ -11,16 +11,15 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { FileText, ExternalLink, Sparkles, AlertTriangle, Lightbulb } from 'lucide-react';
+import { FileText, ExternalLink, Sparkles, AlertTriangle } from 'lucide-react';
 
 
 interface ChatMessageProps {
   chat: Chat;
   onDelete?: () => void;
-  onSuggestionClick?: (question: string) => void;
 }
 
-export const ChatMessage = ({ chat, onDelete, onSuggestionClick }: ChatMessageProps) => {
+export const ChatMessage = ({ chat, onDelete }: ChatMessageProps) => {
   const isUser = chat.type === 'user';
   // Markdown is enabled by default for bot messages. Removed per-message toggle.
   const displayTime = React.useMemo(() => {
@@ -156,24 +155,6 @@ export const ChatMessage = ({ chat, onDelete, onSuggestionClick }: ChatMessagePr
           </div>
         )}
 
-        {/* Suggested Follow-up Questions (below answer, inside bubble) */}
-        {!isUser && chat.suggested_questions && chat.suggested_questions.length > 0 && (
-          <div className="flex flex-col gap-1.5 mt-3 pt-2 border-t border-border/30">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">Follow-up</span>
-            {chat.suggested_questions.slice(0, 2).map((q, idx) => (
-              <Button
-                key={idx}
-                variant="ghost"
-                size="sm"
-                className="h-auto py-1.5 px-3 rounded-lg text-xs bg-muted/30 hover:bg-primary/10 text-muted-foreground hover:text-primary whitespace-normal text-left justify-start"
-                onClick={() => onSuggestionClick?.(q)}
-              >
-                <Lightbulb className="w-3 h-3 mr-2 opacity-70 flex-shrink-0" />
-                {q}
-              </Button>
-            ))}
-          </div>
-        )}
       </div>
 
       {isUser && (

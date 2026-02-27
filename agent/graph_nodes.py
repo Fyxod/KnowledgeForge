@@ -37,6 +37,17 @@ async def retriever(state: AgentState) -> AgentState:
     3. Better coverage when multiple documents are present
     4. Re-ranking for optimal relevance and diversity
     """
+    # Skip RAG retrieval when the thread contains only spreadsheet files.
+    # Spreadsheet data is queried via SQL which is faster and more accurate
+    # than text chunks extracted from spreadsheet cells.
+    if state.has_spreadsheet_data and state.spreadsheet_only:
+        print(
+            f"[retriever] Skipping RAG — spreadsheet-only thread for user {state.user_id}"
+        )
+        state.chunks = []
+        state.confidence_score = "high"
+        return state
+
     start_time = time.time()
 
     # Use the new robust retrieval function that ensures document diversity
@@ -92,14 +103,13 @@ async def retriever(state: AgentState) -> AgentState:
         json.dump(modified_docs, f, indent=2)
 
     # Compute confidence score from retrieval quality
-    unique_docs = set(d["document_id"] for d in modified_docs if d["document_id"])
     num_chunks = len(modified_docs)
     avg_rerank = 0.0
     if modified_docs:
         scores = [d.get("rerank_score", 0.0) for d in modified_docs]
         avg_rerank = sum(scores) / len(scores) if scores else 0.0
 
-    if num_chunks >= 5 and len(unique_docs) >= 2 and avg_rerank >= 0.5:
+    if num_chunks >= 5 and avg_rerank >= 0.5:
         state.confidence_score = "high"
     elif num_chunks >= 3 and avg_rerank >= 0.3:
         state.confidence_score = "medium"
@@ -147,9 +157,6 @@ async def generate(state: AgentState) -> AgentState:
             state.answer = result.answer
             state.action = result.action
             state.chunks_used = result.chunks_used or []
-            state.suggested_questions = (
-                getattr(result, "suggested_questions", None) or []
-            )
             state.web_search_queries = getattr(result, "web_search_queries", []) or []
             state.attempts += 1
             state.document_id = result.document_id or None

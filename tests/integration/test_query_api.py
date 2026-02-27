@@ -88,13 +88,13 @@ class TestQueryEndpoint:
             "answer": "AI is artificial intelligence.",
             "chunks_used": [],
             "confidence_score": "high",
-            "suggested_questions": ["What is ML?"],
             "attempts": 0,
             "web_search_attempts": 0,
             "sql_query": None,
             "sql_result": None,
             "sql_attempts": 0,
             "has_spreadsheet_data": False,
+            "spreadsheet_only": False,
             "spreadsheet_schema": None,
             "action": "answer",
             "next": None,
@@ -121,7 +121,7 @@ class TestQueryEndpoint:
         assert data["answer"] == "AI is artificial intelligence."
         assert data["question"] == "What is AI?"
         assert "confidence_score" in data
-        assert "suggested_questions" in data
+        assert "confidence_score" in data
 
     @pytest.mark.asyncio
     async def test_query_missing_question(

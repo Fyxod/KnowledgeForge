@@ -33,10 +33,6 @@ class AgentState(BaseModel):
         default=None,
         description="Confidence level of the answer: 'high', 'medium', or 'low'.",
     )
-    suggested_questions: Optional[List[str]] = Field(
-        default=None, description="Follow-up questions suggested by the LLM."
-    )
-
     attempts: int = 0
     web_search_attempts: int = 0
 
@@ -45,6 +41,7 @@ class AgentState(BaseModel):
     sql_result: Optional[str] = None
     sql_attempts: int = 0
     has_spreadsheet_data: bool = False
+    spreadsheet_only: bool = False  # True when ALL thread documents are spreadsheets
     spreadsheet_schema: Optional[str] = None
 
     action: Optional[

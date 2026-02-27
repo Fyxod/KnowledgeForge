@@ -74,7 +74,6 @@ async def query(request: Request, body: QueryRequest):
     chunks = []
     chunks_used = []
     confidence_scores = []
-    suggested_questions = []
 
     # Reload spreadsheet data if needed (handling server restarts/older chats)
     try:
@@ -112,6 +111,15 @@ async def query(request: Request, body: QueryRequest):
     if has_spreadsheet:
         spreadsheet_schema = get_sql_schema(user_id, thread_id)
         print(f"[SQL] Spreadsheet data available for thread {thread_id}")
+
+    # Determine if the thread contains ONLY spreadsheet documents (no PDFs, PPTX, etc.)
+    # When True, the retriever will skip RAG to avoid wasted latency and LLM confusion
+    thread_docs = thread.get("documents", [])
+    spreadsheet_extensions = {".xlsx", ".xls", ".csv"}
+    spreadsheet_only = has_spreadsheet and len(thread_docs) > 0 and all(
+        any(doc.get("file_name", "").lower().endswith(ext) for ext in spreadsheet_extensions)
+        for doc in thread_docs
+    )
 
     ds = time.time()
     if SWITCHES["DECOMPOSITION"]:
@@ -159,6 +167,7 @@ async def query(request: Request, body: QueryRequest):
                         mode=mode,
                         use_self_knowledge=use_self_knowledge,
                         has_spreadsheet_data=has_spreadsheet,
+                        spreadsheet_only=spreadsheet_only,
                         spreadsheet_schema=spreadsheet_schema,
                         thread_instructions=thread_instructions,
                     )
@@ -176,11 +185,8 @@ async def query(request: Request, body: QueryRequest):
                 qe = time.time() - qs
                 chunks.extend(state.chunks)
                 chunks_used.extend(state.chunks_used)
-                # Collect confidence and suggestions from sub-queries
                 if state.confidence_score:
                     confidence_scores.append(state.confidence_score)
-                if state.suggested_questions:
-                    suggested_questions.extend(state.suggested_questions)
                 print(
                     f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {model}"
                 )
@@ -329,6 +335,7 @@ async def query(request: Request, body: QueryRequest):
                 initial_search_results=search_result.get("results", []),
                 use_self_knowledge=use_self_knowledge,
                 has_spreadsheet_data=has_spreadsheet,
+                spreadsheet_only=spreadsheet_only,
                 spreadsheet_schema=spreadsheet_schema,
                 thread_instructions=thread_instructions,
             )
@@ -352,8 +359,6 @@ async def query(request: Request, body: QueryRequest):
         chunks_used.extend(state.chunks_used)
         if state.confidence_score:
             confidence_scores.append(state.confidence_score)
-        if state.suggested_questions:
-            suggested_questions.extend(state.suggested_questions)
     end_time = time.time()
 
     print(f"Total Agent response time: {end_time - start_time:.2f} seconds")
@@ -413,16 +418,6 @@ async def query(request: Request, body: QueryRequest):
             confidence_scores, key=lambda c: confidence_priority.get(c, 0)
         )
 
-    # Deduplicate suggested questions
-    seen_questions = set()
-    unique_suggestions = []
-    for q in suggested_questions:
-        q_lower = q.strip().lower()
-        if q_lower not in seen_questions:
-            seen_questions.add(q_lower)
-            unique_suggestions.append(q.strip())
-    unique_suggestions = unique_suggestions[:5]  # Cap at 5
-
     # Update the thread with the new messages (including metadata for persistence)
     now = datetime.now(timezone.utc)
     new_messages = [
@@ -433,7 +428,6 @@ async def query(request: Request, body: QueryRequest):
             "timestamp": now,
             "sources": {"documents_used": modified_used, "web_used": all_favicons},
             "confidence_score": final_confidence,
-            "suggested_questions": unique_suggestions,
         },
     ]
 
@@ -455,7 +449,6 @@ async def query(request: Request, body: QueryRequest):
             "web_used": all_favicons,
         },
         "confidence_score": final_confidence,
-        "suggested_questions": unique_suggestions,
         "use_self_knowledge": use_self_knowledge,
     }
 
