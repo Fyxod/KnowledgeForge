@@ -591,9 +591,7 @@ def main_prompt(
                 '- Double quotes inside string values MUST be escaped as \\".\n'
                 "- Backslashes inside string values MUST be escaped as \\\\.\n"
                 "- Do NOT use trailing commas after the last item in arrays or objects.\n"
-                "- For tables inside the answer field, use HTML <table> tags, NOT Markdown pipe tables.\n"
-                "IMPORTANT: Include 2-3 specific follow-up questions in the `suggested_questions` field that would "
-                "help the user explore the topic further based on the available documents."
+                "- For tables inside the answer field, use HTML <table> tags, NOT Markdown pipe tables."
             ),
         }
     )

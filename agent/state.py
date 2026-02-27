@@ -33,10 +33,6 @@ class AgentState(BaseModel):
         default=None,
         description="Confidence level of the answer: 'high', 'medium', or 'low'.",
     )
-    suggested_questions: Optional[List[str]] = Field(
-        default=None, description="Follow-up questions suggested by the LLM."
-    )
-
     attempts: int = 0
     web_search_attempts: int = 0
 

@@ -74,7 +74,6 @@ async def query(request: Request, body: QueryRequest):
     chunks = []
     chunks_used = []
     confidence_scores = []
-    suggested_questions = []
 
     # Reload spreadsheet data if needed (handling server restarts/older chats)
     try:
@@ -176,11 +175,8 @@ async def query(request: Request, body: QueryRequest):
                 qe = time.time() - qs
                 chunks.extend(state.chunks)
                 chunks_used.extend(state.chunks_used)
-                # Collect confidence and suggestions from sub-queries
                 if state.confidence_score:
                     confidence_scores.append(state.confidence_score)
-                if state.suggested_questions:
-                    suggested_questions.extend(state.suggested_questions)
                 print(
                     f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {model}"
                 )
@@ -352,8 +348,6 @@ async def query(request: Request, body: QueryRequest):
         chunks_used.extend(state.chunks_used)
         if state.confidence_score:
             confidence_scores.append(state.confidence_score)
-        if state.suggested_questions:
-            suggested_questions.extend(state.suggested_questions)
     end_time = time.time()
 
     print(f"Total Agent response time: {end_time - start_time:.2f} seconds")
@@ -413,16 +407,6 @@ async def query(request: Request, body: QueryRequest):
             confidence_scores, key=lambda c: confidence_priority.get(c, 0)
         )
 
-    # Deduplicate suggested questions
-    seen_questions = set()
-    unique_suggestions = []
-    for q in suggested_questions:
-        q_lower = q.strip().lower()
-        if q_lower not in seen_questions:
-            seen_questions.add(q_lower)
-            unique_suggestions.append(q.strip())
-    unique_suggestions = unique_suggestions[:5]  # Cap at 5
-
     # Update the thread with the new messages (including metadata for persistence)
     now = datetime.now(timezone.utc)
     new_messages = [
@@ -433,7 +417,6 @@ async def query(request: Request, body: QueryRequest):
             "timestamp": now,
             "sources": {"documents_used": modified_used, "web_used": all_favicons},
             "confidence_score": final_confidence,
-            "suggested_questions": unique_suggestions,
         },
     ]
 
@@ -455,7 +438,6 @@ async def query(request: Request, body: QueryRequest):
             "web_used": all_favicons,
         },
         "confidence_score": final_confidence,
-        "suggested_questions": unique_suggestions,
         "use_self_knowledge": use_self_knowledge,
     }
 

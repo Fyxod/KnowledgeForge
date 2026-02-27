@@ -147,9 +147,6 @@ async def generate(state: AgentState) -> AgentState:
             state.answer = result.answer
             state.action = result.action
             state.chunks_used = result.chunks_used or []
-            state.suggested_questions = (
-                getattr(result, "suggested_questions", None) or []
-            )
             state.web_search_queries = getattr(result, "web_search_queries", []) or []
             state.attempts += 1
             state.document_id = result.document_id or None

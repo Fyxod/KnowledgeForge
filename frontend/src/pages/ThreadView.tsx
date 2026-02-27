@@ -359,7 +359,6 @@ const ThreadView = () => {
             web_used: webUsed,
           },
           // Map enhanced metadata from backend
-          suggested_questions: response.suggested_questions,
           confidence_score: response.confidence_score,
           thought_process: response.thought_process,
         };
@@ -555,7 +554,6 @@ const ThreadView = () => {
                 <ChatMessage
                   chat={chat}
                   onDelete={isPendingAgentResponse ? undefined : () => handleDeleteChat(index)}
-                  onSuggestionClick={(q) => setInput(q)}
                 />
               </div>
             );

@@ -31,10 +31,6 @@ class MainLLMOutputInternal(LLMOutputBase):
         default=None,
         description="List of chunks used to generate the answer, if applicable.",
     )
-    suggested_questions: Optional[List[str]] = Field(
-        default=None,
-        description="List of 2-3 follow-up questions the user might want to ask based on the answer and available documents.",
-    )
     document_id: Optional[str] = Field(
         default=None,
         description="The ID of the document to summarize if using document_summarizer, if applicable.",
@@ -76,10 +72,6 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
         description="List of chunks used to generate the answer, if applicable.",
-    )
-    suggested_questions: Optional[List[str]] = Field(
-        default=None,
-        description="List of 2-3 follow-up questions the user might want to ask based on the answer and available documents.",
     )
     document_id: Optional[str] = Field(
         default=None,
@@ -123,10 +115,6 @@ class MainLLMOutputExternal(LLMOutputBase):
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
         description="List of chunks used to generate the answer, if applicable.",
-    )
-    suggested_questions: Optional[List[str]] = Field(
-        default=None,
-        description="List of 2-3 follow-up questions the user might want to ask based on the answer and available documents.",
     )
     web_search_queries: Optional[List[str]] = Field(
         default=None,
