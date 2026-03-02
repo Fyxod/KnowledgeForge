@@ -75,3 +75,22 @@ class AgentState(BaseModel):
         default_factory=list,
         description="User-defined instructions that apply to every message in this thread.",
     )
+
+    # Phase 2.1: CRAG Corrective Retrieval
+    retrieval_attempts: int = 0  # How many times retrieval has been performed
+    retrieval_verdict: Optional[str] = Field(
+        default=None,
+        description="Evaluator verdict: 'sufficient', 'ambiguous', or 'insufficient'.",
+    )
+
+    # Phase 2.2: Enhanced Decomposition — sub-queries for parallel retrieval
+    sub_queries: List[str] = Field(
+        default_factory=list,
+        description="Sub-queries from decomposition for parallel retrieval within the agent.",
+    )
+
+    # Phase 3.2: Triple context — entity relationships injected at retrieval time
+    triple_context: Optional[str] = Field(
+        default=None,
+        description="Formatted entity relationship triples relevant to the query.",
+    )

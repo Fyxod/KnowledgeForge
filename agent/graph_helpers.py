@@ -46,6 +46,7 @@ def build_main_prompt(state: AgentState):
         sql_result=state.sql_result or None,
         original_query=state.original_query or None,
         thread_instructions=state.thread_instructions or [],
+        triple_context=state.triple_context or None,
     )
 
 

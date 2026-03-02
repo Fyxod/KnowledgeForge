@@ -367,6 +367,7 @@ def main_prompt(
     sql_result: Optional[str] = None,
     original_query: Optional[str] = None,
     thread_instructions: Optional[List[str]] = None,
+    triple_context: Optional[str] = None,
 ):
     contents = []
 
@@ -451,6 +452,19 @@ def main_prompt(
     if chunks:
         contents.append(
             {"role": "system", "parts": f"**Document Chunks (Context):**\n{chunks}\n"}
+        )
+
+    # ── Phase 3.2: Entity relationship triples ──
+    if triple_context:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    f"**{triple_context}**\n"
+                    "Use these relationships to understand connections between entities "
+                    "mentioned in the documents."
+                ),
+            }
         )
 
     # ── External-only sources ──

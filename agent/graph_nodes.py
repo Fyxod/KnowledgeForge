@@ -15,14 +15,20 @@ from agent.state import AgentState
 from agent.tools.search import search_tavily as search_tool
 from agent.tools.sql_query import execute_sql_query
 from core.constants import *
+from core.embeddings.context_enrichment import extract_query_entities
 from core.embeddings.retriever import get_thread_documents_retriever, rerank_chunks
+from core.services.triple_store import TripleStore
 from core.llm.client import invoke_llm
+from core.llm.output_schemas.evaluator_output import EvaluatorLLMOutput
+from core.llm.output_schemas.hyde_output import HyDELLMOutput
 from core.llm.outputs import (
     MainLLMOutputExternal,
     MainLLMOutputInternal,
     MainLLMOutputInternalWithFailure,
     SelfKnowledgeLLMOutput,
 )
+from core.llm.prompts.evaluator_prompt import evaluator_prompt
+from core.llm.prompts.hyde_prompt import hyde_prompt
 
 os.makedirs("DEBUG", exist_ok=True)
 
@@ -53,10 +59,45 @@ async def retriever(state: AgentState) -> AgentState:
     # Use the new robust retrieval function that ensures document diversity
     # Uses adaptive scaling based on document count
     query = state.query or state.resolved_query or state.original_query
+
+    # Phase 2.2: Multi-query retrieval — collect distinct query variants
+    # for broader coverage (original phrasing + resolved/rewritten versions)
+    additional_queries = []
+    if state.original_query and state.original_query != query:
+        additional_queries.append(state.original_query)
+    if (
+        state.resolved_query
+        and state.resolved_query != query
+        and state.resolved_query not in additional_queries
+    ):
+        additional_queries.append(state.resolved_query)
+
+    # Phase 2.3: HyDE — generate a hypothetical document passage for retrieval
+    if SWITCHES.get("HYDE", False):
+        try:
+            hyde_start = time.time()
+            prompt = hyde_prompt(query)
+            hyde_result = await invoke_llm(
+                response_schema=HyDELLMOutput,
+                contents=prompt,
+                gpu_model=GPU_HYDE_LLM.model,
+                port=GPU_HYDE_LLM.port,
+            )
+            hyde_result = HyDELLMOutput.model_validate(hyde_result)
+            if hyde_result.hypothetical_document:
+                additional_queries.append(hyde_result.hypothetical_document)
+                print(
+                    f"[HyDE] Generated hypothetical doc ({time.time() - hyde_start:.2f}s): "
+                    f"{hyde_result.hypothetical_document[:80]}..."
+                )
+        except Exception as e:
+            print(f"[HyDE] Error generating hypothetical document: {e}, skipping")
+
     retrieved_docs = await get_thread_documents_retriever(
         user_id=state.user_id,
         thread_id=state.thread_id,
         query=query,
+        additional_queries=additional_queries if additional_queries else None,
         k=None,  # None enables adaptive scaling
         min_chunks_per_doc=MIN_CHUNKS_PER_DOC,
         max_total_chunks=MAX_TOTAL_CHUNKS,
@@ -117,6 +158,23 @@ async def retriever(state: AgentState) -> AgentState:
         state.confidence_score = "low"
 
     state.chunks = modified_docs
+
+    # Phase 3.2: Look up entity-relation triples for query entities
+    try:
+        query_entities = extract_query_entities(query)
+        if query_entities:
+            triple_ctx = await asyncio.to_thread(
+                TripleStore.get_context_for_query,
+                state.user_id,
+                state.thread_id,
+                query_entities,
+            )
+            if triple_ctx:
+                state.triple_context = triple_ctx
+                print(f"[Triples] Injected {len(triple_ctx.splitlines()) - 1} triples")
+    except Exception as e:
+        print(f"[Triples] Error querying triples: {e}")
+
     return state
 
 
@@ -401,3 +459,79 @@ def summary_router(state: AgentState) -> str:
         print("Routing to generate after summarization")
         return GENERATE
     return ANSWER
+
+
+async def evaluator(state: AgentState) -> AgentState:
+    """
+    Phase 2.1: CRAG Corrective Retrieval — evaluates retrieved chunk quality.
+
+    After the retriever, this node assesses whether the chunks are sufficient
+    to answer the query. If not, it refines the query and triggers re-retrieval.
+    """
+    # Pass through if feature is disabled
+    if not SWITCHES.get("CORRECTIVE_RETRIEVAL", False):
+        state.retrieval_verdict = "sufficient"
+        return state
+
+    # Pass through if already at max attempts
+    if state.retrieval_attempts >= MAX_RETRIEVAL_ATTEMPTS:
+        print(
+            f"[CRAG Evaluator] Max retrieval attempts ({MAX_RETRIEVAL_ATTEMPTS}) reached, proceeding"
+        )
+        state.retrieval_verdict = "sufficient"
+        return state
+
+    # Pass through if no chunks (e.g., spreadsheet-only thread)
+    if not state.chunks:
+        state.retrieval_verdict = "sufficient"
+        return state
+
+    state.retrieval_attempts += 1
+
+    try:
+        start_time = time.time()
+        prompt = evaluator_prompt(state.query, state.chunks)
+        result = await invoke_llm(
+            response_schema=EvaluatorLLMOutput,
+            contents=prompt,
+            gpu_model=GPU_EVALUATOR_LLM.model,
+            port=GPU_EVALUATOR_LLM.port,
+        )
+        result = EvaluatorLLMOutput.model_validate(result)
+
+        elapsed = time.time() - start_time
+        state.retrieval_verdict = result.verdict
+        print(
+            f"[CRAG Evaluator] Verdict: {result.verdict} | "
+            f"Reasoning: {result.reasoning} | Time: {elapsed:.2f}s"
+        )
+
+        if result.verdict == "ambiguous" and result.refined_query:
+            state.query = result.refined_query
+            print(
+                f"[CRAG Evaluator] Refined query for re-retrieval: {result.refined_query}"
+            )
+
+    except Exception as e:
+        print(f"[CRAG Evaluator] Error: {e}, proceeding with current chunks")
+        state.retrieval_verdict = "sufficient"
+
+    return state
+
+
+def evaluator_router(state: AgentState) -> str:
+    """Route based on the CRAG evaluator verdict."""
+    if (
+        state.retrieval_verdict == "ambiguous"
+        and state.retrieval_attempts < MAX_RETRIEVAL_ATTEMPTS
+    ):
+        print(
+            f"[CRAG Router] Re-retrieving (attempt {state.retrieval_attempts + 1})"
+        )
+        return RETRIEVER
+
+    # sufficient, insufficient, or max attempts exhausted → proceed to generate
+    print(
+        f"[CRAG Router] Proceeding to generate (verdict: {state.retrieval_verdict})"
+    )
+    return GENERATE

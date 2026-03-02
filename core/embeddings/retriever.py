@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 import numpy as np
 from sentence_transformers import CrossEncoder
 
+from core.embeddings.context_enrichment import extract_query_entities
 from core.embeddings.vectorstore import get_vectorstore, search_bm25
 
 # Initialize cross-encoder for re-ranking (lazy loading)
@@ -280,6 +281,7 @@ async def hybrid_retrieve(
     user_id: str,
     thread_id: str,
     query: str,
+    additional_queries: List[str] = None,
     vector_k: int = 30,
     bm25_k: int = 20,
 ) -> List[Dict[str, Any]]:
@@ -289,44 +291,97 @@ async def hybrid_retrieve(
     Uses Reciprocal Rank Fusion (RRF) to merge results from both retrievers,
     providing both semantic understanding and keyword matching.
 
+    Phase 2.2: Supports multi-query retrieval — when additional_queries are provided,
+    retrieves for each query variant in parallel and merges all result lists via RRF.
+    This gives broader coverage for rewritten/decomposed queries.
+
     Args:
         user_id: User identifier
         thread_id: Thread identifier
-        query: The user's search query
-        vector_k: Number of results from vector search
-        bm25_k: Number of results from BM25 search
+        query: The primary search query
+        additional_queries: Optional extra query variants for multi-query retrieval
+        vector_k: Number of results from vector search (per query)
+        bm25_k: Number of results from BM25 search (per query)
 
     Returns:
         Merged and deduplicated results sorted by RRF score
     """
     import asyncio
 
-    # Run vector search and BM25 search in parallel
-    vector_retriever = get_user_retriever(user_id, thread_id, k=vector_k)
+    all_queries = [query]
+    if additional_queries:
+        all_queries.extend(additional_queries)
 
-    async def get_vector_results():
-        docs = await vector_retriever.ainvoke(query)
+    # Scale k per query to keep total retrieval volume manageable
+    num_queries = len(all_queries)
+    if num_queries > 1:
+        per_query_vector_k = max(15, vector_k // num_queries)
+        per_query_bm25_k = max(10, bm25_k // num_queries)
+        print(
+            f"[Multi-query retrieval] {num_queries} queries, "
+            f"vector_k={per_query_vector_k}/query, bm25_k={per_query_bm25_k}/query"
+        )
+    else:
+        per_query_vector_k = vector_k
+        per_query_bm25_k = bm25_k
+
+    vector_retriever = get_user_retriever(user_id, thread_id, k=per_query_vector_k)
+
+    async def get_vector_results(q: str):
+        docs = await vector_retriever.ainvoke(q)
         return [doc.model_dump() for doc in docs]
 
-    async def get_bm25_results():
-        return await asyncio.to_thread(search_bm25, user_id, thread_id, query, bm25_k)
+    async def get_bm25_results(q: str):
+        return await asyncio.to_thread(
+            search_bm25, user_id, thread_id, q, per_query_bm25_k
+        )
 
-    vector_results, bm25_results = await asyncio.gather(
-        get_vector_results(),
-        get_bm25_results(),
-    )
+    # Run vector + BM25 for every query variant in parallel
+    tasks = []
+    for q in all_queries:
+        tasks.append(get_vector_results(q))
+        tasks.append(get_bm25_results(q))
 
+    all_results = await asyncio.gather(*tasks)
+
+    # Collect all non-empty result lists for RRF fusion
+    result_lists = [res for res in all_results if res]
+
+    total_retrieved = sum(len(r) for r in result_lists)
     print(
-        f"Hybrid search: {len(vector_results)} vector + {len(bm25_results)} BM25 results"
+        f"Hybrid search: {total_retrieved} total results from {num_queries} "
+        f"query variant(s), {len(result_lists)} result lists"
     )
 
-    # If BM25 returns no results, just use vector search
-    if not bm25_results:
-        return vector_results
+    if not result_lists:
+        fused = []
+    elif len(result_lists) == 1:
+        fused = result_lists[0]
+    else:
+        # Merge all result lists using Reciprocal Rank Fusion
+        fused = reciprocal_rank_fusion(result_lists)
+        print(f"RRF fusion produced {len(fused)} unique results")
 
-    # Merge using Reciprocal Rank Fusion
-    fused = reciprocal_rank_fusion([vector_results, bm25_results])
-    print(f"RRF fusion produced {len(fused)} unique results")
+    # Phase 1.2: Entity-aware boosting — boost chunks containing query entities
+    # Collect entities from all query variants for broader matching
+    all_entities = set()
+    for q in all_queries:
+        all_entities.update(extract_query_entities(q))
+
+    if all_entities:
+        entity_lower = [e.lower() for e in all_entities]
+        for doc in fused:
+            doc_entities = doc.get("metadata", {}).get("entities", "")
+            if doc_entities:
+                doc_entity_lower = doc_entities.lower()
+                matches = sum(1 for e in entity_lower if e in doc_entity_lower)
+                if matches > 0:
+                    # Boost RRF score by 20% per matching entity
+                    boost = 1.0 + (0.2 * matches)
+                    doc["rrf_score"] = doc.get("rrf_score", 0.0) * boost
+        # Re-sort after boosting
+        fused.sort(key=lambda d: d.get("rrf_score", 0.0), reverse=True)
+        print(f"Entity boost applied for {len(all_entities)} entities: {all_entities}")
 
     return fused
 
@@ -424,6 +479,7 @@ async def get_thread_documents_retriever(
     user_id: str,
     thread_id: str,
     query: str = "",
+    additional_queries: List[str] = None,
     k: int = None,
     min_chunks_per_doc: int = 3,
     max_total_chunks: int = 50,
@@ -431,6 +487,9 @@ async def get_thread_documents_retriever(
     """
     Get retriever for all documents in a thread with adaptive document diversity.
     Uses hybrid search (vector + BM25) for improved recall.
+
+    Phase 2.2: Supports multi-query retrieval via additional_queries parameter.
+    When provided, retrieves for each query variant in parallel for broader coverage.
 
     This function uses an adaptive strategy that:
     1. Ensures minimum chunks per document (min_chunks_per_doc)
@@ -442,6 +501,7 @@ async def get_thread_documents_retriever(
         user_id: User identifier
         thread_id: Thread identifier
         query: The user query for semantic similarity search
+        additional_queries: Optional extra query variants for multi-query retrieval
         k: Total number of chunks to retrieve (None for adaptive)
         min_chunks_per_doc: Minimum chunks to retrieve per document
         max_total_chunks: Maximum total chunks to return
@@ -454,6 +514,7 @@ async def get_thread_documents_retriever(
         user_id,
         thread_id,
         query,
+        additional_queries=additional_queries,
         vector_k=max_total_chunks * 2,
         bm25_k=max_total_chunks,
     )
