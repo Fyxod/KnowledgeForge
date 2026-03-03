@@ -7,6 +7,11 @@ Outputs Markdown with proper tables, formulas, and layout preservation.
 GLM-OCR achieves 94.62 on OmniDocBench V1.5 (#1 overall).
 Architecture: CogViT encoder + PP-DocLayout-V3 + GLM-0.5B decoder.
 
+Per official deployment guide (zai-org/GLM-OCR/examples/ollama-deploy):
+  - Uses Ollama's native /api/generate endpoint (NOT /api/chat)
+  - Model: glm-ocr:latest (or custom Modelfile variant)
+  - Template: {{ .Prompt }} — prompt passed directly
+
 Follows the project's async httpx pattern (see core/parsers/vlm.py).
 """
 
@@ -25,7 +30,7 @@ from core.constants import PORT1, GLM_OCR_MODEL, GLM_OCR_WORKERS
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 
-# Prompts matching GLM-OCR's expected format
+# Prompts matching GLM-OCR's expected format (per Ollama model page)
 GLM_OCR_TEXT_PROMPT = "Text Recognition:"
 GLM_OCR_TABLE_PROMPT = "Table Recognition:"
 GLM_OCR_FIGURE_PROMPT = "Figure Recognition:"
@@ -62,7 +67,7 @@ def _resize_image(image_bytes: bytes, max_dim: int) -> bytes:
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-    print(f"[GLM-OCR] Resized image {w}x{h} → {new_w}x{new_h} (max_dim={max_dim})")
+    print(f"[GLM-OCR] Resized image {w}x{h} -> {new_w}x{new_h}")
     return buf.getvalue()
 
 
@@ -88,7 +93,11 @@ async def glm_ocr_parse(
     port: int = PORT1,
 ) -> str:
     """
-    Run GLM-OCR on a single image via Ollama.
+    Run GLM-OCR on a single image via Ollama's native /api/generate endpoint.
+
+    Per the official deployment guide, GLM-OCR uses /api/generate (not /api/chat).
+    The prompt (e.g. "Text Recognition:") is passed directly via the `prompt` field,
+    and the image is sent as base64 in the `images` array.
 
     Args:
         image_input: File path (str) or raw PNG bytes.
@@ -111,25 +120,17 @@ async def glm_ocr_parse(
 
         semaphore = await _get_semaphore()
         async with semaphore:
-            # Use /api/chat (not /api/generate) — GLM-OCR's chat template
-            # properly handles image token injection; /api/generate may return empty.
-            url = f"{LOCAL_BASE_URL}:{port}/api/chat"
+            # Official GLM-OCR docs: use /api/generate (Ollama native endpoint)
+            url = f"{LOCAL_BASE_URL}:{port}/api/generate"
 
             payload = {
                 "model": GLM_OCR_MODEL,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt,
-                        "images": [image_b64],
-                    }
-                ],
+                "prompt": prompt,
+                "images": [image_b64],
                 "stream": False,
                 "keep_alive": 300,  # Keep model loaded for 5 min between calls
                 "options": {
-                    "temperature": 0.01,  # Near-deterministic for factual extraction
-                    "num_ctx": 8192,
-                    "num_predict": 4096,
+                    "temperature": 0,  # Deterministic (per official Modelfile)
                 },
             }
 
@@ -142,13 +143,12 @@ async def glm_ocr_parse(
                 f"[GLM-OCR] Sending {label} to Ollama ({GLM_OCR_MODEL}) port {port} mode={mode}..."
             )
 
-            async with httpx.AsyncClient(timeout=120) as client:
+            async with httpx.AsyncClient(timeout=180) as client:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
 
             result = response.json()
-            # /api/chat returns content in message.content, not response
-            content = result.get("message", {}).get("content", "").strip()
+            content = result.get("response", "").strip()
 
             elapsed = time.time() - start_time
             print(
@@ -160,14 +160,14 @@ async def glm_ocr_parse(
     except httpx.ConnectError:
         print(
             f"[GLM-OCR] Connection refused at {LOCAL_BASE_URL}:{port}. "
-            "Is Ollama running with glm-ocr model? Try: ollama pull glm-ocr:q8_0"
+            "Is Ollama running with glm-ocr model? Try: ollama pull glm-ocr:latest"
         )
         return ""
     except httpx.TimeoutException:
-        print(f"[GLM-OCR] Request timed out after 120s for model {GLM_OCR_MODEL}.")
+        print(f"[GLM-OCR] Request timed out after 180s for model {GLM_OCR_MODEL}.")
         return ""
     except httpx.HTTPStatusError as e:
-        print(f"[GLM-OCR] HTTP error: {e}")
+        print(f"[GLM-OCR] HTTP error {e.response.status_code}: {e}")
         return ""
     except Exception as e:
         print(f"[GLM-OCR] Unexpected error: {e}")

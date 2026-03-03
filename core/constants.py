@@ -19,7 +19,7 @@ SWITCHES = {
 }
 
 # GLM-OCR Configuration
-GLM_OCR_MODEL = "glm-ocr:q8_0"  # Ollama model name (1.6 GB Q8_0 quantized)
+GLM_OCR_MODEL = "glm-ocr-32k"  # Custom Modelfile: 32K context, 8K output (see core/parsers/Modelfile.glm-ocr)
 GLM_OCR_WORKERS = 3  # Max concurrent GLM-OCR inferences (VRAM-aware)
 
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
