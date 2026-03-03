@@ -111,12 +111,19 @@ async def glm_ocr_parse(
 
         semaphore = await _get_semaphore()
         async with semaphore:
-            url = f"{LOCAL_BASE_URL}:{port}/api/generate"
+            # Use /api/chat (not /api/generate) — GLM-OCR's chat template
+            # properly handles image token injection; /api/generate may return empty.
+            url = f"{LOCAL_BASE_URL}:{port}/api/chat"
 
             payload = {
                 "model": GLM_OCR_MODEL,
-                "prompt": prompt,
-                "images": [image_b64],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt,
+                        "images": [image_b64],
+                    }
+                ],
                 "stream": False,
                 "keep_alive": 300,  # Keep model loaded for 5 min between calls
                 "options": {
@@ -140,7 +147,8 @@ async def glm_ocr_parse(
                 response.raise_for_status()
 
             result = response.json()
-            content = result.get("response", "").strip()
+            # /api/chat returns content in message.content, not response
+            content = result.get("message", {}).get("content", "").strip()
 
             elapsed = time.time() - start_time
             print(
