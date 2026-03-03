@@ -25,6 +25,7 @@ def get_cross_encoder():
         device = "cuda" if torch.cuda.is_available() else "cpu"
         _cross_encoder = CrossEncoder(
             "cross-encoder/ms-marco-MiniLM-L-6-v2",
+            max_length=512,  # Truncate inputs to model's max position embeddings
             device=device,
         )
         if device == "cuda":
@@ -118,6 +119,9 @@ def rerank_chunks(
         pairs = [(query, chunk.get("page_content", "")) for chunk in chunks]
 
         # Get relevance scores (raw logits, typically -10 to +10)
+        # CrossEncoder is initialized with max_length=512 to truncate long inputs.
+        # GLM-OCR Markdown (tables, formulas) tokenizes into far more tokens per char
+        # than plain text and can exceed the model's 512-token position embedding limit.
         scores = cross_encoder.predict(pairs)
 
         # Normalize to 0-1 range using sigmoid
