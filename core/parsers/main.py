@@ -37,6 +37,8 @@ from core.parsers.slide_export import (
     get_libreoffice_command,
 )
 from core.parsers.vlm import vlm_parse_concurrent, vlm_parse_slide
+from core.constants import SWITCHES
+from core.parsers.glm_ocr import glm_ocr_parse, glm_ocr_parse_concurrent
 from core.services.sqlite_manager import SQLiteManager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -243,6 +245,20 @@ async def extract_document(
             print(f"Error processing image {safe_file_name}: {str(e)}")
             traceback.print_exc()
             return None
+
+        # --- GLM-OCR Enhancement for standalone images (additive) ---
+        if SWITCHES.get("GLM_OCR", False):
+            try:
+                print(f"[Image] Running GLM-OCR enhancement on {safe_file_name}...")
+                glm_result = await glm_ocr_parse(file_path, mode="text")
+                if glm_result and glm_result.strip():
+                    text += f"\n\n[GLM-OCR Enhanced Content]\n{glm_result.strip()}\n[/GLM-OCR Enhanced Content]"
+                    print(
+                        f"[Image] GLM-OCR enhancement added ({len(glm_result)} chars)"
+                    )
+            except Exception as e:
+                print(f"[Image] GLM-OCR enhancement failed: {e}")
+                traceback.print_exc()
 
         await safe_emit(
             f"{user_id}/progress",
@@ -723,6 +739,93 @@ async def extract_document(
                     print(f"[DOCX] VLM enhancement error: {e}")
                     traceback.print_exc()
 
+            # --- GLM-OCR Enhancement for DOC (runs alongside existing OCR, additive) ---
+            if SWITCHES.get("GLM_OCR", False):
+                try:
+                    print(
+                        f"[DOC] GLM-OCR enhancement enabled for {safe_file_name}. Converting to PDF..."
+                    )
+                    await safe_emit(
+                        f"{user_id}/progress",
+                        {"message": f"Running GLM-OCR enhancement on {safe_file_name}..."},
+                    )
+
+                    libreoffice_cmd = get_libreoffice_command()
+                    pdf_path = None
+                    if libreoffice_cmd:
+                        try:
+                            doc_dir = os.path.dirname(file_path)
+                            proc = await asyncio.create_subprocess_exec(
+                                libreoffice_cmd,
+                                "--headless",
+                                "--convert-to",
+                                "pdf",
+                                "--outdir",
+                                doc_dir,
+                                file_path,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                            )
+                            await asyncio.wait_for(proc.communicate(), timeout=120)
+                            if proc.returncode == 0:
+                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                                if os.path.exists(expected_pdf):
+                                    pdf_path = expected_pdf
+                        except Exception as e:
+                            print(f"[DOC] LibreOffice conversion for GLM-OCR failed: {e}")
+                            traceback.print_exc()
+
+                    if pdf_path:
+                        try:
+                            pdf_doc = fitz.open(pdf_path)
+                            glm_images = []
+                            glm_labels = []
+
+                            for pg_num in range(len(pdf_doc)):
+                                pg = pdf_doc.load_page(pg_num)
+                                pix = pg.get_pixmap(dpi=150)
+                                glm_images.append(pix.tobytes("png"))
+                                glm_labels.append(f"Page {pg_num + 1}")
+                            pdf_doc.close()
+
+                            if glm_images:
+                                glm_results = await glm_ocr_parse_concurrent(
+                                    images=glm_images,
+                                    page_labels=glm_labels,
+                                    mode="text",
+                                    max_concurrent=3,
+                                )
+
+                                glm_combined = "\n\n".join(
+                                    f"[GLM-OCR Page {i+1}]\n{r}"
+                                    for i, r in enumerate(glm_results)
+                                    if r
+                                )
+
+                                if glm_combined:
+                                    enhancement = f"\n\n[GLM-OCR Enhanced Content]\n{glm_combined}\n[/GLM-OCR Enhanced Content]"
+                                    text += enhancement
+                                    print(
+                                        f"[DOC] GLM-OCR enhancement added ({len(glm_combined)} chars)"
+                                    )
+
+                        except Exception as e:
+                            print(f"[DOC] GLM-OCR processing failed: {e}")
+                            traceback.print_exc()
+                        finally:
+                            if pdf_path and os.path.exists(pdf_path):
+                                try:
+                                    os.remove(pdf_path)
+                                except:
+                                    pass
+                    else:
+                        print(
+                            "[DOC] Skipping GLM-OCR: LibreOffice conversion failed or not available"
+                        )
+                except Exception as e:
+                    print(f"[DOC] GLM-OCR enhancement error: {e}")
+                    traceback.print_exc()
+
             return Document(
                 id=doc_id,
                 type="doc",
@@ -926,6 +1029,91 @@ async def extract_document(
                     print(f"[PPT] VLM enhancement error: {e}")
                     traceback.print_exc()
 
+            # --- GLM-OCR Enhancement for PPT (runs alongside existing OCR, additive) ---
+            if SWITCHES.get("GLM_OCR", False):
+                try:
+                    print(
+                        f"[PPT] GLM-OCR enhancement enabled for {safe_file_name}. Converting to PDF..."
+                    )
+                    await safe_emit(
+                        f"{user_id}/progress",
+                        {"message": f"Running GLM-OCR enhancement on {safe_file_name}..."},
+                    )
+
+                    libreoffice_cmd = get_libreoffice_command()
+                    pdf_path = None
+                    if libreoffice_cmd:
+                        try:
+                            ppt_dir = os.path.dirname(file_path)
+                            proc = await asyncio.create_subprocess_exec(
+                                libreoffice_cmd,
+                                "--headless",
+                                "--convert-to",
+                                "pdf",
+                                "--outdir",
+                                ppt_dir,
+                                file_path,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                            )
+                            await asyncio.wait_for(proc.communicate(), timeout=120)
+                            if proc.returncode == 0:
+                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                                if os.path.exists(expected_pdf):
+                                    pdf_path = expected_pdf
+                        except Exception as e:
+                            print(f"[PPT] LibreOffice PDF conversion for GLM-OCR failed: {e}")
+                            traceback.print_exc()
+
+                    if pdf_path:
+                        try:
+                            pdf_doc = fitz.open(pdf_path)
+                            glm_images = []
+                            glm_labels = []
+
+                            num_pdf_pages = len(pdf_doc)
+                            num_slides = len(pages)
+                            process_count = min(num_pdf_pages, num_slides)
+
+                            for pg_num in range(process_count):
+                                pg = pdf_doc.load_page(pg_num)
+                                pix = pg.get_pixmap(dpi=150)
+                                glm_images.append(pix.tobytes("png"))
+                                glm_labels.append(f"Slide {pg_num + 1}")
+                            pdf_doc.close()
+
+                            if glm_images:
+                                glm_results = await glm_ocr_parse_concurrent(
+                                    images=glm_images,
+                                    page_labels=glm_labels,
+                                    mode="text",
+                                    max_concurrent=3,
+                                )
+
+                                for i, glm_text in enumerate(glm_results):
+                                    if glm_text and i < len(pages):
+                                        enhancement = f"\n\n[GLM-OCR Enhanced Content]\n{glm_text}\n[/GLM-OCR Enhanced Content]"
+                                        pages[i].text += enhancement
+                                        combined_texts[i] += enhancement
+                                        print(
+                                            f"[PPT] GLM-OCR enhancement added to Slide {i+1} ({len(glm_text)} chars)"
+                                        )
+
+                        except Exception as e:
+                            print(f"[PPT] GLM-OCR processing failed: {e}")
+                            traceback.print_exc()
+                        finally:
+                            if pdf_path and os.path.exists(pdf_path):
+                                try:
+                                    os.remove(pdf_path)
+                                except:
+                                    pass
+                    else:
+                        print("[PPT] Skipping GLM-OCR: LibreOffice conversion failed")
+                except Exception as e:
+                    print(f"[PPT] GLM-OCR enhancement error: {e}")
+                    traceback.print_exc()
+
             # Wait for OCR tasks
             for placeholder, task in ocr_tasks.items():
                 try:
@@ -1088,6 +1276,93 @@ async def extract_document(
                     image_text = "[Image OCR failed]"
                 page_text = page_text.replace(placeholder, image_text, 1)
 
+            # --- GLM-OCR Enhancement for DOCX (runs alongside existing OCR, additive) ---
+            if SWITCHES.get("GLM_OCR", False):
+                try:
+                    print(
+                        f"[DOCX] GLM-OCR enhancement enabled for {safe_file_name}. Converting to PDF..."
+                    )
+                    await safe_emit(
+                        f"{user_id}/progress",
+                        {"message": f"Running GLM-OCR enhancement on {safe_file_name}..."},
+                    )
+
+                    libreoffice_cmd = get_libreoffice_command()
+                    pdf_path = None
+                    if libreoffice_cmd:
+                        try:
+                            docx_dir = os.path.dirname(file_path)
+                            proc = await asyncio.create_subprocess_exec(
+                                libreoffice_cmd,
+                                "--headless",
+                                "--convert-to",
+                                "pdf",
+                                "--outdir",
+                                docx_dir,
+                                file_path,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                            )
+                            await asyncio.wait_for(proc.communicate(), timeout=120)
+                            if proc.returncode == 0:
+                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                                if os.path.exists(expected_pdf):
+                                    pdf_path = expected_pdf
+                        except Exception as e:
+                            print(f"[DOCX] LibreOffice conversion for GLM-OCR failed: {e}")
+                            traceback.print_exc()
+
+                    if pdf_path:
+                        try:
+                            pdf_doc = fitz.open(pdf_path)
+                            glm_images = []
+                            glm_labels = []
+
+                            for pg_num in range(len(pdf_doc)):
+                                pg = pdf_doc.load_page(pg_num)
+                                pix = pg.get_pixmap(dpi=150)
+                                glm_images.append(pix.tobytes("png"))
+                                glm_labels.append(f"Page {pg_num + 1}")
+                            pdf_doc.close()
+
+                            if glm_images:
+                                glm_results = await glm_ocr_parse_concurrent(
+                                    images=glm_images,
+                                    page_labels=glm_labels,
+                                    mode="text",
+                                    max_concurrent=3,
+                                )
+
+                                glm_combined = "\n\n".join(
+                                    f"[GLM-OCR Page {i+1}]\n{r}"
+                                    for i, r in enumerate(glm_results)
+                                    if r
+                                )
+
+                                if glm_combined:
+                                    enhancement = f"\n\n[GLM-OCR Enhanced Content]\n{glm_combined}\n[/GLM-OCR Enhanced Content]"
+                                    page_text += enhancement
+                                    print(
+                                        f"[DOCX] GLM-OCR enhancement added ({len(glm_combined)} chars)"
+                                    )
+
+                        except Exception as e:
+                            print(f"[DOCX] GLM-OCR processing failed: {e}")
+                            traceback.print_exc()
+                        finally:
+                            if pdf_path and os.path.exists(pdf_path):
+                                try:
+                                    os.remove(pdf_path)
+                                except:
+                                    pass
+                    else:
+                        print(
+                            "[DOCX] Skipping GLM-OCR: LibreOffice conversion failed or not available"
+                        )
+                except Exception as e:
+                    print(f"[DOCX] GLM-OCR enhancement error: {e}")
+                    traceback.print_exc()
+
             # --- Build pages (treat entire document as pages of ~3000 chars) ---
             # For simplicity, treat as single page if short, else split
             if len(page_text) <= 5000:
@@ -1158,6 +1433,7 @@ async def extract_document(
         combined_texts = []
         ocr_tasks = {}
         vlm_candidates = []  # Collect pages for concurrent VLM processing
+        glm_ocr_candidates = []  # Collect pages for concurrent GLM-OCR processing
 
         image_dir_base = f"data/{user_id}/threads/{thread_id}/images/{name}"
         MIN_IMAGE_SIZE = 50  # Skip images smaller than 50px (icons, bullets)
@@ -1239,6 +1515,24 @@ async def extract_document(
                     except Exception as e:
                         print(
                             f"[PDF] Failed to render page {page_number + 1} for VLM: {e}"
+                        )
+                        traceback.print_exc()
+
+                # --- GLM-OCR candidate detection (runs alongside existing OCR) ---
+                if SWITCHES.get("GLM_OCR", False):
+                    try:
+                        pix = page.get_pixmap(dpi=150)
+                        img_bytes = pix.tobytes("png")
+                        glm_ocr_candidates.append(
+                            {
+                                "page_index": page_number,
+                                "page_number": page_number + 1,
+                                "image_bytes": img_bytes,
+                            }
+                        )
+                    except Exception as e:
+                        print(
+                            f"[PDF] Failed to render page {page_number + 1} for GLM-OCR: {e}"
                         )
                         traceback.print_exc()
 
@@ -1366,6 +1660,43 @@ async def extract_document(
                     print(
                         f"[PDF] VLM returned less than PyMuPDF for page {candidate['page_number']}, keeping original"
                     )
+
+        # --- Phase 3: Concurrent GLM-OCR processing for candidate pages ---
+        if glm_ocr_candidates:
+            print(
+                f"[PDF] {len(glm_ocr_candidates)} pages queued for GLM-OCR processing"
+            )
+            await safe_emit(
+                f"{user_id}/progress",
+                {
+                    "message": f"Running GLM-OCR on {len(glm_ocr_candidates)} pages of {safe_file_name}..."
+                },
+            )
+
+            glm_images = [c["image_bytes"] for c in glm_ocr_candidates]
+            glm_labels = [f"Page {c['page_number']}" for c in glm_ocr_candidates]
+
+            glm_results = await glm_ocr_parse_concurrent(
+                images=glm_images,
+                page_labels=glm_labels,
+                mode="text",
+                max_concurrent=3,
+            )
+
+            # Append GLM-OCR results to existing page content (additive)
+            for candidate, glm_text in zip(glm_ocr_candidates, glm_results):
+                if not glm_text:
+                    continue
+
+                page_idx = candidate["page_index"]
+                enhancement = (
+                    f"\n\n[GLM-OCR Enhanced Content]\n{glm_text}\n[/GLM-OCR Enhanced Content]"
+                )
+                pages[page_idx].text += enhancement
+                combined_texts[page_idx] += enhancement
+                print(
+                    f"[PDF] GLM-OCR enhancement added to page {candidate['page_number']} ({len(glm_text)} chars)"
+                )
 
         # Wait for OCR tasks from the embedded raster images only
         for placeholder, task in ocr_tasks.items():
