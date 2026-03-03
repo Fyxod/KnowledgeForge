@@ -39,8 +39,11 @@ def evaluator_prompt(query: str, chunks: List[Dict[str, Any]]) -> list:
                 "- **ambiguous**: The chunks are tangentially related but don't directly answer "
                 "the query. A refined query might find better results.\n"
                 "- **insufficient**: The chunks are completely irrelevant to the query.\n\n"
-                "If verdict is 'ambiguous', provide a refined_query that rephrases the question "
-                "using different terms or a more specific angle.\n\n"
+                "If verdict is 'ambiguous' or 'insufficient', you MUST provide a refined_query "
+                "that rephrases the question using different terms, synonyms, or a more specific "
+                "angle. Use synonyms and alternative terminology that might appear in the documents "
+                "(e.g., 'deliverables' ↔ 'objectives', 'goals' ↔ 'targets', 'revenue' ↔ 'income'). "
+                "The refined query should help retrieve chunks that the original query missed.\n\n"
                 "Be lenient — if there is ANY useful information, choose 'sufficient'. "
                 "Only choose 'ambiguous' or 'insufficient' when chunks truly miss the mark."
             ),

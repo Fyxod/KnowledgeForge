@@ -4,7 +4,11 @@ from typing import Any, Dict, List
 import numpy as np
 from sentence_transformers import CrossEncoder
 
-from core.embeddings.context_enrichment import extract_query_entities
+from core.embeddings.context_enrichment import (
+    expand_keywords_with_synonyms,
+    extract_query_entities,
+    extract_query_keywords,
+)
 from core.embeddings.vectorstore import get_vectorstore, search_bm25
 
 # Initialize cross-encoder for re-ranking (lazy loading)
@@ -362,26 +366,46 @@ async def hybrid_retrieve(
         fused = reciprocal_rank_fusion(result_lists)
         print(f"RRF fusion produced {len(fused)} unique results")
 
-    # Phase 1.2: Entity-aware boosting — boost chunks containing query entities
-    # Collect entities from all query variants for broader matching
-    all_entities = set()
-    for q in all_queries:
-        all_entities.update(extract_query_entities(q))
+    # Phase 1.2: Entity + keyword boosting with synonym expansion
+    # 1) Named entity boost — only from PRIMARY query (not HyDE/variants) to avoid noise
+    query_entities = extract_query_entities(query)
 
-    if all_entities:
-        entity_lower = [e.lower() for e in all_entities]
+    # 2) Keyword boost with synonyms — extract nouns and expand with synonyms
+    query_keywords = extract_query_keywords(query)
+    expanded_keywords = expand_keywords_with_synonyms(query_keywords)
+
+    has_boost_terms = bool(query_entities) or bool(expanded_keywords)
+
+    if has_boost_terms:
+        entity_lower = {e.lower() for e in query_entities}
         for doc in fused:
-            doc_entities = doc.get("metadata", {}).get("entities", "")
-            if doc_entities:
-                doc_entity_lower = doc_entities.lower()
-                matches = sum(1 for e in entity_lower if e in doc_entity_lower)
-                if matches > 0:
-                    # Boost RRF score by 20% per matching entity
-                    boost = 1.0 + (0.2 * matches)
-                    doc["rrf_score"] = doc.get("rrf_score", 0.0) * boost
+            doc_entities_str = doc.get("metadata", {}).get("entities", "")
+            doc_content = doc.get("page_content", "").lower()
+            boost = 1.0
+
+            # Entity boost: match on pipe-delimited boundaries for precision
+            if doc_entities_str and entity_lower:
+                doc_entity_list = [e.strip().lower() for e in doc_entities_str.split("|")]
+                entity_matches = sum(1 for e in entity_lower if e in doc_entity_list)
+                if entity_matches > 0:
+                    boost += 0.25 * entity_matches  # 25% per entity match
+
+            # Keyword + synonym boost: check document content for expanded terms
+            if expanded_keywords:
+                kw_matches = sum(1 for kw in expanded_keywords if kw in doc_content)
+                if kw_matches > 0:
+                    # Smaller boost per keyword, capped to avoid runaway boosting
+                    boost += min(0.3, 0.1 * kw_matches)
+
+            if boost > 1.0:
+                doc["rrf_score"] = doc.get("rrf_score", 0.0) * boost
+
         # Re-sort after boosting
         fused.sort(key=lambda d: d.get("rrf_score", 0.0), reverse=True)
-        print(f"Entity boost applied for {len(all_entities)} entities: {all_entities}")
+        print(
+            f"Boost applied — entities: {query_entities}, "
+            f"keywords: {query_keywords}, expanded: {expanded_keywords}"
+        )
 
     return fused
 

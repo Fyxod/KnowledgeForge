@@ -157,7 +157,29 @@ async def retriever(state: AgentState) -> AgentState:
     else:
         state.confidence_score = "low"
 
-    state.chunks = modified_docs
+    # On re-retrieval (CRAG retry), merge new chunks with previous set
+    # so the LLM sees both retrieval attempts for broader coverage
+    if state.retrieval_attempts > 0 and state.chunks:
+        existing_keys = set()
+        for c in state.chunks:
+            key = (c.get("document_id", ""), c.get("page_no", 0), c.get("content", "")[:100])
+            existing_keys.add(key)
+
+        merged = list(state.chunks)
+        for doc in modified_docs:
+            key = (doc.get("document_id", ""), doc.get("page_no", 0), doc.get("content", "")[:100])
+            if key not in existing_keys:
+                merged.append(doc)
+
+        # Sort merged set by rerank_score descending
+        merged.sort(key=lambda d: d.get("rerank_score", 0.0), reverse=True)
+        state.chunks = merged
+        print(
+            f"[CRAG Merge] Combined {len(state.chunks)} chunks "
+            f"(prev: {len(existing_keys)}, new unique: {len(merged) - len(existing_keys)})"
+        )
+    else:
+        state.chunks = modified_docs
 
     # Phase 3.2: Look up entity-relation triples for query entities
     try:
@@ -506,7 +528,7 @@ async def evaluator(state: AgentState) -> AgentState:
             f"Reasoning: {result.reasoning} | Time: {elapsed:.2f}s"
         )
 
-        if result.verdict == "ambiguous" and result.refined_query:
+        if result.verdict in ("ambiguous", "insufficient") and result.refined_query:
             state.query = result.refined_query
             print(
                 f"[CRAG Evaluator] Refined query for re-retrieval: {result.refined_query}"
@@ -522,7 +544,7 @@ async def evaluator(state: AgentState) -> AgentState:
 def evaluator_router(state: AgentState) -> str:
     """Route based on the CRAG evaluator verdict."""
     if (
-        state.retrieval_verdict == "ambiguous"
+        state.retrieval_verdict in ("ambiguous", "insufficient")
         and state.retrieval_attempts < MAX_RETRIEVAL_ATTEMPTS
     ):
         print(
@@ -530,7 +552,7 @@ def evaluator_router(state: AgentState) -> str:
         )
         return RETRIEVER
 
-    # sufficient, insufficient, or max attempts exhausted → proceed to generate
+    # sufficient or max attempts exhausted → proceed to generate
     print(
         f"[CRAG Router] Proceeding to generate (verdict: {state.retrieval_verdict})"
     )

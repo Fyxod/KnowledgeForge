@@ -20,7 +20,8 @@ class EvaluatorLLMOutput(LLMOutputBase):
         default=None,
         description=(
             "A refined version of the original query that may retrieve better results. "
-            "Required when verdict is 'ambiguous'. Should be more specific or use different terms."
+            "Required when verdict is 'ambiguous' or 'insufficient'. Use synonyms and "
+            "alternative terminology (e.g., 'deliverables' instead of 'objectives')."
         ),
     )
     reasoning: str = Field(

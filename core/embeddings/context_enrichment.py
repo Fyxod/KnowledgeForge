@@ -247,10 +247,109 @@ def extract_entities_for_metadata(text: str) -> Dict[str, str]:
 def extract_query_entities(query: str) -> List[str]:
     """
     Extract entity names from a user query for retrieval boosting.
-    Returns a list of entity name strings.
+
+    Only returns high-signal entity types (PERSON, ORG, GPE, PRODUCT, EVENT,
+    WORK_OF_ART, LAW, FAC). Excludes DATE, MONEY, LOC, NORP to avoid
+    broad/noisy boosts from common terms like years or currency amounts.
     """
-    names, _ = extract_entities(query)
+    if not _load_spacy() or not query:
+        return []
+
+    doc = _nlp(query[:2000])
+
+    # High-signal types for query boosting — skip DATE, MONEY, LOC, NORP
+    boost_types = {"PERSON", "ORG", "GPE", "PRODUCT", "EVENT", "WORK_OF_ART", "LAW", "FAC"}
+
+    seen = set()
+    names = []
+    for ent in doc.ents:
+        if ent.label_ not in boost_types:
+            continue
+        name = " ".join(ent.text.split())
+        if len(name) < 2 or name.lower() in _STOP_WORDS:
+            continue
+        key = name.lower()
+        if key not in seen:
+            seen.add(key)
+            names.append(name)
+
     return names
+
+
+# ── Synonym expansion for retrieval boosting ──
+
+_SYNONYM_MAP: Dict[str, List[str]] = {
+    "deliverables": ["objectives", "outcomes", "outputs", "milestones", "results"],
+    "objectives": ["deliverables", "goals", "targets", "aims"],
+    "goals": ["objectives", "targets", "aims", "outcomes"],
+    "targets": ["goals", "objectives", "benchmarks", "milestones"],
+    "revenue": ["income", "earnings", "sales", "turnover"],
+    "income": ["revenue", "earnings", "profit"],
+    "expenses": ["costs", "expenditure", "spending", "outlays"],
+    "costs": ["expenses", "expenditure", "spending"],
+    "profit": ["earnings", "income", "net income", "margin"],
+    "strategy": ["plan", "approach", "roadmap", "framework"],
+    "plan": ["strategy", "roadmap", "blueprint", "proposal"],
+    "risks": ["threats", "challenges", "issues", "vulnerabilities"],
+    "challenges": ["risks", "issues", "obstacles", "problems"],
+    "stakeholders": ["partners", "participants", "collaborators"],
+    "requirements": ["specifications", "criteria", "needs"],
+    "specifications": ["requirements", "specs", "criteria"],
+    "timeline": ["schedule", "milestones", "deadlines", "timeframe"],
+    "schedule": ["timeline", "timetable", "deadlines"],
+    "budget": ["funding", "allocation", "financial plan", "costs"],
+    "performance": ["results", "metrics", "outcomes", "kpis"],
+    "metrics": ["kpis", "measures", "indicators", "benchmarks"],
+    "recommendations": ["suggestions", "proposals", "actions"],
+    "findings": ["results", "conclusions", "outcomes", "observations"],
+    "scope": ["coverage", "extent", "boundaries", "range"],
+    "compliance": ["adherence", "conformance", "regulatory"],
+    "assessment": ["evaluation", "analysis", "review", "appraisal"],
+    "evaluation": ["assessment", "analysis", "review", "appraisal"],
+}
+
+
+def expand_keywords_with_synonyms(keywords: List[str]) -> List[str]:
+    """
+    Expand a list of keywords with synonyms for broader retrieval matching.
+
+    Returns the original keywords plus any known synonyms, deduplicated.
+    """
+    expanded = set()
+    for kw in keywords:
+        kw_lower = kw.lower().strip()
+        expanded.add(kw_lower)
+        if kw_lower in _SYNONYM_MAP:
+            expanded.update(_SYNONYM_MAP[kw_lower])
+
+    return list(expanded)
+
+
+def extract_query_keywords(query: str) -> List[str]:
+    """
+    Extract meaningful keywords (nouns, proper nouns) from a query for
+    entity-keyword hybrid boosting. Falls back to simple word extraction
+    if spaCy is unavailable.
+    """
+    if not query:
+        return []
+
+    if _load_spacy():
+        doc = _nlp(query[:2000])
+        keywords = []
+        for token in doc:
+            # Keep nouns, proper nouns, and adjectives that aren't stop words
+            if (
+                token.pos_ in ("NOUN", "PROPN")
+                and token.text.lower() not in _STOP_WORDS
+                and len(token.text) >= 3
+            ):
+                keywords.append(token.text.lower())
+        return keywords
+
+    # Fallback: simple word extraction
+    words = re.findall(r"\b[a-zA-Z]{3,}\b", query.lower())
+    return [w for w in words if w not in _STOP_WORDS]
 
 
 # ── Phase 3.2: Triple Extraction ──
