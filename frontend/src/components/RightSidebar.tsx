@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus, FilePlus2 } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
@@ -10,6 +10,7 @@ import TechnicalRoadmapModal from './TechnicalRoadmapModal';
 import InsightsModal from './InsightsModal';
 import StrategicAnalysisModal from './StrategicAnalysisModal';
 import TechnicalAnalysisModal from './TechnicalAnalysisModal';
+import DocumentCreatorModal from './DocumentCreatorModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -56,6 +57,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [insightsOpen, setInsightsOpen] = React.useState(false);
   const [stratAnalysisOpen, setStratAnalysisOpen] = React.useState(false);
   const [techAnalysisOpen, setTechAnalysisOpen] = React.useState(false);
+  const [docCreatorOpen, setDocCreatorOpen] = React.useState(false);
   const [deleteConfirmDocId, setDeleteConfirmDocId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
@@ -231,6 +233,14 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </TooltipTrigger>
               <TooltipContent>Strategic Roadmap</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setDocCreatorOpen)} disabled={!threadId} aria-label="Create Document">
+                  <FilePlus2 className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Create Document</TooltipContent>
+            </Tooltip>
             {/* Export Button (Collapsed) */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -282,6 +292,9 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                 <MapPin className="w-4 h-4 mr-2" /> Strategic Roadmap
               </Button>
               <div className="border-t my-2" />
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setDocCreatorOpen)} disabled={!threadId}>
+                <FilePlus2 className="w-4 h-4 mr-2" /> Create Document
+              </Button>
               <Button
                 className="w-full justify-start text-muted-foreground hover:text-primary"
                 variant="ghost"
@@ -468,6 +481,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
       <TechnicalRoadmapModal open={techRoadmapOpen} onOpenChange={setTechRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
       <StrategicAnalysisModal open={stratAnalysisOpen} onOpenChange={setStratAnalysisOpen} threadId={threadId ?? ''} documents={documents} />
       <TechnicalAnalysisModal open={techAnalysisOpen} onOpenChange={setTechAnalysisOpen} threadId={threadId ?? ''} documents={documents} />
+      <DocumentCreatorModal open={docCreatorOpen} onOpenChange={setDocCreatorOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
   );
 };

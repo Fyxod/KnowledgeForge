@@ -14,6 +14,7 @@ SWITCHES = {
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
     "CORRECTIVE_RETRIEVAL": True,  # Phase 2.1: CRAG-style re-retrieval on low-confidence results
     "HYDE": False,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)
+    "DOCUMENT_CREATOR": True,  # Interactive document generation (PPTX/DOCX/PDF)
 }
 
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
@@ -63,6 +64,12 @@ GPU_EVALUATOR_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # CRAG evaluator
 GPU_HYDE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # HyDE hypothesis generation
 GPU_ENTITY_PROFILE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Entity profile generation
 GPU_TRIPLE_EXTRACTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Triple extraction
+
+# Document Creator LLM configurations
+GPU_DOC_OUTLINE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Outline generation
+GPU_DOC_SECTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section content generation
+GPU_DOC_REVIEW_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Quality self-review
+GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section iteration
 
 IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = "qwen3-vl:8b"  # Vision Language Model for slide/complex PDF extraction
