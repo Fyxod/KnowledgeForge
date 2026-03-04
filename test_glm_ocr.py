@@ -156,7 +156,7 @@ async def test_text_only(host: str, port: int, model: str):
         "prompt": "Hello",
         "stream": False,
         "options": {
-            "num_ctx": 4096,
+            "num_ctx": 8192,
             "num_predict": 64,
             "temperature": 0,
         },
@@ -217,7 +217,7 @@ async def test_streaming_ocr(host: str, port: int, model: str, image_b64: str, m
         "stream": True,  # Stream token by token
         "keep_alive": 300,
         "options": {
-            "num_ctx": 4096,
+            "num_ctx": 8192,
             "num_predict": 4096,
             "temperature": 0,
         },
@@ -225,7 +225,7 @@ async def test_streaming_ocr(host: str, port: int, model: str, image_b64: str, m
 
     print(f"  Prompt: {prompt}")
     print(f"  Streaming: True")
-    print(f"  num_ctx: 4096, num_predict: 4096")
+    print(f"  num_ctx: 8192, num_predict: 4096  (4096 is too small — known Ollama bug)")
     print(f"  Sending request...")
 
     start = time.time()
@@ -325,7 +325,7 @@ async def test_non_streaming_ocr(host: str, port: int, model: str, image_b64: st
         "stream": False,
         "keep_alive": 300,
         "options": {
-            "num_ctx": 4096,
+            "num_ctx": 8192,
             "num_predict": 4096,
             "temperature": 0,
         },
