@@ -573,23 +573,41 @@ export interface SectionState {
 }
 
 export interface DocumentCreatorOutlineResponse {
-  status: string;
+  status: boolean;
   tracking_id?: string;
-  doc_gen_id?: string;
   message?: string;
   error?: string;
 }
 
-export interface DocumentCreatorStatusResponse {
-  state: 'pending' | 'completed' | 'failed';
-  data?: {
-    doc_gen_id: string;
-    phase: string;
-    sections: SectionState[];
-    document_title?: string;
-    document_subtitle?: string;
-  };
+export interface OutlineStatusResponse {
+  status: boolean;
+  message?: string;
+  failed?: boolean;
   error?: string;
+  outline?: {
+    doc_gen_id: string;
+    document_title: string;
+    document_subtitle?: string;
+    sections: Array<{
+      section_id: string;
+      title: string;
+      description: string;
+      content_format: string;
+      order: number;
+    }>;
+  };
+}
+
+export interface GenerationStatusResponse {
+  doc_gen_id: string;
+  phase: string;
+  sections: Array<{
+    section_id: string;
+    title: string;
+    status: string;
+  }>;
+  completed_count: number;
+  total_count: number;
 }
 
 export interface DocumentCreatorPreviewResponse {
@@ -1314,7 +1332,15 @@ export const api = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ thread_id: threadId, config }),
+      body: JSON.stringify({
+        thread_id: threadId,
+        document_type: config.document_type,
+        audience: config.audience,
+        tone: config.tone,
+        source_document_ids: config.source_document_ids,
+        custom_instructions: config.custom_instructions,
+        length_preference: config.length_preference || 'medium',
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -1325,7 +1351,7 @@ export const api = {
 
   async documentCreatorOutlineStatus(
     trackingId: string,
-  ): Promise<DocumentCreatorStatusResponse> {
+  ): Promise<OutlineStatusResponse> {
     const token = getAuthToken();
     const response = await fetch(
       `${API_URL}/document-creator/outline-status/${trackingId}`,
@@ -1387,7 +1413,7 @@ export const api = {
 
   async documentCreatorStatus(
     docGenId: string,
-  ): Promise<DocumentCreatorStatusResponse> {
+  ): Promise<GenerationStatusResponse> {
     const token = getAuthToken();
     const response = await fetch(
       `${API_URL}/document-creator/status/${docGenId}`,

@@ -64,13 +64,13 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
             {/* Heading */}
             {headingLevel === 1 && (
-              <h3 className="text-xl font-bold text-foreground">{version.heading || section.spec.title}</h3>
+              <h3 className="text-xl font-bold text-foreground">{section.spec.title}</h3>
             )}
             {headingLevel === 2 && (
-              <h4 className="text-lg font-semibold text-foreground">{version.heading || section.spec.title}</h4>
+              <h4 className="text-lg font-semibold text-foreground">{section.spec.title}</h4>
             )}
             {headingLevel >= 3 && (
-              <h5 className="text-base font-medium text-foreground">{version.heading || section.spec.title}</h5>
+              <h5 className="text-base font-medium text-foreground">{section.spec.title}</h5>
             )}
 
             {/* Key takeaway */}

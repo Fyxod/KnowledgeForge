@@ -447,29 +447,8 @@ async def get_preview(request: Request, doc_gen_id: str):
         content = await f.read()
     state = DocumentCreatorState.model_validate_json(content)
 
-    sections_data = []
-    for s in state.sections:
-        section_info = {
-            "section_id": s.spec.section_id,
-            "title": s.spec.title,
-            "description": s.spec.description,
-            "content_format": s.spec.content_format.value,
-            "heading_level": s.spec.heading_level,
-            "status": s.status.value,
-            "version_count": len(s.versions),
-            "selected_version_index": s.selected_version_index,
-        }
-        if s.versions:
-            v = s.versions[s.selected_version_index]
-            section_info["content"] = {
-                "heading": v.heading if hasattr(v, "heading") else s.spec.title,
-                "content": v.content,
-                "bullet_points": v.bullet_points,
-                "table_data": v.table_data,
-                "speaker_notes": v.speaker_notes,
-                "key_takeaway": v.key_takeaway,
-            }
-        sections_data.append(section_info)
+    # Serialize full section state so frontend gets spec/versions/status
+    sections_data = [s.model_dump(mode="json") for s in state.sections]
 
     return JSONResponse(
         content={

@@ -26,7 +26,7 @@ import {
   type ExportFormat,
   type OutlineSectionSpec,
   type SectionState,
-  type DocumentCreatorStatusResponse,
+  type ContentFormat,
 } from '@/lib/api';
 import OutlineEditor from '@/components/document-creator/OutlineEditor';
 import DocumentPreview from '@/components/document-creator/DocumentPreview';
@@ -210,19 +210,29 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
 
       try {
         const res = await api.documentCreatorOutlineStatus(trackingId);
-        if (res.state === 'completed' && res.data) {
+        if (res.status && res.outline) {
+          // Completed — outline is ready
           stopPolling();
-          setDocGenId(res.data.doc_gen_id);
-          setDocumentTitle(res.data.document_title || 'Untitled Document');
-          setDocumentSubtitle(res.data.document_subtitle || '');
+          setDocGenId(res.outline.doc_gen_id);
+          setDocumentTitle(res.outline.document_title || 'Untitled Document');
+          setDocumentSubtitle(res.outline.document_subtitle || '');
           setOutlineSections(
-            res.data.sections.map((s) => s.spec),
+            res.outline.sections.map((s) => ({
+              section_id: s.section_id,
+              title: s.title,
+              description: s.description,
+              content_format: s.content_format as ContentFormat,
+              heading_level: 1,
+              guidance: null,
+              source_document_ids: [],
+              order: s.order,
+            })),
           );
           setView('outline');
           toast.success('Outline generated');
           return;
         }
-        if (res.state === 'failed') {
+        if (res.failed) {
           stopPolling();
           setErrorMessage(res.error || 'Outline generation failed');
           setView('error');
@@ -287,31 +297,33 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
       }
 
       try {
-        const res: DocumentCreatorStatusResponse = await api.documentCreatorStatus(docGenId);
+        const res = await api.documentCreatorStatus(docGenId);
 
-        if (res.state === 'completed' && res.data) {
+        if (res.phase === 'ready' || res.phase === 'completed') {
+          // All sections done — load full preview
           stopPolling();
-          setSections(res.data.sections);
-          setDocumentTitle(res.data.document_title || documentTitle);
-          setDocumentSubtitle(res.data.document_subtitle || documentSubtitle);
+          try {
+            const preview = await api.documentCreatorPreview(docGenId);
+            setSections(preview.sections);
+            setDocumentTitle(preview.document_title || documentTitle);
+            setDocumentSubtitle(preview.document_subtitle || documentSubtitle);
+          } catch {
+            // Preview load failed, but generation succeeded
+          }
           setView('preview');
           toast.success('Document generated');
           return;
         }
-        if (res.state === 'failed') {
+        if (res.phase === 'failed') {
           stopPolling();
-          setErrorMessage(res.error || 'Content generation failed');
+          setErrorMessage('Content generation failed');
           setView('error');
           return;
         }
 
-        // Update progress from section statuses if available
-        if (res.data?.sections) {
-          const completed = res.data.sections.filter(
-            (s) => s.status === 'generated' || s.status === 'approved',
-          ).length;
-          const total = res.data.sections.length;
-          const msg = `Generating sections... (${completed}/${total} complete)`;
+        // Update progress from section statuses
+        if (res.sections) {
+          const msg = `Generating sections... (${res.completed_count}/${res.total_count} complete)`;
           setProgressMessages((prev) =>
             prev[prev.length - 1] === msg ? prev : [...prev, msg],
           );
