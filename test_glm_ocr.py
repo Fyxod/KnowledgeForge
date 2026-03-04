@@ -3,7 +3,7 @@ Standalone GLM-OCR Test Script
 ==============================
 
 Tests GLM-OCR via Ollama's /api/generate endpoint.
-Completely independent of the PRISM codebase — uses only httpx + Pillow.
+Completely independent of the PRISM codebase — uses only httpx + Pillow + PyMuPDF.
 
 Diagnoses common issues:
   - Connection failures
@@ -12,13 +12,15 @@ Diagnoses common issues:
   - Model not found
 
 Usage:
-  python test_glm_ocr.py                           # Quick connectivity test
-  python test_glm_ocr.py --image /path/to/img.png  # Full OCR test with image
-  python test_glm_ocr.py --image /path/to/img.png --mode table  # Table recognition
-  python test_glm_ocr.py --image /path/to/img.png --no-stream   # Test non-streaming
+  python test_glm_ocr.py                                          # Quick connectivity test
+  python test_glm_ocr.py --image /path/to/document.pdf            # OCR page 1 of PDF
+  python test_glm_ocr.py --image /path/to/document.pdf --page 3   # OCR page 3 of PDF
+  python test_glm_ocr.py --image /path/to/img.png                 # OCR a standalone image
+  python test_glm_ocr.py --image /path/to/img.png --mode table    # Table recognition
+  python test_glm_ocr.py --image /path/to/img.png --no-stream     # Test non-streaming
 
 Requirements:
-  pip install httpx Pillow  (both already in PRISM's requirements)
+  pip install httpx Pillow PyMuPDF  (all already in PRISM's requirements)
 """
 
 import argparse
@@ -50,14 +52,38 @@ MAX_IMAGE_DIM = 2048
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
-def resize_image(image_path: str, max_dim: int = MAX_IMAGE_DIM) -> str:
-    """Load, resize, and return base64-encoded PNG."""
-    with open(image_path, "rb") as f:
-        raw = f.read()
+def pdf_to_image(pdf_path: str, page_num: int = 1, dpi: int = 150) -> bytes:
+    """Render a PDF page to PNG bytes using PyMuPDF (fitz)."""
+    import fitz  # PyMuPDF
+
+    doc = fitz.open(pdf_path)
+    total_pages = len(doc)
+    print(f"  PDF has {total_pages} page(s)")
+
+    if page_num < 1 or page_num > total_pages:
+        print(f"  ✗ Page {page_num} out of range (1-{total_pages})")
+        doc.close()
+        return None
+
+    page = doc.load_page(page_num - 1)  # 0-indexed
+    pix = page.get_pixmap(dpi=dpi)
+    png_bytes = pix.tobytes("png")
+    print(f"  Rendered page {page_num} at {dpi} DPI: {pix.width}x{pix.height} ({len(png_bytes):,} bytes)")
+    doc.close()
+    return png_bytes
+
+
+def prepare_image(image_input, max_dim: int = MAX_IMAGE_DIM) -> str:
+    """Prepare image bytes or file to base64-encoded PNG, resizing if needed."""
+    if isinstance(image_input, bytes):
+        raw = image_input
+    else:
+        with open(image_input, "rb") as f:
+            raw = f.read()
 
     img = Image.open(io.BytesIO(raw))
     w, h = img.size
-    print(f"  Original image: {w}x{h} ({len(raw):,} bytes)")
+    print(f"  Image dimensions: {w}x{h} ({len(raw):,} bytes)")
 
     if max(w, h) > max_dim:
         scale = max_dim / max(w, h)
@@ -353,7 +379,9 @@ async def test_non_streaming_ocr(host: str, port: int, model: str, image_b64: st
 # ─── Main ────────────────────────────────────────────────────────────────────
 async def main():
     parser = argparse.ArgumentParser(description="Test GLM-OCR via Ollama")
-    parser.add_argument("--image", type=str, help="Path to test image (PNG/JPG)")
+    parser.add_argument("--image", type=str, help="Path to test file (PNG/JPG/PDF)")
+    parser.add_argument("--page", type=int, default=1,
+                       help="PDF page number to test (default: 1)")
     parser.add_argument("--mode", type=str, default="text",
                        choices=["text", "table", "figure"],
                        help="OCR mode (default: text)")
@@ -384,14 +412,26 @@ async def main():
     # Test 2: Text-only (model load)
     results["text_only"] = await test_text_only(args.host, args.port, args.model)
 
-    # Test 3 & 4: Image OCR (if image provided)
+    # Test 3 & 4: OCR (if file provided)
     if args.image:
         if not os.path.exists(args.image):
-            print(f"\n✗ Image not found: {args.image}")
+            print(f"\n✗ File not found: {args.image}")
             sys.exit(1)
 
-        print(f"\nPreparing image: {args.image}")
-        image_b64 = resize_image(args.image)
+        file_ext = os.path.splitext(args.image)[1].lower()
+        print(f"\nPreparing input: {args.image}")
+
+        # PDF: render the specified page to an image first
+        if file_ext == ".pdf":
+            print(f"  Detected PDF — rendering page {args.page} at 150 DPI...")
+            png_bytes = pdf_to_image(args.image, page_num=args.page, dpi=150)
+            if png_bytes is None:
+                print("\n✗ Failed to render PDF page.")
+                sys.exit(1)
+            image_b64 = prepare_image(png_bytes)
+        else:
+            # Standard image file (PNG, JPG, etc.)
+            image_b64 = prepare_image(args.image)
 
         # Test 3: Streaming (recommended)
         results["streaming_ocr"] = await test_streaming_ocr(
@@ -404,8 +444,9 @@ async def main():
                 args.host, args.port, args.model, image_b64, args.mode
             )
     else:
-        print("\n⚠ No image provided. Skipping OCR tests.")
-        print("  Use: python test_glm_ocr.py --image /path/to/image.png")
+        print("\n⚠ No file provided. Skipping OCR tests.")
+        print("  Use: python test_glm_ocr.py --image /path/to/document.pdf")
+        print("  Or:  python test_glm_ocr.py --image /path/to/image.png")
 
     # Summary
     print("\n" + "=" * 60)
