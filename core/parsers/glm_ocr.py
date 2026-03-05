@@ -90,19 +90,18 @@ def _encode_image_base64(
 async def glm_ocr_parse(
     image_input,
     mode: str = "text",
-    port: int = PORT1,
+    port: int = 8000, # vLLM default port
 ) -> str:
     """
-    Run GLM-OCR on a single image via Ollama's native /api/generate endpoint.
+    Run GLM-OCR on a single image via the OpenAI-compatible vLLM endpoint.
 
-    Per the official deployment guide, GLM-OCR uses /api/generate (not /api/chat).
-    The prompt (e.g. "Text Recognition:") is passed directly via the `prompt` field,
-    and the image is sent as base64 in the `images` array.
+    Uses standard /v1/chat/completions with image data URIs.
+    Requires vLLM to be running with `--model /models/glm-ocr --served-model-name glm-ocr:latest`
 
     Args:
         image_input: File path (str) or raw PNG bytes.
         mode: Recognition mode — "text", "table", or "figure".
-        port: Ollama API port (default: PORT1 from constants).
+        port: vLLM API port (default: 8000).
 
     Returns:
         Extracted Markdown string, or "" on failure.
@@ -116,22 +115,32 @@ async def glm_ocr_parse(
 
     try:
         start_time = time.time()
+        # Get base64 without data URI prefix (we add it in the payload)
         image_b64 = _encode_image_base64(image_input)
 
         semaphore = await _get_semaphore()
         async with semaphore:
-            # Official GLM-OCR docs: use /api/generate (Ollama native endpoint)
-            url = f"{LOCAL_BASE_URL}:{port}/api/generate"
+            # vLLM standard OpenAI compatible endpoint
+            url = f"{LOCAL_BASE_URL}:{port}/v1/chat/completions"
 
             payload = {
-                "model": GLM_OCR_MODEL,
-                "prompt": prompt,
-                "images": [image_b64],
-                "stream": False,
-                "keep_alive": 300,  # Keep model loaded for 5 min between calls
-                "options": {
-                    "temperature": 0,  # Deterministic (per official Modelfile)
-                },
+                "model": "glm-ocr:latest", # Matches --served-model-name in vLLM
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{image_b64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "temperature": 0,
+                "max_tokens": 4096, # Limit output to prevent runaways
             }
 
             label = (
@@ -139,35 +148,34 @@ async def glm_ocr_parse(
                 if isinstance(image_input, str)
                 else "bytes"
             )
-            print(
-                f"[GLM-OCR] Sending {label} to Ollama ({GLM_OCR_MODEL}) port {port} mode={mode}..."
-            )
+            print(f"[GLM-OCR] Sending {label} to vLLM (port {port}) mode={mode}...")
 
-            async with httpx.AsyncClient(timeout=180) as client:
+            # Use separate timeouts: fast connect, long read time for model compilation/generation
+            timeout = httpx.Timeout(connect=30.0, read=180.0, write=30.0, pool=30.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
 
+            # Parse standard OpenAI response format
             result = response.json()
-            content = result.get("response", "").strip()
+            choices = result.get("choices", [])
+            if choices:
+                content = choices[0].get("message", {}).get("content", "").strip()
+            else:
+                content = ""
 
             elapsed = time.time() - start_time
-            print(
-                f"[GLM-OCR] Completed in {elapsed:.2f}s | {len(content)} chars extracted."
-            )
-
+            print(f"[GLM-OCR] Completed in {elapsed:.2f}s | {len(content)} chars extracted.")
             return content
 
     except httpx.ConnectError:
-        print(
-            f"[GLM-OCR] Connection refused at {LOCAL_BASE_URL}:{port}. "
-            "Is Ollama running with glm-ocr model? Try: ollama pull glm-ocr:latest"
-        )
+        print(f"[GLM-OCR] Connection refused at {LOCAL_BASE_URL}:{port}. Is vLLM running?")
         return ""
     except httpx.TimeoutException:
-        print(f"[GLM-OCR] Request timed out after 180s for model {GLM_OCR_MODEL}.")
+        print(f"[GLM-OCR] Request timed out. vLLM may be overloaded or compiling the model.")
         return ""
     except httpx.HTTPStatusError as e:
-        print(f"[GLM-OCR] HTTP error {e.response.status_code}: {e}")
+        print(f"[GLM-OCR] HTTP error {e.response.status_code}: {e.response.text[:200]}")
         return ""
     except Exception as e:
         print(f"[GLM-OCR] Unexpected error: {e}")
