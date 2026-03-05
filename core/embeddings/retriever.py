@@ -124,6 +124,11 @@ def rerank_chunks(
         # than plain text and can exceed the model's 512-token position embedding limit.
         scores = cross_encoder.predict(pairs)
 
+        # Release cached GPU memory after cross-encoder inference
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         # Normalize to 0-1 range using sigmoid
         def _sigmoid(x):
             return 1.0 / (1.0 + math.exp(-float(x)))
@@ -138,6 +143,7 @@ def rerank_chunks(
         # Fallback: use original order with default scores
         for i, chunk in enumerate(chunks):
             chunk["relevance_score"] = 1.0 - (i / len(chunks))  # Decreasing scores
+
 
     # Step 2: MMR with cosine similarity for diversity
     reranked_chunks = []

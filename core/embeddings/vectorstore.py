@@ -7,6 +7,8 @@ import re
 import time
 from typing import List
 
+import torch
+
 # ── FUSE Filesystem Compatibility ──
 # Must be set BEFORE any chromadb/sqlite3 imports.
 # WAL mode fails on FUSE because it requires mmap() and shared memory (-shm file).
@@ -473,6 +475,11 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
             f"Generated embeddings for batch {batch_idx + 1} in {end_time - start_time:.2f} seconds"
         )
 
+        # Release cached GPU memory after batch embedding to prevent VRAM hoarding
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
+
         # Upsert to Chroma (with retry for FUSE lock issues)
         print(f"Upserting batch {batch_idx + 1} to Chroma")
         max_retries = 3
@@ -669,6 +676,11 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
         embeddings = await asyncio.to_thread(
             vectorstore.embeddings.embed_documents, list(batch_texts)
         )
+
+        # Release cached GPU memory after batch embedding to prevent VRAM hoarding
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
 
         max_retries = 3
         for attempt in range(max_retries):

@@ -124,6 +124,14 @@ async def image_parser(image_path: str) -> str:
             print(
                 f"[EasyOCR] Succeeded in {elapsed:.2f}s for {os.path.basename(image_path)}"
             )
+            # Release cached GPU memory after EasyOCR inference
+            if EASYOCR_GPU:
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
             return easyocr_result.strip()
     except Exception as e:
         print(f"[EasyOCR] Exception: {e}")
@@ -143,3 +151,4 @@ async def image_parser(image_path: str) -> str:
     except Exception as e:
         print(f"[Tesseract] Fatal exception: {e}")
         return ""
+
