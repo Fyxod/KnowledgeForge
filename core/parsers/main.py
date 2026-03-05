@@ -696,8 +696,8 @@ async def extract_document(
                             # For now, process all. 150 DPI is manageable.
                             for pg_num in range(len(pdf_doc)):
                                 pg = pdf_doc.load_page(pg_num)
-                                pix = pg.get_pixmap(dpi=150)
-                                vlm_images.append(pix.tobytes("png"))
+                                def _render_vlm(p): return p.get_pixmap(dpi=150).tobytes("png")
+                                vlm_images.append(await asyncio.to_thread(_render_vlm, pg))
                                 vlm_labels.append(f"Page {pg_num + 1}")
                             pdf_doc.close()
 
@@ -783,8 +783,8 @@ async def extract_document(
 
                             for pg_num in range(len(pdf_doc)):
                                 pg = pdf_doc.load_page(pg_num)
-                                pix = pg.get_pixmap(dpi=150)
-                                glm_images.append(pix.tobytes("png"))
+                                def _render_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
+                                glm_images.append(await asyncio.to_thread(_render_glm, pg))
                                 glm_labels.append(f"Page {pg_num + 1}")
                             pdf_doc.close()
 
@@ -1014,8 +1014,8 @@ async def extract_document(
 
                             for pg_num in range(process_count):
                                 pg = pdf_doc.load_page(pg_num)
-                                pix = pg.get_pixmap(dpi=150)  # 150 DPI optimized
-                                vlm_images.append(pix.tobytes("png"))
+                                def _render_vlm_ppt(p): return p.get_pixmap(dpi=150).tobytes("png")
+                                vlm_images.append(await asyncio.to_thread(_render_vlm_ppt, pg))
                                 vlm_labels.append(f"Slide {pg_num + 1}")
                             pdf_doc.close()
 
@@ -1099,8 +1099,8 @@ async def extract_document(
 
                             for pg_num in range(process_count):
                                 pg = pdf_doc.load_page(pg_num)
-                                pix = pg.get_pixmap(dpi=150)
-                                glm_images.append(pix.tobytes("png"))
+                                def _render_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
+                                glm_images.append(await asyncio.to_thread(_render_glm, pg))
                                 glm_labels.append(f"Slide {pg_num + 1}")
                             pdf_doc.close()
 
@@ -1342,8 +1342,8 @@ async def extract_document(
 
                             for pg_num in range(len(pdf_doc)):
                                 pg = pdf_doc.load_page(pg_num)
-                                pix = pg.get_pixmap(dpi=150)
-                                glm_images.append(pix.tobytes("png"))
+                                def _render_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
+                                glm_images.append(await asyncio.to_thread(_render_glm, pg))
                                 glm_labels.append(f"Page {pg_num + 1}")
                             pdf_doc.close()
 
@@ -1554,8 +1554,8 @@ async def extract_document(
                 if use_vlm:
                     try:
                         # Render page to image at 150 DPI (optimized: lower than 200 for speed)
-                        pix = page.get_pixmap(dpi=150)
-                        img_bytes = pix.tobytes("png")
+                        def _render_pdf(p): return p.get_pixmap(dpi=150).tobytes("png")
+                        img_bytes = await asyncio.to_thread(_render_pdf, page)
                         vlm_candidates.append(
                             {
                                 "page_index": page_number,  # 0-based index into pages[]
@@ -1573,8 +1573,8 @@ async def extract_document(
                 # --- GLM-OCR candidate detection (runs alongside existing OCR) ---
                 if SWITCHES.get("GLM_OCR", False):
                     try:
-                        pix = page.get_pixmap(dpi=150)
-                        img_bytes = pix.tobytes("png")
+                        def _render_pdf_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
+                        img_bytes = await asyncio.to_thread(_render_pdf_glm, page)
                         glm_ocr_candidates.append(
                             {
                                 "page_index": page_number,

@@ -67,38 +67,20 @@ SEARCH_DOCUMENT_PREFIX = "search_document: "
 
 def chunk_page_text(page_text: str) -> List[str]:
     """
-    Split page text into chunks with sentence-boundary awareness.
-    Falls back to RecursiveCharacterTextSplitter for robustness.
+    Split page text into chunks with structural awareness (Markdown friendly).
     """
-    if _HAS_NLTK:
-        # Sentence-boundary aware: split into sentences first, then merge into chunks
-        sentences = sent_tokenize(page_text)
-        chunks = []
-        current_chunk = ""
-        for sentence in sentences:
-            if len(current_chunk) + len(sentence) + 1 > CHUNK_SIZE and current_chunk:
-                chunks.append(current_chunk.strip())
-                # Keep overlap from the end of the last chunk
-                overlap_text = (
-                    current_chunk[-CHUNK_OVERLAP:]
-                    if len(current_chunk) > CHUNK_OVERLAP
-                    else current_chunk
-                )
-                current_chunk = overlap_text + " " + sentence
-            else:
-                current_chunk = (current_chunk + " " + sentence).strip()
-        if current_chunk.strip():
-            chunks.append(current_chunk.strip())
-
-        # If NLTK produces no output (edge case), fall back
-        if chunks:
-            return chunks
-
-    # Fallback: RecursiveCharacterTextSplitter
+    # Use RecursiveCharacterTextSplitter with Markdown-friendly separators
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
-        separators=["\n\n", "\n", ". ", " ", ""],
+        separators=[
+            "\n\n",
+            "\n",
+            "|---|",
+            ". ",
+            " ",
+            ""
+        ],
     )
     return splitter.split_text(page_text)
 
@@ -325,6 +307,10 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
     # Chunking with contextual enrichment (Phase 1.1 + 1.2 + 1.3 + 3.1)
     start_time = time.time()
     for doc in docs.documents:
+        if doc.type == "spreadsheet":
+            print(f"[VectorStore] Skipping vector chunking for spreadsheet {doc.title}. SQL engine will be used exclusively.")
+            continue
+
         total_pages = len(doc.content)
         # Phase 1.1: Extract document-level keywords once per document
         doc_keywords = extract_document_keywords(doc.full_text)
@@ -459,7 +445,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
     await asyncio.to_thread(_build_and_save_bm25, chunk_data, user_id, thread_id)
 
     # Batch embedding and upsert
-    batch_size = 5000  # Don't change this in any case
+    batch_size = 1000  # Reduced to avoid VRAM hoarding on 48GB GPU
     total_batches = math.ceil(len(chunk_data) / batch_size)
 
     for batch_idx in range(total_batches):
@@ -519,6 +505,10 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
     Uses thread-prefixed chunk IDs to avoid collisions when the same document
     exists in multiple threads within the same user's ChromaDB collection.
     """
+    if doc.type == "spreadsheet":
+        print(f"[VectorStore] Skipping vector chunking for existing spreadsheet {doc.title}. SQL engine will be used exclusively.")
+        return
+
     start_time = time.time()
     vectorstore = await asyncio.to_thread(get_vectorstore, user_id, thread_id)
 
@@ -666,7 +656,7 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
     await asyncio.to_thread(_build_and_save_bm25, all_bm25_chunks, user_id, thread_id)
 
     # Batch embed and upsert to ChromaDB
-    batch_size = 5000
+    batch_size = 1000
     total_batches = math.ceil(len(chunk_data) / batch_size)
 
     for batch_idx in range(total_batches):
