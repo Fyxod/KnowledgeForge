@@ -796,17 +796,39 @@ async def extract_document(
                                     max_concurrent=3,
                                 )
 
-                                glm_combined = "\n\n".join(
-                                    f"[GLM-OCR Page {i+1}]\n{r}"
-                                    for i, r in enumerate(glm_results)
-                                    if r
-                                )
+                                # If GLM-OCR ran, we now have page-by-page layout
+                                # We'll build Pages from these results instead of a single blob
+                                pages = []
+                                full_text_lines = []
+                                
+                                # Since python-docx / antiword don't give exact page breaks, 
+                                # the original text is just a single block. 
+                                # We will put the original raw text on Page 1, 
+                                # and then append the GLM-OCR Enhanced Pages exactly as they appear in the PDF.
+                                if text.strip():
+                                    pages.append(Page(number=1, text=f"[Original Extracted Text]\n{text}\n[/Original Extracted Text]"))
+                                    full_text_lines.append(f"[Original Extracted Text]\n{text}\n[/Original Extracted Text]")
 
-                                if glm_combined:
-                                    enhancement = f"\n\n[GLM-OCR Enhanced Content]\n{glm_combined}\n[/GLM-OCR Enhanced Content]"
-                                    text += enhancement
+                                page_counter = len(pages) + 1
+                                for i, r in enumerate(glm_results):
+                                    if r:
+                                        enhancement = f"[GLM-OCR Enhanced Page {i+1}]\n{r}\n[/GLM-OCR Enhanced Page {i+1}]"
+                                        pages.append(Page(number=page_counter, text=enhancement))
+                                        full_text_lines.append(enhancement)
+                                        page_counter += 1
+
+                                if pages:
                                     print(
-                                        f"[DOC] GLM-OCR enhancement added ({len(glm_combined)} chars)"
+                                        f"[DOC] GLM-OCR enhancement added ({len(pages) - (1 if text.strip() else 0)} pages)"
+                                    )
+                                    # Override the single block return with the new paginated structure
+                                    return Document(
+                                        id=doc_id,
+                                        type="doc",
+                                        file_name=safe_file_name,
+                                        content=pages,
+                                        title=title,
+                                        full_text="\n\n".join(full_text_lines),
                                     )
 
                         except Exception as e:
@@ -1333,17 +1355,47 @@ async def extract_document(
                                     max_concurrent=3,
                                 )
 
-                                glm_combined = "\n\n".join(
-                                    f"[GLM-OCR Page {i+1}]\n{r}"
-                                    for i, r in enumerate(glm_results)
-                                    if r
-                                )
+                                # If GLM-OCR ran, we now have page-by-page layout
+                                # We'll build Pages from these results instead of a single blob
+                                pages = []
+                                full_text_lines = []
+                                
+                                # Since python-docx doesn't give exact page breaks, 
+                                # the original text is just a single block. 
+                                # We will put the original raw text on Page 1, 
+                                # and then append the GLM-OCR Enhanced Pages exactly as they appear in the PDF.
+                                if page_text.strip():
+                                    pages.append(Page(number=1, text=f"[Original Extracted Text]\n{page_text}\n[/Original Extracted Text]", images=image_names_all))
+                                    full_text_lines.append(f"[Original Extracted Text]\n{page_text}\n[/Original Extracted Text]")
 
-                                if glm_combined:
-                                    enhancement = f"\n\n[GLM-OCR Enhanced Content]\n{glm_combined}\n[/GLM-OCR Enhanced Content]"
-                                    page_text += enhancement
+                                page_counter = len(pages) + 1
+                                for i, r in enumerate(glm_results):
+                                    if r:
+                                        enhancement = f"[GLM-OCR Enhanced Page {i+1}]\n{r}\n[/GLM-OCR Enhanced Page {i+1}]"
+                                        pages.append(Page(number=page_counter, text=enhancement))
+                                        full_text_lines.append(enhancement)
+                                        page_counter += 1
+
+                                if pages:
                                     print(
-                                        f"[DOCX] GLM-OCR enhancement added ({len(glm_combined)} chars)"
+                                        f"[DOCX] GLM-OCR enhancement added ({len(pages) - (1 if page_text.strip() else 0)} pages)"
+                                    )
+                                    # Override the single block return with the new paginated structure
+                                    await safe_emit(
+                                        f"{user_id}/progress",
+                                        {"message": f"Processed {safe_file_name} (Word) successfully"},
+                                    )
+                                    end_time = time.time()
+                                    print(
+                                        f"Time taken to process {safe_file_name} (.docx): {end_time - start_time} seconds"
+                                    )
+                                    return Document(
+                                        id=doc_id,
+                                        type="docx",
+                                        file_name=safe_file_name,
+                                        content=pages,
+                                        title=title,
+                                        full_text="\n\n".join(full_text_lines),
                                     )
 
                         except Exception as e:
@@ -1363,7 +1415,7 @@ async def extract_document(
                     print(f"[DOCX] GLM-OCR enhancement error: {e}")
                     traceback.print_exc()
 
-            # --- Build pages (treat entire document as pages of ~3000 chars) ---
+            # --- Fallback if GLM-OCR didn't run ---
             # For simplicity, treat as single page if short, else split
             if len(page_text) <= 5000:
                 pages = [Page(number=1, text=page_text, images=image_names_all)]
