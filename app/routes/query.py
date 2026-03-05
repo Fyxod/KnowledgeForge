@@ -18,6 +18,7 @@ from core.database import db
 from core.llm.outputs import DecompositionLLMOutput
 from core.services.sqlite_manager import SQLiteManager
 from core.utils.extra_done_check import is_extra_done
+from core.services.semantic_cache import SemanticCacheManager
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -28,6 +29,7 @@ class QueryRequest(BaseModel):
     mode: Literal[f"{INTERNAL}", f"{EXTERNAL}"] = EXTERNAL
     use_self_knowledge: bool = False
     use_context: bool = False
+    override_cache: bool = False
 
 
 @router.post("/")
@@ -42,9 +44,10 @@ async def query(request: Request, body: QueryRequest):
     mode = body.mode
     use_self_knowledge = body.use_self_knowledge
     use_context = body.use_context
+    override_cache = body.override_cache
 
     print(
-        f"Received query for thread_id: {thread_id} with question: {question} and mode: {mode} (use_self_knowledge={use_self_knowledge}, use_context={use_context})"
+        f"Received query for thread_id: {thread_id} with question: {question} and mode: {mode} (use_self_knowledge={use_self_knowledge}, use_context={use_context}, override_cache={override_cache})"
     )
 
     user_id = payload.userId
@@ -71,6 +74,44 @@ async def query(request: Request, body: QueryRequest):
                 messages.append(HumanMessage(content=chat.get("content", "")))
             elif chat.get("type") == "agent":
                 messages.append(AIMessage(content=chat.get("content", "")))
+    
+    # Check Semantic Cache for identical queries
+    cache_manager = SemanticCacheManager(user_id=user_id)
+    if SWITCHES.get("SEMANTIC_CACHE", False) and not override_cache:
+        print("[CACHE] Checking Semantic Cache for identical queries")
+        cached_result = cache_manager.check_cache(question)
+        if cached_result:
+            now = datetime.now(timezone.utc)
+            new_messages = [
+                {"type": "user", "content": question, "timestamp": now},
+                {
+                    "type": "agent",
+                    "content": cached_result["answer"],
+                    "timestamp": now,
+                    "sources": cached_result.get("sources", {}),
+                    "confidence_score": cached_result.get("confidence_score", "high"),
+                    "cached": True
+                },
+            ]
+            db.users.update_one(
+                {"userId": user_id},
+                {
+                    "$push": {f"threads.{thread_id}.chats": {"$each": new_messages}},
+                    "$set": {f"threads.{thread_id}.updatedAt": now},
+                },
+            )
+            return {
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "question": question,
+                "answer": cached_result["answer"],
+                "sources": cached_result.get("sources", {}),
+                "confidence_score": cached_result.get("confidence_score", "high"),
+                "use_self_knowledge": use_self_knowledge,
+                "cached": True
+            }
+
+
     chunks = []
     chunks_used = []
     confidence_scores = []
@@ -439,17 +480,30 @@ async def query(request: Request, body: QueryRequest):
         },
     )
 
+    # Final response structure
+    sources = {
+        "documents_used": modified_used,
+        "web_used": all_favicons,
+    }
+
     response = {
         "thread_id": thread_id,
         "user_id": user_id,
         "question": question,
         "answer": answer,
-        "sources": {
-            "documents_used": modified_used,
-            "web_used": all_favicons,
-        },
+        "sources": sources,
         "confidence_score": final_confidence,
         "use_self_knowledge": use_self_knowledge,
+        "cached": False
     }
+
+    # If the semantic cache is enabled and we ran the full pipeline, store the result
+    if SWITCHES.get("SEMANTIC_CACHE", False):
+        cache_manager.add_to_cache(
+            query=question,
+            answer=answer,
+            sources=sources,
+            confidence_score=final_confidence
+        )
 
     return response

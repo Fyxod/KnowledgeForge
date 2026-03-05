@@ -16,6 +16,7 @@ SWITCHES = {
     "HYDE": False,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)
     "DOCUMENT_CREATOR": True,  # Interactive document generation (PPTX/DOCX/PDF)
     "GLM_OCR": False,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
+    "SEMANTIC_CACHE": True,  # Enables ChromaDB caching of LLM answers for exact/highly similar queries
 }
 
 # GLM-OCR Configuration
@@ -51,10 +52,10 @@ MAIN_MODEL = (
 # QWEN3_14B = "qwen3:14b-39500-8k"
 
 # GPU LLM configurations
-GPU_QUERY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)
+GPU_QUERY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_QUERY_LLM2 = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
-GPU_DECOMPOSITION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)
-GPU_COMBINATION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)
+GPU_DECOMPOSITION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
+GPU_COMBINATION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_DOC_SUMMARIZER_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_GLOBAL_SUMMARIZER_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_STOP_WORDS_EXTRACTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
@@ -72,9 +73,9 @@ GPU_TRIPLE_EXTRACTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Triple
 
 # Document Creator LLM configurations
 GPU_DOC_OUTLINE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Outline generation
-GPU_DOC_SECTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section content generation
+GPU_DOC_SECTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Section content generation
 GPU_DOC_REVIEW_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Quality self-review
-GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section iteration
+GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Section iteration
 
 IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = "qwen3-vl:8b"  # Vision Language Model for slide/complex PDF extraction

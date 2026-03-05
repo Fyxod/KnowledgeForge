@@ -60,9 +60,8 @@ print("Embedding model loaded.")
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 100
 
-# nomic-embed-text-v1.5 task prefix for document embeddings.
-# Queries use "search_query: " (configured in embeddings.py via query_instruction).
 SEARCH_DOCUMENT_PREFIX = "search_document: "
+SEARCH_QUERY_PREFIX = "search_query: "
 
 
 def chunk_page_text(page_text: str) -> List[str]:
