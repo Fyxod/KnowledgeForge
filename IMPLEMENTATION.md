@@ -107,7 +107,9 @@ PRISM Code/
 │   │   ├── main.py               # extract_document() dispatcher
 │   │   ├── extensions.py         # File extension constants
 │   │   ├── process_files.py      # Batch file processing orchestrator
-│   │   ├── vlm_parser.py         # Vision Language Model parser (qwen3-vl:8b)
+│   │   ├── vlm.py                # Vision Language Model parser (qwen3-vl:8b)
+│   │   ├── glm_ocr.py            # GLM-OCR parser (structured OCR via Ollama)
+│   │   ├── image.py              # EasyOCR / Tesseract image OCR
 │   │   └── ...
 │   │
 │   ├── services/                 # Business services
@@ -303,12 +305,15 @@ Dispatcher logic:
 ```python
 ext = file_name.split(".")[-1].lower()
 
-if ext in PDF_EXTENSIONS:       → PyMuPDF (fitz) + optional VLM (qwen3-vl:8b)
+if ext in PDF_EXTENSIONS:       → PyMuPDF (fitz) + optional VLM or GLM-OCR
 if ext in EXCEL_EXTENSIONS:     → pandas → SQLite tables
-if ext in PPTX_EXTENSIONS:      → python-pptx + OCR
-if ext in IMAGE_EXTENSIONS:     → EasyOCR / Tesseract
+if ext in PPTX_EXTENSIONS:      → python-pptx + OCR (VLM or GLM-OCR for slides)
+if ext in IMAGE_EXTENSIONS:     → EasyOCR / Tesseract (or GLM-OCR if enabled)
 if ext in MARKDOWN_EXTENSIONS:  → html2text
 ```
+
+When `SWITCHES["GLM_OCR"]` is enabled, PDF/PPTX/Image parsing uses GLM-OCR's structured
+Markdown output (tables, formulas, layout preservation) alongside or instead of the default OCR pipeline.
 
 Output: `Document(id, type, file_name, content=[Page(number, text, images)], title, full_text)`
 
@@ -536,7 +541,15 @@ SWITCHES = {
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU server
     "CORRECTIVE_RETRIEVAL": True,    # Enable CRAG re-retrieval
     "HYDE": False,                   # Enable HyDE retrieval
+    "GLM_OCR": False,               # GLM-OCR for structured OCR (tables, formulas, figures)
+    "DOCUMENT_CREATOR": True,        # Interactive document generation (PPTX/DOCX/PDF)
 }
+```
+
+### GLM-OCR Constants
+```python
+GLM_OCR_MODEL = "glm-ocr-32k"      # Custom Modelfile: 32K context, 8K output
+GLM_OCR_WORKERS = 3                 # Max concurrent GLM-OCR inferences (VRAM-aware)
 ```
 
 ### Limits
@@ -755,6 +768,42 @@ POST /extra/                       # Mind maps, summaries, word clouds
 - **Fallback**: Tesseract
 - **Output**: Single-page document with OCR text
 
+### 10.5 GLM-OCR Parser
+
+**File**: `core/parsers/glm_ocr.py`
+
+Structured document OCR using the GLM-OCR model (0.9B params) served via Ollama. Activated when `SWITCHES["GLM_OCR"] = True`.
+
+**Architecture**: CogViT encoder + PP-DocLayout-V3 + GLM-0.5B decoder (OmniDocBench V1.5 score: 94.62, #1 overall).
+
+| Parameter | Value |
+|-----------|-------|
+| Model | `glm-ocr-32k` (custom Modelfile: 32K ctx, 8K output) |
+| API | Ollama `/api/generate` (NOT `/api/chat`) |
+| Max image dim | 2048 px |
+| Concurrency | 3 workers (semaphore-controlled) |
+| Timeout | 120s (text), 180s (table) |
+
+**Three-Pass Strategy** — each page is analyzed with three specialized prompts:
+
+| Pass | Prompt | Purpose |
+|------|--------|---------|
+| 1 | `"Text Recognition:"` | Body text, headings, paragraphs |
+| 2 | `"Table Recognition:"` | Tables → Markdown tables |
+| 3 | `"Figure Recognition:"` | Charts, diagrams → structured descriptions |
+
+Results from all three passes are merged per page. Empty passes are skipped.
+
+**Concurrent Processing** (`glm_ocr_parse_concurrent`):
+- Converts PDF pages to images (150 DPI via PyMuPDF)
+- Processes all pages in parallel with semaphore limiting (default 3)
+- Returns combined Markdown output per page
+
+**Key Design Decisions**:
+- Uses Ollama HTTP API (not local model loading) — no GPU memory consumed by the backend process
+- Images resized to max 2048px (vs 1280px for VLM) — GLM-OCR handles higher resolution
+- Custom Modelfile extends default context from 2K to 32K for multi-page documents
+
 ---
 
 ## 11. Performance Architecture
@@ -786,6 +835,19 @@ POST /extra/                       # Mind maps, summaries, word clouds
 | cross-encoder/ms-marco-MiniLM-L-6-v2 | ~0.1GB |
 | EasyOCR | ~0.2GB |
 | VLM (qwen3-vl:8b, when active) | ~8GB |
+| GLM-OCR (served by Ollama) | ~2GB (in Ollama process, not backend) |
+
+### 11.4 GPU Memory Management
+
+PyTorch's CUDA memory allocator caches freed GPU memory and does not return it to the OS.
+To prevent the backend from accumulating unreleased GPU memory, `torch.cuda.empty_cache()`
+is called after every heavy GPU operation:
+
+| Location | File | After |
+|----------|------|-------|
+| Batch embedding | `vectorstore.py` | `embed_documents()` in both `save_documents_to_store()` and `add_existing_document_to_store()` |
+| Cross-encoder re-ranking | `retriever.py` | `cross_encoder.predict()` |
+| EasyOCR inference | `image.py` | `reader.readtext()` (GPU mode only) |
 
 ---
 
@@ -909,11 +971,11 @@ File Upload
       ▼
   extract_document() per file
       │
-      ├─ PDF → PyMuPDF + optional VLM
-      ├─ Excel/CSV → Pandas → SQLite
-      ├─ PPTX → python-pptx + OCR
-      ├─ Image → EasyOCR/Tesseract
-      └─ Markdown → html2text
+       ├─ PDF → PyMuPDF + optional VLM/GLM-OCR
+       ├─ Excel/CSV → Pandas → SQLite
+       ├─ PPTX → python-pptx + OCR/VLM/GLM-OCR
+       ├─ Image → EasyOCR/Tesseract (or GLM-OCR)
+       └─ Markdown → html2text
       │
       ▼
   Document(id, type, file_name, content=[Page], title, full_text)

@@ -80,13 +80,26 @@ Each analysis project lives in a **Thread** — an isolated workspace where user
 
 | Format | Capabilities |
 |--------|-------------|
-| **PDF** | Full text extraction with page-level granularity. Optional Vision Language Model (VLM) parsing for scanned/image-heavy PDFs |
+| **PDF** | Full text extraction with page-level granularity. Optional VLM parsing for scanned/image-heavy PDFs. Optional GLM-OCR for structured table/formula/layout extraction |
 | **Excel / CSV** | Automatic table detection, header inference, multi-sheet support. Loaded into SQL for natural-language querying |
-| **PowerPoint (PPTX/PPT)** | Slide text extraction + OCR for embedded images and diagrams |
+| **PowerPoint (PPTX/PPT)** | Slide text extraction + OCR for embedded images and diagrams. VLM or GLM-OCR enhancement for complex slides |
 | **Images (PNG/JPG/TIFF)** | OCR via EasyOCR or Tesseract for text extraction from photos, screenshots, diagrams |
 | **Markdown** | Direct text indexing |
 
-### 3.3 Natural-Language Spreadsheet Queries
+### 3.3 GLM-OCR (Structured Document Understanding)
+
+When enabled (`GLM_OCR` switch), PRISM uses the **GLM-OCR** model (0.9B, #1 on OmniDocBench V1.5) for high-fidelity document OCR that goes beyond plain text extraction:
+
+| Capability | What It Does |
+|------------|-------------|
+| **Table Recognition** | Converts complex tables (merged cells, multi-level headers) into proper Markdown tables |
+| **Formula Extraction** | Recognizes mathematical formulas and outputs them in a structured format |
+| **Layout Preservation** | Maintains reading order, column layouts, and heading hierarchy |
+| **Figure Analysis** | Generates structured descriptions of charts, flowcharts, and diagrams |
+
+GLM-OCR runs alongside the existing OCR pipeline — it is served via Ollama and does not require additional GPU memory from the backend process. It processes each page with three specialized passes (text, table, figure) and merges the results into structured Markdown.
+
+### 3.4 Natural-Language Spreadsheet Queries
 
 Users can ask questions like:
 - *"What was the total revenue in Q3 2024?"*
@@ -101,7 +114,7 @@ The system automatically:
 
 The SQL engine supports up to 6 retries with query refinement if the initial SQL fails.
 
-### 3.4 Web Search Integration (External Mode)
+### 3.5 Web Search Integration (External Mode)
 
 When operating in **External Mode**, the agent can:
 - Detect when uploaded documents don't contain the answer
@@ -109,7 +122,7 @@ When operating in **External Mode**, the agent can:
 - Retrieve and synthesize web results alongside document context
 - Clearly attribute which parts of the answer come from web vs. documents
 
-### 3.5 Real-Time Streaming
+### 3.6 Real-Time Streaming
 
 All processing communicates progress via Socket.IO:
 - Document upload and parsing status
@@ -117,7 +130,7 @@ All processing communicates progress via Socket.IO:
 - Query processing stages
 - Users see live updates during long operations
 
-### 3.6 Operating Modes
+### 3.7 Operating Modes
 
 | Mode | Description |
 |------|-------------|
@@ -262,8 +275,8 @@ Deep-dive analyses providing:
 │ Excel → SQL │ (Semantic + BM25 + RRF)   │ Source Citations       │
 │ PPTX Parser │                           │ Confidence Scores      │
 │ Image OCR   │ Cross-Encoder Re-Ranking  │                       │
-│ Markdown    │ CRAG Self-Correction      │ Mind Maps (ReactFlow) │
-│             │ Entity Relationships      │ Word Clouds           │
+│ GLM-OCR     │ CRAG Self-Correction      │ Mind Maps (ReactFlow) │
+│ Markdown    │ Entity Relationships      │ Word Clouds           │
 │             │                           │ Summaries             │
 │             │ LangGraph Agent           │ Insights              │
 │             │ (Retrieve → Evaluate →    │ Roadmaps              │
