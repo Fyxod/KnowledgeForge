@@ -90,29 +90,24 @@ def _encode_image_base64(
 async def glm_ocr_parse(
     image_input,
     mode: str = "text",
-    port: int = 8000, # vLLM default port
+    port: int = 5002, # GLM-OCR SDK server default port
 ) -> str:
     """
-    Run GLM-OCR on a single image via the OpenAI-compatible vLLM endpoint.
+    Run GLM-OCR on a single image via the local GLM-OCR Python SDK Server.
 
-    Uses standard /v1/chat/completions with image data URIs.
-    Requires vLLM to be running with `--model /models/glm-ocr --served-model-name glm-ocr:latest`
+    Uses standard /glmocr/parse with image data URIs.
+    Requires the dual-service deployment:
+      1. vLLM running on port 8080 (serves the raw GLM-OCR model)
+      2. `python -m glmocr.server` running on port 5002 (handles PP-DocLayout-V3 & calls vLLM)
 
     Args:
         image_input: File path (str) or raw PNG bytes.
-        mode: Recognition mode — "text", "table", or "figure".
-        port: vLLM API port (default: 8000).
+        mode: Recognition mode — "text", "table", "figure" (Ignored by SDK which infers layout automatically).
+        port: GLM-OCR SDK server API port (default: 5002).
 
     Returns:
         Extracted Markdown string, or "" on failure.
     """
-    prompts = {
-        "text": GLM_OCR_TEXT_PROMPT,
-        "table": GLM_OCR_TABLE_PROMPT,
-        "figure": GLM_OCR_FIGURE_PROMPT,
-    }
-    prompt = prompts.get(mode, GLM_OCR_TEXT_PROMPT)
-
     try:
         start_time = time.time()
         # Get base64 without data URI prefix (we add it in the payload)
@@ -120,27 +115,12 @@ async def glm_ocr_parse(
 
         semaphore = await _get_semaphore()
         async with semaphore:
-            # vLLM standard OpenAI compatible endpoint
-            url = f"{LOCAL_BASE_URL}:{port}/v1/chat/completions"
+            # GLM-OCR SDK Server endpoint
+            url = f"{LOCAL_BASE_URL}:{port}/glmocr/parse"
 
             payload = {
-                "model": "glm-ocr:latest", # Matches --served-model-name in vLLM
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{image_b64}"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                "temperature": 0,
-                "max_tokens": 4096, # Limit output to prevent runaways
+                # The SDK expects an array of Data URIs (or local paths)
+                "images": [f"data:image/png;base64,{image_b64}"]
             }
 
             label = (
@@ -148,31 +128,39 @@ async def glm_ocr_parse(
                 if isinstance(image_input, str)
                 else "bytes"
             )
-            print(f"[GLM-OCR] Sending {label} to vLLM (port {port}) mode={mode}...")
+            print(f"[GLM-OCR] Sending {label} to Local SDK Server (port {port})...")
 
-            # Use separate timeouts: fast connect, long read time for model compilation/generation
-            timeout = httpx.Timeout(connect=30.0, read=180.0, write=30.0, pool=30.0)
+            # Use separate timeouts: fast connect, very long read time for layout + generation
+            timeout = httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=30.0)
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
 
-            # Parse standard OpenAI response format
-            result = response.json()
-            choices = result.get("choices", [])
-            if choices:
-                content = choices[0].get("message", {}).get("content", "").strip()
+            # The SDK returns {"result": "markdown..."} or similar
+            result_data = response.json()
+            
+            # The SDK might return {"result": "..."} or {"responses": ["..."]} depending on version
+            # The official python example implies it returns a structured dict
+            content = ""
+            if "result" in result_data:
+                content = result_data["result"]
+            elif "responses" in result_data and isinstance(result_data["responses"], list):
+                content = "\n\n".join(result_data["responses"])
             else:
-                content = ""
+                # Fallback to stringifying the dict if the schema is unexpected
+                content = str(result_data)
+
+            content = content.strip()
 
             elapsed = time.time() - start_time
             print(f"[GLM-OCR] Completed in {elapsed:.2f}s | {len(content)} chars extracted.")
             return content
 
     except httpx.ConnectError:
-        print(f"[GLM-OCR] Connection refused at {LOCAL_BASE_URL}:{port}. Is vLLM running?")
+        print(f"[GLM-OCR] Connection refused at {LOCAL_BASE_URL}:{port}. Is the local GLM-OCR Python SDK Server running?")
         return ""
     except httpx.TimeoutException:
-        print(f"[GLM-OCR] Request timed out. vLLM may be overloaded or compiling the model.")
+        print(f"[GLM-OCR] Request timed out. Layout inference + VLM may be overloaded.")
         return ""
     except httpx.HTTPStatusError as e:
         print(f"[GLM-OCR] HTTP error {e.response.status_code}: {e.response.text[:200]}")
