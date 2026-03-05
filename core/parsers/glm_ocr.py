@@ -26,7 +26,7 @@ import httpx
 from PIL import Image
 
 from core.config import settings
-from core.constants import PORT1, GLM_OCR_MODEL, GLM_OCR_WORKERS
+from core.constants import GLM_OCR_MODEL, GLM_OCR_WORKERS
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 
@@ -175,7 +175,7 @@ async def glm_ocr_parse_concurrent(
     images: list,
     page_labels: list[str] | None = None,
     mode: str = "text",
-    port: int = PORT1,
+    port: int = 5002,
     max_concurrent: int = 3,
 ) -> list[str]:
     """
@@ -185,7 +185,7 @@ async def glm_ocr_parse_concurrent(
         images: List of file paths (str) or raw bytes, one per page/image.
         page_labels: Optional labels for logging (e.g. ["Page 1", "Slide 3"]).
         mode: Recognition mode — "text", "table", or "figure".
-        port: Ollama API port.
+        port: GLM-OCR SDK server API port (default 5002).
         max_concurrent: Max simultaneous GLM-OCR calls.
 
     Returns:
