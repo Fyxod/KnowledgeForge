@@ -46,3 +46,4 @@ einops
 json-repair
 spacy
 docling
+fpdf2
