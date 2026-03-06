@@ -1718,8 +1718,12 @@ async def extract_document(
                     enhanced_text = (
                         f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
                     )
-                    pages[page_idx].text = enhanced_text
-                    combined_texts[page_idx] = enhanced_text
+                    if "[Docling Extracted Text]" in pages[page_idx].text:
+                        pages[page_idx].text += f"\n\n{enhanced_text}"
+                        combined_texts[page_idx] += f"\n\n{enhanced_text}"
+                    else:
+                        pages[page_idx].text = enhanced_text
+                        combined_texts[page_idx] = enhanced_text
                     print(
                         f"[PDF] VLM content used for page {candidate['page_number']} ({len(vlm_text)} chars)"
                     )
