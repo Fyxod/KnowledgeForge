@@ -41,6 +41,12 @@ from core.constants import SWITCHES
 from core.parsers.glm_ocr import glm_ocr_parse, glm_ocr_parse_concurrent
 from core.services.sqlite_manager import SQLiteManager
 
+try:
+    from docling.document_converter import DocumentConverter
+    _HAS_DOCLING = True
+except ImportError:
+    _HAS_DOCLING = False
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 SMARTART_URI = "http://schemas.openxmlformats.org/drawingml/2006/diagram"
@@ -1491,106 +1497,115 @@ async def extract_document(
         MIN_IMAGE_SIZE = 50  # Skip images smaller than 50px (icons, bullets)
         _ocr_xref_cache = {}  # Cache OCR results by image xref to skip duplicates
 
+        # --- Docling native PDF extraction ---
+        docling_md_text = ""
+        if ext == ".pdf" and _HAS_DOCLING:
+            try:
+                print(f"[PDF] Running Docling extraction for {safe_file_name}...")
+                await safe_emit(f"{user_id}/progress", {"message": f"Running Docling extraction for {safe_file_name}..."})
+                
+                def _run_docling(p):
+                    converter = DocumentConverter()
+                    result = converter.convert(p)
+                    return result.document.export_to_markdown()
+                
+                docling_md_text = await asyncio.to_thread(_run_docling, file_path)
+            except Exception as e:
+                print(f"[PDF] Docling extraction failed: {e}")
+                traceback.print_exc()
+
         for page_number in range(len(doc)):
             page = doc.load_page(page_number)
 
-            # --- Table-aware text extraction ---
             table_blocks = []
-            try:
-                tables = page.find_tables()
-                for table in tables.tables:
-                    try:
-                        table_md = table.to_markdown()
-                        if table_md and table_md.strip():
-                            table_blocks.append(f"[Table]\n{table_md}\n[/Table]")
-                    except Exception:
-                        traceback.print_exc()
-            except Exception:
-                traceback.print_exc()
-
-            # Extract text excluding table regions
-            try:
-                # Get table bounding boxes to exclude from text extraction
-                table_rects = []
+            page_text = ""
+            if docling_md_text:
+                if page_number == 0:
+                    page_text = f"[Docling Extracted Text]\n{docling_md_text}\n[/Docling Extracted Text]"
+            else:
+                # --- Original Table-aware text extraction ---
                 try:
+                    tables = page.find_tables()
                     for table in tables.tables:
-                        table_rects.append(fitz.Rect(table.bbox))
+                        try:
+                            table_md = table.to_markdown()
+                            if table_md and table_md.strip():
+                                table_blocks.append(f"[Table]\n{table_md}\n[/Table]")
+                        except Exception:
+                            pass
                 except Exception:
                     pass
 
-                if table_rects:
-                    # Get text blocks and filter out those overlapping with tables
-                    text_dict = page.get_text("dict")
-                    non_table_lines = []
-                    for block in text_dict.get("blocks", []):
-                        if block.get("type") != 0:  # Only text blocks
-                            continue
-                        block_rect = fitz.Rect(block["bbox"])
-                        # Check if this block overlaps with any table
-                        overlaps_table = any(
-                            block_rect.intersects(tr) for tr in table_rects
-                        )
-                        if not overlaps_table:
-                            for line in block.get("lines", []):
-                                line_text = " ".join(
-                                    span["text"] for span in line.get("spans", [])
-                                )
-                                if line_text.strip():
-                                    non_table_lines.append(line_text.strip())
-                    page_text = "\n".join(non_table_lines)
-                else:
+                try:
+                    table_rects = []
+                    try:
+                        for table in tables.tables:
+                            table_rects.append(fitz.Rect(table.bbox))
+                    except Exception:
+                        pass
+
+                    if table_rects:
+                        text_dict = page.get_text("dict")
+                        non_table_lines = []
+                        for block in text_dict.get("blocks", []):
+                            if block.get("type") != 0:
+                                continue
+                            block_rect = fitz.Rect(block["bbox"])
+                            if not any(block_rect.intersects(tr) for tr in table_rects):
+                                for line in block.get("lines", []):
+                                    line_text = " ".join(span["text"] for span in line.get("spans", []))
+                                    if line_text.strip():
+                                        non_table_lines.append(line_text.strip())
+                        page_text = "\n".join(non_table_lines)
+                    else:
+                        page_text = page.get_text("text")
+
+                except Exception:
+                    traceback.print_exc()
                     page_text = page.get_text("text")
 
-                # --- VLM candidate detection (Phase 1: collect, don't process yet) ---
-                use_vlm = settings.USE_VISION_MODEL
-                if not use_vlm:
-                    # Auto-detect "slide" characteristics:
-                    # 1. Low text density
-                    # 2. Landscape orientation (width > height) often indicates slides
-                    is_landscape = page.rect.width > page.rect.height
-                    if len(page_text.strip()) < 100 and is_landscape:
-                        use_vlm = True
+            # Append table blocks after the regular text
+            if table_blocks:
+                page_text += "\n\n" + "\n\n".join(table_blocks)
 
-                if use_vlm:
-                    try:
-                        # Render page to image at 150 DPI (optimized: lower than 200 for speed)
-                        def _render_pdf(p): return p.get_pixmap(dpi=150).tobytes("png")
-                        img_bytes = await asyncio.to_thread(_render_pdf, page)
-                        vlm_candidates.append(
-                            {
-                                "page_index": page_number,  # 0-based index into pages[]
-                                "page_number": page_number + 1,  # 1-based for display
-                                "image_bytes": img_bytes,
-                                "original_text": page_text,
-                            }
-                        )
-                    except Exception as e:
-                        print(
-                            f"[PDF] Failed to render page {page_number + 1} for VLM: {e}"
-                        )
-                        traceback.print_exc()
+            # --- VLM candidate detection (Phase 1: collect, don't process yet) ---
+            use_vlm = settings.USE_VISION_MODEL
+            if not use_vlm:
+                is_landscape = page.rect.width > page.rect.height
+                if len(page_text.strip()) < 100 and is_landscape:
+                    use_vlm = True
 
-                # --- GLM-OCR candidate detection (runs alongside existing OCR) ---
-                if SWITCHES.get("GLM_OCR", False):
-                    try:
-                        def _render_pdf_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
-                        img_bytes = await asyncio.to_thread(_render_pdf_glm, page)
-                        glm_ocr_candidates.append(
-                            {
-                                "page_index": page_number,
-                                "page_number": page_number + 1,
-                                "image_bytes": img_bytes,
-                            }
-                        )
-                    except Exception as e:
-                        print(
-                            f"[PDF] Failed to render page {page_number + 1} for GLM-OCR: {e}"
-                        )
-                        traceback.print_exc()
+            if use_vlm:
+                try:
+                    def _render_pdf(p): return p.get_pixmap(dpi=150).tobytes("png")
+                    img_bytes = await asyncio.to_thread(_render_pdf, page)
+                    vlm_candidates.append(
+                        {
+                            "page_index": page_number,
+                            "page_number": page_number + 1,
+                            "image_bytes": img_bytes,
+                            "original_text": page_text,
+                        }
+                    )
+                except Exception as e:
+                    print(f"[PDF] Failed to render page {page_number + 1} for VLM: {e}")
+                    traceback.print_exc()
 
-            except Exception:
-                traceback.print_exc()
-                page_text = page.get_text("text")
+            # --- GLM-OCR candidate detection (runs alongside existing OCR) ---
+            if SWITCHES.get("GLM_OCR", False):
+                try:
+                    def _render_pdf_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
+                    img_bytes = await asyncio.to_thread(_render_pdf_glm, page)
+                    glm_ocr_candidates.append(
+                        {
+                            "page_index": page_number,
+                            "page_number": page_number + 1,
+                            "image_bytes": img_bytes,
+                        }
+                    )
+                except Exception as e:
+                    print(f"[PDF] Failed to render page {page_number + 1} for GLM-OCR: {e}")
+                    traceback.print_exc()
 
             # Append table blocks after the regular text
             if table_blocks:
