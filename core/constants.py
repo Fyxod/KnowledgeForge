@@ -5,7 +5,7 @@ from core.models.gpu_config import GPULLMConfig
 SWITCHES = {
     "MIND_MAP": False,  # For long documents, mind map will be better if SUMMARIZATION = True
     # For Cpu based testing we suggest to keep both False to avoid much load on CPU
-    "SUMMARIZATION": False,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
+    "SUMMARIZATION": True,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
     "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
@@ -13,9 +13,9 @@ SWITCHES = {
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
     "CORRECTIVE_RETRIEVAL": True,  # Phase 2.1: CRAG-style re-retrieval on low-confidence results
-    "HYDE": False,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)
+    "HYDE": True,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)
     "DOCUMENT_CREATOR": True,  # Interactive document generation (PPTX/DOCX/PDF)
-    "GLM_OCR": False,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
+    "GLM_OCR": True,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
 }
 
 # GLM-OCR Configuration
@@ -77,7 +77,7 @@ GPU_DOC_REVIEW_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Quality self-
 GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section iteration
 
 IMAGE_PARSER_LLM = "gemma3:12b"
-VLM_MODEL = "qwen3-vl:8b"  # Vision Language Model for slide/complex PDF extraction
+VLM_MODEL = "qwen3.5:9b"  # Vision Language Model for slide/complex PDF extraction
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
 FALLBACK_GEMINI_MODEL = "gemini-2.5-flash"
