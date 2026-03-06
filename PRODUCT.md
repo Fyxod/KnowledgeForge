@@ -80,7 +80,7 @@ Each analysis project lives in a **Thread** — an isolated workspace where user
 
 | Format | Capabilities |
 |--------|-------------|
-| **PDF** | Full text extraction with page-level granularity. Optional VLM parsing for scanned/image-heavy PDFs. Optional GLM-OCR for structured table/formula/layout extraction |
+| **PDF** | Full text extraction with structural parsing (Docling) for perfect Markdown conversion. Concurrent VLM parsing for scanned/image-heavy pages. Concurrent GLM-OCR for complex structured layouts (tables, formulas, figures) |
 | **Excel / CSV** | Automatic table detection, header inference, multi-sheet support. Loaded into SQL for natural-language querying |
 | **PowerPoint (PPTX/PPT)** | Slide text extraction + OCR for embedded images and diagrams. VLM or GLM-OCR enhancement for complex slides |
 | **Images (PNG/JPG/TIFF)** | OCR via EasyOCR or Tesseract for text extraction from photos, screenshots, diagrams |
@@ -271,7 +271,7 @@ Deep-dive analyses providing:
 ├─────────────┬───────────────────────────┬───────────────────────┤
 │   INGEST    │        UNDERSTAND         │       PRESENT         │
 ├─────────────┼───────────────────────────┼───────────────────────┤
-│ PDF Parser  │ Hybrid Retrieval          │ Chat Interface        │
+│ Docling PDF │ Hybrid Retrieval          │ Chat Interface        │
 │ Excel → SQL │ (Semantic + BM25 + RRF)   │ Source Citations       │
 │ PPTX Parser │                           │ Confidence Scores      │
 │ Image OCR   │ Cross-Encoder Re-Ranking  │                       │
