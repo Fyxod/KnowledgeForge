@@ -1676,16 +1676,19 @@ async def extract_document(
             try:
                 drawings = page.get_drawings()
                 # Group connected/overlapping drawings into diagram bounding boxes
-                diagram_rects = []
+                initial_rects = []
                 for d in drawings:
                     rect = d["rect"]
                     # Ignore tiny drawing commands (e.g. single lines or dots)
                     if rect.width < 50 or rect.height < 50:
                         continue
-                    
+                    initial_rects.append(fitz.Rect(rect))
+                
+                # Merge overlapping rects (with a margin) to form complete diagram boxes
+                diagram_rects = []
+                for rect in initial_rects:
                     merged = False
                     for existing in diagram_rects:
-                        # Expand rect slightly to catch nearby elements of the same diagram
                         expanded = fitz.Rect(rect.x0 - 20, rect.y0 - 20, rect.x1 + 20, rect.y1 + 20)
                         if existing.intersects(expanded):
                             existing.include_rect(rect)
@@ -1694,8 +1697,21 @@ async def extract_document(
                     if not merged:
                         diagram_rects.append(rect)
 
+                # Second pass to catch transitive overlaps 
+                final_rects = []
+                for r in diagram_rects:
+                    merged = False
+                    for existing in final_rects:
+                        expanded = fitz.Rect(r.x0 - 20, r.y0 - 20, r.x1 + 20, r.y1 + 20)
+                        if existing.intersects(expanded):
+                            existing.include_rect(r)
+                            merged = True
+                            break
+                    if not merged:
+                        final_rects.append(r)
+
                 # Crop each diagram and schedule for Mermaid VLM extraction
-                for d_index, d_rect in enumerate(diagram_rects):
+                for d_index, d_rect in enumerate(final_rects):
                     # Ensure rect is within page bounds
                     d_rect.intersect(page.rect)
                     if d_rect.is_empty or d_rect.width < 100 or d_rect.height < 100:
