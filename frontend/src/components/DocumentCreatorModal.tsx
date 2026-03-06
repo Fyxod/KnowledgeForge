@@ -37,6 +37,7 @@ import {
 } from '@/lib/api';
 import OutlineEditor from '@/components/document-creator/OutlineEditor';
 import DocumentPreview from '@/components/document-creator/DocumentPreview';
+import { downloadDocumentCreatorPdf } from '@/lib/document-creator-pdf';
 import { toast } from 'sonner';
 
 type Props = {
@@ -534,18 +535,30 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
     if (!docGenId || exporting) return;
     setExporting(true);
     try {
-      const res = await api.documentCreatorExport(docGenId, exportFormat);
-      if (res.filename) {
-        const blob = await api.documentCreatorDownload(docGenId, res.filename);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = res.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast.success(`Downloaded ${res.filename}`);
+      if (exportFormat === 'pdf') {
+        // Client-side PDF generation (avoids server-side fpdf2 issues)
+        downloadDocumentCreatorPdf(
+          documentTitle,
+          documentSubtitle || undefined,
+          sections,
+          { document_type: documentType, audience },
+        );
+        toast.success('PDF downloaded');
+      } else {
+        // Server-side export for DOCX and PPTX
+        const res = await api.documentCreatorExport(docGenId, exportFormat);
+        if (res.filename) {
+          const blob = await api.documentCreatorDownload(docGenId, res.filename);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = res.filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          toast.success(`Downloaded ${res.filename}`);
+        }
       }
     } catch (e: any) {
       toast.error(e.message || 'Export failed');
