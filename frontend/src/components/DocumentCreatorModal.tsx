@@ -602,8 +602,8 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
               </Button>
             </div>
 
-            <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
-              <div className="space-y-3 pr-4">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+              <div className="space-y-3 pr-2">
                 {loadingList && (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -668,15 +668,15 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
                   </Card>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           </div>
         )}
 
         {/* ── Configure View ── */}
         {view === 'configure' && (
           <div className="flex-1 min-h-0 flex flex-col gap-4">
-            <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
-              <div className="space-y-5 pr-4">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+              <div className="space-y-5 pr-2">
                 {/* Document type & audience */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
@@ -787,7 +787,7 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
                   />
                 </div>
               </div>
-            </ScrollArea>
+            </div>
 
             <div className="flex gap-3">
               <Button
@@ -814,8 +814,8 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
         {/* ── Outline Editor View ── */}
         {view === 'outline' && (
           <div className="flex-1 min-h-0 flex flex-col gap-4">
-            <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
-              <div className="pr-4">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+              <div className="pr-2">
                 <OutlineEditor
                   sections={outlineSections}
                   documentTitle={documentTitle}
@@ -825,7 +825,7 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
                   onSubtitleChange={setDocumentSubtitle}
                 />
               </div>
-            </ScrollArea>
+            </div>
 
             <div className="flex gap-3">
               <Button
@@ -884,7 +884,7 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
         {/* ── Preview & Export View ── */}
         {view === 'preview' && (
           <div className="flex-1 min-h-0 flex flex-col gap-4">
-            <ScrollArea className="flex-1 min-h-0 max-h-[60vh] border rounded-lg p-4 bg-muted/30">
+            <div className="flex-1 min-h-0 overflow-y-auto border rounded-lg p-4 bg-muted/30">
               <DocumentPreview
                 documentTitle={documentTitle}
                 documentSubtitle={documentSubtitle}
@@ -895,7 +895,7 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
                 onEditSection={handleEditSection}
                 iteratingSection={iteratingSection}
               />
-            </ScrollArea>
+            </div>
 
             <div className="flex items-center gap-3">
               <Button

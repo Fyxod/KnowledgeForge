@@ -6,6 +6,9 @@ from fpdf import FPDF
 from core.document_creator.assemblers.base import BaseDocumentAssembler
 from core.document_creator.state import DocumentCreatorConfig, SectionState
 
+# Minimum column width in mm to fit at least one character at 10pt
+_MIN_COL_WIDTH = 15
+
 
 class _ReportPDF(FPDF):
     """Custom FPDF subclass with headers and footers."""
@@ -140,13 +143,16 @@ class PdfAssembler(BaseDocumentAssembler):
                     pdf.multi_cell(0, 6, text)
                     pdf.ln(3)
 
-        # Bullet points
+        # Bullet points — use explicit width calculation instead of
+        # cell(8) + multi_cell(0) which is fragile with X cursor state
         if version.bullet_points:
             pdf.set_font("Helvetica", "", 11)
             pdf.set_text_color(30, 41, 59)
+            indent = 8
+            bullet_width = pdf.w - pdf.l_margin - pdf.r_margin - indent
             for bullet in version.bullet_points:
-                pdf.cell(8)  # indent
-                pdf.multi_cell(0, 6, f"\u2022  {bullet}")
+                pdf.set_x(pdf.l_margin + indent)
+                pdf.multi_cell(bullet_width, 6, f"\u2022  {bullet}")
                 pdf.ln(2)
 
         # Table
@@ -161,8 +167,13 @@ class PdfAssembler(BaseDocumentAssembler):
         if not headers:
             return
 
-        # Calculate column widths
-        available_width = pdf.w - 20  # margins
+        # Calculate column widths, capping the number of columns to fit
+        available_width = pdf.w - pdf.l_margin - pdf.r_margin
+        max_cols = max(1, int(available_width / _MIN_COL_WIDTH))
+        if len(headers) > max_cols:
+            headers = headers[:max_cols]
+            rows = [row[:max_cols] for row in rows]
+
         col_width = available_width / len(headers)
 
         # Header row
