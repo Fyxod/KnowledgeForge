@@ -1672,6 +1672,68 @@ async def extract_document(
                 except Exception:
                     traceback.print_exc()
 
+            # Extract Diagram/Flowchart bounding boxes (vector graphics) for Mermaid parsing
+            try:
+                drawings = page.get_drawings()
+                # Group connected/overlapping drawings into diagram bounding boxes
+                diagram_rects = []
+                for d in drawings:
+                    rect = d["rect"]
+                    # Ignore tiny drawing commands (e.g. single lines or dots)
+                    if rect.width < 50 or rect.height < 50:
+                        continue
+                    
+                    merged = False
+                    for existing in diagram_rects:
+                        # Expand rect slightly to catch nearby elements of the same diagram
+                        expanded = fitz.Rect(rect.x0 - 20, rect.y0 - 20, rect.x1 + 20, rect.y1 + 20)
+                        if existing.intersects(expanded):
+                            existing.include_rect(rect)
+                            merged = True
+                            break
+                    if not merged:
+                        diagram_rects.append(rect)
+
+                # Crop each diagram and schedule for Mermaid VLM extraction
+                for d_index, d_rect in enumerate(diagram_rects):
+                    # Ensure rect is within page bounds
+                    d_rect.intersect(page.rect)
+                    if d_rect.is_empty or d_rect.width < 100 or d_rect.height < 100:
+                        continue
+
+                    diagram_name = f"page{page_number + 1}_diagram{d_index + 1}.png"
+                    diagram_path = os.path.join(image_dir, diagram_name)
+                    
+                    # Render just the cropped area
+                    try:
+                        diagram_pix = page.get_pixmap(clip=d_rect, dpi=150)
+                        diagram_bytes = diagram_pix.tobytes("png")
+                        
+                        image = Image.open(io.BytesIO(diagram_bytes))
+                        image.save(diagram_path)
+                    except Exception:
+                        traceback.print_exc()
+                        continue
+                        
+                    placeholder = f"{{PENDING_{diagram_name}}}"
+                    page_text += f"\n\n[Diagram Detected]\n{placeholder}\n[/Diagram Detected]"
+                    image_names.append(diagram_name)
+
+                    # Import vlm_parse_slide dynamically to avoid circular import if necessary
+                    from core.parsers.vlm import vlm_parse_slide
+                    
+                    async def _extract_mermaid(path):
+                        result = await vlm_parse_slide(path, prompt_type="mermaid")
+                        if result:
+                            return f"```mermaid\n{result}\n```"
+                        return "[Diagram Mermaid Extraction Failed]"
+
+                    ocr_tasks[placeholder] = asyncio.create_task(
+                        _extract_mermaid(diagram_path)
+                    )
+            except Exception:
+                traceback.print_exc()
+
             combined_texts.append(page_text)
             pages.append(
                 Page(number=page_number + 1, text=page_text, images=image_names)

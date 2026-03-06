@@ -46,6 +46,15 @@ VLM_RETRY_PROMPT = (
     "Output as Markdown. No filler text."
 )
 
+# Specialized prompt for extracting flowcharts and ERDs into code
+VLM_MERMAID_PROMPT = (
+    "You are an expert graph transcription AI. Analyze this image. "
+    "If it contains a flowchart, architectural diagram, or Entity-Relationship Diagram (ERD), "
+    "extract the exact nodes, edges, decisions, and relationships. "
+    "Output the result STRICTLY as valid `Mermaid.js` syntax representing the graph. "
+    "Do not describe the graph in English; write ONLY the Mermaid code block that generates it."
+)
+
 
 def _resize_image(image_bytes: bytes, max_dim: int) -> bytes:
     """Resize image so its longest side is at most max_dim pixels. Returns PNG bytes."""
@@ -78,13 +87,14 @@ def _encode_image_base64(image_input, max_dim: int = VLM_MAX_IMAGE_DIM) -> str:
     return base64.b64encode(resized).decode("utf-8")
 
 
-async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
+async def vlm_parse_slide(image_input, port: int = PORT1, prompt_type: str = "default") -> str:
     """
     Send a single image to Ollama VLM for structured text extraction.
 
     Args:
         image_input: File path (str) or raw PNG bytes.
         port: Ollama API port (default: PORT1 from constants).
+        prompt_type: "default", "mermaid", or "retry"
 
     Returns:
         Extracted Markdown string, or "" on failure.
@@ -94,10 +104,16 @@ async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
         image_b64 = _encode_image_base64(image_input)
 
         url = f"{LOCAL_BASE_URL}:{port}/api/generate"
+        
+        selected_prompt = VLM_EXTRACTION_PROMPT
+        if prompt_type == "mermaid":
+            selected_prompt = VLM_MERMAID_PROMPT
+        elif prompt_type == "retry":
+            selected_prompt = VLM_RETRY_PROMPT
 
         payload = {
             "model": VLM_MODEL,
-            "prompt": VLM_EXTRACTION_PROMPT,
+            "prompt": selected_prompt,
             "images": [image_b64],
             "stream": False,
             "keep_alive": 300,  # Keep model loaded for 5 min between calls
@@ -147,6 +163,7 @@ async def vlm_parse_concurrent(
     page_labels: list[str] | None = None,
     port: int = PORT1,
     max_concurrent: int = 3,
+    prompt_type: str = "default",
 ) -> list[str]:
     """
     Process multiple pages concurrently using async single-page VLM calls.
@@ -160,6 +177,7 @@ async def vlm_parse_concurrent(
         page_labels: Optional labels for logging (e.g. ["Page 1", "Slide 3"]).
         port: Ollama API port (default: PORT1 from constants).
         max_concurrent: Max simultaneous VLM calls (default: 3, balance speed vs VRAM).
+        prompt_type: "default", "mermaid", or "retry".
 
     Returns:
         List of extracted Markdown strings, one per input image.
@@ -177,8 +195,8 @@ async def vlm_parse_concurrent(
 
     async def _process_one(idx: int, img_bytes: bytes) -> str:
         async with semaphore:
-            print(f"[VLM] Starting {labels[idx]}...")
-            result = await vlm_parse_slide(img_bytes, port=port)
+            print(f"[VLM] Starting {labels[idx]} (prompt: {prompt_type})...")
+            result = await vlm_parse_slide(img_bytes, port=port, prompt_type=prompt_type)
             if result:
                 print(f"[VLM] {labels[idx]} done ({len(result)} chars)")
             else:
