@@ -1,6 +1,18 @@
-import re
-import unicodedata
+"""PDF assembler using fpdf2 with Unicode font support.
+
+Uses DejaVuSans (TrueType) instead of built-in Helvetica so that all
+Unicode characters produced by LLMs render correctly.  The font is
+resolved in order:
+  1. System font dir  (/usr/share/fonts/truetype/dejavu/ on Debian/Ubuntu)
+  2. Local cache      (<project>/data/.fonts/)
+  3. Auto-download    from GitHub (one-time, ~700 KB per file)
+"""
+
+import logging
+import os
+import urllib.request
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
 from fpdf import FPDF
@@ -8,72 +20,76 @@ from fpdf import FPDF
 from core.document_creator.assemblers.base import BaseDocumentAssembler
 from core.document_creator.state import DocumentCreatorConfig, SectionState
 
-# Minimum column width in mm to fit at least one character at 10pt
+logger = logging.getLogger(__name__)
+
+# Minimum table column width in mm
 _MIN_COL_WIDTH = 15
 
-# Unicode → Latin-1-safe replacements for common LLM-generated characters
-_UNICODE_REPLACEMENTS = {
-    "\u2018": "'",   # left single quote
-    "\u2019": "'",   # right single quote
-    "\u201c": '"',   # left double quote
-    "\u201d": '"',   # right double quote
-    "\u2013": "-",   # en dash
-    "\u2014": "--",  # em dash
-    "\u2026": "...", # ellipsis
-    "\u2022": "*",   # bullet (we add our own bullet prefix)
-    "\u2023": ">",   # triangular bullet
-    "\u2043": "-",   # hyphen bullet
-    "\u00a0": " ",   # non-breaking space
-    "\u200b": "",    # zero-width space
-    "\u200c": "",    # zero-width non-joiner
-    "\u200d": "",    # zero-width joiner
-    "\ufeff": "",    # byte order mark
-    "\u2212": "-",   # minus sign
-    "\u00b7": "*",   # middle dot
-    "\u2217": "*",   # asterisk operator
-    "\u2192": "->",  # right arrow
-    "\u2190": "<-",  # left arrow
-    "\u2264": "<=",  # less-than or equal
-    "\u2265": ">=",  # greater-than or equal
-    "\u2260": "!=",  # not equal
-    "\u00b2": "2",   # superscript 2
-    "\u00b3": "3",   # superscript 3
+# ── Font resolution ───────────────────────────────────────────────────────
+
+_FONT_FAMILY = "dejavu"
+_FONT_CACHE_DIR = os.path.join("data", ".fonts")
+
+_FONT_FILES = {
+    "": "DejaVuSans.ttf",
+    "B": "DejaVuSans-Bold.ttf",
+    "I": "DejaVuSans-Oblique.ttf",
+    "BI": "DejaVuSans-BoldOblique.ttf",
 }
 
-# Regex to match characters outside Windows-1252 (Latin-1 superset used by fpdf2)
-_NON_LATIN1_RE = re.compile(r"[^\x00-\xff]")
+_DEJAVU_GITHUB_BASE = (
+    "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts"
+    "/master/ttf/"
+)
+
+_SYSTEM_FONT_DIRS = [
+    "/usr/share/fonts/truetype/dejavu",
+    "/usr/share/fonts/dejavu",
+    "/usr/share/fonts/TTF",
+    "/usr/local/share/fonts",
+]
 
 
-def _sanitize_text(text: str) -> str:
-    """Replace non-Latin-1 characters with safe ASCII equivalents.
+def _find_font(filename: str) -> Optional[str]:
+    """Find a font file on disk — system dirs first, then local cache."""
+    for d in _SYSTEM_FONT_DIRS:
+        p = os.path.join(d, filename)
+        if os.path.isfile(p):
+            return p
+    cached = os.path.join(_FONT_CACHE_DIR, filename)
+    if os.path.isfile(cached):
+        return cached
+    return None
 
-    fpdf2 built-in fonts (Helvetica, Courier, Times) only support the
-    Windows-1252 character set. Characters outside this range cause
-    width-calculation errors like 'Not enough horizontal space to render
-    a single character'. This function normalises common Unicode chars
-    produced by LLMs to safe Latin-1 equivalents.
-    """
-    if not text:
-        return text
 
-    # Apply explicit replacements first
-    for src, dst in _UNICODE_REPLACEMENTS.items():
-        if src in text:
-            text = text.replace(src, dst)
+def _ensure_font(filename: str) -> str:
+    """Return path to *filename*, downloading from GitHub if needed."""
+    path = _find_font(filename)
+    if path:
+        return path
 
-    # Normalise remaining accented characters via NFKD decomposition
-    # (e.g. ñ → n, ü → u) only for chars still outside Latin-1
-    def _replace_char(match: re.Match) -> str:
-        ch = match.group(0)
-        # Try NFKD decomposition (strips accents / decomposes ligatures)
-        decomposed = unicodedata.normalize("NFKD", ch)
-        ascii_chars = decomposed.encode("ascii", "ignore").decode("ascii")
-        if ascii_chars:
-            return ascii_chars
-        return "?"
+    os.makedirs(_FONT_CACHE_DIR, exist_ok=True)
+    dest = os.path.join(_FONT_CACHE_DIR, filename)
+    url = _DEJAVU_GITHUB_BASE + filename
+    logger.info("Downloading font %s from %s", filename, url)
+    try:
+        urllib.request.urlretrieve(url, dest)
+    except Exception:
+        raise RuntimeError(
+            f"Cannot find or download font {filename}. "
+            f"Install fonts-dejavu-core (apt) or place {filename} in {_FONT_CACHE_DIR}/"
+        )
+    return dest
 
-    text = _NON_LATIN1_RE.sub(_replace_char, text)
-    return text
+
+def _register_fonts(pdf: FPDF) -> None:
+    """Register DejaVuSans font family (regular, bold, italic, bold-italic)."""
+    for style, filename in _FONT_FILES.items():
+        path = _ensure_font(filename)
+        pdf.add_font(_FONT_FAMILY, style=style, fname=path)
+
+
+# ── PDF subclass ──────────────────────────────────────────────────────────
 
 
 class _ReportPDF(FPDF):
@@ -81,29 +97,31 @@ class _ReportPDF(FPDF):
 
     def __init__(self, doc_title: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.doc_title = _sanitize_text(doc_title)
+        self.doc_title = doc_title
 
     def header(self):
         if self.page_no() > 1:
-            self.set_font("Helvetica", "I", 8)
+            self.set_font(_FONT_FAMILY, "I", 8)
             self.set_text_color(100, 116, 139)
             self.cell(0, 10, self.doc_title, align="L")
             self.ln(5)
-            # Divider line
             self.set_draw_color(226, 232, 240)
             self.line(10, 18, self.w - 10, 18)
             self.ln(10)
 
     def footer(self):
         self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
+        self.set_font(_FONT_FAMILY, "I", 8)
         self.set_text_color(148, 163, 184)
         self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="C")
 
 
+# ── Assembler ─────────────────────────────────────────────────────────────
+
+
 class PdfAssembler(BaseDocumentAssembler):
     """
-    Assembles sections into a PDF document using fpdf2.
+    Assembles sections into a PDF document using fpdf2 + DejaVuSans.
 
     Creates a professional report with:
     - Title page
@@ -121,6 +139,7 @@ class PdfAssembler(BaseDocumentAssembler):
         output_path: str,
     ) -> str:
         pdf = _ReportPDF(doc_title=title)
+        _register_fonts(pdf)
         pdf.alias_nb_pages()
         pdf.set_auto_page_break(auto=True, margin=20)
 
@@ -137,21 +156,21 @@ class PdfAssembler(BaseDocumentAssembler):
         pdf.output(output_path)
         return output_path
 
+    # ── Title page ────────────────────────────────────────────────────────
+
     def _add_title_page(self, pdf, title, subtitle, config):
         pdf.add_page()
         pdf.ln(60)
 
-        # Title
-        pdf.set_font("Helvetica", "B", 28)
+        pdf.set_font(_FONT_FAMILY, "B", 28)
         pdf.set_text_color(30, 41, 59)
-        pdf.multi_cell(0, 14, _sanitize_text(title), align="C")
+        pdf.multi_cell(0, 14, title, align="C")
         pdf.ln(8)
 
-        # Subtitle
         if subtitle:
-            pdf.set_font("Helvetica", "", 14)
+            pdf.set_font(_FONT_FAMILY, "", 14)
             pdf.set_text_color(100, 116, 139)
-            pdf.multi_cell(0, 8, _sanitize_text(subtitle), align="C")
+            pdf.multi_cell(0, 8, subtitle, align="C")
             pdf.ln(8)
 
         # Divider
@@ -161,7 +180,7 @@ class PdfAssembler(BaseDocumentAssembler):
         pdf.ln(12)
 
         # Metadata
-        pdf.set_font("Helvetica", "", 10)
+        pdf.set_font(_FONT_FAMILY, "", 10)
         pdf.set_text_color(148, 163, 184)
         meta = (
             f"Type: {config.document_type.value.replace('_', ' ').title()} | "
@@ -170,23 +189,24 @@ class PdfAssembler(BaseDocumentAssembler):
         )
         pdf.multi_cell(0, 6, meta, align="C")
 
+    # ── Section rendering ─────────────────────────────────────────────────
+
     def _add_section(self, pdf, section_state, version):
-        heading = _sanitize_text(section_state.spec.title)
+        heading = section_state.spec.title
         level = section_state.spec.heading_level
 
-        # Check if we need a new page (leave room for heading + some content)
         if pdf.get_y() > pdf.h - 60:
             pdf.add_page()
 
         # Heading
         if level == 1:
-            pdf.set_font("Helvetica", "B", 18)
+            pdf.set_font(_FONT_FAMILY, "B", 18)
             pdf.set_text_color(30, 41, 59)
         elif level == 2:
-            pdf.set_font("Helvetica", "B", 14)
+            pdf.set_font(_FONT_FAMILY, "B", 14)
             pdf.set_text_color(51, 65, 85)
         else:
-            pdf.set_font("Helvetica", "B", 12)
+            pdf.set_font(_FONT_FAMILY, "B", 12)
             pdf.set_text_color(71, 85, 105)
 
         pdf.multi_cell(0, 10, heading)
@@ -194,31 +214,30 @@ class PdfAssembler(BaseDocumentAssembler):
 
         # Key takeaway
         if version.key_takeaway:
-            pdf.set_font("Helvetica", "I", 9)
+            pdf.set_font(_FONT_FAMILY, "I", 9)
             pdf.set_text_color(249, 115, 22)
-            pdf.multi_cell(0, 5, f"Key Takeaway: {_sanitize_text(version.key_takeaway)}")
+            pdf.multi_cell(0, 5, f"Key Takeaway: {version.key_takeaway}")
             pdf.ln(4)
 
-        # Content
+        # Content paragraphs
         if version.content:
-            pdf.set_font("Helvetica", "", 11)
+            pdf.set_font(_FONT_FAMILY, "", 11)
             pdf.set_text_color(30, 41, 59)
-            for para in _sanitize_text(version.content).split("\n"):
+            for para in version.content.split("\n"):
                 text = para.strip()
                 if text:
                     pdf.multi_cell(0, 6, text)
                     pdf.ln(3)
 
-        # Bullet points — use explicit width calculation instead of
-        # cell(8) + multi_cell(0) which is fragile with X cursor state
+        # Bullet points
         if version.bullet_points:
-            pdf.set_font("Helvetica", "", 11)
+            pdf.set_font(_FONT_FAMILY, "", 11)
             pdf.set_text_color(30, 41, 59)
             indent = 8
             bullet_width = pdf.w - pdf.l_margin - pdf.r_margin - indent
             for bullet in version.bullet_points:
                 pdf.set_x(pdf.l_margin + indent)
-                pdf.multi_cell(bullet_width, 6, f"*  {_sanitize_text(bullet)}")
+                pdf.multi_cell(bullet_width, 6, f"\u2022  {bullet}")
                 pdf.ln(2)
 
         # Table
@@ -227,13 +246,14 @@ class PdfAssembler(BaseDocumentAssembler):
 
         pdf.ln(6)
 
+    # ── Table rendering ───────────────────────────────────────────────────
+
     def _add_table(self, pdf, table_data):
         headers = table_data.get("headers", [])
         rows = table_data.get("rows", [])
         if not headers:
             return
 
-        # Calculate column widths, capping the number of columns to fit
         available_width = pdf.w - pdf.l_margin - pdf.r_margin
         max_cols = max(1, int(available_width / _MIN_COL_WIDTH))
         if len(headers) > max_cols:
@@ -243,19 +263,19 @@ class PdfAssembler(BaseDocumentAssembler):
         col_width = available_width / len(headers)
 
         # Header row
-        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_font(_FONT_FAMILY, "B", 10)
         pdf.set_fill_color(241, 245, 249)
         pdf.set_text_color(30, 41, 59)
         for header in headers:
-            pdf.cell(col_width, 8, _sanitize_text(str(header))[:30], border=1, fill=True)
+            pdf.cell(col_width, 8, str(header)[:30], border=1, fill=True)
         pdf.ln()
 
         # Data rows
-        pdf.set_font("Helvetica", "", 10)
+        pdf.set_font(_FONT_FAMILY, "", 10)
         for row_data in rows:
             for col_idx, cell_value in enumerate(row_data):
                 if col_idx < len(headers):
-                    pdf.cell(col_width, 7, _sanitize_text(str(cell_value))[:30], border=1)
+                    pdf.cell(col_width, 7, str(cell_value)[:30], border=1)
             pdf.ln()
 
         pdf.ln(4)
