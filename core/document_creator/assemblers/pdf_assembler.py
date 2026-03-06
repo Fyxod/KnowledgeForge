@@ -1,3 +1,5 @@
+import re
+import unicodedata
 from datetime import datetime
 from typing import List, Optional
 
@@ -9,13 +11,77 @@ from core.document_creator.state import DocumentCreatorConfig, SectionState
 # Minimum column width in mm to fit at least one character at 10pt
 _MIN_COL_WIDTH = 15
 
+# Unicode → Latin-1-safe replacements for common LLM-generated characters
+_UNICODE_REPLACEMENTS = {
+    "\u2018": "'",   # left single quote
+    "\u2019": "'",   # right single quote
+    "\u201c": '"',   # left double quote
+    "\u201d": '"',   # right double quote
+    "\u2013": "-",   # en dash
+    "\u2014": "--",  # em dash
+    "\u2026": "...", # ellipsis
+    "\u2022": "*",   # bullet (we add our own bullet prefix)
+    "\u2023": ">",   # triangular bullet
+    "\u2043": "-",   # hyphen bullet
+    "\u00a0": " ",   # non-breaking space
+    "\u200b": "",    # zero-width space
+    "\u200c": "",    # zero-width non-joiner
+    "\u200d": "",    # zero-width joiner
+    "\ufeff": "",    # byte order mark
+    "\u2212": "-",   # minus sign
+    "\u00b7": "*",   # middle dot
+    "\u2217": "*",   # asterisk operator
+    "\u2192": "->",  # right arrow
+    "\u2190": "<-",  # left arrow
+    "\u2264": "<=",  # less-than or equal
+    "\u2265": ">=",  # greater-than or equal
+    "\u2260": "!=",  # not equal
+    "\u00b2": "2",   # superscript 2
+    "\u00b3": "3",   # superscript 3
+}
+
+# Regex to match characters outside Windows-1252 (Latin-1 superset used by fpdf2)
+_NON_LATIN1_RE = re.compile(r"[^\x00-\xff]")
+
+
+def _sanitize_text(text: str) -> str:
+    """Replace non-Latin-1 characters with safe ASCII equivalents.
+
+    fpdf2 built-in fonts (Helvetica, Courier, Times) only support the
+    Windows-1252 character set. Characters outside this range cause
+    width-calculation errors like 'Not enough horizontal space to render
+    a single character'. This function normalises common Unicode chars
+    produced by LLMs to safe Latin-1 equivalents.
+    """
+    if not text:
+        return text
+
+    # Apply explicit replacements first
+    for src, dst in _UNICODE_REPLACEMENTS.items():
+        if src in text:
+            text = text.replace(src, dst)
+
+    # Normalise remaining accented characters via NFKD decomposition
+    # (e.g. ñ → n, ü → u) only for chars still outside Latin-1
+    def _replace_char(match: re.Match) -> str:
+        ch = match.group(0)
+        # Try NFKD decomposition (strips accents / decomposes ligatures)
+        decomposed = unicodedata.normalize("NFKD", ch)
+        ascii_chars = decomposed.encode("ascii", "ignore").decode("ascii")
+        if ascii_chars:
+            return ascii_chars
+        return "?"
+
+    text = _NON_LATIN1_RE.sub(_replace_char, text)
+    return text
+
 
 class _ReportPDF(FPDF):
     """Custom FPDF subclass with headers and footers."""
 
     def __init__(self, doc_title: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.doc_title = doc_title
+        self.doc_title = _sanitize_text(doc_title)
 
     def header(self):
         if self.page_no() > 1:
@@ -78,14 +144,14 @@ class PdfAssembler(BaseDocumentAssembler):
         # Title
         pdf.set_font("Helvetica", "B", 28)
         pdf.set_text_color(30, 41, 59)
-        pdf.multi_cell(0, 14, title, align="C")
+        pdf.multi_cell(0, 14, _sanitize_text(title), align="C")
         pdf.ln(8)
 
         # Subtitle
         if subtitle:
             pdf.set_font("Helvetica", "", 14)
             pdf.set_text_color(100, 116, 139)
-            pdf.multi_cell(0, 8, subtitle, align="C")
+            pdf.multi_cell(0, 8, _sanitize_text(subtitle), align="C")
             pdf.ln(8)
 
         # Divider
@@ -105,7 +171,7 @@ class PdfAssembler(BaseDocumentAssembler):
         pdf.multi_cell(0, 6, meta, align="C")
 
     def _add_section(self, pdf, section_state, version):
-        heading = section_state.spec.title
+        heading = _sanitize_text(section_state.spec.title)
         level = section_state.spec.heading_level
 
         # Check if we need a new page (leave room for heading + some content)
@@ -130,14 +196,14 @@ class PdfAssembler(BaseDocumentAssembler):
         if version.key_takeaway:
             pdf.set_font("Helvetica", "I", 9)
             pdf.set_text_color(249, 115, 22)
-            pdf.multi_cell(0, 5, f"Key Takeaway: {version.key_takeaway}")
+            pdf.multi_cell(0, 5, f"Key Takeaway: {_sanitize_text(version.key_takeaway)}")
             pdf.ln(4)
 
         # Content
         if version.content:
             pdf.set_font("Helvetica", "", 11)
             pdf.set_text_color(30, 41, 59)
-            for para in version.content.split("\n"):
+            for para in _sanitize_text(version.content).split("\n"):
                 text = para.strip()
                 if text:
                     pdf.multi_cell(0, 6, text)
@@ -152,7 +218,7 @@ class PdfAssembler(BaseDocumentAssembler):
             bullet_width = pdf.w - pdf.l_margin - pdf.r_margin - indent
             for bullet in version.bullet_points:
                 pdf.set_x(pdf.l_margin + indent)
-                pdf.multi_cell(bullet_width, 6, f"\u2022  {bullet}")
+                pdf.multi_cell(bullet_width, 6, f"*  {_sanitize_text(bullet)}")
                 pdf.ln(2)
 
         # Table
@@ -181,7 +247,7 @@ class PdfAssembler(BaseDocumentAssembler):
         pdf.set_fill_color(241, 245, 249)
         pdf.set_text_color(30, 41, 59)
         for header in headers:
-            pdf.cell(col_width, 8, str(header)[:30], border=1, fill=True)
+            pdf.cell(col_width, 8, _sanitize_text(str(header))[:30], border=1, fill=True)
         pdf.ln()
 
         # Data rows
@@ -189,7 +255,7 @@ class PdfAssembler(BaseDocumentAssembler):
         for row_data in rows:
             for col_idx, cell_value in enumerate(row_data):
                 if col_idx < len(headers):
-                    pdf.cell(col_width, 7, str(cell_value)[:30], border=1)
+                    pdf.cell(col_width, 7, _sanitize_text(str(cell_value))[:30], border=1)
             pdf.ln()
 
         pdf.ln(4)
