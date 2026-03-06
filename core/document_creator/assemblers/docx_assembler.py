@@ -82,7 +82,7 @@ class DocxAssembler(BaseDocumentAssembler):
         doc.add_page_break()
 
     def _add_section(self, doc, section_state, version):
-        heading_text = version.heading or section_state.spec.title
+        heading_text = section_state.spec.title
         level = min(section_state.spec.heading_level, 3)
 
         # Heading

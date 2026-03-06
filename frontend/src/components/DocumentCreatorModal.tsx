@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Loader2,
@@ -15,11 +17,16 @@ import {
   CheckCircle2,
   ArrowLeft,
   ArrowRight,
+  Plus,
+  Trash2,
+  Clock,
+  FolderOpen,
 } from 'lucide-react';
 import {
   Document,
   api,
   type DocumentCreatorConfig,
+  type DocumentCreatorListItem,
   type DocumentType,
   type AudienceType,
   type ToneType,
@@ -42,7 +49,7 @@ type Props = {
 const ALL_DOCS_ID = '__ALL_DOCS__';
 const MAX_POLL_COUNT = 120; // 120 × 5s = 10 min
 
-type View = 'configure' | 'outline' | 'progress' | 'preview' | 'error';
+type View = 'my_documents' | 'configure' | 'outline' | 'progress' | 'preview' | 'error';
 
 const DOC_TYPE_LABELS: Record<DocumentType, string> = {
   presentation: 'Presentation',
@@ -66,11 +73,38 @@ const TONE_LABELS: Record<ToneType, string> = {
   academic: 'Academic',
 };
 
+const PHASE_LABELS: Record<string, string> = {
+  initialized: 'Draft',
+  outline: 'Outline Ready',
+  outline_approved: 'Outline Approved',
+  generating: 'Generating',
+  review: 'In Review',
+  ready: 'Ready',
+  exported: 'Exported',
+  failed: 'Failed',
+};
+
+const PHASE_COLORS: Record<string, string> = {
+  initialized: 'bg-muted text-muted-foreground',
+  outline: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  outline_approved: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  generating: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  review: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+  ready: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  exported: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+};
+
 const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents }) => {
   // View state
-  const [view, setView] = useState<View>('configure');
+  const [view, setView] = useState<View>('my_documents');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // My Documents view
+  const [savedDocuments, setSavedDocuments] = useState<DocumentCreatorListItem[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [resumingDocId, setResumingDocId] = useState<string | null>(null);
 
   // Configure view
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
@@ -109,9 +143,12 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
   };
 
   const resetState = () => {
-    setView('configure');
+    setView('my_documents');
     setLoading(false);
     setErrorMessage(null);
+    setSavedDocuments([]);
+    setLoadingList(false);
+    setResumingDocId(null);
     setSelectedDocs([]);
     setDocumentType('technical_report');
     setAudience('technical');
@@ -139,6 +176,87 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
   useEffect(() => {
     if (!open) stopPolling();
   }, [open]);
+
+  // ── Load saved documents on open ──
+
+  const loadSavedDocuments = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      const res = await api.documentCreatorList(threadId);
+      setSavedDocuments(res.documents);
+    } catch {
+      // silently fail — just show empty list
+      setSavedDocuments([]);
+    } finally {
+      setLoadingList(false);
+    }
+  }, [threadId]);
+
+  useEffect(() => {
+    if (open && view === 'my_documents') {
+      loadSavedDocuments();
+    }
+  }, [open, view, loadSavedDocuments]);
+
+  // ── Resume a saved document ──
+
+  const handleResume = async (item: DocumentCreatorListItem) => {
+    setResumingDocId(item.doc_gen_id);
+    try {
+      const preview = await api.documentCreatorPreview(item.doc_gen_id);
+      setDocGenId(item.doc_gen_id);
+      setDocumentTitle(preview.document_title || 'Untitled Document');
+      setDocumentSubtitle(preview.document_subtitle || '');
+
+      const phase = item.phase;
+
+      if (phase === 'outline' || phase === 'outline_approved') {
+        // Load outline sections for editing
+        setOutlineSections(
+          preview.sections.map((s) => ({
+            section_id: s.spec.section_id,
+            title: s.spec.title,
+            description: s.spec.description,
+            content_format: s.spec.content_format as ContentFormat,
+            heading_level: s.spec.heading_level,
+            guidance: s.spec.guidance || null,
+            source_document_ids: s.spec.source_document_ids || [],
+            order: s.spec.order,
+          })),
+        );
+        setView('outline');
+      } else if (phase === 'generating') {
+        // Resume polling
+        setView('progress');
+        setProgressMessages(['Resuming generation...']);
+        pollingActiveRef.current = true;
+        pollCountRef.current = 0;
+        pollGenerationStatus();
+      } else if (phase === 'ready' || phase === 'exported' || phase === 'review') {
+        setSections(preview.sections);
+        setView('preview');
+      } else {
+        // fallback — show configure
+        setView('configure');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load document');
+    } finally {
+      setResumingDocId(null);
+    }
+  };
+
+  // ── Delete a saved document ──
+
+  const handleDelete = async (docId: string) => {
+    try {
+      await api.documentCreatorDelete(docId);
+      setSavedDocuments((prev) => prev.filter((d) => d.doc_gen_id !== docId));
+      toast.success('Document deleted');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to delete document');
+    }
+  };
 
   // ── Document selection ──
 
@@ -385,6 +503,31 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
     }
   };
 
+  const handleEditSection = async (
+    sectionId: string,
+    edits: { content?: string; bullet_points?: string[] },
+  ) => {
+    if (!docGenId) return;
+    try {
+      await api.documentCreatorEditSection(docGenId, sectionId, edits);
+      // Update local state
+      setSections((prev) =>
+        prev.map((s) => {
+          if (s.spec.section_id !== sectionId) return s;
+          const versions = [...s.versions];
+          const vi = s.selected_version_index;
+          if (versions[vi]) {
+            versions[vi] = { ...versions[vi], ...edits };
+          }
+          return { ...s, versions };
+        }),
+      );
+      toast.success('Section updated');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save edits');
+    }
+  };
+
   // ── Export ──
 
   const handleExport = async () => {
@@ -415,6 +558,25 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
 
   const allApproved = sections.length > 0 && sections.every((s) => s.status === 'approved');
 
+  const formatDate = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
+      ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getDescription = () => {
+    switch (view) {
+      case 'my_documents': return 'View saved documents or create a new one.';
+      case 'configure': return 'Configure your document and select source materials.';
+      case 'outline': return 'Review and edit the document outline before generation.';
+      case 'progress': return 'Generating your document...';
+      case 'preview': return 'Review, iterate, and export your document.';
+      case 'error': return 'An error occurred during generation.';
+      default: return '';
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
@@ -423,19 +585,97 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
             <FileText className="w-5 h-5" />
             Document Creator
           </DialogTitle>
-          <DialogDescription>
-            {view === 'configure' && 'Configure your document and select source materials.'}
-            {view === 'outline' && 'Review and edit the document outline before generation.'}
-            {view === 'progress' && 'Generating your document...'}
-            {view === 'preview' && 'Review, iterate, and export your document.'}
-            {view === 'error' && 'An error occurred during generation.'}
-          </DialogDescription>
+          <DialogDescription>{getDescription()}</DialogDescription>
         </DialogHeader>
+
+        {/* ── My Documents View ── */}
+        {view === 'my_documents' && (
+          <div className="flex-1 min-h-0 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-muted-foreground">Saved Documents</h3>
+              <Button
+                onClick={() => setView('configure')}
+                size="sm"
+                className="bg-gradient-primary"
+              >
+                <Plus className="w-4 h-4 mr-1" /> New Document
+              </Button>
+            </div>
+
+            <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
+              <div className="space-y-3 pr-4">
+                {loadingList && (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+
+                {!loadingList && savedDocuments.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <FolderOpen className="w-12 h-12 text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground">No saved documents yet.</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Click "New Document" to create your first one.
+                    </p>
+                  </div>
+                )}
+
+                {!loadingList && savedDocuments.map((item) => (
+                  <Card key={item.doc_gen_id} className="p-4 hover:bg-accent/20 transition-colors">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-medium text-sm truncate">{item.document_title}</h4>
+                          <Badge className={`text-[10px] px-1.5 py-0 ${PHASE_COLORS[item.phase] || PHASE_COLORS.initialized}`}>
+                            {PHASE_LABELS[item.phase] || item.phase}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span>{(DOC_TYPE_LABELS as Record<string, string>)[item.document_type] || item.document_type}</span>
+                          <span>{item.section_count} section{item.section_count !== 1 ? 's' : ''}</span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(item.updated_at)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => handleResume(item)}
+                          disabled={resumingDocId === item.doc_gen_id}
+                        >
+                          {resumingDocId === item.doc_gen_id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <>
+                              <ArrowRight className="w-3 h-3 mr-1" /> Resume
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDelete(item.doc_gen_id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
 
         {/* ── Configure View ── */}
         {view === 'configure' && (
-          <div className="flex-1 overflow-hidden flex flex-col gap-4">
-            <ScrollArea className="flex-1 h-[60vh]">
+          <div className="flex-1 min-h-0 flex flex-col gap-4">
+            <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
               <div className="space-y-5 pr-4">
                 {/* Document type & audience */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -549,24 +789,32 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
               </div>
             </ScrollArea>
 
-            <Button
-              onClick={handleGenerateOutline}
-              disabled={loading || selectedDocs.length === 0}
-              className="bg-gradient-primary"
-            >
-              {loading ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating Outline...</>
-              ) : (
-                <><ArrowRight className="w-4 h-4 mr-2" /> Generate Outline</>
-              )}
-            </Button>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setView('my_documents')}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" /> Back
+              </Button>
+              <Button
+                onClick={handleGenerateOutline}
+                disabled={loading || selectedDocs.length === 0}
+                className="ml-auto bg-gradient-primary"
+              >
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating Outline...</>
+                ) : (
+                  <><ArrowRight className="w-4 h-4 mr-2" /> Generate Outline</>
+                )}
+              </Button>
+            </div>
           </div>
         )}
 
         {/* ── Outline Editor View ── */}
         {view === 'outline' && (
-          <div className="flex-1 overflow-hidden flex flex-col gap-4">
-            <ScrollArea className="flex-1 h-[60vh]">
+          <div className="flex-1 min-h-0 flex flex-col gap-4">
+            <ScrollArea className="flex-1 min-h-0 max-h-[60vh]">
               <div className="pr-4">
                 <OutlineEditor
                   sections={outlineSections}
@@ -582,7 +830,7 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => setView('configure')}
+                onClick={() => setView('my_documents')}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" /> Back
               </Button>
@@ -624,7 +872,7 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
               className="mt-4"
               onClick={() => {
                 stopPolling();
-                setView('configure');
+                setView('my_documents');
                 setProgressMessages([]);
               }}
             >
@@ -635,8 +883,8 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
 
         {/* ── Preview & Export View ── */}
         {view === 'preview' && (
-          <div className="flex-1 overflow-hidden flex flex-col gap-4">
-            <ScrollArea className="flex-1 border rounded-lg p-4 bg-muted/30 h-[60vh] overflow-auto">
+          <div className="flex-1 min-h-0 flex flex-col gap-4">
+            <ScrollArea className="flex-1 min-h-0 max-h-[60vh] border rounded-lg p-4 bg-muted/30">
               <DocumentPreview
                 documentTitle={documentTitle}
                 documentSubtitle={documentSubtitle}
@@ -644,6 +892,7 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
                 onApprove={handleApprove}
                 onIterate={handleIterate}
                 onSelectVersion={handleSelectVersion}
+                onEditSection={handleEditSection}
                 iteratingSection={iteratingSection}
               />
             </ScrollArea>
@@ -651,9 +900,9 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"
-                onClick={() => setView('outline')}
+                onClick={() => setView('my_documents')}
               >
-                <ArrowLeft className="w-4 h-4 mr-2" /> Edit Outline
+                <ArrowLeft className="w-4 h-4 mr-2" /> My Documents
               </Button>
 
               {allApproved && (
@@ -699,7 +948,7 @@ const DocumentCreatorModal: React.FC<Props> = ({ open, onOpenChange, threadId, d
               </p>
             </div>
             <div className="flex gap-3 mt-4">
-              <Button variant="outline" onClick={() => { setView('configure'); setErrorMessage(null); setProgressMessages([]); }}>
+              <Button variant="outline" onClick={() => { setView('my_documents'); setErrorMessage(null); setProgressMessages([]); }}>
                 <ArrowLeft className="w-4 h-4 mr-2" /> Back
               </Button>
               <Button onClick={handleGenerateOutline} disabled={loading}>

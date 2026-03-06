@@ -634,6 +634,16 @@ export interface DocumentCreatorExportResponse {
   error?: string;
 }
 
+export interface DocumentCreatorListItem {
+  doc_gen_id: string;
+  document_title: string;
+  phase: string;
+  document_type: string;
+  section_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Auth helpers
 export const getAuthToken = () => localStorage.getItem('auth_token');
 export const setAuthToken = (token: string) => localStorage.setItem('auth_token', token);
@@ -1508,6 +1518,35 @@ export const api = {
     return data;
   },
 
+  async documentCreatorEditSection(
+    docGenId: string,
+    sectionId: string,
+    edits: {
+      content?: string;
+      bullet_points?: string[];
+      key_takeaway?: string;
+      speaker_notes?: string;
+    },
+  ): Promise<{ section_id: string; status: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/edit-section/${docGenId}/${sectionId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(edits),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to edit section');
+    }
+    return data;
+  },
+
   async documentCreatorExport(
     docGenId: string,
     format: ExportFormat,
@@ -1544,6 +1583,39 @@ export const api = {
       throw new Error('Failed to download file');
     }
     return response.blob();
+  },
+
+  async documentCreatorList(
+    threadId: string,
+  ): Promise<{ documents: DocumentCreatorListItem[] }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/list/${threadId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to list documents');
+    }
+    return data;
+  },
+
+  async documentCreatorDelete(
+    docGenId: string,
+  ): Promise<{ status: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/${docGenId}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to delete document');
+    }
+    return data;
   },
 };
 

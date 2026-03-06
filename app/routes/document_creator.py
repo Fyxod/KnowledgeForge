@@ -64,6 +64,13 @@ class SelectVersionRequest(BaseModel):
     version_index: int
 
 
+class EditSectionRequest(BaseModel):
+    content: str | None = None
+    bullet_points: list[str] | None = None
+    key_takeaway: str | None = None
+    speaker_notes: str | None = None
+
+
 class ExportRequest(BaseModel):
     format: str = Field(description="pptx, docx, or pdf")
 
@@ -120,6 +127,88 @@ def _load_thread_documents(user_id: str, thread_id: str, source_ids: list[str] |
             continue
 
     return documents
+
+
+# ─── List & Delete Saved Documents ────────────────────────────────────────
+
+
+@router.get("/document-creator/list/{thread_id}")
+async def list_documents(request: Request, thread_id: str):
+    """List all saved document creator instances for a thread."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+    state_dir = _get_state_dir(user_id, thread_id)
+
+    if not os.path.exists(state_dir):
+        return JSONResponse(content={"documents": []})
+
+    documents = []
+    for filename in os.listdir(state_dir):
+        if not filename.startswith("state_") or not filename.endswith(".json"):
+            continue
+        file_path = os.path.join(state_dir, filename)
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            documents.append({
+                "doc_gen_id": data.get("doc_gen_id", ""),
+                "document_title": data.get("document_title") or "Untitled Document",
+                "phase": data.get("phase", "initialized"),
+                "document_type": data.get("config", {}).get("document_type", "technical_report"),
+                "section_count": len(data.get("sections", [])),
+                "created_at": data.get("created_at", ""),
+                "updated_at": data.get("updated_at", ""),
+            })
+        except Exception:
+            continue
+
+    # Sort by updated_at descending
+    documents.sort(key=lambda d: d.get("updated_at", ""), reverse=True)
+
+    return JSONResponse(content={"documents": documents})
+
+
+@router.delete("/document-creator/{doc_gen_id}")
+async def delete_document(request: Request, doc_gen_id: str):
+    """Delete a saved document creator instance and its exports."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+
+    import glob
+    import shutil
+
+    pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
+    matches = glob.glob(pattern)
+    if not matches:
+        raise HTTPException(status_code=404, detail="Document generation not found")
+
+    state_path = matches[0]
+    state_dir = os.path.dirname(state_path)
+
+    # Delete the state file
+    os.remove(state_path)
+
+    # Delete any outline status files for this doc
+    for f in glob.glob(os.path.join(state_dir, f"outline_status_*.json")):
+        try:
+            os.remove(f)
+        except Exception:
+            pass
+
+    # Delete export files if they exist
+    exports_dir = os.path.join(state_dir, "exports")
+    if os.path.exists(exports_dir):
+        # Only delete exports associated with this doc_gen_id
+        # Since exports are named by title, we just leave exports dir intact
+        pass
+
+    return JSONResponse(content={"status": "deleted", "doc_gen_id": doc_gen_id})
 
 
 # ─── Phase 1: Generate Outline ───────────────────────────────────────────
@@ -603,6 +692,63 @@ async def approve_section(request: Request, doc_gen_id: str, section_id: str):
 
     return JSONResponse(
         content={"section_id": section_id, "status": "approved"}
+    )
+
+
+# ─── Iteration: Edit Section Content ──────────────────────────────────────
+
+
+@router.put("/document-creator/edit-section/{doc_gen_id}/{section_id}")
+async def edit_section(
+    request: Request,
+    doc_gen_id: str,
+    section_id: str,
+    body: EditSectionRequest = Body(...),
+):
+    """Directly edit the content of the currently selected version."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+
+    import glob
+
+    pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
+    matches = glob.glob(pattern)
+    if not matches:
+        raise HTTPException(status_code=404, detail="Document generation not found")
+
+    state_path = matches[0]
+    async with aiofiles.open(state_path, "r", encoding="utf-8") as f:
+        content = await f.read()
+    state = DocumentCreatorState.model_validate_json(content)
+
+    section = next(
+        (s for s in state.sections if s.spec.section_id == section_id), None
+    )
+    if section is None:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    if not section.versions:
+        raise HTTPException(status_code=422, detail="Section has no generated content to edit")
+
+    version = section.versions[section.selected_version_index]
+
+    if body.content is not None:
+        version.content = body.content
+    if body.bullet_points is not None:
+        version.bullet_points = body.bullet_points
+    if body.key_takeaway is not None:
+        version.key_takeaway = body.key_takeaway
+    if body.speaker_notes is not None:
+        version.speaker_notes = body.speaker_notes
+
+    state.touch()
+    await _save_state(state)
+
+    return JSONResponse(
+        content={"section_id": section_id, "status": "updated"}
     )
 
 

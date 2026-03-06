@@ -75,7 +75,7 @@ class PptxAssembler(BaseDocumentAssembler):
 
         # Title
         if slide.placeholders[0]:
-            slide.placeholders[0].text = version.heading or section_state.spec.title
+            slide.placeholders[0].text = section_state.spec.title
             for p in slide.placeholders[0].text_frame.paragraphs:
                 p.font.size = Pt(28)
                 p.font.color.rgb = self.TITLE_COLOR

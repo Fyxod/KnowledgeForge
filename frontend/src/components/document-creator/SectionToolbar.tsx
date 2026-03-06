@@ -9,6 +9,7 @@ import {
   ChevronRight,
   MessageSquare,
   Loader2,
+  Pencil,
 } from 'lucide-react';
 import type { SectionState } from '@/lib/api';
 
@@ -17,7 +18,9 @@ interface SectionToolbarProps {
   onApprove: () => void;
   onIterate: (feedback?: string) => void;
   onSelectVersion: (index: number) => void;
+  onEdit: () => void;
   isIterating: boolean;
+  isEditing: boolean;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -34,7 +37,9 @@ const SectionToolbar: React.FC<SectionToolbarProps> = ({
   onApprove,
   onIterate,
   onSelectVersion,
+  onEdit,
   isIterating,
+  isEditing,
 }) => {
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -91,6 +96,15 @@ const SectionToolbar: React.FC<SectionToolbarProps> = ({
               <CheckCircle2 className="w-3 h-3 mr-1" /> Approve
             </Button>
           )}
+
+          <Button
+            variant={isEditing ? 'default' : 'outline'}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={onEdit}
+          >
+            <Pencil className="w-3 h-3 mr-1" /> {isEditing ? 'Done' : 'Edit'}
+          </Button>
 
           <Button
             variant="outline"

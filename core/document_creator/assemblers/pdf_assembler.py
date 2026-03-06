@@ -102,7 +102,7 @@ class PdfAssembler(BaseDocumentAssembler):
         pdf.multi_cell(0, 6, meta, align="C")
 
     def _add_section(self, pdf, section_state, version):
-        heading = version.heading or section_state.spec.title
+        heading = section_state.spec.title
         level = section_state.spec.heading_level
 
         # Check if we need a new page (leave room for heading + some content)

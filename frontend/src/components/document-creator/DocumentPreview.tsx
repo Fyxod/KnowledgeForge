@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import SectionToolbar from './SectionToolbar';
 import type { SectionState } from '@/lib/api';
 
@@ -11,6 +12,7 @@ interface DocumentPreviewProps {
   onApprove: (sectionId: string) => void;
   onIterate: (sectionId: string, feedback?: string) => void;
   onSelectVersion: (sectionId: string, index: number) => void;
+  onEditSection: (sectionId: string, edits: { content?: string; bullet_points?: string[] }) => void;
   iteratingSection: string | null;
 }
 
@@ -21,8 +23,32 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   onApprove,
   onIterate,
   onSelectVersion,
+  onEditSection,
   iteratingSection,
 }) => {
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [editBullets, setEditBullets] = useState('');
+
+  const startEditing = (sectionId: string, version: any) => {
+    if (editingSectionId === sectionId) {
+      // Save and stop editing
+      const edits: { content?: string; bullet_points?: string[] } = {};
+      if (version.content !== undefined) {
+        edits.content = editContent;
+      }
+      if (version.bullet_points && version.bullet_points.length > 0) {
+        edits.bullet_points = editBullets.split('\n').filter((l: string) => l.trim());
+      }
+      onEditSection(sectionId, edits);
+      setEditingSectionId(null);
+    } else {
+      // Start editing
+      setEditingSectionId(sectionId);
+      setEditContent(version.content || '');
+      setEditBullets(version.bullet_points ? version.bullet_points.join('\n') : '');
+    }
+  };
   return (
     <div className="space-y-6">
       {/* Document header */}
@@ -57,7 +83,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
               onApprove={() => onApprove(section.spec.section_id)}
               onIterate={(fb) => onIterate(section.spec.section_id, fb)}
               onSelectVersion={(idx) => onSelectVersion(section.spec.section_id, idx)}
+              onEdit={() => startEditing(section.spec.section_id, version)}
               isIterating={iteratingSection === section.spec.section_id}
+              isEditing={editingSectionId === section.spec.section_id}
             />
 
             <Separator />
@@ -81,19 +109,45 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             )}
 
             {/* Content */}
-            {version.content && (
-              <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                {version.content}
+            {editingSectionId === section.spec.section_id ? (
+              <div className="space-y-3">
+                {version.content !== undefined && (
+                  <Textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    rows={Math.max(5, editContent.split('\n').length + 1)}
+                    className="text-sm font-mono"
+                    placeholder="Section content..."
+                  />
+                )}
+                {version.bullet_points && version.bullet_points.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Bullet points (one per line):</p>
+                    <Textarea
+                      value={editBullets}
+                      onChange={(e) => setEditBullets(e.target.value)}
+                      rows={Math.max(3, editBullets.split('\n').length + 1)}
+                      className="text-sm font-mono"
+                      placeholder="One bullet point per line..."
+                    />
+                  </div>
+                )}
               </div>
-            )}
-
-            {/* Bullet points */}
-            {version.bullet_points && version.bullet_points.length > 0 && (
-              <ul className="list-disc list-inside space-y-1 text-sm text-foreground/90">
-                {version.bullet_points.map((bp, idx) => (
-                  <li key={idx}>{bp}</li>
-                ))}
-              </ul>
+            ) : (
+              <>
+                {version.content && (
+                  <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                    {version.content}
+                  </div>
+                )}
+                {version.bullet_points && version.bullet_points.length > 0 && (
+                  <ul className="list-disc list-inside space-y-1 text-sm text-foreground/90">
+                    {version.bullet_points.map((bp, idx) => (
+                      <li key={idx}>{bp}</li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
 
             {/* Table */}
