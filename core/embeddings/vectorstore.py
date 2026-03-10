@@ -178,6 +178,10 @@ def _get_bm25_path(user_id: str, thread_id: str) -> str:
 
 def _build_and_save_bm25(chunk_data: list, user_id: str, thread_id: str):
     """Build and persist a BM25 index from chunk data."""
+    if not chunk_data:
+        print(f"No chunks to index for BM25 (thread {thread_id}), skipping.")
+        return
+
     try:
         from rank_bm25 import BM25Okapi
     except ImportError:

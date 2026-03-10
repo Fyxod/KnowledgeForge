@@ -131,6 +131,13 @@ class TestBuildAndSaveBm25:
         assert "bm25" in saved_data
         assert saved_data["chunk_ids"] == ["c1", "c2"]
 
+    def test_empty_chunk_data_skips_bm25(self):
+        """Empty chunk_data (e.g. spreadsheet-only upload) must not raise ZeroDivisionError."""
+        from core.embeddings.vectorstore import _build_and_save_bm25
+
+        # Should return immediately without touching BM25Okapi
+        _build_and_save_bm25([], "u1", "t1")  # no error
+
     @patch("core.embeddings.vectorstore.os.makedirs")
     def test_missing_rank_bm25_module(self, mock_makedirs):
         """If rank_bm25 is not installed, should not raise."""
