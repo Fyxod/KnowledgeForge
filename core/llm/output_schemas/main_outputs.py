@@ -24,8 +24,9 @@ class MainLLMOutputInternal(LLMOutputBase):
         "global_summarizer",
         "failure",
         "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
+        "excel_create",  # create a downloadable Excel file from the data
     ] = Field(
-        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data."
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file."
     )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -38,6 +39,10 @@ class MainLLMOutputInternal(LLMOutputBase):
     sql_query: Optional[str] = Field(
         default=None,
         description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
+    )
+    excel_request: Optional[str] = Field(
+        default=None,
+        description="Natural-language description of the Excel file to create. Required when action is 'excel_create'. E.g., 'Create a pivot table of sales by region with a bar chart'.",
     )
 
     @field_validator("action", mode="before")
@@ -54,6 +59,8 @@ class MainLLMOutputInternal(LLMOutputBase):
                 return "sql_query"
             if val in ["summarize", "summary"]:
                 return "document_summarizer"
+            if val in ["excel", "spreadsheet", "export", "download_excel", "create_excel"]:
+                return "excel_create"
             return val
         return v
 
@@ -66,8 +73,9 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
         "global_summarizer",
         "failure",
         "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
+        "excel_create",  # create a downloadable Excel file from the data
     ] = Field(
-        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data."
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file."
     )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -80,6 +88,10 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
     sql_query: Optional[str] = Field(
         default=None,
         description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
+    )
+    excel_request: Optional[str] = Field(
+        default=None,
+        description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
     )
 
     @field_validator("action", mode="before")
@@ -96,6 +108,8 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
                 return "sql_query"
             if val in ["summarize", "summary"]:
                 return "document_summarizer"
+            if val in ["excel", "spreadsheet", "export", "download_excel", "create_excel"]:
+                return "excel_create"
             return val
         return v
 
@@ -109,8 +123,9 @@ class MainLLMOutputExternal(LLMOutputBase):
         "global_summarizer",
         "failure",
         "sql_query",  # query spreadsheet data via SQL - use for ANY spreadsheet-related question
+        "excel_create",  # create a downloadable Excel file from the data
     ] = Field(
-        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data."
+        description="The action to take based on the answer. Use 'sql_query' for ANY question that can be answered from spreadsheet/CSV data. Use 'excel_create' when the user wants to create/export/download an Excel file."
     )
     chunks_used: Optional[List[ChunksUsed]] = Field(
         default=None,
@@ -128,6 +143,10 @@ class MainLLMOutputExternal(LLMOutputBase):
         default=None,
         description="The SQL SELECT query to execute against the spreadsheet data. Required when action is 'sql_query'.",
     )
+    excel_request: Optional[str] = Field(
+        default=None,
+        description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
+    )
 
     @field_validator("action", mode="before")
     @classmethod
@@ -140,6 +159,8 @@ class MainLLMOutputExternal(LLMOutputBase):
                 return "sql_query"
             if val in ["summarize", "summary"]:
                 return "document_summarizer"
+            if val in ["excel", "spreadsheet", "export", "download_excel", "create_excel"]:
+                return "excel_create"
             return val
         return v
 

@@ -511,6 +511,28 @@ export interface TechnicalAnalysisResponse {
   failed?: boolean;
 }
 
+// ── Excel Skill types ──
+
+export interface ExcelSkillGenerateResponse {
+  status: boolean;
+  message?: string;
+  tracking_id?: string;
+}
+
+export interface ExcelSkillStatusResponse {
+  status: boolean;
+  message?: string;
+  failed?: boolean;
+  error?: string;
+  result?: {
+    file_name: string;
+    download_url: string;
+    description: string;
+    sheet_count: number;
+    total_rows: number;
+  };
+}
+
 // ── Document Creator types ──
 
 export type DocumentType =
@@ -1616,6 +1638,63 @@ export const api = {
       throw new Error(data.detail || data.error || 'Failed to delete document');
     }
     return data;
+  },
+
+  // ── Excel Skill ──
+
+  async excelSkillGenerate(
+    threadId: string,
+    requestText: string,
+    sourceDocumentIds?: string[],
+  ): Promise<ExcelSkillGenerateResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/excel-skill/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        thread_id: threadId,
+        request_text: requestText,
+        source_document_ids: sourceDocumentIds || null,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to start Excel generation');
+    }
+    return data;
+  },
+
+  async excelSkillStatus(
+    trackingId: string,
+  ): Promise<ExcelSkillStatusResponse> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/excel-skill/status/${trackingId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to check Excel status');
+    }
+    return data;
+  },
+
+  async excelSkillDownload(
+    threadId: string,
+    filename: string,
+  ): Promise<Blob> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/excel-skill/download/${threadId}/${filename}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      throw new Error('Failed to download Excel file');
+    }
+    return response.blob();
   },
 };
 

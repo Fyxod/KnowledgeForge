@@ -44,6 +44,10 @@ class AgentState(BaseModel):
     spreadsheet_only: bool = False  # True when ALL thread documents are spreadsheets
     spreadsheet_schema: Optional[str] = None
 
+    # Excel Skill fields
+    excel_request: Optional[str] = None  # User's Excel creation request extracted by LLM
+    excel_result: Optional[str] = None  # Download URL after Excel generation
+
     action: Optional[
         Literal[
             f"{ANSWER}",
@@ -52,10 +56,11 @@ class AgentState(BaseModel):
             f"{GLOBAL_SUMMARIZER}",
             f"{FAILURE}",
             f"{SQL_QUERY}",
+            f"{EXCEL_CREATE}",
         ]
     ] = Field(
         default=None,
-        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', 'sql_query', or 'failure'.",
+        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', 'sql_query', 'excel_create', or 'failure'.",
     )
 
     # Used to determine the next step in the state graph

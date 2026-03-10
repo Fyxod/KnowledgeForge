@@ -241,6 +241,7 @@ async def generate(state: AgentState) -> AgentState:
             state.attempts += 1
             state.document_id = result.document_id or None
             state.sql_query = getattr(result, "sql_query", None)
+            state.excel_request = getattr(result, "excel_request", None)
             return state
 
         except Exception as e:
@@ -440,6 +441,61 @@ async def sql_query_node(state: AgentState) -> AgentState:
     return state
 
 
+async def excel_skill_node(state: AgentState) -> AgentState:
+    """
+    Executes the Excel Skill: generates a downloadable .xlsx file
+    based on the user's natural-language request.
+
+    The pipeline uses LLM only for planning and NLP columns;
+    data extraction and Excel assembly are deterministic.
+    """
+    from core.excel_skill.pipeline import generate_excel
+
+    request_text = state.excel_request
+    if not request_text:
+        # Fallback: use the original query as the request
+        request_text = state.query or state.original_query or "Export all data"
+
+    print(f"[excel_skill_node] Generating Excel: {request_text}")
+
+    try:
+        result = await generate_excel(
+            user_request=request_text,
+            user_id=state.user_id,
+            thread_id=state.thread_id,
+        )
+
+        state.excel_result = result.download_url
+
+        # Build a user-friendly answer with download link
+        state.answer = (
+            f"I've created your Excel file: **{result.file_name}**\n\n"
+            f"{result.description}\n\n"
+            f"- **Sheets:** {result.sheet_count}\n"
+            f"- **Total rows:** {result.total_rows}\n\n"
+            f"[Download {result.file_name}]({result.download_url})"
+        )
+
+        state.messages.append(
+            AIMessage(content=f"Excel file created: {result.file_name}")
+        )
+        print(
+            f"[excel_skill_node] Created {result.file_name} "
+            f"({result.sheet_count} sheets, {result.total_rows} rows)"
+        )
+
+    except Exception as e:
+        error_msg = f"Failed to create Excel file: {str(e)}"
+        print(f"[excel_skill_node] {error_msg}")
+        state.answer = (
+            "I wasn't able to create the Excel file. "
+            "Please try again or rephrase your request."
+        )
+        state.messages.append(AIMessage(content=error_msg))
+
+    return state
+
+
 def main_router(state: AgentState) -> str:
     if state.action == ANSWER:
         print("Router -> Answering the question")
@@ -458,6 +514,10 @@ def main_router(state: AgentState) -> str:
         else:
             print("Router -> Max SQL retries reached, answering with what we have")
             return ANSWER
+
+    elif state.action == EXCEL_CREATE:
+        print("Router -> Creating Excel file")
+        return EXCEL_CREATE
 
     elif state.action == DOCUMENT_SUMMARIZER:
         print("Router -> Summarizing document")

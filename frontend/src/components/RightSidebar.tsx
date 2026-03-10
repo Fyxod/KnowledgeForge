@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus, FilePlus2 } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus, FilePlus2, FileSpreadsheet } from 'lucide-react';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
@@ -11,6 +11,7 @@ import InsightsModal from './InsightsModal';
 import StrategicAnalysisModal from './StrategicAnalysisModal';
 import TechnicalAnalysisModal from './TechnicalAnalysisModal';
 import DocumentCreatorModal from './DocumentCreatorModal';
+import ExcelSkillModal from './ExcelSkillModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -58,6 +59,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [stratAnalysisOpen, setStratAnalysisOpen] = React.useState(false);
   const [techAnalysisOpen, setTechAnalysisOpen] = React.useState(false);
   const [docCreatorOpen, setDocCreatorOpen] = React.useState(false);
+  const [excelSkillOpen, setExcelSkillOpen] = React.useState(false);
   const [deleteConfirmDocId, setDeleteConfirmDocId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
@@ -241,6 +243,14 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </TooltipTrigger>
               <TooltipContent>Create Document</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setExcelSkillOpen)} disabled={!threadId} aria-label="Excel Builder">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Excel Builder</TooltipContent>
+            </Tooltip>
             {/* Export Button (Collapsed) */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -294,6 +304,9 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               <div className="border-t my-2" />
               <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setDocCreatorOpen)} disabled={!threadId}>
                 <FilePlus2 className="w-4 h-4 mr-2" /> Create Document
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setExcelSkillOpen)} disabled={!threadId}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel Builder
               </Button>
               <Button
                 className="w-full justify-start text-muted-foreground hover:text-primary"
@@ -482,6 +495,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
       <StrategicAnalysisModal open={stratAnalysisOpen} onOpenChange={setStratAnalysisOpen} threadId={threadId ?? ''} documents={documents} />
       <TechnicalAnalysisModal open={techAnalysisOpen} onOpenChange={setTechAnalysisOpen} threadId={threadId ?? ''} documents={documents} />
       <DocumentCreatorModal open={docCreatorOpen} onOpenChange={setDocCreatorOpen} threadId={threadId ?? ''} documents={documents} />
+      <ExcelSkillModal open={excelSkillOpen} onOpenChange={setExcelSkillOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
   );
 };

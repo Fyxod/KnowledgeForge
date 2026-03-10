@@ -587,6 +587,15 @@ def main_prompt(
                 "**This should be your DEFAULT choice whenever the question relates to spreadsheet data.**\n"
             )
 
+    excel_action_text = (
+        "- **excel_create**: Create a downloadable Excel (.xlsx) file from the data. "
+        "Use when the user asks to 'create an Excel', 'export to spreadsheet', 'make a table I can download', "
+        "'generate a report in Excel', 'create a pivot table', 'download as Excel', etc. "
+        "Requires the `excel_request` field with a natural-language description of what to create "
+        "(e.g., 'pivot table of sales by region with totals' or 'export all employee data with a chart'). "
+        "**Do NOT use this for answering questions about data — only for creating/exporting files.**\n"
+    )
+
     contents.append(
         {
             "role": "system",
@@ -599,6 +608,7 @@ def main_prompt(
                     else ""
                 )
                 + sql_action_text
+                + excel_action_text
                 + "- **document_summarizer**: Request a summary of a specific document (requires `document_id`).\n"
                 "- **global_summarizer**: Request a collective summary of all documents.\n"
                 "- **failure**: Indicate inability to answer with available information.\n"

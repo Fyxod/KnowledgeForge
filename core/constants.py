@@ -16,6 +16,7 @@ SWITCHES = {
     "HYDE": True,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)
     "DOCUMENT_CREATOR": True,  # Interactive document generation (PPTX/DOCX/PDF)
     "GLM_OCR": True,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
+    "EXCEL_SKILL": True,  # Excel creation/download skill — generates .xlsx from chat or sidebar
 }
 
 # GLM-OCR Configuration
@@ -76,6 +77,10 @@ GPU_DOC_SECTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section cont
 GPU_DOC_REVIEW_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Quality self-review
 GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section iteration
 
+# Excel Skill LLM configurations
+GPU_EXCEL_PLAN_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Excel plan generation
+GPU_EXCEL_NLP_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # NLP column interpretation
+
 IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = "qwen3.5:9b"  # Vision Language Model for slide/complex PDF extraction
 # Fallback LLM models
@@ -96,6 +101,7 @@ GLOBAL_SUMMARIZER = "global_summarizer"
 DOCUMENT_SUMMARIZER = "document_summarizer"
 SELF_KNOWLEDGE = "self_knowledge"
 SQL_QUERY = "sql_query"
+EXCEL_CREATE = "excel_create"  # Excel skill: create downloadable .xlsx files
 EVALUATOR = "evaluator"  # Phase 2.1: CRAG corrective retrieval evaluator node
 MAX_WEB_SEARCH = 2
 MAX_SQL_RETRIES = 6

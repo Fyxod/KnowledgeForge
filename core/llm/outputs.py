@@ -77,3 +77,12 @@ from .output_schemas.document_creator_outputs import (
     SectionContentOutput,
     SectionIterationOutput,
 )
+
+# Excel skill outputs
+from .output_schemas.excel_skill_outputs import (
+    ChartSpec,
+    ExcelSkillPlan,
+    NLPColumnResult,
+    SheetColumnSpec,
+    SheetSpec,
+)
