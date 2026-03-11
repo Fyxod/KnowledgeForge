@@ -57,7 +57,11 @@ class MyServerLLM(LLM):
         super().__init__(model=model, port=port, **kwargs)
 
         self._client = ChatOllama(
-            model=model, base_url=f"{LOCAL_BASE_URL}:{port}", timeout=1000, **kwargs
+            model=model,
+            base_url=f"{LOCAL_BASE_URL}:{port}",
+            timeout=1000,
+            reasoning=False,  # Disable thinking mode (think=false in Ollama API)
+            **kwargs,
         )
 
     @property
