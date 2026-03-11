@@ -24,11 +24,6 @@ async def extract_from_spreadsheet(
     """
     Execute a SQL query against the user's spreadsheet data and return a DataFrame.
 
-    Args:
-        user_id: User identifier.
-        thread_id: Thread identifier.
-        sql_query: SQL SELECT query to execute.
-
     Returns:
         pandas DataFrame with the query results. Empty DataFrame on error.
     """
@@ -61,17 +56,8 @@ def extract_from_documents(
     """
     Extract tables from parsed document JSON files.
 
-    Scans the parsed directory for document JSON files and extracts
-    any tabular data found in the text content (using simple heuristics
-    for markdown-style tables or structured page content).
-
-    Args:
-        user_id: User identifier.
-        thread_id: Thread identifier.
-        doc_ids: Optional list of document IDs to filter. If None, all docs are scanned.
-
-    Returns:
-        Dict mapping "doc_title (table N)" → DataFrame for each table found.
+    Keys in the returned dict use the format "{doc_id}::{doc_title}" or
+    "{doc_id}::{doc_title} (table N)" so callers can match by either doc_id or title.
     """
     parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
     tables = {}
@@ -97,18 +83,49 @@ def extract_from_documents(
         doc_title = data.get("title", filename.replace(".json", ""))
         full_text = data.get("full_text", "")
 
-        # Extract markdown-style tables from the text
-        extracted = _extract_markdown_tables(full_text)
+        # Extract tables from the text content
+        extracted = _extract_all_tables(full_text)
         for i, df in enumerate(extracted):
-            key = f"{doc_title}" if len(extracted) == 1 else f"{doc_title} (table {i+1})"
+            if len(extracted) == 1:
+                key = f"{doc_id}::{doc_title}"
+            else:
+                key = f"{doc_id}::{doc_title} (table {i+1})"
             tables[key] = df
+
+    if tables:
+        total = sum(len(df) for df in tables.values())
+        print(f"[ExcelSkill:data_extractor] Extracted {len(tables)} table(s), {total} total rows from documents")
+    else:
+        print("[ExcelSkill:data_extractor] No tables found in any documents")
+
+    return tables
+
+
+def _extract_all_tables(text: str) -> List[pd.DataFrame]:
+    """
+    Extract all tables from text content using multiple strategies:
+      1. Standard markdown pipe tables (| col | col |)
+      2. [Table]...[/Table] wrapped tables (PPTX/PDF format)
+      3. Space-pipe-space delimited tables (PPTX format without leading pipes)
+    """
+    tables = []
+
+    # Strategy 1: Standard markdown pipe tables
+    tables.extend(_extract_markdown_tables(text))
+
+    # Strategy 2: [Table]...[/Table] wrapped content that isn't standard markdown
+    tables.extend(_extract_tagged_tables(text))
+
+    # Strategy 3: Space-delimited pipe tables (PPTX style: "Cell1 | Cell2 | Cell3")
+    if not tables:
+        tables.extend(_extract_loose_pipe_tables(text))
 
     return tables
 
 
 def _extract_markdown_tables(text: str) -> List[pd.DataFrame]:
     """
-    Extract markdown-style pipe tables from text content.
+    Extract standard markdown pipe tables from text content.
 
     Handles tables with format:
     | Header1 | Header2 |
@@ -138,7 +155,7 @@ def _extract_markdown_tables(text: str) -> List[pd.DataFrame]:
                 else:
                     break
 
-            if len(table_lines) >= 3:  # header + separator + at least 1 data row
+            if len(table_lines) >= 2:  # header + at least 1 data row (separator optional)
                 df = _parse_pipe_table(table_lines)
                 if df is not None and not df.empty:
                     tables.append(df)
@@ -150,8 +167,89 @@ def _extract_markdown_tables(text: str) -> List[pd.DataFrame]:
     return tables
 
 
+def _extract_tagged_tables(text: str) -> List[pd.DataFrame]:
+    """
+    Extract tables from [Table]...[/Table] blocks (used by PPTX/PDF parsers).
+
+    Handles both:
+      - Markdown-formatted content inside the tags (with leading |)
+      - Space-pipe-space content (PPTX style: "Cell1 | Cell2 | Cell3")
+    """
+    tables = []
+    pattern = re.compile(r"\[Table\](.*?)\[/Table\]", re.DOTALL | re.IGNORECASE)
+
+    for match in pattern.finditer(text):
+        block = match.group(1).strip()
+        if not block:
+            continue
+
+        block_lines = [l.strip() for l in block.split("\n") if l.strip()]
+        if not block_lines:
+            continue
+
+        # Check if lines start with | (standard markdown inside tags)
+        if block_lines[0].startswith("|"):
+            df = _parse_pipe_table(block_lines)
+            if df is not None and not df.empty:
+                tables.append(df)
+        elif " | " in block_lines[0]:
+            # PPTX-style: "Cell1 | Cell2 | Cell3" (no leading pipe)
+            df = _parse_space_pipe_table(block_lines)
+            if df is not None and not df.empty:
+                tables.append(df)
+
+    return tables
+
+
+def _extract_loose_pipe_tables(text: str) -> List[pd.DataFrame]:
+    """
+    Extract tables that use space-pipe-space delimiters without leading pipes.
+
+    PPTX tables are often formatted as:
+      Header1 | Header2 | Header3
+      Value1  | Value2  | Value3
+    """
+    tables = []
+    lines = text.split("\n")
+    i = 0
+
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Detect a line with multiple space-pipe-space delimiters (not a markdown table)
+        if (
+            " | " in line
+            and not line.startswith("|")
+            and not line.startswith("[")
+            and line.count(" | ") >= 1
+        ):
+            table_lines = [line]
+            j = i + 1
+
+            while j < len(lines):
+                next_line = lines[j].strip()
+                if " | " in next_line and not next_line.startswith("["):
+                    table_lines.append(next_line)
+                    j += 1
+                elif not next_line:
+                    j += 1
+                else:
+                    break
+
+            if len(table_lines) >= 2:  # header + at least 1 row
+                df = _parse_space_pipe_table(table_lines)
+                if df is not None and not df.empty:
+                    tables.append(df)
+
+            i = j
+        else:
+            i += 1
+
+    return tables
+
+
 def _parse_pipe_table(lines: List[str]) -> Optional[pd.DataFrame]:
-    """Parse a markdown pipe table into a DataFrame."""
+    """Parse a standard markdown pipe table into a DataFrame."""
     try:
         # Parse header
         header_line = lines[0]
@@ -190,6 +288,48 @@ def _parse_pipe_table(lines: List[str]) -> Optional[pd.DataFrame]:
         return None
 
 
+def _parse_space_pipe_table(lines: List[str]) -> Optional[pd.DataFrame]:
+    """
+    Parse a space-pipe-space delimited table into a DataFrame.
+
+    Input format (no leading pipes):
+      Header1 | Header2 | Header3
+      Value1  | Value2  | Value3
+    """
+    try:
+        # Parse header
+        headers = [cell.strip() for cell in lines[0].split("|")]
+        headers = [h for h in headers if h]
+
+        if not headers:
+            return None
+
+        # Skip separator if present
+        data_start = 1
+        if len(lines) > 1 and re.match(r"^[\s\-:|]+$", lines[1].replace("|", "").strip()):
+            data_start = 2
+
+        rows = []
+        for line in lines[data_start:]:
+            # Skip separator lines
+            if re.match(r"^[\s\-:|]+$", line.replace("|", "").strip()):
+                continue
+            cells = [cell.strip() for cell in line.split("|")]
+            cells = cells[:len(headers)]
+            while len(cells) < len(headers):
+                cells.append("")
+            rows.append(cells)
+
+        if not rows:
+            return None
+
+        return pd.DataFrame(rows, columns=headers)
+
+    except Exception as e:
+        print(f"[ExcelSkill:data_extractor] Space-pipe table parse error: {e}")
+        return None
+
+
 def get_document_info(
     user_id: str,
     thread_id: str,
@@ -198,8 +338,8 @@ def get_document_info(
     """
     Get metadata about available documents in the thread.
 
-    Returns a list of dicts with title, doc_id, type, and table count
-    for use in the LLM planning prompt.
+    Returns a list of dicts with title, doc_id, type, table count,
+    and a preview of available data for use in the LLM planning prompt.
     """
     parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
     docs = []
@@ -224,7 +364,20 @@ def get_document_info(
 
         doc_type = data.get("type", "unknown")
         full_text = data.get("full_text", "")
-        table_count = len(_extract_markdown_tables(full_text))
+
+        # Extract tables to get count and preview
+        extracted_tables = _extract_all_tables(full_text)
+        table_count = len(extracted_tables)
+
+        # Build a data preview (first table's columns + first 3 rows)
+        data_preview = ""
+        if extracted_tables:
+            preview_df = extracted_tables[0]
+            cols = list(preview_df.columns)
+            data_preview = f"Columns: {', '.join(cols)}"
+            if len(preview_df) > 0:
+                sample_rows = preview_df.head(3).to_dict(orient="records")
+                data_preview += f"\n      Sample: {sample_rows}"
 
         docs.append({
             "doc_id": doc_id,
@@ -233,6 +386,7 @@ def get_document_info(
             "table_count": table_count,
             "tables": table_count > 0,
             "has_sql_data": data.get("has_sql_data", False),
+            "data_preview": data_preview,
         })
 
     return docs

@@ -2,14 +2,18 @@
 Excel Skill API — sidebar-triggered Excel generation and download.
 
 Endpoints:
-  POST /excel-skill/generate   — kick off async Excel generation
-  GET  /excel-skill/status/{id} — poll for completion
+  POST /excel-skill/generate                       — kick off async Excel generation
+  GET  /excel-skill/status/{id}                     — poll for completion
+  GET  /excel-skill/list/{thread_id}                — list previously generated files
   GET  /excel-skill/download/{thread_id}/{filename} — download the .xlsx file
+  DELETE /excel-skill/{thread_id}/{tracking_id}     — delete a generated file
 """
 
 import asyncio
+import json
 import os
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -82,6 +86,8 @@ async def generate_excel(request: Request, body: ExcelGenerateRequest = Body(...
                     "description": result.description,
                     "sheet_count": result.sheet_count,
                     "total_rows": result.total_rows,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "request_text": body.request_text,
                 },
             )
         except Exception as e:
@@ -135,6 +141,99 @@ async def get_status(request: Request, tracking_id: str):
         return JSONResponse(
             content={"status": True, "result": gen_status["data"]}
         )
+
+
+# ─── List ─────────────────────────────────────────────────────────────
+
+@router.get("/excel-skill/list/{thread_id}")
+async def list_excel_files(request: Request, thread_id: str):
+    """List all previously generated Excel files for a thread."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+    status_dir = _get_status_dir(user_id, thread_id)
+
+    if not os.path.exists(status_dir):
+        return JSONResponse(content={"files": []})
+
+    files = []
+    for filename in os.listdir(status_dir):
+        if not filename.startswith("status_") or not filename.endswith(".json"):
+            continue
+
+        file_path = os.path.join(status_dir, filename)
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        # Skip pending/failed status files (completed ones have no _status key)
+        if "_status" in data:
+            continue
+
+        # Verify the .xlsx file still exists on disk
+        xlsx_name = data.get("file_name", "")
+        xlsx_path = os.path.join(status_dir, xlsx_name)
+        if not xlsx_name or not os.path.exists(xlsx_path):
+            continue
+
+        # Extract tracking_id from filename: status_{tracking_id}.json
+        tracking_id = filename[len("status_"):-len(".json")]
+
+        files.append({
+            "tracking_id": tracking_id,
+            "file_name": data.get("file_name", ""),
+            "download_url": data.get("download_url", ""),
+            "description": data.get("description", ""),
+            "sheet_count": data.get("sheet_count", 0),
+            "total_rows": data.get("total_rows", 0),
+            "created_at": data.get("created_at", ""),
+            "request_text": data.get("request_text", ""),
+        })
+
+    # Sort newest first
+    files.sort(key=lambda f: f.get("created_at", ""), reverse=True)
+
+    return JSONResponse(content={"files": files})
+
+
+# ─── Delete ───────────────────────────────────────────────────────────
+
+@router.delete("/excel-skill/{thread_id}/{tracking_id}")
+async def delete_excel_file(request: Request, thread_id: str, tracking_id: str):
+    """Delete a generated Excel file and its status metadata."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+    status_dir = _get_status_dir(user_id, thread_id)
+    status_path = os.path.join(status_dir, f"status_{tracking_id}.json")
+
+    if not os.path.exists(status_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Read status to find the .xlsx filename
+    try:
+        with open(status_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        xlsx_name = data.get("file_name", "")
+    except Exception:
+        xlsx_name = ""
+
+    # Delete the status file
+    os.remove(status_path)
+
+    # Delete the .xlsx file if it exists
+    if xlsx_name:
+        xlsx_path = os.path.join(status_dir, xlsx_name)
+        if os.path.exists(xlsx_path):
+            os.remove(xlsx_path)
+
+    return JSONResponse(content={"deleted": True})
 
 
 # ─── Download ────────────────────────────────────────────────────────

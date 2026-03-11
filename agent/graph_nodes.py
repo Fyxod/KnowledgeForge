@@ -479,6 +479,28 @@ async def excel_skill_node(state: AgentState) -> AgentState:
         state.messages.append(
             AIMessage(content=f"Excel file created: {result.file_name}")
         )
+
+        # Persist status metadata so chat-generated files appear in the list
+        import json
+        import uuid as _uuid
+        from datetime import datetime, timezone
+
+        status_dir = f"data/{state.user_id}/threads/{state.thread_id}/excel_exports"
+        os.makedirs(status_dir, exist_ok=True)
+        _tracking_id = str(_uuid.uuid4())
+        status_data = {
+            "file_name": result.file_name,
+            "download_url": result.download_url,
+            "description": result.description,
+            "sheet_count": result.sheet_count,
+            "total_rows": result.total_rows,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "request_text": request_text,
+        }
+        _status_path = os.path.join(status_dir, f"status_{_tracking_id}.json")
+        with open(_status_path, "w", encoding="utf-8") as _f:
+            json.dump(status_data, _f, ensure_ascii=False, indent=2)
+
         print(
             f"[excel_skill_node] Created {result.file_name} "
             f"({result.sheet_count} sheets, {result.total_rows} rows)"

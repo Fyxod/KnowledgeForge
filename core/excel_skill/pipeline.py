@@ -8,7 +8,9 @@ LLM is called only for:
 Everything else (SQL queries, Excel assembly, formulas, charts) is deterministic.
 """
 
+import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -48,6 +50,50 @@ class ExcelSkillResult:
 NLP_BATCH_SIZE = 100
 
 
+def _ensure_sqlite_loaded(user_id: str, thread_id: str) -> None:
+    """
+    Ensure spreadsheet data is loaded into SQLiteManager for this thread.
+
+    In-memory SQLite connections are lost on server restart or worker switch.
+    This mirrors the reload logic in app/routes/query.py to recover them.
+    """
+    key = (user_id, thread_id)
+    if key in SQLiteManager._connections:
+        # Check if the connection actually has tables
+        if SQLiteManager.has_spreadsheet_data(user_id, thread_id):
+            return
+
+    # Try to reload from uploaded files
+    try:
+        from core.database import db
+
+        user = db.users.find_one({"threads." + thread_id: {"$exists": True}})
+        if not user:
+            return
+
+        thread = user.get("threads", {}).get(thread_id)
+        if not thread:
+            return
+
+        spreadsheet_files = []
+        for doc in thread.get("documents", []):
+            fname = doc.get("file_name", "").lower()
+            if fname.endswith(".xlsx") or fname.endswith(".xls") or fname.endswith(".csv"):
+                file_path = f"data/{user_id}/threads/{thread_id}/uploads/{doc['file_name']}"
+                if os.path.exists(file_path):
+                    spreadsheet_files.append({
+                        "path": file_path,
+                        "file_name": doc["file_name"],
+                        "doc_id": doc.get("docId"),
+                    })
+
+        if spreadsheet_files:
+            print(f"[ExcelSkill] Reloading {len(spreadsheet_files)} spreadsheet(s) into SQLite")
+            SQLiteManager.reload_from_files(user_id, thread_id, spreadsheet_files)
+    except Exception as e:
+        print(f"[ExcelSkill] SQLite reload error: {e}")
+
+
 async def generate_excel(
     user_request: str,
     user_id: str,
@@ -64,17 +110,9 @@ async def generate_excel(
       4. Process any NLP columns via LLM callback
       5. Assemble the .xlsx file via openpyxl
       6. Return download info
-
-    Args:
-        user_request: Natural-language request from the user.
-        user_id: User identifier.
-        thread_id: Thread identifier.
-        source_doc_ids: Optional list of document IDs to use as sources.
-
-    Returns:
-        ExcelSkillResult with file path and download URL.
     """
     # ── 1. Gather data sources ──
+    _ensure_sqlite_loaded(user_id, thread_id)
     schema = SQLiteManager.get_schema(user_id, thread_id)
     doc_info = get_document_info(user_id, thread_id, source_doc_ids)
 
@@ -96,7 +134,7 @@ async def generate_excel(
     sheet_data: Dict[str, pd.DataFrame] = {}
     total_rows = 0
 
-    # Pre-extract document tables (for sheets referencing doc data)
+    # Pre-extract document tables (keyed by both doc_id and title for flexible matching)
     doc_tables = extract_from_documents(user_id, thread_id, source_doc_ids)
 
     for sheet_spec in plan.sheets:
@@ -128,15 +166,20 @@ async def generate_excel(
 
     # ── 5. Assemble Excel ──
     export_dir = f"data/{user_id}/threads/{thread_id}/excel_exports"
-    output_path = os.path.join(export_dir, f"{plan.file_name}.xlsx")
+    os.makedirs(export_dir, exist_ok=True)
+
+    # Sanitize file name: strip unsafe characters, collapse whitespace to underscores
+    safe_name = re.sub(r'[^\w\s\-.]', '', plan.file_name).strip()
+    safe_name = re.sub(r'\s+', '_', safe_name) or "export"
+    output_path = os.path.join(export_dir, f"{safe_name}.xlsx")
 
     assemble_excel(plan, sheet_data, output_path)
 
     # ── 6. Return result ──
-    download_url = f"/excel-skill/download/{thread_id}/{plan.file_name}.xlsx"
+    download_url = f"/excel-skill/download/{thread_id}/{safe_name}.xlsx"
 
     return ExcelSkillResult(
-        file_name=f"{plan.file_name}.xlsx",
+        file_name=f"{safe_name}.xlsx",
         file_path=output_path,
         download_url=download_url,
         description=plan.description,
@@ -154,12 +197,12 @@ async def _extract_sheet_data(
     """
     Extract data for a single sheet based on its specification.
 
-    Handles three source types:
-      - SQL query → extract from SQLiteManager
-      - Document extraction → use pre-extracted doc tables
-      - Mixed → combine sources
+    Tries multiple strategies in order:
+      1. SQL query (if source_query is set)
+      2. Document table matching by doc_id or title
+      3. First available document table (universal fallback)
     """
-    # Try SQL source first
+    # ── Strategy 1: SQL source ──
     if sheet_spec.source_query:
         df = await extract_from_spreadsheet(
             user_id=user_id,
@@ -167,30 +210,52 @@ async def _extract_sheet_data(
             sql_query=sheet_spec.source_query,
         )
         if not df.empty:
+            # Apply filter_condition if specified and not already in the SQL
+            if sheet_spec.filter_condition and "WHERE" not in sheet_spec.source_query.upper():
+                try:
+                    df = df.query(sheet_spec.filter_condition)
+                except Exception as e:
+                    print(f"[ExcelSkill] filter_condition failed ({sheet_spec.filter_condition}): {e}")
             return df
+        else:
+            print(
+                f"[ExcelSkill] SQL query returned 0 rows for sheet '{sheet_spec.sheet_name}': "
+                f"{sheet_spec.source_query[:100]}"
+            )
 
-    # Try document table extraction
-    has_extract_cols = any(
-        c.source.startswith("extract:") for c in sheet_spec.columns
-    )
-    if has_extract_cols and doc_tables:
-        # Find matching document table
+    # ── Strategy 2: Document table matching ──
+    if doc_tables:
+        # Build a lookup: doc_id → list of (key, DataFrame)
+        # doc_tables keys are like "Title" or "Title (table 2)"
+        # The extract_from_documents function also stores doc_id in a parallel index
         for col_spec in sheet_spec.columns:
             if col_spec.source.startswith("extract:"):
-                doc_id = col_spec.source[len("extract:"):]
-                # Match by doc_id prefix in table keys
+                target_id = col_spec.source[len("extract:"):]
+                # Try matching by doc_id (stored in the key metadata)
                 for key, df in doc_tables.items():
-                    if doc_id in key and not df.empty:
+                    if not df.empty and (target_id in key or target_id.lower() in key.lower()):
+                        print(f"[ExcelSkill] Matched doc table '{key}' via extract:{target_id}")
                         return df
 
-        # If no specific match, return the first available table
-        for df in doc_tables.values():
+        # No specific extract: columns found or no match — try any available table
+        for key, df in doc_tables.items():
             if not df.empty:
+                print(f"[ExcelSkill] Using first available doc table: '{key}' ({len(df)} rows)")
                 return df
 
-    # Fallback: empty DataFrame with column names from spec
-    col_names = [c.name for c in sheet_spec.columns if c.source == "sql"]
-    return pd.DataFrame(columns=col_names) if col_names else pd.DataFrame()
+    # ── Strategy 3: Universal fallback — if we have ANY doc tables, use the largest ──
+    if doc_tables:
+        best_key, best_df = max(doc_tables.items(), key=lambda item: len(item[1]))
+        if not best_df.empty:
+            print(
+                f"[ExcelSkill] Fallback: using largest doc table '{best_key}' ({len(best_df)} rows)"
+            )
+            return best_df
+
+    # Nothing worked — return empty DataFrame with column names from spec
+    print(f"[ExcelSkill] WARNING: No data found for sheet '{sheet_spec.sheet_name}'")
+    col_names = [c.name for c in sheet_spec.columns]
+    return pd.DataFrame(columns=col_names)
 
 
 async def _process_nlp_column(

@@ -533,6 +533,17 @@ export interface ExcelSkillStatusResponse {
   };
 }
 
+export interface ExcelSkillListItem {
+  tracking_id: string;
+  file_name: string;
+  download_url: string;
+  description: string;
+  sheet_count: number;
+  total_rows: number;
+  created_at: string;
+  request_text: string;
+}
+
 // ── Document Creator types ──
 
 export type DocumentType =
@@ -1695,6 +1706,36 @@ export const api = {
       throw new Error('Failed to download Excel file');
     }
     return response.blob();
+  },
+
+  async excelSkillList(
+    threadId: string,
+  ): Promise<{ files: ExcelSkillListItem[] }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/excel-skill/list/${threadId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to list Excel files');
+    }
+    return data;
+  },
+
+  async excelSkillDelete(
+    threadId: string,
+    trackingId: string,
+  ): Promise<void> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/excel-skill/${threadId}/${trackingId}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || 'Failed to delete Excel file');
+    }
   },
 };
 

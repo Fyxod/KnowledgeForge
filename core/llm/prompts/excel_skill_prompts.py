@@ -22,7 +22,8 @@ def excel_plan_prompt(
         schema_section = (
             "\n## Available Spreadsheet Data (SQL Queryable)\n"
             "The following tables are loaded in a SQLite database. "
-            "You can reference these in `source_query` fields using standard SQL SELECT statements.\n\n"
+            "You can reference these in `source_query` fields using standard SQL SELECT statements.\n"
+            "**IMPORTANT**: Use the EXACT table and column names shown below (they include suffixes like _abc12).\n\n"
             f"```\n{available_schema}\n```\n"
         )
 
@@ -30,18 +31,47 @@ def excel_plan_prompt(
     if available_documents:
         doc_lines = []
         for doc in available_documents:
-            tables_info = ""
+            line = f"- **{doc['title']}** (ID: {doc['doc_id']}, type: {doc['type']})"
             if doc.get("tables"):
-                tables_info = f" — contains {doc['table_count']} table(s)"
-            doc_lines.append(
-                f"- **{doc['title']}** (ID: {doc['doc_id']}, type: {doc['type']}){tables_info}"
-            )
+                line += f" — {doc['table_count']} table(s)"
+            if doc.get("has_sql_data"):
+                line += " [SQL available]"
+            if doc.get("data_preview"):
+                line += f"\n      {doc['data_preview']}"
+            doc_lines.append(line)
         docs_section = (
             "\n## Available Documents\n"
             "These documents are uploaded in the thread. "
             "Tables extracted from PDFs/PPTX can be used as data sources.\n\n"
             + "\n".join(doc_lines)
             + "\n"
+        )
+
+    # Determine which data sources are actually available
+    has_sql = bool(available_schema)
+    has_docs = bool(available_documents and any(d.get("tables") for d in available_documents))
+
+    source_guidance = ""
+    if has_sql and not has_docs:
+        source_guidance = (
+            "\n**Data Source**: Only SQL-queryable spreadsheet data is available. "
+            "Use `source_query` with SQL SELECT on all sheets. Do NOT use `extract:` columns.\n"
+        )
+    elif has_docs and not has_sql:
+        source_guidance = (
+            "\n**Data Source**: Only document-extracted tables are available (no SQL). "
+            "Use `extract:<doc_id>` for column sources. Do NOT write SQL queries.\n"
+        )
+    elif has_sql and has_docs:
+        source_guidance = (
+            "\n**Data Source**: Both SQL spreadsheet data and document tables are available. "
+            "Prefer SQL queries for spreadsheet data; use `extract:<doc_id>` for PDF/PPTX tables.\n"
+        )
+    else:
+        source_guidance = (
+            "\n**Data Source**: No structured data sources detected. "
+            "Create the sheet structure based on the user's request with placeholder column names. "
+            "Use `static:N/A` for column sources if no data is available.\n"
         )
 
     return (
@@ -51,6 +81,8 @@ def excel_plan_prompt(
         "1. Each sheet must have a clear purpose and descriptive name (max 31 chars).\n"
         "2. For columns sourced from spreadsheet data, write a SQL SELECT query in `source_query`.\n"
         "   - Use standard SQLite syntax. Only SELECT queries are allowed.\n"
+        "   - **CRITICAL**: Copy table names and column names EXACTLY from the schema — "
+        "including any `_suffix` at the end. Do NOT shorten or modify them.\n"
         "   - Mark each column's `source` as `sql` when it comes from the query result.\n"
         "3. For computed columns, use `formula:<excel_formula>` with row-relative references "
         "(e.g., `formula:=C2*D2` will be applied to each row).\n"
@@ -64,6 +96,7 @@ def excel_plan_prompt(
         "9. When the user asks to 'export all data' or 'download the spreadsheet', "
         "create a single sheet with `SELECT * FROM <table>` as the source query.\n"
         "10. For document-extracted tables (PDFs/PPTX), use `source` as `extract:<doc_id>` on columns.\n"
+        f"{source_guidance}"
         f"{schema_section}"
         f"{docs_section}"
         f"\n## User Request\n{user_request}\n\n"
