@@ -34,6 +34,10 @@ _ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060\u180e]")
 # Markdown code fence patterns
 _CODE_FENCE_RE = re.compile(r"```(?:json|JSON)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 
+# Thinking / reasoning tags (some models emit these even when disabled)
+_THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+_REASONING_TAG_RE = re.compile(r"<reasoning>.*?</reasoning>", re.DOTALL)
+
 
 def sanitize_llm_json(raw: str) -> str:
     """
@@ -56,6 +60,10 @@ def sanitize_llm_json(raw: str) -> str:
         return raw
 
     text = raw
+
+    # 0. Strip thinking / reasoning tags (models may emit these before JSON)
+    text = _THINK_TAG_RE.sub("", text)
+    text = _REASONING_TAG_RE.sub("", text)
 
     # 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
     fence_match = _CODE_FENCE_RE.search(text)
@@ -126,29 +134,50 @@ def _escape_control_chars_in_strings(text: str) -> str:
     return "".join(result)
 
 
+# Known schema field names — used to find the "right" JSON object when
+# multiple `{` characters appear in LLM output (e.g., markdown with code blocks).
+_SCHEMA_FIELD_RE = re.compile(
+    r'\{\s*"(?:answer|action|sql_query|excel_request|summary|outline|sections|content'
+    r'|description|reasoning|result|data|items|categories|findings|recommendations'
+    r'|stop_words|nodes|edges|milestones|phases|insights|review)"'
+)
+
+
 def _extract_json_block(text: str) -> str:
     """
     Extract the outermost JSON object or array from text that may contain
     preamble or postamble content.
 
+    Strategy:
+    1. Look for a JSON object starting with a known schema field name
+       (e.g., {"answer": ...) to skip markdown/HTML preamble with stray braces.
+    2. Fall back to the first { or [ if no schema match is found.
+
     Uses bracket counting to find the correct closing bracket,
     properly handling strings (including escaped quotes).
     """
-    # Find first { or [
-    start = -1
-    open_char = None
-    close_char = None
-    for i, ch in enumerate(text):
-        if ch == "{":
-            start = i
-            open_char = "{"
-            close_char = "}"
-            break
-        elif ch == "[":
-            start = i
-            open_char = "["
-            close_char = "]"
-            break
+    # Strategy 1: Find a JSON object that starts with a known schema field
+    schema_match = _SCHEMA_FIELD_RE.search(text)
+    if schema_match:
+        start = schema_match.start()
+        open_char = "{"
+        close_char = "}"
+    else:
+        # Strategy 2: Fall back to first { or [
+        start = -1
+        open_char = None
+        close_char = None
+        for i, ch in enumerate(text):
+            if ch == "{":
+                start = i
+                open_char = "{"
+                close_char = "}"
+                break
+            elif ch == "[":
+                start = i
+                open_char = "["
+                close_char = "]"
+                break
 
     if start == -1:
         return text  # No JSON structure found, return as-is
@@ -236,9 +265,23 @@ def parse_llm_json(raw: str, schema: Type[T]) -> T:
         except Exception:
             pass
 
+    # Strategy 3: Emergency fallback — if the LLM returned plain text with no
+    # parseable JSON, wrap it in a minimal valid response.  This prevents full
+    # failure when the model reverts to conversational mode.
+    if hasattr(schema, "model_fields") and "answer" in schema.model_fields:
+        try:
+            # Use the raw text as the answer, pick a safe default action
+            fallback_data = {
+                "answer": raw.strip()[:8000],
+                "action": "answer",
+            }
+            return schema.model_validate(fallback_data)
+        except Exception:
+            pass
+
     raise ValueError(
         f"Failed to parse LLM output as {schema.__name__}. "
-        f"Cleaned output: {cleaned}"
+        f"Cleaned output: {cleaned[:500]}"
     )
 
 

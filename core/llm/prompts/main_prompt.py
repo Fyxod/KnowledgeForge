@@ -573,6 +573,15 @@ def main_prompt(
                     "Do NOT rely on the presence of individual words like 'not', 'bad', 'poor' — "
                     "understand the COMPLETE sentence meaning (e.g., 'not bad' = positive, "
                     "'could not be better' = positive, 'not what I expected' = negative).\n"
+                    "7. **LARGE DATASET OUTPUT RULE**: If the SQL result has many rows (more than ~20) "
+                    "and the question requires listing, categorizing, or detailing each row:\n"
+                    "   - Use `excel_create` action to generate a downloadable Excel file with the full analysis.\n"
+                    "   - Set `excel_request` to describe what to create (e.g., 'categorize all worklet titles "
+                    "into groups with counts and details').\n"
+                    "   - Also set `answer` to a brief summary: total counts, key categories/patterns, "
+                    "top/bottom items. Do NOT try to list every row in the answer.\n"
+                    "   - If the question only needs aggregates (counts, averages, totals), use `answer` directly "
+                    "with the summarized data — no Excel needed.\n"
                 ),
             }
         )
@@ -600,11 +609,18 @@ def main_prompt(
 
     excel_action_text = (
         "- **excel_create**: Create a downloadable Excel (.xlsx) file from the data. "
-        "Use when the user asks to 'create an Excel', 'export to spreadsheet', 'make a table I can download', "
-        "'generate a report in Excel', 'create a pivot table', 'download as Excel', etc. "
+        "Use in TWO scenarios:\n"
+        "  1. **User explicitly requests an export**: 'create an Excel', 'export to spreadsheet', "
+        "'download as Excel', 'create a pivot table', 'generate a report in Excel', etc.\n"
+        "  2. **Your analysis output would be too long**: If answering the question requires listing, "
+        "categorizing, or detailing MORE than ~20 rows of data (e.g., categorizing hundreds of items, "
+        "listing all records with details, building a full breakdown), you MUST use `excel_create` "
+        "instead of `answer`. Put the detailed data in the Excel file and provide a brief summary "
+        "in the `answer` field (counts, key patterns, top items).\n"
         "Requires the `excel_request` field with a natural-language description of what to create "
-        "(e.g., 'pivot table of sales by region with totals' or 'export all employee data with a chart'). "
-        "**Do NOT use this for answering questions about data — only for creating/exporting files.**\n"
+        "(e.g., 'categorize all 2500 worklet titles into groups with counts' or "
+        "'export filtered employee data with department breakdown'). "
+        "When using this for large output, also set `answer` to a short summary of the analysis.\n"
     )
 
     # When spreadsheet data is available but no SQL has been run yet,
