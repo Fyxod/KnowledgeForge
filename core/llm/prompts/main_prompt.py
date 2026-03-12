@@ -144,10 +144,12 @@ def _build_system_prompt(
 
     if has_spreadsheet:
         role += (
-            "\n**IMPORTANT: SQL ENGINE AVAILABLE**\n"
+            "\n**IMPORTANT: SQL ENGINE AVAILABLE — MANDATORY FIRST STEP**\n"
             "You have access to a **SQL engine** that can query the uploaded spreadsheet data directly. "
-            "For ANY question regarding data in the spreadsheets (counting, filtering, aggregating, finding values), "
-            "you **MUST** use the `sql_query` tool. Do NOT attempt to answer these from text chunks.\n"
+            "For ANY question regarding data in the spreadsheets (counting, filtering, aggregating, listing, "
+            "finding values, or retrieving records), you **MUST** use the `sql_query` action FIRST before "
+            "attempting to answer. Do NOT answer spreadsheet questions from memory, text chunks, or prior context. "
+            "Always query the actual data to ensure accuracy and completeness.\n"
         )
 
     # ── Task ──
@@ -413,6 +415,10 @@ def main_prompt(
                     "Only use LIKE for searching specific names, places, IDs, or concrete keywords.\n"
                     "- Column names and table names are case-sensitive and use underscores instead of spaces.\n"
                     "- Only SELECT queries are allowed (no INSERT, UPDATE, DELETE).\n"
+                    "- **DO NOT add LIMIT unless the user explicitly asks for a specific number** "
+                    "(e.g., 'top 10', 'first 5', 'show me 20'). When the user asks for analysis, "
+                    "categorization, listing, or 'all' data, you MUST fetch ALL rows — do NOT "
+                    "add LIMIT on your own. Incomplete data leads to wrong analysis.\n"
                     "\n"
                     "**CRITICAL — NLP / SEMANTIC ANALYSIS QUESTIONS:**\n"
                     "When the user asks a question that requires **understanding meaning, sentiment, tone, opinion, "
@@ -428,7 +434,8 @@ def main_prompt(
                     "analyze each entry's sentiment/tone/meaning and present a properly classified answer.\n"
                     "4. This applies to ANY question involving: sentiment, tone, opinion, satisfaction, positivity, "
                     "negativity, complaints, praise, criticism, quality assessment, mood, attitude, or subjective classification.\n"
-                    "5. For large datasets, you may limit rows (e.g., `LIMIT 200`) but NEVER filter by keywords "
+                    "5. Fetch ALL rows for NLP analysis — do NOT add LIMIT. You need the complete dataset "
+                    "to provide accurate sentiment/classification results. NEVER filter by keywords "
                     "when the question is about meaning or sentiment.\n"
                     "- **CRITICAL — SQL-FIRST RULE**: For ANY question whose answer could exist in the spreadsheet tables above, "
                     "you MUST use the `sql_query` action. This includes but is NOT limited to:\n"
@@ -586,7 +593,9 @@ def main_prompt(
                 "- **sql_query**: Execute a SQL SELECT query against the spreadsheet data. Use this for ANY question "
                 "that can be answered from the uploaded spreadsheet/CSV files — including lookups, searches, filters, "
                 "aggregations, listings, and data retrieval. Requires the `sql_query` field with a valid SQLite SELECT statement. "
-                "**This should be your DEFAULT choice whenever the question relates to spreadsheet data.**\n"
+                "**You have NOT queried the data yet. You MUST use `sql_query` as your action — do NOT choose `answer` "
+                "for spreadsheet questions without first running a SQL query. Even if you think you know the answer, "
+                "always verify by querying the actual data.**\n"
             )
 
     excel_action_text = (
