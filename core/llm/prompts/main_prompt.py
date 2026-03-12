@@ -540,65 +540,79 @@ def main_prompt(
     # ── Spreadsheet SQL schema (Moved to TOP) ──
     # (Removed from here, placed before chunks)
 
-    # ── Pre-analyzed NLP themes (from chunked extraction over ALL rows) ──
-    if sql_nlp_summary:
-        contents.append(
-            {
-                "role": "system",
-                "parts": (
-                    "### Pre-Analyzed Themes (from ALL rows in the dataset)\n"
-                    f"{sql_nlp_summary}\n\n"
-                    "Use these pre-analyzed themes as the **primary basis** for your answer. "
-                    "The themes were extracted from the COMPLETE dataset using chunked analysis. "
-                    "The raw SQL data below is only a truncated SAMPLE for reference and examples — "
-                    "do NOT re-derive themes from the sample alone."
-                ),
-            }
-        )
-
     # ── SQL query result from a previous iteration ──
     if sql_result:
         display_question = original_query or question
-        contents.append(
-            {
-                "role": "system",
-                "parts": (
-                    "### SQL Query Result\n"
-                    "A SQL query was already executed on the spreadsheet data.\n\n"
-                    + (f"**SQL Query Executed:** `{sql_query}`\n\n" if sql_query else "")
-                    + f"**Result:**\n{sql_result}\n\n"
-                    f"**Original User Question:** {display_question}\n\n"
-                    "**CRITICAL — STOP AND EVALUATE BEFORE CHOOSING AN ACTION:**\n"
-                    "You have ALREADY received a SQL query result above. Follow these rules strictly:\n"
-                    "1. Compare the SQL result against the **Original User Question**.\n"
-                    "2. If the SQL result contains the data needed to answer the question (even partially), "
-                    'you **MUST** set `action` to `"answer"` and use the result to write your final answer. '
-                    "Do NOT request another SQL query.\n"
-                    '3. You should ONLY set `action` to `"sql_query"` again if ALL of these conditions are true:\n'
-                    "   - The SQL result above is an ERROR message (e.g., 'SQL execution error: ...'), OR\n"
-                    "   - The SQL query was clearly WRONG (e.g., queried the wrong column/table), OR\n"
-                    "   - The original question explicitly requires MULTIPLE SEPARATE pieces of data that cannot "
-                    "be retrieved in a single query and the current result only covers part of it.\n"
-                    "4. If the result is a valid number, table, or dataset — even if small or unexpected — "
-                    "that IS your answer. Present it clearly. Do NOT re-query to 'verify' or 'get more details'.\n"
-                    "5. An empty result set (0 rows) is still a valid answer (it means 'none found'). "
-                    "Do NOT re-query for empty results unless the query itself was incorrect.\n"
-                    "6. **SEMANTIC ANALYSIS**: If the original question is about sentiment, tone, opinion, "
-                    "or subjective classification and the SQL result contains the raw text data, you MUST now "
-                    "analyze EACH entry using your language understanding. Read each text entry carefully, "
-                    "understand its full meaning in context, and classify it appropriately. "
-                    "Do NOT rely on the presence of individual words like 'not', 'bad', 'poor' — "
-                    "understand the COMPLETE sentence meaning (e.g., 'not bad' = positive, "
-                    "'could not be better' = positive, 'not what I expected' = negative).\n"
-                    "7. **LARGE DATASET OUTPUT RULE**: If the SQL result has many rows (more than ~20) "
-                    "and the question requires listing, categorizing, or detailing each row:\n"
-                    "   - Use `excel_create` action to generate a downloadable Excel file with the full analysis.\n"
-                    "   - Set `excel_request` to describe what to create (e.g., 'categorize all worklet titles "
-                    "into groups with counts and details').\n"
-                    "   - Also set `answer` to a brief summary: total counts, key categories/patterns, "
-                    "top/bottom items. Do NOT try to list every row in the answer.\n"
-                    "   - If the question only needs aggregates (counts, averages, totals), use `answer` directly "
-                    "with the summarized data — no Excel needed.\n"
+
+        # When NLP theme summary exists, use simplified instructions —
+        # the themes are the primary answer source, raw data is just a sample.
+        if sql_nlp_summary:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": (
+                        "### Pre-Analyzed Themes (complete dataset analysis)\n"
+                        f"{sql_nlp_summary}\n\n"
+                        "### Raw Data Sample (for reference only)\n"
+                        + (f"**SQL Query:** `{sql_query}`\n\n" if sql_query else "")
+                        + f"{sql_result}\n\n"
+                        f"**Original User Question:** {display_question}\n\n"
+                        "**INSTRUCTIONS — READ CAREFULLY:**\n"
+                        "The **Pre-Analyzed Themes** above were extracted from the COMPLETE dataset "
+                        "(every single row). The raw data sample is a small subset for reference only.\n\n"
+                        "You MUST:\n"
+                        '1. Set `action` to `"answer"`.\n'
+                        "2. Write a comprehensive answer based on the **Pre-Analyzed Themes**.\n"
+                        "3. Present the themes with their counts, percentages, and examples.\n"
+                        "4. Use the raw data sample only to quote specific examples if helpful.\n\n"
+                        "You MUST NOT:\n"
+                        "- Request another SQL query. The data has already been fully analyzed.\n"
+                        "- Re-derive themes from the small sample. The themes above cover ALL rows.\n"
+                        "- Return a blank or empty answer.\n"
+                    ),
+                }
+            )
+        else:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": (
+                        "### SQL Query Result\n"
+                        "A SQL query was already executed on the spreadsheet data.\n\n"
+                        + (f"**SQL Query Executed:** `{sql_query}`\n\n" if sql_query else "")
+                        + f"**Result:**\n{sql_result}\n\n"
+                        f"**Original User Question:** {display_question}\n\n"
+                        "**CRITICAL — STOP AND EVALUATE BEFORE CHOOSING AN ACTION:**\n"
+                        "You have ALREADY received a SQL query result above. Follow these rules strictly:\n"
+                        "1. Compare the SQL result against the **Original User Question**.\n"
+                        "2. If the SQL result contains the data needed to answer the question (even partially), "
+                        'you **MUST** set `action` to `"answer"` and use the result to write your final answer. '
+                        "Do NOT request another SQL query.\n"
+                        '3. You should ONLY set `action` to `"sql_query"` again if ALL of these conditions are true:\n'
+                        "   - The SQL result above is an ERROR message (e.g., 'SQL execution error: ...'), OR\n"
+                        "   - The SQL query was clearly WRONG (e.g., queried the wrong column/table), OR\n"
+                        "   - The original question explicitly requires MULTIPLE SEPARATE pieces of data that cannot "
+                        "be retrieved in a single query and the current result only covers part of it.\n"
+                        "4. If the result is a valid number, table, or dataset — even if small or unexpected — "
+                        "that IS your answer. Present it clearly. Do NOT re-query to 'verify' or 'get more details'.\n"
+                        "5. An empty result set (0 rows) is still a valid answer (it means 'none found'). "
+                        "Do NOT re-query for empty results unless the query itself was incorrect.\n"
+                        "6. **SEMANTIC ANALYSIS**: If the original question is about sentiment, tone, opinion, "
+                        "or subjective classification and the SQL result contains the raw text data, you MUST now "
+                        "analyze EACH entry using your language understanding. Read each text entry carefully, "
+                        "understand its full meaning in context, and classify it appropriately. "
+                        "Do NOT rely on the presence of individual words like 'not', 'bad', 'poor' — "
+                        "understand the COMPLETE sentence meaning (e.g., 'not bad' = positive, "
+                        "'could not be better' = positive, 'not what I expected' = negative).\n"
+                        "7. **LARGE DATASET OUTPUT RULE**: If the SQL result has many rows (more than ~20) "
+                        "and the question requires listing, categorizing, or detailing each row:\n"
+                        "   - Use `excel_create` action to generate a downloadable Excel file with the full analysis.\n"
+                        "   - Set `excel_request` to describe what to create (e.g., 'categorize all worklet titles "
+                        "into groups with counts and details').\n"
+                        "   - Also set `answer` to a brief summary: total counts, key categories/patterns, "
+                        "top/bottom items. Do NOT try to list every row in the answer.\n"
+                        "   - If the question only needs aggregates (counts, averages, totals), use `answer` directly "
+                        "with the summarized data — no Excel needed.\n"
                 ),
             }
         )

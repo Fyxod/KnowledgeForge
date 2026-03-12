@@ -233,6 +233,16 @@ async def generate(state: AgentState) -> AgentState:
             print("LLM result: ", result)
             print(f"LLM response time: {end_time - start_time:.2f} seconds")
 
+            # Guard against blank/empty answers — retry if the model returned nothing
+            answer_text = (result.answer or "").strip()
+            if not answer_text and result.action in (ANSWER, None):
+                print(f"[generate] Blank answer detected (attempt {attempt+1}/{max_retries}), retrying...")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+                    continue
+                # Last attempt — fall through with a generic message
+                result.answer = "I was unable to generate an answer for this query. Please try rephrasing your question."
+
             state.messages.append(HumanMessage(content=state.query))  # controversial
             state.messages.append(AIMessage(content=result.answer))
             state.messages.append(AIMessage("Action taken: " + result.action))
@@ -630,24 +640,41 @@ async def sql_query_node(state: AgentState) -> AgentState:
             except Exception as e:
                 print(f"[NLP Theme Extraction] Failed: {e}")
 
-        # Truncate large results to prevent context overflow and output truncation
-        if len(result) > _SQL_RESULT_MAX_CHARS:
+        # Truncate large results to prevent context overflow and output truncation.
+        # When NLP themes were already extracted, use a much smaller sample —
+        # the themes cover ALL data so the raw sample is just for examples.
+        if state.sql_nlp_summary:
+            max_chars = 4000  # ~50 rows — just enough for example references
+        else:
+            max_chars = _SQL_RESULT_MAX_CHARS
+
+        if len(result) > max_chars:
             full_len = len(result)
+            row_count = result.count("\n")
             # Find the last complete row (newline) within the limit
-            truncated = result[:_SQL_RESULT_MAX_CHARS]
+            truncated = result[:max_chars]
             last_newline = truncated.rfind("\n")
-            if last_newline > _SQL_RESULT_MAX_CHARS // 2:
+            if last_newline > max_chars // 2:
                 truncated = truncated[:last_newline]
 
-            result = (
-                f"{truncated}\n\n"
-                f"... [OUTPUT TRUNCATED — showing {len(truncated)}/{full_len} chars] ...\n"
-                "The dataset is too large to display in full. "
-                "Summarize, aggregate, or categorize the data in your answer. "
-                "Do NOT try to list every row — provide counts, percentages, "
-                "and key groupings instead."
-            )
-            print(f"[sql_query_node] Result truncated: {full_len} -> {len(result)} chars")
+            if state.sql_nlp_summary:
+                result = (
+                    f"{truncated}\n\n"
+                    f"... [SAMPLE ONLY — {row_count} total rows in dataset] ...\n"
+                    "Full-data theme analysis is provided above. "
+                    "Use these rows only as example references."
+                )
+            else:
+                result = (
+                    f"{truncated}\n\n"
+                    f"... [OUTPUT TRUNCATED — showing {len(truncated)}/{full_len} chars] ...\n"
+                    "The dataset is too large to display in full. "
+                    "Summarize, aggregate, or categorize the data in your answer. "
+                    "Do NOT try to list every row — provide counts, percentages, "
+                    "and key groupings instead."
+                )
+            print(f"[sql_query_node] Result truncated: {full_len} -> {len(result)} chars"
+                  f" (NLP mode: {bool(state.sql_nlp_summary)})")
 
         state.sql_result = result
         state.messages.append(HumanMessage(content=f"SQL query executed: {query}"))
