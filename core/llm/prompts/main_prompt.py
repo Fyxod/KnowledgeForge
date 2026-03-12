@@ -371,6 +371,7 @@ def main_prompt(
     original_query: Optional[str] = None,
     thread_instructions: Optional[List[str]] = None,
     triple_context: Optional[str] = None,
+    sql_nlp_summary: Optional[str] = None,
 ):
     contents = []
 
@@ -538,6 +539,22 @@ def main_prompt(
 
     # ── Spreadsheet SQL schema (Moved to TOP) ──
     # (Removed from here, placed before chunks)
+
+    # ── Pre-analyzed NLP themes (from chunked extraction over ALL rows) ──
+    if sql_nlp_summary:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "### Pre-Analyzed Themes (from ALL rows in the dataset)\n"
+                    f"{sql_nlp_summary}\n\n"
+                    "Use these pre-analyzed themes as the **primary basis** for your answer. "
+                    "The themes were extracted from the COMPLETE dataset using chunked analysis. "
+                    "The raw SQL data below is only a truncated SAMPLE for reference and examples — "
+                    "do NOT re-derive themes from the sample alone."
+                ),
+            }
+        )
 
     # ── SQL query result from a previous iteration ──
     if sql_result:

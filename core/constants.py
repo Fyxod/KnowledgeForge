@@ -80,6 +80,7 @@ GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Section iter
 # Excel Skill LLM configurations
 GPU_EXCEL_PLAN_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Excel plan generation
 GPU_EXCEL_NLP_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # NLP column interpretation
+GPU_NLP_THEME_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Chunked NLP theme extraction
 
 IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = "qwen3.5:9b"  # Vision Language Model for slide/complex PDF extraction

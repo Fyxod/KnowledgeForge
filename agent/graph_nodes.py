@@ -411,6 +411,173 @@ async def global_summarizer(state: AgentState) -> AgentState:
 # ~4000 tokens ≈ 16000 chars — leaves room for schema, chunks, instructions, and 8K output.
 _SQL_RESULT_MAX_CHARS = 16000
 
+# NLP query detection keywords — triggers chunked theme extraction on large results
+_NLP_KEYWORDS = [
+    "sentiment", "theme", "themes", "tone", "opinion", "opinions",
+    "categorize", "categorise", "classify", "classification",
+    "analyze comments", "analyse comments", "analyze feedback", "analyse feedback",
+    "positive", "negative", "neutral",
+    "overarching", "common patterns", "common themes", "recurring",
+    "feedback analysis", "what do people say", "what are people saying",
+    "mood", "attitude", "complaints", "praise", "criticism",
+    "subjective", "qualitative analysis",
+]
+
+# Minimum row count to trigger NLP chunked extraction
+_NLP_MIN_ROWS = 100
+# Number of chunks for parallel processing
+_NLP_CHUNK_COUNT = 3
+
+
+def _is_nlp_query(question: str) -> bool:
+    """Check if the user's question requires NLP/subjective analysis."""
+    q_lower = question.lower()
+    return any(kw in q_lower for kw in _NLP_KEYWORDS)
+
+
+def _parse_markdown_table_rows(result_text: str) -> tuple:
+    """
+    Parse a markdown table into header and data rows.
+    Returns (header_line, separator_line, data_rows) or (None, None, []) if not a table.
+    """
+    lines = result_text.strip().split("\n")
+    # Find the markdown table — look for header separator (|---|---|)
+    header_line = None
+    separator_line = None
+    data_start = 0
+
+    for i, line in enumerate(lines):
+        if "|" in line and "---" in line:
+            separator_line = line
+            if i > 0:
+                header_line = lines[i - 1]
+            data_start = i + 1
+            break
+
+    if not separator_line:
+        return None, None, []
+
+    data_rows = [l for l in lines[data_start:] if l.strip() and "|" in l]
+    return header_line, separator_line, data_rows
+
+
+async def _extract_nlp_themes(
+    result_text: str,
+    user_question: str,
+    row_count: int,
+) -> str | None:
+    """
+    Run chunked NLP theme extraction on a large SQL result.
+
+    Splits the markdown table into chunks, runs lightweight theme
+    extraction on each chunk in parallel, then merges results.
+
+    Returns a formatted theme summary string, or None if extraction fails.
+    """
+    from core.constants import GPU_NLP_THEME_LLM
+    from core.llm.output_schemas.nlp_theme_output import NLPThemeExtraction
+    from core.llm.prompts.nlp_theme_prompt import nlp_theme_extraction_prompt
+
+    header_line, separator_line, data_rows = _parse_markdown_table_rows(result_text)
+    if not data_rows or len(data_rows) < _NLP_MIN_ROWS:
+        return None
+
+    # Split data rows into chunks
+    chunk_size = max(1, len(data_rows) // _NLP_CHUNK_COUNT)
+    chunks = []
+    for i in range(0, len(data_rows), chunk_size):
+        chunks.append(data_rows[i : i + chunk_size])
+
+    # Limit to _NLP_CHUNK_COUNT chunks (last chunk absorbs remainder)
+    if len(chunks) > _NLP_CHUNK_COUNT:
+        chunks[_NLP_CHUNK_COUNT - 1].extend(
+            row for c in chunks[_NLP_CHUNK_COUNT:] for row in c
+        )
+        chunks = chunks[:_NLP_CHUNK_COUNT]
+
+    print(
+        f"[NLP Theme Extraction] Detected NLP query, chunking {len(data_rows)} rows "
+        f"into {len(chunks)} batches ({[len(c) for c in chunks]} rows each)"
+    )
+
+    # Extract text content from markdown table rows (take all cell values)
+    def rows_to_text(rows):
+        entries = []
+        for row in rows:
+            cells = [c.strip() for c in row.split("|") if c.strip()]
+            entries.append(" | ".join(cells))
+        return entries
+
+    # Run theme extraction on each chunk in parallel
+    async def extract_chunk(chunk_rows, batch_num):
+        entries = rows_to_text(chunk_rows)
+        prompt = nlp_theme_extraction_prompt(
+            entries=entries,
+            user_question=user_question,
+            batch_number=batch_num,
+            total_batches=len(chunks),
+        )
+        try:
+            result = await invoke_llm(
+                gpu_model=GPU_NLP_THEME_LLM.model,
+                response_schema=NLPThemeExtraction,
+                contents=prompt,
+                port=GPU_NLP_THEME_LLM.port,
+                remove_thinking=True,
+            )
+            return NLPThemeExtraction.model_validate(result)
+        except Exception as e:
+            print(f"[NLP Theme Extraction] Chunk {batch_num} failed: {e}")
+            return None
+
+    chunk_results = await asyncio.gather(
+        *(extract_chunk(chunk, i + 1) for i, chunk in enumerate(chunks))
+    )
+
+    # Merge themes across chunks
+    theme_map = {}  # theme_name_lower -> {theme, count, examples}
+    total_analyzed = 0
+
+    for cr in chunk_results:
+        if cr is None:
+            continue
+        total_analyzed += cr.total_rows_analyzed
+        for t in cr.themes:
+            key = t.theme.strip().lower()
+            if key in theme_map:
+                theme_map[key]["count"] += t.count
+                # Keep up to 3 unique examples
+                existing = set(theme_map[key]["examples"])
+                for ex in t.examples:
+                    if len(theme_map[key]["examples"]) < 3 and ex not in existing:
+                        theme_map[key]["examples"].append(ex)
+            else:
+                theme_map[key] = {
+                    "theme": t.theme.strip(),
+                    "count": t.count,
+                    "examples": list(t.examples[:3]),
+                }
+
+    if not theme_map:
+        return None
+
+    # Sort by count descending
+    sorted_themes = sorted(theme_map.values(), key=lambda x: x["count"], reverse=True)
+
+    # Format as readable summary
+    lines = [f"**Pre-Analyzed Themes** (from ALL {total_analyzed} rows across {len(chunks)} batches):\n"]
+    for i, t in enumerate(sorted_themes, 1):
+        pct = (t["count"] / total_analyzed * 100) if total_analyzed > 0 else 0
+        examples_str = "; ".join(f'"{ex}"' for ex in t["examples"])
+        lines.append(
+            f"{i}. **{t['theme']}** — {t['count']} entries ({pct:.0f}%)\n"
+            f"   Examples: {examples_str}"
+        )
+
+    summary = "\n".join(lines)
+    print(f"[NLP Theme Extraction] Extracted {len(sorted_themes)} themes from {total_analyzed} rows")
+    return summary
+
 
 async def sql_query_node(state: AgentState) -> AgentState:
     """
@@ -418,6 +585,9 @@ async def sql_query_node(state: AgentState) -> AgentState:
     The query is generated by the LLM in the generate step.
     After execution, the result is stored in state so the next generate
     call can use it to formulate the final answer.
+
+    For NLP/subjective queries on large datasets, runs chunked theme
+    extraction so the main LLM has accurate analysis from ALL rows.
 
     Large results are truncated to fit within the LLM context window,
     with a note appended so the LLM knows the data is partial.
@@ -441,6 +611,24 @@ async def sql_query_node(state: AgentState) -> AgentState:
             thread_id=state.thread_id,
             query=query,
         )
+
+        # NLP chunked theme extraction — runs BEFORE truncation so it sees ALL data.
+        # Only triggers for NLP-type queries on large results.
+        user_q = state.original_query or state.query or ""
+        if (
+            len(result) > _SQL_RESULT_MAX_CHARS
+            and _is_nlp_query(user_q)
+        ):
+            try:
+                nlp_summary = await _extract_nlp_themes(
+                    result_text=result,
+                    user_question=user_q,
+                    row_count=result.count("\n"),
+                )
+                if nlp_summary:
+                    state.sql_nlp_summary = nlp_summary
+            except Exception as e:
+                print(f"[NLP Theme Extraction] Failed: {e}")
 
         # Truncate large results to prevent context overflow and output truncation
         if len(result) > _SQL_RESULT_MAX_CHARS:
