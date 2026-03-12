@@ -652,13 +652,22 @@ def main_prompt(
 
     # Final reminder for SQL-first enforcement (recency bias — last instruction is strongest)
     if sql_not_yet_run:
+        import time as _time
+
         contents.append(
             {
                 "role": "system",
                 "parts": (
-                    "⚠️ REMINDER: You have spreadsheet data available but have NOT run any SQL query yet. "
-                    "You MUST set action to `sql_query` and provide a SQL query. "
-                    "Do NOT set action to `answer` for data questions without querying first."
+                    f"[Request ID: {int(_time.time() * 1000)}] "
+                    "⚠️ CRITICAL INSTRUCTION — READ CAREFULLY:\n"
+                    "No SQL query has been executed yet for this request. "
+                    "You MUST choose `sql_query` as your action and write a SQL SELECT query. "
+                    "Choosing `answer` without first running a SQL query is WRONG and will produce "
+                    "inaccurate results. The spreadsheet data can ONLY be accessed through SQL.\n\n"
+                    "Your response MUST have:\n"
+                    '  "action": "sql_query"\n'
+                    '  "sql_query": "SELECT ... FROM ..."\n\n'
+                    "Any other action for a data question is incorrect."
                 ),
             }
         )
@@ -671,7 +680,19 @@ def main_prompt(
     )
 
     # Final user question
-    contents.append({"role": "user", "parts": f"**Question:** {question}\n"})
+    if sql_not_yet_run:
+        contents.append(
+            {
+                "role": "user",
+                "parts": (
+                    f"**Question:** {question}\n\n"
+                    "Remember: You MUST use `sql_query` action to query the spreadsheet data first. "
+                    "Write a SQL SELECT statement to retrieve the data needed to answer this question."
+                ),
+            }
+        )
+    else:
+        contents.append({"role": "user", "parts": f"**Question:** {question}\n"})
 
     # JSON formatting requirement
     contents.append(
