@@ -365,6 +365,7 @@ def main_prompt(
     use_self_knowledge: bool = False,
     spreadsheet_schema: Optional[str] = None,
     sql_result: Optional[str] = None,
+    sql_query: Optional[str] = None,
     original_query: Optional[str] = None,
     thread_instructions: Optional[List[str]] = None,
     triple_context: Optional[str] = None,
@@ -539,8 +540,9 @@ def main_prompt(
                 "role": "system",
                 "parts": (
                     "### SQL Query Result\n"
-                    "A SQL query was already executed on the spreadsheet data. Here is the result:\n\n"
-                    f"{sql_result}\n\n"
+                    "A SQL query was already executed on the spreadsheet data.\n\n"
+                    + (f"**SQL Query Executed:** `{sql_query}`\n\n" if sql_query else "")
+                    + f"**Result:**\n{sql_result}\n\n"
                     f"**Original User Question:** {display_question}\n\n"
                     "**CRITICAL — STOP AND EVALUATE BEFORE CHOOSING AN ACTION:**\n"
                     "You have ALREADY received a SQL query result above. Follow these rules strictly:\n"

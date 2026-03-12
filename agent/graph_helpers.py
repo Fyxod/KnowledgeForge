@@ -44,6 +44,7 @@ def build_main_prompt(state: AgentState):
         use_self_knowledge=state.use_self_knowledge or False,
         spreadsheet_schema=state.spreadsheet_schema or None,
         sql_result=state.sql_result or None,
+        sql_query=state.sql_query or None,
         original_query=state.original_query or None,
         thread_instructions=state.thread_instructions or [],
         triple_context=state.triple_context or None,
