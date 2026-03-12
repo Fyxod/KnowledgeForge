@@ -106,22 +106,48 @@ async def invoke_llm(
     4. Do not output any text before or after the JSON object.
     """
 
+    # Track the last failed output and parse error for self-correction context
+    last_failed_output = None
+    last_parse_error = None
+
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
 
+        # Build the effective prompt — append correction context if a previous
+        # attempt produced output that failed parsing
+        effective_prompt = prompt
+        if last_failed_output and last_parse_error:
+            effective_prompt = (
+                f"{prompt}\n\n"
+                "--- PREVIOUS ATTEMPT FAILED ---\n"
+                "Your previous output could not be parsed. Fix the errors and output valid JSON only.\n\n"
+                f"Previous output (rejected):\n{last_failed_output[:2000]}\n\n"
+                f"Parse error:\n{last_parse_error}\n\n"
+                "Fix the above errors and return ONLY valid JSON matching the schema."
+            )
+            print(f"[Self-correction] Injecting previous output + error into prompt")
+
         # === 1. GPU SERVER ===
         if gpu_model:
+            llm_output = None
             try:
                 print("Trying GPU server...")
                 gpu_llm = _get_cached_llm(gpu_model, port)
                 s = time.time()
-                llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
+                llm_output = await asyncio.to_thread(gpu_llm._call, effective_prompt)
                 e = time.time()
                 print(f"Success via GPU server, LLM call took {e - s:.2f}s")
                 structured = _try_parse(llm_output, parser, response_schema)
                 return structured
             except Exception as e:
-                print(f"GPU server failed at port {port}: {e}")
+                error_str = str(e)
+                print(f"GPU server failed at port {port}: {error_str}")
+                # LLM produced output but parsing failed — retry with correction context
+                if llm_output:
+                    last_failed_output = llm_output
+                    last_parse_error = error_str
+                    print(f"[Self-correction] Captured failed output ({len(llm_output)} chars) for next attempt")
+                    continue  # Skip fallbacks, retry on same port with correction
 
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
@@ -148,7 +174,7 @@ async def invoke_llm(
                         asyncio.to_thread(
                             client.models.generate_content,
                             model=FALLBACK_GEMINI_MODEL,
-                            contents=prompt,
+                            contents=effective_prompt,
                             config=config,
                         ),
                         timeout=80,
@@ -179,7 +205,7 @@ async def invoke_llm(
                 s = time.time()
                 response = await openai_client.chat.completions.create(
                     model=FALLBACK_OPENAI_MODEL,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[{"role": "user", "content": effective_prompt}],
                     temperature=0.2,
                 )
 
