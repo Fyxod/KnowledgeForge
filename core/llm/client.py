@@ -1,6 +1,9 @@
 import asyncio
 import itertools
+import json
+import os
 import time
+from datetime import datetime, timezone
 
 from google import genai
 from langchain_core.output_parsers import PydanticOutputParser
@@ -9,6 +12,36 @@ from openai import AsyncOpenAI
 from core.config import settings
 from core.constants import FALLBACK_GEMINI_MODEL, FALLBACK_OPENAI_MODEL, SWITCHES
 from core.utils.llm_output_sanitizer import parse_llm_json, sanitize_llm_json
+
+# Directory for logging parse failures
+_PARSE_ERRORS_DIR = "DEBUG/parse_errors"
+os.makedirs(_PARSE_ERRORS_DIR, exist_ok=True)
+
+
+def _log_parse_failure(
+    source: str,
+    attempt: int,
+    raw_output: str,
+    error: str,
+    schema_name: str,
+    prompt_snippet: str = "",
+):
+    """Log a parse failure to a JSONL file for later analysis."""
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": source,
+        "attempt": attempt,
+        "schema": schema_name,
+        "error": error,
+        "raw_output": raw_output[:5000],
+        "prompt_tail": prompt_snippet[-500:] if prompt_snippet else "",
+    }
+    try:
+        log_path = os.path.join(_PARSE_ERRORS_DIR, "failures.jsonl")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # Don't let logging failures break the main flow
 
 if SWITCHES["REMOTE_GPU"]:
     import core.llm.configurations.remote_llm as llm_module
@@ -146,6 +179,14 @@ async def invoke_llm(
                 if llm_output:
                     last_failed_output = llm_output
                     last_parse_error = error_str
+                    _log_parse_failure(
+                        source="gpu",
+                        attempt=attempt,
+                        raw_output=llm_output,
+                        error=error_str,
+                        schema_name=response_schema.__name__,
+                        prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
+                    )
                     print(f"[Self-correction] Captured failed output ({len(llm_output)} chars) for next attempt")
                     continue  # Skip fallbacks, retry on same port with correction
 
@@ -196,10 +237,19 @@ async def invoke_llm(
                     print("Gemini timeout — switching key...")
                 except Exception as e:
                     print(f"Gemini error: {e}")
+                    if raw_output:
+                        _log_parse_failure(
+                            source="gemini",
+                            attempt=attempt,
+                            raw_output=raw_output,
+                            error=str(e),
+                            schema_name=response_schema.__name__,
+                        )
                     await asyncio.sleep(0.2)
 
         # === 3. OPENAI FALLBACK ===
         if SWITCHES["FALLBACK_TO_OPENAI"]:
+            openai_raw = None
             try:
                 print("Falling back to OpenAI...")
                 s = time.time()
@@ -209,14 +259,22 @@ async def invoke_llm(
                     temperature=0.2,
                 )
 
-                raw_output = response.choices[0].message.content
-                structured = _try_parse(raw_output, parser, response_schema)
+                openai_raw = response.choices[0].message.content
+                structured = _try_parse(openai_raw, parser, response_schema)
                 e = time.time()
                 print(f"Success via OpenAI, LLM call took {e - s:.2f}s")
                 return structured
 
             except Exception as e:
                 print(f"OpenAI fallback error: {e}")
+                if openai_raw:
+                    _log_parse_failure(
+                        source="openai",
+                        attempt=attempt,
+                        raw_output=openai_raw,
+                        error=str(e),
+                        schema_name=response_schema.__name__,
+                    )
 
         await asyncio.sleep(2)
 
