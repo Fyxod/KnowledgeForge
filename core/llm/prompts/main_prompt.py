@@ -607,27 +607,61 @@ def main_prompt(
         "**Do NOT use this for answering questions about data — only for creating/exporting files.**\n"
     )
 
-    contents.append(
-        {
-            "role": "system",
-            "parts": (
-                "You can perform the following actions:\n"
-                "- **answer**: Directly answer the question using available information.\n"
-                + (
-                    "- **web_search**: Search for recent or external information not in the documents.\n"
-                    if mode == EXTERNAL
-                    else ""
-                )
-                + sql_action_text
-                + excel_action_text
-                + "- **document_summarizer**: Request a summary of a specific document (requires `document_id`).\n"
-                "- **global_summarizer**: Request a collective summary of all documents.\n"
-                "- **failure**: Indicate inability to answer with available information.\n"
-                "Do not choose an action lightly; only use 'failure' when absolutely necessary.\n"
-                "Do not choose any other action other than the ones mentioned above.\n"
-            ),
-        }
+    # When spreadsheet data is available but no SQL has been run yet,
+    # reorder actions to put sql_query first and restrict "answer"
+    sql_not_yet_run = spreadsheet_schema and not sql_result
+    if sql_not_yet_run:
+        answer_action_text = (
+            "- **answer**: Directly answer the question. "
+            "**ONLY use this for greetings, clarification requests, or questions clearly unrelated to the spreadsheet data. "
+            "For ANY data question, you MUST use `sql_query` first.**\n"
+        )
+    else:
+        answer_action_text = "- **answer**: Directly answer the question using available information.\n"
+
+    # Build action list — sql_query comes first when it should be the default
+    if sql_not_yet_run:
+        action_list = (
+            "You can perform the following actions:\n"
+            + sql_action_text
+            + excel_action_text
+            + answer_action_text
+        )
+    else:
+        action_list = (
+            "You can perform the following actions:\n"
+            + answer_action_text
+            + (
+                "- **web_search**: Search for recent or external information not in the documents.\n"
+                if mode == EXTERNAL
+                else ""
+            )
+            + sql_action_text
+            + excel_action_text
+        )
+
+    action_list += (
+        "- **document_summarizer**: Request a summary of a specific document (requires `document_id`).\n"
+        "- **global_summarizer**: Request a collective summary of all documents.\n"
+        "- **failure**: Indicate inability to answer with available information.\n"
+        "Do not choose an action lightly; only use 'failure' when absolutely necessary.\n"
+        "Do not choose any other action other than the ones mentioned above.\n"
     )
+
+    contents.append({"role": "system", "parts": action_list})
+
+    # Final reminder for SQL-first enforcement (recency bias — last instruction is strongest)
+    if sql_not_yet_run:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "⚠️ REMINDER: You have spreadsheet data available but have NOT run any SQL query yet. "
+                    "You MUST set action to `sql_query` and provide a SQL query. "
+                    "Do NOT set action to `answer` for data questions without querying first."
+                ),
+            }
+        )
 
     contents.append(
         {
