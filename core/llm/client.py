@@ -123,20 +123,6 @@ async def invoke_llm(
             except Exception as e:
                 print(f"GPU server failed at port {port}: {e}")
 
-            if port == 11435:
-                temp_port = 11434
-                try:
-                    print(f"Retrying GPU server on alternate port {temp_port}...")
-                    gpu_llm = _get_cached_llm(gpu_model, temp_port)
-                    s = time.time()
-                    llm_output = await asyncio.to_thread(gpu_llm._call, prompt)
-                    e = time.time()
-                    print(f"Success via GPU server, LLM call took {e - s:.2f}s")
-                    structured = _try_parse(llm_output, parser, response_schema)
-                    return structured
-                except Exception as e:
-                    print(f"GPU server failed at alternate port {temp_port}: {e}")
-
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
             print("Falling back to Gemini...")

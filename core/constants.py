@@ -44,7 +44,6 @@ EASYOCR_GPU = (
 )
 
 PORT1 = 11434  # port where ollama is running
-PORT2 = 11435  # port where second ollama instance is running
 
 MAIN_MODEL = (
     settings.MAIN_MODEL
@@ -52,11 +51,11 @@ MAIN_MODEL = (
 # MAIN_MODEL = "gpt-oss:20b-50k-8k"
 # QWEN3_14B = "qwen3:14b-39500-8k"
 
-# GPU LLM configurations
-GPU_QUERY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)
+# GPU LLM configurations — all on PORT1 (single Ollama instance for KV cache consistency)
+GPU_QUERY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_QUERY_LLM2 = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
-GPU_DECOMPOSITION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)
-GPU_COMBINATION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)
+GPU_DECOMPOSITION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
+GPU_COMBINATION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_DOC_SUMMARIZER_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_GLOBAL_SUMMARIZER_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_STOP_WORDS_EXTRACTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
@@ -74,13 +73,13 @@ GPU_TRIPLE_EXTRACTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Triple
 
 # Document Creator LLM configurations
 GPU_DOC_OUTLINE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Outline generation
-GPU_DOC_SECTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section content generation
+GPU_DOC_SECTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Section content generation
 GPU_DOC_REVIEW_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Quality self-review
-GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # Section iteration
+GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Section iteration
 
 # Excel Skill LLM configurations
 GPU_EXCEL_PLAN_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Excel plan generation
-GPU_EXCEL_NLP_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT2)  # NLP column interpretation
+GPU_EXCEL_NLP_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # NLP column interpretation
 
 IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = "qwen3.5:9b"  # Vision Language Model for slide/complex PDF extraction
