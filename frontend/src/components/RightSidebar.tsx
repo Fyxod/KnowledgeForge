@@ -1,7 +1,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus, FilePlus2, FileSpreadsheet } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus, FilePlus2, FileSpreadsheet, Settings } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
@@ -65,6 +66,28 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [importOpen, setImportOpen] = React.useState(false);
   const [selectedSourceThread, setSelectedSourceThread] = React.useState<string>('');
   const [addingDocId, setAddingDocId] = React.useState<string | null>(null);
+  const [switches, setSwitches] = React.useState<Record<string, boolean>>({});
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+  // Fetch switches when settings panel opens
+  React.useEffect(() => {
+    if (!settingsOpen) return;
+    api.getSwitches()
+      .then((data) => setSwitches(data.switches))
+      .catch((err) => console.error('Failed to load switches:', err));
+  }, [settingsOpen]);
+
+  const handleSwitchToggle = async (key: string, value: boolean) => {
+    // Optimistic update
+    setSwitches((prev) => ({ ...prev, [key]: value }));
+    try {
+      await api.updateSwitch(key, value);
+    } catch (err) {
+      // Revert on failure
+      setSwitches((prev) => ({ ...prev, [key]: !value }));
+      toast.error(err instanceof Error ? err.message : 'Failed to update setting');
+    }
+  };
 
   const handleDeleteDocument = async (docId: string) => {
     if (!threadId || deleting) return;
@@ -269,6 +292,15 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </TooltipTrigger>
               <TooltipContent>Export Chat</TooltipContent>
             </Tooltip>
+            <div className="border-t w-full my-1" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(!settingsOpen)} aria-label="Settings">
+                  <Settings className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Settings</TooltipContent>
+            </Tooltip>
           </div>
         ) : (
           <div className="w-full">
@@ -319,6 +351,50 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               >
                 <Download className="w-4 h-4 mr-2" /> Export Chat
               </Button>
+              <div className="border-t my-2" />
+              <Button
+                className="w-full justify-start"
+                variant="ghost"
+                onClick={() => setSettingsOpen(!settingsOpen)}
+              >
+                <Settings className="w-4 h-4 mr-2" /> Settings
+              </Button>
+              {settingsOpen && (
+                <div className="space-y-3 px-2 py-2 rounded-md bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="sw-disable-thinking">Disable Thinking</label>
+                    <Switch
+                      id="sw-disable-thinking"
+                      checked={switches['DISABLE_THINKING'] ?? true}
+                      onCheckedChange={(v) => handleSwitchToggle('DISABLE_THINKING', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="sw-hyde">HyDE Retrieval</label>
+                    <Switch
+                      id="sw-hyde"
+                      checked={switches['HYDE'] ?? false}
+                      onCheckedChange={(v) => handleSwitchToggle('HYDE', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="sw-corrective">Corrective Retrieval</label>
+                    <Switch
+                      id="sw-corrective"
+                      checked={switches['CORRECTIVE_RETRIEVAL'] ?? true}
+                      onCheckedChange={(v) => handleSwitchToggle('CORRECTIVE_RETRIEVAL', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="sw-decomposition">Query Decomposition</label>
+                    <Switch
+                      id="sw-decomposition"
+                      checked={switches['DECOMPOSITION'] ?? true}
+                      onCheckedChange={(v) => handleSwitchToggle('DECOMPOSITION', v)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

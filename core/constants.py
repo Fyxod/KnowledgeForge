@@ -13,10 +13,11 @@ SWITCHES = {
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
     "CORRECTIVE_RETRIEVAL": True,  # Phase 2.1: CRAG-style re-retrieval on low-confidence results
-    "HYDE": True,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)
+    "HYDE": False,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)
     "DOCUMENT_CREATOR": True,  # Interactive document generation (PPTX/DOCX/PDF)
     "GLM_OCR": True,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
     "EXCEL_SKILL": True,  # Excel creation/download skill — generates .xlsx from chat or sidebar
+    "DISABLE_THINKING": True,  # Disable LLM thinking mode (think=false) for faster inference
 }
 
 # GLM-OCR Configuration

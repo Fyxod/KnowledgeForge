@@ -15,4 +15,5 @@ auth_paths = [
     "/export",
     "/document-creator",
     "/excel-skill",
+    "/settings",
 ]

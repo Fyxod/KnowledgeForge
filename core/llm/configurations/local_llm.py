@@ -60,7 +60,6 @@ class MyServerLLM(LLM):
             model=model,
             base_url=f"{LOCAL_BASE_URL}:{port}",
             timeout=1000,
-            reasoning=False,  # Disable thinking mode (think=false in Ollama API)
             **kwargs,
         )
 
@@ -74,6 +73,10 @@ class MyServerLLM(LLM):
         Limits concurrent requests per (model, port) via semaphore.
         """
         with model_port_lock(self.model, self.port):
+            # Read thinking switch at call time so UI toggles take effect immediately
+            from core.constants import SWITCHES
+
+            self._client.reasoning = not SWITCHES.get("DISABLE_THINKING", True)
             print(f"Processing request for model={self.model}, port={self.port}")
             try:
                 response = self._client.invoke(prompt, stop=stop)

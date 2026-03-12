@@ -1651,6 +1651,37 @@ export const api = {
     return data;
   },
 
+  // ── Settings ──
+
+  async getSwitches(): Promise<{ switches: Record<string, boolean> }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/settings/switches`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to fetch switches');
+    }
+    return data;
+  },
+
+  async updateSwitch(key: string, value: boolean): Promise<{ key: string; value: boolean }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/settings/switches/${key}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ value }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to update switch');
+    }
+    return data;
+  },
+
   // ── Excel Skill ──
 
   async excelSkillGenerate(
