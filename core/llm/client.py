@@ -107,6 +107,20 @@ def _try_parse(raw_output: str, parser, response_schema):
     return parse_llm_json(raw_output, response_schema)
 
 
+def _serialize_prompt_messages(messages: list) -> str:
+    """
+    Convert a list of role/parts message dicts into a readable multi-section
+    prompt string.  This preserves the intent of each section (system instructions,
+    user question, etc.) rather than dumping a raw Python list repr.
+    """
+    parts = []
+    for msg in messages:
+        role = msg.get("role", "system").upper()
+        content = msg.get("parts", "")
+        parts.append(f"[{role}]\n{content}")
+    return "\n\n".join(parts)
+
+
 async def invoke_llm(
     gpu_model,
     response_schema,
@@ -125,19 +139,45 @@ async def invoke_llm(
     # Initialize the parser for structured output
     parser = PydanticOutputParser(pydantic_object=response_schema)
 
-    prompt = f"""
-    Extract structured data according to this model:
-    {parser.get_format_instructions()}
+    # Serialize contents properly — multi-turn role/parts dicts become readable
+    # prompt sections instead of a raw Python list repr.
+    if isinstance(contents, list) and contents and isinstance(contents[0], dict) and "role" in contents[0]:
+        serialized = _serialize_prompt_messages(contents)
+    else:
+        serialized = str(contents)
 
-    Input:
-    {contents}
+    # Use different framing for answer-generating schemas vs pure extraction schemas.
+    # Answer schemas need the LLM to generate rich content in the "answer" field;
+    # "Extract structured data" framing causes short, terse outputs.
+    is_answer_schema = hasattr(response_schema, "model_fields") and "answer" in response_schema.model_fields
 
-    CRITICAL OUTPUT RULES:
-    1. Output must be valid JSON.
-    2. Escape newlines as \\n and tabs as \\t within JSON strings.
-    3. If you generate internal reasoning (e.g. inside <think> tags), you MUST produce the final JSON object AFTER the closing </think> tag.
-    4. Do not output any text before or after the JSON object.
-    """
+    if is_answer_schema:
+        prompt = f"""{serialized}
+
+RESPONSE FORMAT — CRITICAL:
+You MUST respond with a single valid JSON object matching this schema:
+{parser.get_format_instructions()}
+
+JSON RULES:
+1. Output ONLY the JSON object — no markdown fences, no commentary, no text before or after.
+2. Escape newlines as \\n and tabs as \\t within JSON string values.
+3. If you use internal reasoning (e.g. <think> tags), produce the JSON AFTER the closing tag.
+4. The "answer" field should contain your FULL, DETAILED response following the guidelines above. Do NOT truncate or shorten it.
+5. For tables inside the answer field, use HTML <table> tags, NOT Markdown pipe tables.
+"""
+    else:
+        prompt = f"""Extract structured data according to this model:
+{parser.get_format_instructions()}
+
+Input:
+{serialized}
+
+CRITICAL OUTPUT RULES:
+1. Output must be valid JSON.
+2. Escape newlines as \\n and tabs as \\t within JSON strings.
+3. If you generate internal reasoning (e.g. inside <think> tags), you MUST produce the final JSON object AFTER the closing </think> tag.
+4. Do not output any text before or after the JSON object.
+"""
 
     # Track the last failed output and parse error for self-correction context
     last_failed_output = None
