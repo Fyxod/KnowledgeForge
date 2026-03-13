@@ -372,6 +372,7 @@ def main_prompt(
     thread_instructions: Optional[List[str]] = None,
     triple_context: Optional[str] = None,
     sql_nlp_summary: Optional[str] = None,
+    sql_batched_answer: Optional[str] = None,
 ):
     contents = []
 
@@ -544,9 +545,34 @@ def main_prompt(
     if sql_result:
         display_question = original_query or question
 
-        # When NLP theme summary exists, use simplified instructions —
-        # the themes are the primary answer source, raw data is just a sample.
-        if sql_nlp_summary:
+        # When batched analysis or NLP theme summary exists, use simplified instructions —
+        # the pre-analyzed content is the primary answer source, raw data is just a sample.
+        if sql_batched_answer:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": (
+                        "### Pre-Analyzed SQL Result (complete dataset analysis)\n"
+                        f"{sql_batched_answer}\n\n"
+                        "### Raw Data Sample (for reference only)\n"
+                        + (f"**SQL Query:** `{sql_query}`\n\n" if sql_query else "")
+                        + f"{sql_result}\n\n"
+                        f"**Original User Question:** {display_question}\n\n"
+                        "**INSTRUCTIONS:**\n"
+                        "The **Pre-Analyzed SQL Result** above was generated from the COMPLETE dataset "
+                        "(all rows were processed in batches). The raw data sample is a small subset for reference.\n\n"
+                        "You MUST:\n"
+                        '1. Set `action` to `"answer"`.\n'
+                        "2. Write your answer based on the **Pre-Analyzed SQL Result**.\n"
+                        "3. Enhance and format it using Markdown (tables, headings, bullet points).\n"
+                        "4. Use the raw data sample to quote specific examples if helpful.\n\n"
+                        "You MUST NOT:\n"
+                        "- Request another SQL query. The data has already been fully analyzed.\n"
+                        "- Return a blank or empty answer.\n"
+                    ),
+                }
+            )
+        elif sql_nlp_summary:
             contents.append(
                 {
                     "role": "system",

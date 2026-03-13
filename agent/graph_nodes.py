@@ -417,10 +417,6 @@ async def global_summarizer(state: AgentState) -> AgentState:
 
 
 
-# Maximum characters for SQL result injected into the LLM prompt.
-# ~4000 tokens ≈ 16000 chars — leaves room for schema, chunks, instructions, and 8K output.
-_SQL_RESULT_MAX_CHARS = 16000
-
 # NLP query detection keywords — triggers chunked theme extraction on large results
 _NLP_KEYWORDS = [
     "sentiment", "theme", "themes", "tone", "opinion", "opinions",
@@ -469,6 +465,140 @@ def _parse_markdown_table_rows(result_text: str) -> tuple:
 
     data_rows = [l for l in lines[data_start:] if l.strip() and "|" in l]
     return header_line, separator_line, data_rows
+
+
+def _calculate_sql_token_budget(state: AgentState) -> int:
+    """Calculate how many tokens are available for SQL result data.
+
+    Builds the main prompt without SQL result, counts its tokens,
+    and returns the remaining budget from the 128K context window.
+    """
+    from core.constants import MAIN_MODEL, MODEL_CONTEXT_TOKENS, MODEL_OUTPUT_RESERVE
+    from core.utils.count_tokens import count_tokens
+
+    # Temporarily clear SQL fields to measure prompt overhead
+    saved_sql_result = state.sql_result
+    saved_sql_nlp = state.sql_nlp_summary
+    saved_sql_batched = state.sql_batched_answer
+    state.sql_result = None
+    state.sql_nlp_summary = None
+    state.sql_batched_answer = None
+
+    try:
+        prompt_contents = build_main_prompt(state)
+        prompt_text = "\n".join(
+            msg["parts"]
+            for msg in prompt_contents
+            if isinstance(msg.get("parts"), str)
+        )
+        overhead_tokens = count_tokens(prompt_text, MAIN_MODEL)
+    except Exception:
+        # If prompt building fails, use a conservative estimate
+        overhead_tokens = 15_000
+    finally:
+        state.sql_result = saved_sql_result
+        state.sql_nlp_summary = saved_sql_nlp
+        state.sql_batched_answer = saved_sql_batched
+
+    safety_margin = 2000
+    available = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - safety_margin - overhead_tokens
+    return max(0, available)
+
+
+async def _batch_sql_answer(
+    result_text: str,
+    user_question: str,
+    budget_tokens: int,
+) -> str | None:
+    """
+    MapReduce over SQL results that exceed context.
+    Splits into batches, gets partial answers in parallel, combines them.
+    """
+    from core.constants import GPU_QUERY_LLM, GPU_COMBINATION_LLM, MAIN_MODEL
+    from core.llm.output_schemas.main_outputs import CombinationLLMOutput
+    from core.llm.prompts.combination_prompt import combination_prompt
+    from core.llm.prompts.sql_batch_prompt import sql_batch_prompt
+    from core.utils.count_tokens import count_tokens
+
+    header_line, separator_line, data_rows = _parse_markdown_table_rows(result_text)
+    if not data_rows:
+        return None
+
+    # Each batch gets: lightweight prompt (~1-2K tokens) + data chunk
+    batch_prompt_overhead = 2000
+    tokens_per_batch = budget_tokens - batch_prompt_overhead
+
+    # Estimate average tokens per row from a sample
+    sample_rows = data_rows[: min(20, len(data_rows))]
+    sample_text = "\n".join(sample_rows)
+    avg_tokens_per_row = max(
+        1, count_tokens(sample_text, MAIN_MODEL) / len(sample_rows)
+    )
+    rows_per_batch = max(10, int(tokens_per_batch / avg_tokens_per_row))
+
+    # Create batches
+    batches = []
+    for i in range(0, len(data_rows), rows_per_batch):
+        batch_rows = data_rows[i : i + rows_per_batch]
+        batch_table = "\n".join([header_line, separator_line] + batch_rows)
+        batches.append(batch_table)
+
+    total = len(batches)
+    print(
+        f"[SQL Batch] Splitting {len(data_rows)} rows into {total} batches "
+        f"(~{rows_per_batch} rows each)"
+    )
+
+    # Map: process each batch in parallel
+    async def process_batch(batch_data, batch_num):
+        prompt = sql_batch_prompt(
+            data=batch_data,
+            user_question=user_question,
+            batch_number=batch_num,
+            total_batches=total,
+        )
+        try:
+            result = await invoke_llm(
+                gpu_model=GPU_QUERY_LLM.model,
+                response_schema=CombinationLLMOutput,
+                contents=prompt,
+                port=GPU_QUERY_LLM.port,
+                remove_thinking=True,
+            )
+            return result.answer
+        except Exception as e:
+            print(f"[SQL Batch] Batch {batch_num} failed: {e}")
+            return None
+
+    partial_answers = await asyncio.gather(
+        *(process_batch(batch, i + 1) for i, batch in enumerate(batches))
+    )
+
+    valid_answers = [a for a in partial_answers if a]
+    if not valid_answers:
+        return None
+
+    if len(valid_answers) == 1:
+        return valid_answers[0]
+
+    # Reduce: combine partial answers
+    combo_prompt = combination_prompt(
+        query=user_question,
+        sub_answers=valid_answers,
+    )
+    try:
+        combined = await invoke_llm(
+            gpu_model=GPU_COMBINATION_LLM.model,
+            response_schema=CombinationLLMOutput,
+            contents=combo_prompt,
+            port=GPU_COMBINATION_LLM.port,
+            remove_thinking=True,
+        )
+        print(f"[SQL Batch] Combined {len(valid_answers)} partial answers")
+        return combined.answer
+    except Exception as e:
+        print(f"[SQL Batch] Combination failed: {e}, returning concatenated")
+        return "\n\n---\n\n".join(valid_answers)
 
 
 async def _extract_nlp_themes(
@@ -600,8 +730,9 @@ async def sql_query_node(state: AgentState) -> AgentState:
     For NLP/subjective queries on large datasets, runs chunked theme
     extraction so the main LLM has accurate analysis from ALL rows.
 
-    Large results are truncated to fit within the LLM context window,
-    with a note appended so the LLM knows the data is partial.
+    Uses dynamic token budget to fit as much data as possible in the
+    128K context window. For results that exceed the budget, runs
+    batched MapReduce processing (parallel partial answers + combination).
     """
     query = state.sql_query
     if not query:
@@ -648,41 +779,84 @@ async def sql_query_node(state: AgentState) -> AgentState:
                 except Exception as e:
                     print(f"[NLP Theme Extraction] Failed: {e}")
 
-        # Truncate large results to prevent context overflow and output truncation.
-        # When NLP themes were already extracted, use a much smaller sample —
-        # the themes cover ALL data so the raw sample is just for examples.
+        # ── Dynamic token budget: fit as much SQL data as possible ──
+        # When NLP themes exist, keep a small sample (themes are the primary source).
+        # Otherwise, dynamically calculate how much data fits in the 128K context.
         if state.sql_nlp_summary:
             max_chars = 4000  # ~50 rows — just enough for example references
-        else:
-            max_chars = _SQL_RESULT_MAX_CHARS
-
-        if len(result) > max_chars:
-            full_len = len(result)
-            row_count = result.count("\n")
-            # Find the last complete row (newline) within the limit
-            truncated = result[:max_chars]
-            last_newline = truncated.rfind("\n")
-            if last_newline > max_chars // 2:
-                truncated = truncated[:last_newline]
-
-            if state.sql_nlp_summary:
+            if len(result) > max_chars:
+                row_count = result.count("\n")
+                truncated = result[:max_chars]
+                last_nl = truncated.rfind("\n")
+                if last_nl > max_chars // 2:
+                    truncated = truncated[:last_nl]
                 result = (
                     f"{truncated}\n\n"
                     f"... [SAMPLE ONLY — {row_count} total rows in dataset] ...\n"
                     "Full-data theme analysis is provided above. "
                     "Use these rows only as example references."
                 )
+                print(f"[sql_query_node] NLP mode — sample truncated to {len(result)} chars")
+        else:
+            from core.constants import MAIN_MODEL
+            from core.utils.count_tokens import count_tokens
+
+            sql_tokens = count_tokens(result, MAIN_MODEL)
+            budget_tokens = _calculate_sql_token_budget(state)
+            print(
+                f"[sql_query_node] SQL tokens: {sql_tokens}, budget: {budget_tokens}"
+            )
+
+            if sql_tokens <= budget_tokens:
+                # Single shot — full data fits in context
+                print(f"[sql_query_node] Full result fits in context")
             else:
-                result = (
-                    f"{truncated}\n\n"
-                    f"... [OUTPUT TRUNCATED — showing {len(truncated)}/{full_len} chars] ...\n"
-                    "The dataset is too large to display in full. "
-                    "Summarize, aggregate, or categorize the data in your answer. "
-                    "Do NOT try to list every row — provide counts, percentages, "
-                    "and key groupings instead."
+                # Result exceeds budget — re-fetch ALL rows for batched processing
+                print(f"[sql_query_node] Result exceeds budget, batching...")
+                full_result = await execute_sql_query(
+                    user_id=state.user_id,
+                    thread_id=state.thread_id,
+                    query=query,
+                    max_rows=None,
                 )
-            print(f"[sql_query_node] Result truncated: {full_len} -> {len(result)} chars"
-                  f" (NLP mode: {bool(state.sql_nlp_summary)})")
+                try:
+                    batched_answer = await _batch_sql_answer(
+                        result_text=full_result,
+                        user_question=user_q,
+                        budget_tokens=budget_tokens,
+                    )
+                except Exception as e:
+                    print(f"[SQL Batch] Error: {e}")
+                    batched_answer = None
+
+                if batched_answer:
+                    state.sql_batched_answer = batched_answer
+                    # Truncate raw result to a sample for generate() context
+                    max_sample_chars = min(budget_tokens * 3, len(result))
+                    truncated = result[:max_sample_chars]
+                    last_nl = truncated.rfind("\n")
+                    if last_nl > max_sample_chars // 2:
+                        truncated = truncated[:last_nl]
+                    row_count = result.count("\n")
+                    result = (
+                        f"{truncated}\n\n"
+                        f"... [SAMPLE — {row_count} total rows] ...\n"
+                        "A comprehensive batched analysis of ALL rows is provided separately."
+                    )
+                    print(f"[sql_query_node] Batched analysis complete, sample: {len(result)} chars")
+                else:
+                    # Batch failed — truncate to what fits
+                    max_chars = budget_tokens * 3  # rough token→char conversion
+                    truncated = result[:max_chars]
+                    last_nl = truncated.rfind("\n")
+                    if last_nl > max_chars // 2:
+                        truncated = truncated[:last_nl]
+                    result = (
+                        f"{truncated}\n\n"
+                        f"... [TRUNCATED — showing partial data] ...\n"
+                        "Summarize, aggregate, or categorize the data in your answer."
+                    )
+                    print(f"[sql_query_node] Batch failed, truncated to {len(result)} chars")
 
         state.sql_result = result
         state.messages.append(HumanMessage(content=f"SQL query executed: {query}"))

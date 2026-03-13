@@ -49,6 +49,7 @@ def build_main_prompt(state: AgentState):
         thread_instructions=state.thread_instructions or [],
         triple_context=state.triple_context or None,
         sql_nlp_summary=state.sql_nlp_summary or None,
+        sql_batched_answer=state.sql_batched_answer or None,
     )
 
 

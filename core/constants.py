@@ -45,6 +45,10 @@ EASYOCR_GPU = (
 
 PORT1 = 11434  # port where ollama is running
 
+# Model context window (tokens). gpt-oss:20b full = 128K.
+MODEL_CONTEXT_TOKENS = 128_000
+MODEL_OUTPUT_RESERVE = 8_000  # Reserve for output generation
+
 MAIN_MODEL = (
     settings.MAIN_MODEL
 )  # Set in .env file, e.g. "gpt-oss:20b-50k-8k" or "qwen3:14b-39500-8k"
