@@ -255,7 +255,6 @@ async def generate(state: AgentState) -> AgentState:
             state.document_id = result.document_id or None
             state.sql_query = getattr(result, "sql_query", None)
             state.excel_request = getattr(result, "excel_request", None)
-            state.requires_full_data = getattr(result, "requires_full_data", None)
             return state
 
         except Exception as e:

@@ -22,7 +22,8 @@ Schema:
 {
   "requires_decomposition": <bool>,
   "resolved_query":         <string>,  // query after context resolution
-  "sub_queries":            <string[]> // 1-10 standalone sub queries
+  "sub_queries":            <string[]>, // 1-10 standalone sub queries
+  "requires_full_data":     <bool>     // true if the question needs NLP analysis of ALL text rows
 }
 
 ⸻
@@ -240,10 +241,33 @@ For ANY question that can be answered from the spreadsheet data — including lo
                 f"\nAvailable SQL tables:\n```\n{spreadsheet_schema}\n```\n"
             )
 
+    nlp_classification = ""
+    if has_spreadsheet_data:
+        nlp_classification = """
+
+⸻
+
+NLP / Full-Data Analysis Classification (requires_full_data)
+
+Set requires_full_data to TRUE when the question requires understanding, interpreting, or analyzing the TEXT CONTENT of rows — not just counting or filtering them. Examples:
+  - "What are the overarching themes in the comments?" → TRUE (needs to read all text)
+  - "Analyze patents, identify leading technology areas" → TRUE (needs to read patent descriptions)
+  - "Categorize the feedback into groups" → TRUE (needs to understand each entry)
+  - "What is the sentiment of the reviews?" → TRUE (needs NLP understanding)
+  - "Identify patterns in the descriptions" → TRUE (needs text analysis)
+  - "How many rows are there?" → FALSE (simple count)
+  - "What is the average salary?" → FALSE (numeric aggregation)
+  - "Show me all records from 2024" → FALSE (simple filter)
+  - "What is the address of John?" → FALSE (lookup)
+
+Rule: If the answer requires the LLM to READ and UNDERSTAND text data from many rows, set TRUE. If SQL alone can answer it (COUNT, SUM, AVG, WHERE, GROUP BY), set FALSE.
+"""
+
     full_prompt = (
         system_prompt
         + examples
         + spreadsheet_note
+        + nlp_classification
         + """
 
 ⸻

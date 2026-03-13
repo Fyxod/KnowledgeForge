@@ -44,16 +44,6 @@ class MainLLMOutputInternal(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'. E.g., 'Create a pivot table of sales by region with a bar chart'.",
     )
-    requires_full_data: Optional[bool] = Field(
-        default=None,
-        description=(
-            "Set to true when the user's question requires reading/understanding the FULL text content "
-            "of ALL rows (e.g., theme analysis, sentiment analysis, categorization of text, "
-            "identifying patterns in descriptions, qualitative analysis). "
-            "Set to false or omit for simple counts, filters, aggregations, or lookups."
-        ),
-    )
-
     @field_validator("action", mode="before")
     @classmethod
     def normalize_action(cls, v):
@@ -102,16 +92,6 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
     )
-    requires_full_data: Optional[bool] = Field(
-        default=None,
-        description=(
-            "Set to true when the user's question requires reading/understanding the FULL text content "
-            "of ALL rows (e.g., theme analysis, sentiment analysis, categorization of text, "
-            "identifying patterns in descriptions, qualitative analysis). "
-            "Set to false or omit for simple counts, filters, aggregations, or lookups."
-        ),
-    )
-
     @field_validator("action", mode="before")
     @classmethod
     def normalize_action(cls, v):
@@ -165,16 +145,6 @@ class MainLLMOutputExternal(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
     )
-    requires_full_data: Optional[bool] = Field(
-        default=None,
-        description=(
-            "Set to true when the user's question requires reading/understanding the FULL text content "
-            "of ALL rows (e.g., theme analysis, sentiment analysis, categorization of text, "
-            "identifying patterns in descriptions, qualitative analysis). "
-            "Set to false or omit for simple counts, filters, aggregations, or lookups."
-        ),
-    )
-
     @field_validator("action", mode="before")
     @classmethod
     def normalize_action(cls, v):
@@ -205,6 +175,15 @@ class DecompositionLLMOutput(LLMOutputBase):
     )
     sub_queries: List[str] = Field(
         description="List of standalone sub-queries generated from the original query."
+    )
+    requires_full_data: bool = Field(
+        default=False,
+        description=(
+            "Set to true when the question requires reading/understanding the text content "
+            "of ALL rows in a spreadsheet — e.g., theme extraction, sentiment analysis, "
+            "categorization of text, identifying patterns, qualitative analysis. "
+            "False for counts, filters, lookups, aggregations, or non-spreadsheet questions."
+        ),
     )
 
 
