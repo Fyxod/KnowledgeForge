@@ -451,6 +451,11 @@ def main_prompt(
                     "The SQL database contains ALL rows and ALL columns and will give exact, complete results.\n"
                     "- Always provide the `sql_query` field in your response when choosing the `sql_query` action.\n"
                     "- **VALIDATION RULE**: If you choose `action='sql_query'`, you **MUST** provide the `sql_query` field with the valid SQL statement. Failing to do so will cause a system error.\n"
+                    "- **FULL-DATA ANALYSIS FLAG**: When choosing `sql_query`, also set `requires_full_data` to `true` "
+                    "if the question requires reading and understanding the text content of ALL rows — e.g., "
+                    "theme extraction, sentiment analysis, categorization of text entries, identifying patterns "
+                    "in descriptions, qualitative analysis, or any question that cannot be answered by SQL "
+                    "aggregation alone. Set to `false` for simple counts, filters, lookups, or aggregations.\n"
                     "- Even if you see some spreadsheet data in the document chunks, ALWAYS use `sql_query` instead. "
                     "The document chunks are only text previews and do NOT contain the full dataset.\n"
                 ),

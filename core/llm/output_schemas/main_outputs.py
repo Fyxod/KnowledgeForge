@@ -44,6 +44,15 @@ class MainLLMOutputInternal(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'. E.g., 'Create a pivot table of sales by region with a bar chart'.",
     )
+    requires_full_data: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Set to true when the user's question requires reading/understanding the FULL text content "
+            "of ALL rows (e.g., theme analysis, sentiment analysis, categorization of text, "
+            "identifying patterns in descriptions, qualitative analysis). "
+            "Set to false or omit for simple counts, filters, aggregations, or lookups."
+        ),
+    )
 
     @field_validator("action", mode="before")
     @classmethod
@@ -92,6 +101,15 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
     excel_request: Optional[str] = Field(
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
+    )
+    requires_full_data: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Set to true when the user's question requires reading/understanding the FULL text content "
+            "of ALL rows (e.g., theme analysis, sentiment analysis, categorization of text, "
+            "identifying patterns in descriptions, qualitative analysis). "
+            "Set to false or omit for simple counts, filters, aggregations, or lookups."
+        ),
     )
 
     @field_validator("action", mode="before")
@@ -146,6 +164,15 @@ class MainLLMOutputExternal(LLMOutputBase):
     excel_request: Optional[str] = Field(
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
+    )
+    requires_full_data: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Set to true when the user's question requires reading/understanding the FULL text content "
+            "of ALL rows (e.g., theme analysis, sentiment analysis, categorization of text, "
+            "identifying patterns in descriptions, qualitative analysis). "
+            "Set to false or omit for simple counts, filters, aggregations, or lookups."
+        ),
     )
 
     @field_validator("action", mode="before")

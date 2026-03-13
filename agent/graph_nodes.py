@@ -255,6 +255,7 @@ async def generate(state: AgentState) -> AgentState:
             state.document_id = result.document_id or None
             state.sql_query = getattr(result, "sql_query", None)
             state.excel_request = getattr(result, "excel_request", None)
+            state.requires_full_data = getattr(result, "requires_full_data", None)
             return state
 
         except Exception as e:
@@ -623,12 +624,10 @@ async def sql_query_node(state: AgentState) -> AgentState:
         )
 
         # NLP chunked theme extraction — runs BEFORE truncation so it sees ALL data.
-        # Only triggers for NLP-type queries on large results.
+        # LLM flag (requires_full_data) takes priority; keyword matching is fallback.
         user_q = state.original_query or state.query or ""
-        if (
-            len(result) > _SQL_RESULT_MAX_CHARS
-            and _is_nlp_query(user_q)
-        ):
+        is_nlp = state.requires_full_data or _is_nlp_query(user_q)
+        if len(result) > _SQL_RESULT_MAX_CHARS and is_nlp:
             try:
                 nlp_summary = await _extract_nlp_themes(
                     result_text=result,
