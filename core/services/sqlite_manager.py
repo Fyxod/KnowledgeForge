@@ -276,7 +276,7 @@ class SQLiteManager:
         return "\n\n".join(schema_parts)
 
     @classmethod
-    def execute_query(cls, user_id: str, thread_id: str, query: str) -> Dict:
+    def execute_query(cls, user_id: str, thread_id: str, query: str, max_rows: int = 500) -> Dict:
         """
         Execute a SQL query against the user/thread's SQLite database.
         Only SELECT queries are allowed for safety.
@@ -320,8 +320,7 @@ class SQLiteManager:
         try:
             df = pd.read_sql_query(query, conn)
             # Limit output to avoid overwhelming the LLM
-            max_rows = 500
-            truncated = len(df) > max_rows
+            truncated = max_rows is not None and len(df) > max_rows
             if truncated:
                 result_df = df.head(max_rows)
             else:

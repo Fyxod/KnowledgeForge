@@ -435,8 +435,8 @@ _NLP_KEYWORDS = [
 
 # Minimum row count to trigger NLP chunked extraction
 _NLP_MIN_ROWS = 100
-# Number of chunks for parallel processing
-_NLP_CHUNK_COUNT = 3
+# Target rows per chunk — keeps each chunk within LLM context
+_NLP_ROWS_PER_CHUNK = 200
 
 
 def _is_nlp_query(question: str) -> bool:
@@ -492,18 +492,19 @@ async def _extract_nlp_themes(
     if not data_rows or len(data_rows) < _NLP_MIN_ROWS:
         return None
 
-    # Split data rows into chunks
-    chunk_size = max(1, len(data_rows) // _NLP_CHUNK_COUNT)
+    # Split data rows into chunks of ~_NLP_ROWS_PER_CHUNK rows each
+    chunk_count = max(1, (len(data_rows) + _NLP_ROWS_PER_CHUNK - 1) // _NLP_ROWS_PER_CHUNK)
+    chunk_size = max(1, len(data_rows) // chunk_count)
     chunks = []
     for i in range(0, len(data_rows), chunk_size):
         chunks.append(data_rows[i : i + chunk_size])
 
-    # Limit to _NLP_CHUNK_COUNT chunks (last chunk absorbs remainder)
-    if len(chunks) > _NLP_CHUNK_COUNT:
-        chunks[_NLP_CHUNK_COUNT - 1].extend(
-            row for c in chunks[_NLP_CHUNK_COUNT:] for row in c
+    # Last chunk absorbs any remainder from rounding
+    if len(chunks) > chunk_count:
+        chunks[chunk_count - 1].extend(
+            row for c in chunks[chunk_count:] for row in c
         )
-        chunks = chunks[:_NLP_CHUNK_COUNT]
+        chunks = chunks[:chunk_count]
 
     print(
         f"[NLP Theme Extraction] Detected NLP query, chunking {len(data_rows)} rows "
@@ -622,21 +623,30 @@ async def sql_query_node(state: AgentState) -> AgentState:
             query=query,
         )
 
-        # NLP chunked theme extraction — runs BEFORE truncation so it sees ALL data.
+        # NLP chunked theme extraction — needs ALL rows, not just the default 500.
         # LLM flag (requires_full_data) takes priority; keyword matching is fallback.
         user_q = state.original_query or state.query or ""
         is_nlp = state.requires_full_data or _is_nlp_query(user_q)
-        if len(result) > _SQL_RESULT_MAX_CHARS and is_nlp:
-            try:
-                nlp_summary = await _extract_nlp_themes(
-                    result_text=result,
-                    user_question=user_q,
-                    row_count=result.count("\n"),
-                )
-                if nlp_summary:
-                    state.sql_nlp_summary = nlp_summary
-            except Exception as e:
-                print(f"[NLP Theme Extraction] Failed: {e}")
+        if is_nlp:
+            # Re-fetch with no row limit so NLP extraction sees the COMPLETE dataset
+            full_result = await execute_sql_query(
+                user_id=state.user_id,
+                thread_id=state.thread_id,
+                query=query,
+                max_rows=None,
+            )
+            if not full_result.startswith("SQL query failed"):
+                try:
+                    nlp_summary = await _extract_nlp_themes(
+                        result_text=full_result,
+                        user_question=user_q,
+                        row_count=full_result.count("\n"),
+                    )
+                    if nlp_summary:
+                        state.sql_nlp_summary = nlp_summary
+                        print(f"[NLP Theme Extraction] Complete — analyzed all rows")
+                except Exception as e:
+                    print(f"[NLP Theme Extraction] Failed: {e}")
 
         # Truncate large results to prevent context overflow and output truncation.
         # When NLP themes were already extracted, use a much smaller sample —
