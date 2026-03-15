@@ -16,7 +16,11 @@ from agent.tools.search import search_tavily as search_tool
 from agent.tools.sql_query import execute_sql_query
 from core.constants import *
 from core.embeddings.context_enrichment import extract_query_entities
-from core.embeddings.retriever import get_thread_documents_retriever, rerank_chunks
+from core.embeddings.retriever import (
+    expand_to_parent_chunks,
+    get_thread_documents_retriever,
+    rerank_chunks,
+)
 from core.services.triple_store import TripleStore
 from core.llm.client import invoke_llm
 from core.llm.output_schemas.evaluator_output import EvaluatorLLMOutput
@@ -119,8 +123,14 @@ async def retriever(state: AgentState) -> AgentState:
     rerank_end = time.time()
     print(f"Re-ranking completed in {rerank_end - rerank_start:.2f} seconds")
 
+    # Expand child chunks to parent-level context for richer LLM prompting.
+    # Retrieval and reranking operate on small, precise child chunks; the LLM
+    # receives the larger parent section for better answer grounding.
+    expanded_docs = expand_to_parent_chunks(reranked_docs)
+    print(f"Expanded {len(reranked_docs)} child chunks → {len(expanded_docs)} parent chunks")
+
     modified_docs = []
-    for doc in reranked_docs:
+    for doc in expanded_docs:
         metadata = doc.get("metadata", {}) or {}
         doc_title = metadata.get("title", "Unknown Title")
         doc_id = metadata.get("document_id", "")

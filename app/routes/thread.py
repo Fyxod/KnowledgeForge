@@ -19,6 +19,8 @@ from core.embeddings.vectorstore import (
     rebuild_bm25_after_deletion,
 )
 from core.models.document import Document, Page
+from core.services.sqlite_manager import SQLiteManager
+from core.services.triple_store import TripleStore
 from core.models.thread import (
     AddExistingDocumentRequest,
     InstructionCreateRequest,
@@ -245,7 +247,24 @@ async def delete_document(request: Request, thread_id: str, doc_id: str):
         except Exception as e:
             print(f"Warning: BM25 rebuild failed for thread {thread_id}: {e}")
 
-        # 4. Delete uploaded file from disk
+        # 4. Delete entity-relation triples for this document
+        try:
+            deleted_triples = await asyncio.to_thread(
+                TripleStore.delete_document_triples, user_id, thread_id, doc_id
+            )
+            print(f"Deleted {deleted_triples} triples for doc {doc_id}")
+        except Exception as e:
+            print(f"Warning: Triple cleanup failed for doc {doc_id}: {e}")
+
+        # 5. Drop SQLite tables for this document (spreadsheets)
+        try:
+            await asyncio.to_thread(
+                SQLiteManager.drop_tables_for_document, user_id, thread_id, doc_id
+            )
+        except Exception as e:
+            print(f"Warning: SQLite table cleanup failed for doc {doc_id}: {e}")
+
+        # 6. Delete uploaded file from disk
         if file_name:
             upload_path = os.path.join(
                 "data", user_id, "threads", thread_id, "uploads", file_name
@@ -253,28 +272,30 @@ async def delete_document(request: Request, thread_id: str, doc_id: str):
             if os.path.exists(upload_path):
                 os.remove(upload_path)
 
-        # 5. Delete parsed JSON from disk
-        if file_name:
+        # 7. Delete parsed JSON from disk
+        # Try new doc_id-keyed path first; fall back to old filename-stem path
+        # for backward compatibility with documents indexed before this change.
+        parsed_base = os.path.join("data", user_id, "threads", thread_id, "parsed")
+        parsed_by_id = os.path.join(parsed_base, f"{doc_id}.json")
+        if os.path.exists(parsed_by_id):
+            os.remove(parsed_by_id)
+        elif file_name:
             name_without_ext = os.path.splitext(file_name)[0]
-            parsed_path = os.path.join(
-                "data",
-                user_id,
-                "threads",
-                thread_id,
-                "parsed",
-                f"{name_without_ext}.json",
-            )
-            if os.path.exists(parsed_path):
-                os.remove(parsed_path)
+            parsed_by_name = os.path.join(parsed_base, f"{name_without_ext}.json")
+            if os.path.exists(parsed_by_name):
+                os.remove(parsed_by_name)
 
-        # 6. Delete extracted images directory from disk
-        if file_name:
+        # 8. Delete extracted images directory from disk
+        # Try new doc_id-keyed dir first; fall back to old filename-stem dir.
+        images_root = os.path.join("data", user_id, "threads", thread_id, "images")
+        images_by_id = os.path.join(images_root, doc_id)
+        if os.path.isdir(images_by_id):
+            shutil.rmtree(images_by_id, ignore_errors=True)
+        elif file_name:
             name_without_ext = os.path.splitext(file_name)[0]
-            images_dir = os.path.join(
-                "data", user_id, "threads", thread_id, "images", name_without_ext
-            )
-            if os.path.isdir(images_dir):
-                shutil.rmtree(images_dir, ignore_errors=True)
+            images_by_name = os.path.join(images_root, name_without_ext)
+            if os.path.isdir(images_by_name):
+                shutil.rmtree(images_by_name, ignore_errors=True)
 
         # Return updated documents list
         updated_user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})

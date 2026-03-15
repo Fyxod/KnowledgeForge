@@ -5,7 +5,7 @@ import os
 import pickle
 import re
 import time
-from typing import List
+from typing import Any, Dict, List
 
 import torch
 
@@ -56,33 +56,78 @@ print("Loading embedding model...")
 embedding_function = get_embedding_function()
 print("Embedding model loaded.")
 
-# Improved chunking parameters (512 chars, ~20% overlap)
-CHUNK_SIZE = 512
-CHUNK_OVERLAP = 100
+# Hierarchical chunking parameters.
+# Parent chunks: larger, section-level context sent to the LLM.
+# Child chunks: smaller, precise units indexed in Chroma and retrieved/reranked.
+PARENT_CHUNK_SIZE = 1000   # characters (~800-1200 token equivalent)
+PARENT_CHUNK_OVERLAP = 100
+CHILD_CHUNK_SIZE = 300     # characters (~250-350 token equivalent)
+CHILD_CHUNK_OVERLAP = 50
 
 # nomic-embed-text-v1.5 task prefix for document embeddings.
 # Queries use "search_query: " (configured in embeddings.py via query_instruction).
 SEARCH_DOCUMENT_PREFIX = "search_document: "
 
+# Separators ordered from coarsest to finest for structural awareness.
+_CHUNK_SEPARATORS = [
+    "\n## ", "\n### ", "\n#### ",  # Markdown section headings
+    "\n\n",
+    "\n",
+    ". ", "! ", "? ",              # Sentence boundaries
+    "|---|",                       # Markdown table rows
+    " ",
+    "",
+]
+
+
+def chunk_page_text_hierarchical(page_text: str) -> List[Dict[str, Any]]:
+    """
+    Split page text into a two-level hierarchy of parent/child chunks.
+
+    Each child is derived from exactly one parent.  Child chunks are indexed
+    in Chroma for precise retrieval; parent text is stored in chunk metadata
+    so callers can expand results to richer context before prompting the LLM.
+
+    Returns:
+        List of dicts with keys:
+            parent_text  — the larger context block
+            child_text   — the precise snippet to embed and retrieve
+            parent_idx   — index of the parent within this page
+            child_idx    — index of the child within its parent
+    """
+    parent_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=PARENT_CHUNK_SIZE,
+        chunk_overlap=PARENT_CHUNK_OVERLAP,
+        separators=_CHUNK_SEPARATORS,
+    )
+    child_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHILD_CHUNK_SIZE,
+        chunk_overlap=CHILD_CHUNK_OVERLAP,
+        separators=_CHUNK_SEPARATORS,
+    )
+
+    parents = parent_splitter.split_text(page_text)
+    result: List[Dict[str, Any]] = []
+    for p_idx, parent in enumerate(parents):
+        children = child_splitter.split_text(parent)
+        for c_idx, child in enumerate(children):
+            result.append(
+                {
+                    "parent_text": parent,
+                    "child_text": child,
+                    "parent_idx": p_idx,
+                    "child_idx": c_idx,
+                }
+            )
+    return result
+
 
 def chunk_page_text(page_text: str) -> List[str]:
     """
-    Split page text into chunks with structural awareness (Markdown friendly).
+    Backward-compatible wrapper: returns only child chunk texts.
+    Use chunk_page_text_hierarchical() when parent context is needed.
     """
-    # Use RecursiveCharacterTextSplitter with Markdown-friendly separators
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
-        separators=[
-            "\n\n",
-            "\n",
-            "|---|",
-            ". ",
-            " ",
-            ""
-        ],
-    )
-    return splitter.split_text(page_text)
+    return [item["child_text"] for item in chunk_page_text_hierarchical(page_text)]
 
 
 # Expected embedding dimension for the current model
@@ -322,17 +367,30 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
         entity_mentions = []
 
         for page in doc.content:
-            chunks = await asyncio.to_thread(chunk_page_text, page.text)
+            # Hierarchical chunking: child chunks are indexed; parent text is stored
+            # in metadata for later expansion before LLM prompting.
+            hier_chunks = await asyncio.to_thread(
+                chunk_page_text_hierarchical, page.text
+            )
             # Phase 1.1: Detect section heading for this page
             heading = detect_page_heading(page.text)
+            # Extract child texts for adjacent-sentence context building
+            child_texts = [item["child_text"] for item in hier_chunks]
 
-            for i, chunk in enumerate(chunks):
-                chunk_id = f"{doc.id}_page{page.number}_chunk{i}"
+            for item in hier_chunks:
+                p_idx = item["parent_idx"]
+                c_idx = item["child_idx"]
+                child_text = item["child_text"]
+                parent_text = item["parent_text"]
 
-                # Phase 1.1: Build enriched chunk with programmatic context
-                adjacent_ctx = get_adjacent_sentences(chunks, i, _HAS_NLTK)
+                child_id = f"{doc.id}_page{page.number}_p{p_idx}_c{c_idx}"
+                parent_id = f"{doc.id}_page{page.number}_p{p_idx}"
+
+                # Phase 1.1: Build enriched child chunk with programmatic context
+                flat_idx = hier_chunks.index(item)
+                adjacent_ctx = get_adjacent_sentences(child_texts, flat_idx, _HAS_NLTK)
                 enriched_chunk = build_enriched_chunk(
-                    chunk_text=chunk,
+                    chunk_text=child_text,
                     doc_title=doc.title,
                     page_no=page.number,
                     total_pages=total_pages,
@@ -347,13 +405,16 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     "thread_id": thread_id,
                     "document_id": doc.id,
                     "page_no": page.number,
-                    "chunk_index": i,
+                    "chunk_index": flat_idx,
+                    "chunk_type": "child",
+                    "parent_chunk_id": parent_id,
+                    "parent_text": parent_text,
                     "file_name": doc.file_name,
                     "title": doc.title,
                 }
 
                 # Phase 1.2: Extract entities — used for both metadata and profiles
-                names, types = extract_entities(chunk)
+                names, types = extract_entities(child_text)
                 if names:
                     metadata["entities"] = "|".join(names[:15])
                     metadata["entity_types"] = "|".join(types[:15])
@@ -363,12 +424,12 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                             {
                                 "name": name,
                                 "type": etype,
-                                "chunk_text": chunk,
+                                "chunk_text": child_text,
                                 "page_no": page.number,
                             }
                         )
 
-                chunk_data.append((chunk_id, enriched_chunk, metadata))
+                chunk_data.append((child_id, enriched_chunk, metadata))
 
         # Phase 1.3: Add document summary as a special indexed chunk
         summary_text = doc.summary if doc.summary else None
@@ -445,8 +506,25 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
         f"Processed {len(chunk_data)} chunks in {end_time - start_time:.2f} seconds for user {user_id}"
     )
 
-    # Build and save BM25 index for hybrid search
-    await asyncio.to_thread(_build_and_save_bm25, chunk_data, user_id, thread_id)
+    # Build and save BM25 index for hybrid search.
+    # Merge with existing index so that incremental uploads (second doc, third doc, …)
+    # do not evict chunks from previously indexed documents in the same thread.
+    existing_bm25 = load_bm25(user_id, thread_id)
+    if existing_bm25:
+        existing_chunks = list(zip(
+            existing_bm25["chunk_ids"],
+            existing_bm25["chunk_texts"],
+            existing_bm25["chunk_metadatas"],
+        ))
+        # Deduplicate: new chunks override old ones with the same ID (upsert semantics)
+        merged_by_id = {cid: (cid, txt, meta) for cid, txt, meta in existing_chunks}
+        for cid, txt, meta in chunk_data:
+            merged_by_id[cid] = (cid, txt, meta)
+        all_bm25_chunks = list(merged_by_id.values())
+    else:
+        all_bm25_chunks = chunk_data
+
+    await asyncio.to_thread(_build_and_save_bm25, all_bm25_chunks, user_id, thread_id)
 
     # Batch embedding and upsert
     batch_size = 1000  # Reduced to avoid VRAM hoarding on 48GB GPU
@@ -523,17 +601,29 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
     entity_mentions = []
 
     for page in doc.content:
-        chunks = await asyncio.to_thread(chunk_page_text, page.text)
+        # Hierarchical chunking: child chunks are indexed; parent text is stored
+        # in metadata for later expansion before LLM prompting.
+        hier_chunks = await asyncio.to_thread(
+            chunk_page_text_hierarchical, page.text
+        )
         heading = detect_page_heading(page.text)
+        child_texts = [item["child_text"] for item in hier_chunks]
 
-        for i, chunk in enumerate(chunks):
+        for item in hier_chunks:
+            p_idx = item["parent_idx"]
+            c_idx = item["child_idx"]
+            child_text = item["child_text"]
+            parent_text = item["parent_text"]
+
             # Thread-prefixed ID prevents collision with same doc in other threads
-            chunk_id = f"{thread_id}_{doc.id}_page{page.number}_chunk{i}"
+            child_id = f"{thread_id}_{doc.id}_page{page.number}_p{p_idx}_c{c_idx}"
+            parent_id = f"{thread_id}_{doc.id}_page{page.number}_p{p_idx}"
 
-            # Phase 1.1: Build enriched chunk with programmatic context
-            adjacent_ctx = get_adjacent_sentences(chunks, i, _HAS_NLTK)
+            # Phase 1.1: Build enriched child chunk with programmatic context
+            flat_idx = hier_chunks.index(item)
+            adjacent_ctx = get_adjacent_sentences(child_texts, flat_idx, _HAS_NLTK)
             enriched_chunk = build_enriched_chunk(
-                chunk_text=chunk,
+                chunk_text=child_text,
                 doc_title=doc.title,
                 page_no=page.number,
                 total_pages=total_pages,
@@ -548,12 +638,15 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
                 "thread_id": thread_id,
                 "document_id": doc.id,
                 "page_no": page.number,
-                "chunk_index": i,
+                "chunk_index": flat_idx,
+                "chunk_type": "child",
+                "parent_chunk_id": parent_id,
+                "parent_text": parent_text,
                 "file_name": doc.file_name,
                 "title": doc.title,
             }
             # Phase 1.2: Extract entities — used for both metadata and profiles
-            names, types = extract_entities(chunk)
+            names, types = extract_entities(child_text)
             if names:
                 metadata["entities"] = "|".join(names[:15])
                 metadata["entity_types"] = "|".join(types[:15])
@@ -563,12 +656,12 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
                         {
                             "name": name,
                             "type": etype,
-                            "chunk_text": chunk,
+                            "chunk_text": child_text,
                             "page_no": page.number,
                         }
                     )
 
-            chunk_data.append((chunk_id, enriched_chunk, metadata))
+            chunk_data.append((child_id, enriched_chunk, metadata))
 
     # Phase 1.3: Document summary chunk
     full_text = getattr(doc, "full_text", "")

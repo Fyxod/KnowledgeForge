@@ -223,7 +223,7 @@ async def extract_document(
     # Normalize user/thread to avoid crashing on None
     user_id = user_id or "unknown_user"
     thread_id = thread_id or "unknown_thread"
-    doc_id = str(uuid.uuid4())[:5]
+    doc_id = str(uuid.uuid4())
 
     async def safe_emit(channel: str, payload: dict):
         try:
@@ -300,8 +300,8 @@ async def extract_document(
                 traceback.print_exc()
                 plain_text = md_text
 
-            # Prepare image handling
-            image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+            # Prepare image handling (keyed by doc_id to avoid filename collisions)
+            image_dir = f"data/{user_id}/threads/{thread_id}/images/{doc_id}"
             try:
                 os.makedirs(image_dir, exist_ok=True)
             except Exception:
@@ -913,7 +913,7 @@ async def extract_document(
         pages = []
         combined_texts = []
         ocr_tasks = {}
-        image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+        image_dir = f"data/{user_id}/threads/{thread_id}/images/{doc_id}"
         try:
             os.makedirs(image_dir, exist_ok=True)
         except Exception:
@@ -1188,7 +1188,7 @@ async def extract_document(
             pages_text = []
             image_names_all = []
             ocr_tasks = {}
-            image_dir = f"data/{user_id}/threads/{thread_id}/images/{name}"
+            image_dir = f"data/{user_id}/threads/{thread_id}/images/{doc_id}"
             try:
                 os.makedirs(image_dir, exist_ok=True)
             except Exception:
@@ -1493,7 +1493,7 @@ async def extract_document(
         vlm_candidates = []  # Collect pages for concurrent VLM processing
         glm_ocr_candidates = []  # Collect pages for concurrent GLM-OCR processing
 
-        image_dir_base = f"data/{user_id}/threads/{thread_id}/images/{name}"
+        image_dir_base = f"data/{user_id}/threads/{thread_id}/images/{doc_id}"
         MIN_IMAGE_SIZE = 50  # Skip images smaller than 50px (icons, bullets)
         _ocr_xref_cache = {}  # Cache OCR results by image xref to skip duplicates
 

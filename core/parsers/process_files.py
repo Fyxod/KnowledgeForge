@@ -76,8 +76,9 @@ async def process_files(
                 return parsed_data
 
             try:
-                name, _ = os.path.splitext(file_data.get("file_name", "document"))
-                json_file_path = os.path.join(parsed_dir, f"{name}.json")
+                # Key by doc_id (not filename stem) to avoid collisions across
+                # documents that share the same base filename in one thread.
+                json_file_path = os.path.join(parsed_dir, f"{parsed_data.id}.json")
                 async with aiofiles.open(json_file_path, "w", encoding="utf-8") as f:
                     await f.write(parsed_json)
             except Exception as e:

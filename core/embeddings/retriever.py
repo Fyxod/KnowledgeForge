@@ -519,17 +519,19 @@ async def get_thread_documents_retriever(
     max_total_chunks: int = 50,
 ) -> List[Dict[str, Any]]:
     """
-    Get retriever for all documents in a thread with adaptive document diversity.
+    Get retriever for all documents in a thread with score-aware document diversity.
     Uses hybrid search (vector + BM25) for improved recall.
 
     Phase 2.2: Supports multi-query retrieval via additional_queries parameter.
-    When provided, retrieves for each query variant in parallel for broader coverage.
 
-    This function uses an adaptive strategy that:
-    1. Ensures minimum chunks per document (min_chunks_per_doc)
-    2. Scales total chunks based on document count
-    3. Respects maximum total chunks limit (max_total_chunks)
-    4. Provides balanced representation across all documents
+    Strategy (replaces hard per-doc minimum allocation):
+    1. Fetch a broad candidate pool via hybrid retrieval.
+    2. Quality-gate: keep only documents whose best RRF score is ≥ 25% of the
+       top document's score (weak/irrelevant documents are excluded).
+    3. Guarantee top-1 child chunk per kept document so every qualifying doc
+       has at least one representative chunk.
+    4. Fill remaining budget by descending RRF score with a per-doc cap.
+    5. Deduplicate by content_hash when available.
 
     Args:
         user_id: User identifier
@@ -537,11 +539,8 @@ async def get_thread_documents_retriever(
         query: The user query for semantic similarity search
         additional_queries: Optional extra query variants for multi-query retrieval
         k: Total number of chunks to retrieve (None for adaptive)
-        min_chunks_per_doc: Minimum chunks to retrieve per document
-        max_total_chunks: Maximum total chunks to return
-
-    Returns:
-        List of retrieved document chunks with metadata
+        min_chunks_per_doc: Kept for API compatibility; not used in the new strategy
+        max_total_chunks: Hard upper bound on returned chunks
     """
     # Use hybrid retrieval (vector + BM25) for better recall
     retrieved_docs = await hybrid_retrieve(
@@ -553,62 +552,134 @@ async def get_thread_documents_retriever(
         bm25_k=max_total_chunks,
     )
 
+    if not retrieved_docs:
+        return []
+
     # Group by document_id
     docs_by_document: Dict[str, List[Dict[str, Any]]] = {}
     for doc in retrieved_docs:
         doc_id = doc.get("metadata", {}).get("document_id", "unknown")
-        if doc_id not in docs_by_document:
-            docs_by_document[doc_id] = []
-        docs_by_document[doc_id].append(doc)
+        docs_by_document.setdefault(doc_id, []).append(doc)
 
     num_documents = len(docs_by_document)
     if num_documents == 0:
         return []
 
-    # Adaptive k calculation based on document count
+    # --- Quality gate ---
+    # Keep only documents whose best fused score is at least 25% of the top doc.
+    best_score_per_doc = {
+        doc_id: max(d.get("rrf_score", 0.0) for d in docs)
+        for doc_id, docs in docs_by_document.items()
+    }
+    top_score = max(best_score_per_doc.values(), default=0.0)
+    threshold = top_score * 0.25
+
+    kept_docs = {
+        doc_id: docs
+        for doc_id, docs in docs_by_document.items()
+        if best_score_per_doc[doc_id] >= threshold
+    }
+
+    num_kept = len(kept_docs)
+    if num_kept == 0:
+        return []
+
+    # --- Adaptive total budget ---
     if k is None:
-        if num_documents <= 2:
+        if num_kept <= 2:
             k = 20
-        elif num_documents <= 5:
+        elif num_kept <= 5:
             k = 50
-        elif num_documents <= 10:
-            k = 100
+        elif num_kept <= 10:
+            k = 80
         else:
-            k = min(max_total_chunks, num_documents * 10)
+            k = min(max_total_chunks, num_kept * 8)
 
-    print(f"Adaptive k={k} for {num_documents} documents")
-
-    # Calculate chunks per document
-    chunks_per_doc = math.ceil(k / num_documents)
-
-    # Ensure minimum chunks per document
-    chunks_per_doc = max(chunks_per_doc, min_chunks_per_doc)
-
-    # Recalculate total k based on chunks per doc
-    adaptive_k = min(chunks_per_doc * num_documents, max_total_chunks)
+    k = min(k, max_total_chunks)
+    per_doc_cap = max(1, min(4, math.ceil(k / num_kept)))
 
     print(
-        f"Retrieving {chunks_per_doc} chunks per document from {num_documents} documents (total: {adaptive_k})"
+        f"[MultiDoc] {num_kept}/{num_documents} docs passed quality gate "
+        f"(threshold={threshold:.4f}), budget k={k}, per_doc_cap={per_doc_cap}"
     )
 
-    # Select chunks from each document
-    balanced_docs = []
-    for doc_id, docs in docs_by_document.items():
-        # Take top chunks_per_doc from this document
-        balanced_docs.extend(docs[:chunks_per_doc])
+    # --- Guarantee top-1 per doc, then fill by score ---
+    guaranteed: List[Dict[str, Any]] = []
+    remainder_pool: List[Dict[str, Any]] = []
 
-    # Ensure we don't exceed adaptive_k
-    balanced_docs = balanced_docs[:adaptive_k]
+    for doc_id in sorted(
+        kept_docs, key=lambda d: best_score_per_doc[d], reverse=True
+    ):
+        docs_sorted = sorted(
+            kept_docs[doc_id],
+            key=lambda d: d.get("rrf_score", 0.0),
+            reverse=True,
+        )
+        guaranteed.append(docs_sorted[0])
+        remainder_pool.extend(docs_sorted[1:per_doc_cap])
 
-    print(
-        f"Final retrieved: {len(balanced_docs)} chunks from {num_documents} documents"
-    )
-    for doc_id, docs in docs_by_document.items():
+    remainder_pool.sort(key=lambda d: d.get("rrf_score", 0.0), reverse=True)
+    result = guaranteed + remainder_pool
+    result = result[:k]
+
+    # --- Deduplicate by content_hash if available ---
+    seen_hashes: set = set()
+    deduped: List[Dict[str, Any]] = []
+    for doc in result:
+        ch = doc.get("metadata", {}).get("content_hash")
+        if ch:
+            if ch in seen_hashes:
+                continue
+            seen_hashes.add(ch)
+        deduped.append(doc)
+
+    print(f"[MultiDoc] Final: {len(deduped)} chunks from {num_kept} documents")
+    for doc_id in kept_docs:
         count = sum(
             1
-            for doc in balanced_docs
-            if doc.get("metadata", {}).get("document_id") == doc_id
+            for d in deduped
+            if d.get("metadata", {}).get("document_id") == doc_id
         )
         print(f"  Document {doc_id}: {count} chunks")
 
-    return balanced_docs
+    return deduped
+
+
+def expand_to_parent_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Expand retrieved child chunks to their parent-level context for LLM prompting.
+
+    After retrieval and reranking on small child chunks, this helper replaces
+    each chunk's page_content with the larger parent text stored in metadata.
+    Parent chunks are deduplicated by parent_chunk_id so the same section is
+    not repeated even if multiple child chunks from it were retrieved.
+
+    Chunks without a parent_chunk_id (summaries, entity profiles) are passed
+    through unchanged.
+
+    Args:
+        chunks: Reranked list of child chunk dicts (with page_content + metadata)
+
+    Returns:
+        Deduplicated list of parent-level chunks ready for LLM context assembly
+    """
+    seen_parents: set = set()
+    expanded: List[Dict[str, Any]] = []
+
+    for chunk in chunks:
+        meta = chunk.get("metadata", {})
+        parent_id = meta.get("parent_chunk_id")
+        parent_text = meta.get("parent_text")
+
+        if parent_id and parent_text:
+            if parent_id in seen_parents:
+                continue
+            seen_parents.add(parent_id)
+            parent_chunk = chunk.copy()
+            parent_chunk["page_content"] = parent_text
+            expanded.append(parent_chunk)
+        else:
+            # Summary / entity-profile / legacy chunk — use as-is
+            expanded.append(chunk)
+
+    return expanded
