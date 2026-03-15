@@ -52,6 +52,8 @@ FORMAT_MAP = {
     "text": "@",
 }
 
+MAX_EXCEL_SHEET_NAME_LENGTH = 31
+
 
 def assemble_excel(
     plan: ExcelSkillPlan,
@@ -81,14 +83,19 @@ def assemble_excel(
         _build_summary_sheet(wb, plan, sheet_data)
 
     # Build data sheets
+    sheet_name_map: Dict[str, str] = {}
     for sheet_spec in plan.sheets:
         df = sheet_data.get(sheet_spec.sheet_name, pd.DataFrame())
-        _build_data_sheet(wb, sheet_spec, df)
+        actual_sheet_name = _resolve_sheet_name(
+            sheet_spec.sheet_name, set(wb.sheetnames)
+        )
+        sheet_name_map[sheet_spec.sheet_name] = actual_sheet_name
+        _build_data_sheet(wb, sheet_spec, df, actual_sheet_name)
 
     # Add charts
     if plan.charts:
         for chart_spec in plan.charts:
-            _add_chart(wb, chart_spec, sheet_data)
+            _add_chart(wb, chart_spec, sheet_data, sheet_name_map)
 
     # If workbook has no sheets (edge case), add a placeholder
     if not wb.sheetnames:
@@ -152,11 +159,10 @@ def _build_data_sheet(
     wb: Workbook,
     sheet_spec: SheetSpec,
     df: pd.DataFrame,
+    actual_sheet_name: str,
 ) -> None:
     """Build a single data sheet with formatting and formulas."""
-    # Truncate sheet name to Excel's 31-char limit
-    sheet_name = sheet_spec.sheet_name[:31]
-    ws = wb.create_sheet(sheet_name)
+    ws = wb.create_sheet(actual_sheet_name)
 
     if df.empty:
         ws["A1"] = f"No data available for: {sheet_spec.description}"
@@ -334,12 +340,18 @@ def _add_chart(
     wb: Workbook,
     chart_spec: ChartSpec,
     sheet_data: Dict[str, pd.DataFrame],
+    sheet_name_map: Dict[str, str],
 ) -> None:
     """Add a chart to the specified sheet."""
-    if chart_spec.sheet_name not in wb.sheetnames:
+    worksheet_name = sheet_name_map.get(chart_spec.sheet_name)
+    if not worksheet_name:
+        truncated_name = chart_spec.sheet_name[:MAX_EXCEL_SHEET_NAME_LENGTH]
+        if truncated_name in wb.sheetnames:
+            worksheet_name = truncated_name
+    if not worksheet_name or worksheet_name not in wb.sheetnames:
         return
 
-    ws = wb[chart_spec.sheet_name]
+    ws = wb[worksheet_name]
     df = sheet_data.get(chart_spec.sheet_name, pd.DataFrame())
 
     if df.empty:
@@ -404,3 +416,19 @@ def _clean_value(value):
         if not value or value.lower() == "nan":
             return None
     return value
+
+
+def _resolve_sheet_name(requested_name: str, existing_names: set[str]) -> str:
+    """Normalize and deduplicate worksheet names within Excel's limits."""
+    safe_name = re.sub(r'[\\/*?:\[\]]', "_", requested_name or "").strip() or "Sheet"
+    base_name = safe_name[:MAX_EXCEL_SHEET_NAME_LENGTH]
+    candidate = base_name
+    suffix = 2
+
+    while candidate in existing_names:
+        suffix_text = f"_{suffix}"
+        trimmed_base = base_name[: MAX_EXCEL_SHEET_NAME_LENGTH - len(suffix_text)]
+        candidate = f"{trimmed_base}{suffix_text}"
+        suffix += 1
+
+    return candidate

@@ -11,6 +11,7 @@ Everything else (SQL queries, Excel assembly, formulas, charts) is deterministic
 import json
 import os
 import re
+import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -48,6 +49,22 @@ class ExcelSkillResult:
 
 # NLP batch size — process this many rows per LLM call to stay within context
 NLP_BATCH_SIZE = 100
+
+
+def _sanitize_export_name(name: str) -> str:
+    """Convert the requested workbook name into a filesystem-safe base name."""
+    safe_name = re.sub(r"[^\w\s\-.]", "", name).strip()
+    return re.sub(r"\s+", "_", safe_name) or "export"
+
+
+def _build_unique_export_filename(export_dir: str, plan_file_name: str) -> str:
+    """Create a unique .xlsx filename so saved exports never overwrite each other."""
+    base_name = _sanitize_export_name(plan_file_name)
+
+    while True:
+        candidate = f"{base_name}_{uuid.uuid4().hex[:8]}.xlsx"
+        if not os.path.exists(os.path.join(export_dir, candidate)):
+            return candidate
 
 
 def _ensure_sqlite_loaded(user_id: str, thread_id: str) -> None:
@@ -168,18 +185,16 @@ async def generate_excel(
     export_dir = f"data/{user_id}/threads/{thread_id}/excel_exports"
     os.makedirs(export_dir, exist_ok=True)
 
-    # Sanitize file name: strip unsafe characters, collapse whitespace to underscores
-    safe_name = re.sub(r'[^\w\s\-.]', '', plan.file_name).strip()
-    safe_name = re.sub(r'\s+', '_', safe_name) or "export"
-    output_path = os.path.join(export_dir, f"{safe_name}.xlsx")
+    output_file_name = _build_unique_export_filename(export_dir, plan.file_name)
+    output_path = os.path.join(export_dir, output_file_name)
 
     assemble_excel(plan, sheet_data, output_path)
 
     # ── 6. Return result ──
-    download_url = f"/excel-skill/download/{thread_id}/{safe_name}.xlsx"
+    download_url = f"/excel-skill/download/{thread_id}/{output_file_name}"
 
     return ExcelSkillResult(
-        file_name=f"{safe_name}.xlsx",
+        file_name=output_file_name,
         file_path=output_path,
         download_url=download_url,
         description=plan.description,

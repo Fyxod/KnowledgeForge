@@ -429,6 +429,11 @@ _NLP_KEYWORDS = [
     "subjective", "qualitative analysis",
 ]
 
+
+def _has_successful_sql_result(result: str | None) -> bool:
+    """True only when the SQL tool returned a successful query payload."""
+    return bool(result and result.startswith("**Query executed successfully.**"))
+
 # Minimum row count to trigger NLP chunked extraction
 _NLP_MIN_ROWS = 100
 # Target rows per chunk — keeps each chunk within LLM context
@@ -738,13 +743,14 @@ async def sql_query_node(state: AgentState) -> AgentState:
     if not query:
         print("[sql_query_node] No SQL query provided")
         state.sql_result = "No SQL query was provided."
+        state.sql_last_executed_query = None
         state.messages.append(
             AIMessage(content="SQL query action requested but no query was provided.")
         )
         return state
 
     print(f"[sql_query_node] Executing SQL: {query}")
-    state.sql_last_executed_query = query
+    state.sql_last_executed_query = None
     state.sql_attempts += 1
 
     try:
@@ -859,6 +865,8 @@ async def sql_query_node(state: AgentState) -> AgentState:
                     print(f"[sql_query_node] Batch failed, truncated to {len(result)} chars")
 
         state.sql_result = result
+        if _has_successful_sql_result(result):
+            state.sql_last_executed_query = query
         state.messages.append(HumanMessage(content=f"SQL query executed: {query}"))
         state.messages.append(AIMessage(content=f"SQL Result:\n{result}"))
         print(f"[sql_query_node] Query result length: {len(result)} chars")
@@ -866,6 +874,7 @@ async def sql_query_node(state: AgentState) -> AgentState:
         error_msg = f"SQL execution error: {str(e)}"
         print(f"[sql_query_node] {error_msg}")
         state.sql_result = error_msg
+        state.sql_last_executed_query = None
         state.messages.append(AIMessage(content=error_msg))
 
     return state
@@ -970,8 +979,7 @@ def main_router(state: AgentState) -> str:
         # result already exists, force it to answer.  But allow NEW/different
         # queries through (multi-part questions, drill-downs, corrections).
         if (
-            state.sql_result
-            and "SQL query failed:" not in state.sql_result
+            _has_successful_sql_result(state.sql_result)
             and state.sql_last_executed_query
         ):
             new_q = (state.sql_query or "").strip().lower()

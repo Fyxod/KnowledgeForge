@@ -89,6 +89,24 @@ def sanitize_llm_json(raw: str) -> str:
     return text
 
 
+def _sanitize_fallback_text(raw: str) -> str:
+    """Clean plain-text fallback output without forcing JSON extraction."""
+    if not raw:
+        return raw
+
+    text = raw
+    text = _THINK_TAG_RE.sub("", text)
+    text = _REASONING_TAG_RE.sub("", text)
+
+    fence_match = _CODE_FENCE_RE.search(text)
+    if fence_match:
+        text = fence_match.group(1)
+
+    text = _UNICODE_WHITESPACE_RE.sub(" ", text)
+    text = _ZERO_WIDTH_RE.sub("", text)
+    return text.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
 def _escape_control_chars_in_strings(text: str) -> str:
     """
     Escapes control characters (newlines, tabs) only when they appear
@@ -265,16 +283,12 @@ def parse_llm_json(raw: str, schema: Type[T]) -> T:
         except Exception:
             pass
 
-    # Strategy 3: Emergency fallback — if the LLM returned plain text with no
-    # parseable JSON, wrap it in a minimal valid response.  This prevents full
-    # failure when the model reverts to conversational mode.
-    if hasattr(schema, "model_fields") and "answer" in schema.model_fields:
+    # Strategy 3: Emergency fallback for answer-only schemas.
+    # Do not fabricate tool-routing fields such as `action`, `sql_query`, etc.
+    model_fields = getattr(schema, "model_fields", {})
+    if "answer" in model_fields and "action" not in model_fields:
         try:
-            # Use the raw text as the answer, pick a safe default action
-            fallback_data = {
-                "answer": raw.strip()[:8000],
-                "action": "answer",
-            }
+            fallback_data = {"answer": _sanitize_fallback_text(raw)[:8000]}
             return schema.model_validate(fallback_data)
         except Exception:
             pass
