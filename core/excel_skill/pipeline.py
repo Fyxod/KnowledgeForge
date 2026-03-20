@@ -116,6 +116,7 @@ async def generate_excel(
     user_id: str,
     thread_id: str,
     source_doc_ids: Optional[List[str]] = None,
+    prior_sql_query: Optional[str] = None,
 ) -> ExcelSkillResult:
     """
     Main entry point: generate an Excel file from a user request.
@@ -127,6 +128,11 @@ async def generate_excel(
       4. Process any NLP columns via LLM callback
       5. Assemble the .xlsx file via openpyxl
       6. Return download info
+
+    Args:
+        prior_sql_query: A SQL query already executed in this conversation
+            whose filtered result set the Excel should reflect. Forwarded
+            to the planner as an advisory hint.
     """
     # ── 1. Gather data sources ──
     _ensure_sqlite_loaded(user_id, thread_id)
@@ -138,6 +144,7 @@ async def generate_excel(
         user_request=user_request,
         available_schema=schema,
         available_documents=doc_info if doc_info else None,
+        prior_sql_query=prior_sql_query,
     )
 
     print(

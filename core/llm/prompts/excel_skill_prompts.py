@@ -9,6 +9,7 @@ def excel_plan_prompt(
     user_request: str,
     available_schema: Optional[str],
     available_documents: Optional[List[dict]],
+    prior_sql_query: Optional[str] = None,
 ) -> str:
     """
     Build the prompt for generating an ExcelSkillPlan.
@@ -16,6 +17,14 @@ def excel_plan_prompt(
     The LLM receives the user's natural-language request along with
     available data sources (SQL schema and/or document table info)
     and must produce a structured plan for the Excel workbook.
+
+    Args:
+        prior_sql_query: A SQL query that was already executed in this
+            conversation and produced the filtered result set the user
+            is asking to export. When provided, the planner is instructed
+            to use it as the primary source_query for the main data sheet
+            (advisory — JOINs and column selection are allowed, but the
+            WHERE clause must be preserved).
     """
     schema_section = ""
     if available_schema:
@@ -74,6 +83,21 @@ def excel_plan_prompt(
             "Use `static:N/A` for column sources if no data is available.\n"
         )
 
+    # Advisory section injected when a prior filtered SQL query exists
+    prior_sql_section = ""
+    if prior_sql_query:
+        prior_sql_section = (
+            "\n## Pre-filtered Data Source (IMPORTANT)\n"
+            "A SQL query was already executed in this conversation and returned EXACTLY "
+            "the filtered rows relevant to this Excel export:\n\n"
+            f"```sql\n{prior_sql_query}\n```\n\n"
+            "**Use this as the `source_query` for the primary data sheet.**\n"
+            "- You MAY add column selection, JOINs, or ORDER BY to enrich the result.\n"
+            "- You MUST preserve the WHERE clause — do not broaden or remove the filter.\n"
+            "- Only ignore this hint if the user's request explicitly asks for a "
+            "different or wider dataset.\n"
+        )
+
     return (
         "You are an Excel workbook planner. Given a user's request and available data sources, "
         "create a detailed plan for an Excel (.xlsx) file.\n\n"
@@ -96,6 +120,7 @@ def excel_plan_prompt(
         "9. When the user asks to 'export all data' or 'download the spreadsheet', "
         "create a single sheet with `SELECT * FROM <table>` as the source query.\n"
         "10. For document-extracted tables (PDFs/PPTX), use `source` as `extract:<doc_id>` on columns.\n"
+        f"{prior_sql_section}"
         f"{source_guidance}"
         f"{schema_section}"
         f"{docs_section}"

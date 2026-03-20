@@ -14,6 +14,7 @@ async def generate_excel_plan(
     user_request: str,
     available_schema: Optional[str],
     available_documents: Optional[List[dict]],
+    prior_sql_query: Optional[str] = None,
 ) -> ExcelSkillPlan:
     """
     Call the LLM to generate a structured plan for the Excel workbook.
@@ -22,6 +23,10 @@ async def generate_excel_plan(
         user_request: The user's natural-language request (e.g., "create a pivot of sales by region").
         available_schema: SQLiteManager schema string (table definitions), or None.
         available_documents: List of document metadata dicts, or None.
+        prior_sql_query: A SQL query already executed in this conversation whose
+            filtered result set the Excel should reflect. Passed as an advisory
+            hint to the planner — the WHERE clause must be preserved, but JOINs
+            and column selection are permitted.
 
     Returns:
         ExcelSkillPlan with sheets, columns, charts, etc.
@@ -30,6 +35,7 @@ async def generate_excel_plan(
         user_request=user_request,
         available_schema=available_schema,
         available_documents=available_documents,
+        prior_sql_query=prior_sql_query,
     )
 
     plan = await invoke_llm(

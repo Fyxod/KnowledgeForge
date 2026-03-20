@@ -951,6 +951,7 @@ async def excel_skill_node(state: AgentState) -> AgentState:
             user_request=request_text,
             user_id=state.user_id,
             thread_id=state.thread_id,
+            prior_sql_query=state.sql_last_executed_query or None,
         )
 
         state.excel_result = result.download_url
