@@ -1572,7 +1572,14 @@ async def extract_document(
             use_vlm = settings.USE_VISION_MODEL
             if not use_vlm:
                 is_landscape = page.rect.width > page.rect.height
-                if len(page_text.strip()) < 100 and is_landscape:
+                _text_len = len(page_text.strip())
+                # Quick metadata check for embedded raster images (no pixel extraction)
+                _has_embedded_images = bool(page.get_images(full=True))
+                if (
+                    _text_len < 100                                    # essentially image-only page
+                    or is_landscape                                    # slide/diagram orientation
+                    or (_has_embedded_images and _text_len < 500)      # figure-heavy page (sparse text + images)
+                ):
                     use_vlm = True
 
             if use_vlm:
@@ -1732,7 +1739,12 @@ async def extract_document(
                         continue
                         
                     placeholder = f"{{PENDING_{diagram_name}}}"
-                    page_text += f"\n\n[Diagram Detected]\n{placeholder}\n[/Diagram Detected]"
+                    # Stitch surrounding caption context into the diagram block so
+                    # caption text ("Figure 2: ...") and diagram content always land
+                    # in the same chunk, enabling retrieval by figure number.
+                    _ctx = page_text.strip()[-300:] if page_text.strip() else ""
+                    _ctx_block = f"[Caption context: ...{_ctx}]\n" if _ctx else ""
+                    page_text += f"\n\n[Diagram Detected]\n{_ctx_block}{placeholder}\n[/Diagram Detected]"
                     image_names.append(diagram_name)
 
                     # Import vlm_parse_slide dynamically to avoid circular import if necessary
