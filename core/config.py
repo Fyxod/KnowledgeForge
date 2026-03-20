@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     VISION_URL: str
     MAIN_MODEL: str
     REMOTE_GPU: bool = False
-    USE_VISION_MODEL: bool = False  # Set to True in .env to force VLM for all PDF pages
+    USE_VISION_MODEL: bool = True  # VLM runs on every page/slide (PDF, DOCX, PPTX). Set False in .env to disable.
     LOCAL_BASE_URL: str = "http://localhost"
 
     class Config:

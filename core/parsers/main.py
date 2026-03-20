@@ -1569,20 +1569,9 @@ async def extract_document(
                 page_text += "\n\n" + "\n\n".join(table_blocks)
 
             # --- VLM candidate detection (Phase 1: collect, don't process yet) ---
-            use_vlm = settings.USE_VISION_MODEL
-            if not use_vlm:
-                is_landscape = page.rect.width > page.rect.height
-                _text_len = len(page_text.strip())
-                # Quick metadata check for embedded raster images (no pixel extraction)
-                _has_embedded_images = bool(page.get_images(full=True))
-                if (
-                    _text_len < 100                                    # essentially image-only page
-                    or is_landscape                                    # slide/diagram orientation
-                    or (_has_embedded_images and _text_len < 500)      # figure-heavy page (sparse text + images)
-                ):
-                    use_vlm = True
-
-            if use_vlm:
+            # VLM runs on every page when USE_VISION_MODEL=True (the default).
+            # Set USE_VISION_MODEL=False in .env to disable (e.g. CPU-only environments).
+            if settings.USE_VISION_MODEL:
                 try:
                     def _render_pdf(p): return p.get_pixmap(dpi=150).tobytes("png")
                     img_bytes = await asyncio.to_thread(_render_pdf, page)
@@ -1788,39 +1777,22 @@ async def extract_document(
                 max_concurrent=3,
             )
 
-            # Merge VLM results back into pages
+            # Merge VLM results back into pages (always additive)
+            # PyMuPDF text layer + VLM visual layer + Mermaid diagrams + GLM-OCR = maximum coverage.
+            # Never replace: content-rich pages would lose good PyMuPDF text extraction.
             for candidate, vlm_text in zip(vlm_candidates, vlm_results):
                 if not vlm_text:
                     continue
 
                 page_idx = candidate["page_index"]
-                original_text = candidate["original_text"]
-
-                # Force mode: always use VLM content
-                # Auto-detect mode: only use if VLM extracted more
-                should_use = False
-                if settings.USE_VISION_MODEL:
-                    should_use = True
-                elif len(vlm_text) > len(original_text):
-                    should_use = True
-
-                if should_use:
-                    enhanced_text = (
-                        f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
-                    )
-                    if "[Docling Extracted Text]" in pages[page_idx].text:
-                        pages[page_idx].text += f"\n\n{enhanced_text}"
-                        combined_texts[page_idx] += f"\n\n{enhanced_text}"
-                    else:
-                        pages[page_idx].text = enhanced_text
-                        combined_texts[page_idx] = enhanced_text
-                    print(
-                        f"[PDF] VLM content used for page {candidate['page_number']} ({len(vlm_text)} chars)"
-                    )
-                else:
-                    print(
-                        f"[PDF] VLM returned less than PyMuPDF for page {candidate['page_number']}, keeping original"
-                    )
+                enhanced_text = (
+                    f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
+                )
+                pages[page_idx].text += f"\n\n{enhanced_text}"
+                combined_texts[page_idx] += f"\n\n{enhanced_text}"
+                print(
+                    f"[PDF] VLM content appended to page {candidate['page_number']} ({len(vlm_text)} chars)"
+                )
 
         # --- Phase 3: Concurrent GLM-OCR processing for candidate pages ---
         if glm_ocr_candidates:
