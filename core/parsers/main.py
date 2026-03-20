@@ -1047,6 +1047,17 @@ async def extract_document(
                             traceback.print_exc()
                         finally:
                             if pdf_path and os.path.exists(pdf_path):
+                                # Persist intermediate PDF for query-time VLM page rendering
+                                if SWITCHES.get("USE_VLM_FOR_ANSWER", False):
+                                    try:
+                                        import shutil
+                                        persist_dir = os.path.join("data", user_id, "threads", thread_id, "parsed")
+                                        os.makedirs(persist_dir, exist_ok=True)
+                                        persist_path = os.path.join(persist_dir, f"{doc_id}_slides.pdf")
+                                        shutil.copy2(pdf_path, persist_path)
+                                        print(f"[PPT] Persisted intermediate PDF → {persist_path}")
+                                    except Exception as e:
+                                        print(f"[PPT] Failed to persist intermediate PDF: {e}")
                                 try:
                                     os.remove(pdf_path)
                                 except:
@@ -1409,6 +1420,17 @@ async def extract_document(
                             traceback.print_exc()
                         finally:
                             if pdf_path and os.path.exists(pdf_path):
+                                # Persist intermediate PDF for query-time VLM page rendering
+                                if SWITCHES.get("USE_VLM_FOR_ANSWER", False):
+                                    try:
+                                        import shutil
+                                        persist_dir = os.path.join("data", user_id, "threads", thread_id, "parsed")
+                                        os.makedirs(persist_dir, exist_ok=True)
+                                        persist_path = os.path.join(persist_dir, f"{doc_id}_pages.pdf")
+                                        shutil.copy2(pdf_path, persist_path)
+                                        print(f"[DOCX] Persisted intermediate PDF → {persist_path}")
+                                    except Exception as e:
+                                        print(f"[DOCX] Failed to persist intermediate PDF: {e}")
                                 try:
                                     os.remove(pdf_path)
                                 except:

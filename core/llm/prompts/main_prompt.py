@@ -374,6 +374,7 @@ def main_prompt(
     sql_nlp_summary: Optional[str] = None,
     sql_batched_answer: Optional[str] = None,
     doc_batched_answer: Optional[str] = None,
+    vlm_visual_answer: Optional[str] = None,
 ):
     contents = []
 
@@ -455,6 +456,30 @@ def main_prompt(
                     "- **VALIDATION RULE**: If you choose `action='sql_query'`, you **MUST** provide the `sql_query` field with the valid SQL statement. Failing to do so will cause a system error.\n"
                     "- Even if you see some spreadsheet data in the document chunks, ALWAYS use `sql_query` instead. "
                     "The document chunks are only text previews and do NOT contain the full dataset.\n"
+                ),
+            }
+        )
+
+    # ── Visual Reference Answer (query-time VLM for page/slide/figure queries) ──
+    if vlm_visual_answer:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "### Visual Reference Answer (direct VLM analysis of the referenced page/figure)\n"
+                    f"{vlm_visual_answer}\n\n"
+                    "**INSTRUCTIONS:**\n"
+                    "The **Visual Reference Answer** above was produced by directly analyzing the image "
+                    "of the referenced page, slide, or figure from the source document. "
+                    "It is the primary source for answering this question.\n\n"
+                    "You MUST:\n"
+                    '1. Set `action` to `"answer"`.\n'
+                    "2. Base your answer primarily on the **Visual Reference Answer**.\n"
+                    "3. Supplement with relevant text from Document Chunks below if helpful.\n"
+                    "4. Format clearly using Markdown.\n\n"
+                    "You MUST NOT:\n"
+                    "- Contradict the Visual Reference Answer without clear evidence.\n"
+                    "- Return a blank or empty answer.\n"
                 ),
             }
         )

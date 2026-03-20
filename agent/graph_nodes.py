@@ -209,6 +209,29 @@ async def retriever(state: AgentState) -> AgentState:
     except Exception as e:
         print(f"[Triples] Error querying triples: {e}")
 
+    # ── Query-time VLM for visual reference queries ──
+    # Detects explicit ("slide 3", "figure 2") and implicit ("the flowchart") references,
+    # renders the relevant page from the source document, and answers via VLM.
+    if SWITCHES.get("USE_VLM_FOR_ANSWER", False) and state.chunks:
+        try:
+            _query_for_vlm = state.query or state.resolved_query or state.original_query
+            is_visual, explicit_page, is_last, is_implicit = _detect_visual_reference(_query_for_vlm)
+            if is_visual:
+                print(
+                    f"[VLM-Answer] Visual reference detected "
+                    f"(explicit_page={explicit_page}, is_last={is_last}, is_implicit={is_implicit})"
+                )
+                vlm_ans = await _resolve_visual_page_vlm(
+                    state=state,
+                    explicit_page_num=explicit_page,
+                    is_last=is_last,
+                    is_implicit=is_implicit,
+                )
+                if vlm_ans:
+                    state.vlm_visual_answer = vlm_ans
+        except Exception as e:
+            print(f"[VLM-Answer] Visual reference VLM failed: {e}")
+
     # ── Lost in the Middle mitigation ──
     # Reorder so highest-scored chunks are at positions 0 and -1,
     # and lowest-scored chunks sit in the middle — combats positional
@@ -702,6 +725,147 @@ async def _batch_sql_answer(
     except Exception as e:
         print(f"[SQL Batch] Combination failed: {e}, returning concatenated")
         return "\n\n---\n\n".join(valid_answers)
+
+
+import re as _re
+
+# Patterns for explicit visual references: "page 3", "slide 2", "figure 4", "fig. 5", etc.
+_EXPLICIT_VISUAL_RE = _re.compile(
+    r'\b(?:page|slide|figure|fig\.?|chart|diagram|image|photo|illustration|table)\s+(\d+)\b'
+    r'|\b(\d+)(?:st|nd|rd|th)?\s*(?:page|slide|figure|chart|diagram|image)\b'
+    r'|\b(last|final)\s+(?:page|slide|figure|chart|diagram|image)\b'
+    r'|\b(first)\s+(?:page|slide|figure|chart|diagram|image)\b',
+    _re.IGNORECASE,
+)
+
+# Words that indicate a visual/spatial query even without an explicit number
+_IMPLICIT_VISUAL_RE = _re.compile(
+    r'\b(?:flowchart|org\s*chart|organizational\s*chart|below\s+the|above\s+the'
+    r'|in\s+the\s+(?:image|figure|diagram|chart)|the\s+(?:diagram|flowchart|chart|figure))\b',
+    _re.IGNORECASE,
+)
+
+
+def _detect_visual_reference(query: str):
+    """
+    Detect whether a query references a specific visual element (figure, slide, page).
+
+    Returns:
+        (is_visual: bool, explicit_page_num: int|None, is_last: bool, is_implicit: bool)
+    """
+    m = _EXPLICIT_VISUAL_RE.search(query)
+    if m:
+        num_str = m.group(1) or m.group(2)
+        if num_str:
+            return True, int(num_str), False, False
+        # "last" or "final"
+        if m.group(3):
+            return True, None, True, False
+        # "first"
+        if m.group(4):
+            return True, 1, False, False
+
+    if _IMPLICIT_VISUAL_RE.search(query):
+        return True, None, False, True
+
+    return False, None, False, False
+
+
+async def _resolve_visual_page_vlm(
+    state: AgentState,
+    explicit_page_num,
+    is_last: bool,
+    is_implicit: bool,
+) -> str | None:
+    """
+    Render the referenced page from the source document and call VLM with the user's question.
+
+    Resolution order:
+      1. Explicit page number → render that page from the top-chunk's source file
+      2. "last" → find highest page_no among retrieved chunks for the top document
+      3. Implicit → use top-ranked chunk's page_no
+
+    Returns VLM answer string, or None on failure.
+    """
+    import fitz  # PyMuPDF
+
+    from core.parsers.vlm import vlm_parse_slide
+    from core.constants import PORT1
+
+    if not state.chunks:
+        return None
+
+    # Use top-ranked chunk to identify source file + document_id
+    top_chunk = state.chunks[0]
+    file_name = top_chunk.get("file_name", "")
+    doc_id = top_chunk.get("document_id", "")
+
+    if not file_name or not doc_id:
+        return None
+
+    # Determine page number
+    if explicit_page_num is not None:
+        target_page = explicit_page_num
+    elif is_last:
+        # Highest page_no among chunks for the same document
+        doc_page_nos = [
+            c.get("page_no", 1)
+            for c in state.chunks
+            if c.get("document_id") == doc_id
+        ]
+        target_page = max(doc_page_nos) if doc_page_nos else 1
+    else:
+        # Implicit: use top chunk's page_no
+        target_page = top_chunk.get("page_no", 1)
+
+    # Locate source PDF
+    ext = os.path.splitext(file_name)[1].lower()
+    base_data = os.path.join("data", state.user_id, "threads", state.thread_id)
+
+    if ext == ".pdf":
+        source_pdf = os.path.join(base_data, "uploads", file_name)
+    elif ext in (".pptx", ".ppt"):
+        source_pdf = os.path.join(base_data, "parsed", f"{doc_id}_slides.pdf")
+    elif ext in (".docx", ".doc"):
+        source_pdf = os.path.join(base_data, "parsed", f"{doc_id}_pages.pdf")
+    else:
+        print(f"[VLM-Answer] Unsupported file type for visual rendering: {ext}")
+        return None
+
+    if not os.path.exists(source_pdf):
+        print(f"[VLM-Answer] Source PDF not found: {source_pdf}")
+        return None
+
+    # Render the target page
+    try:
+        pdf_doc = fitz.open(source_pdf)
+        page_idx = target_page - 1  # 0-indexed
+        if page_idx < 0 or page_idx >= len(pdf_doc):
+            page_idx = max(0, min(page_idx, len(pdf_doc) - 1))
+        page = pdf_doc.load_page(page_idx)
+        img_bytes = page.get_pixmap(dpi=150).tobytes("png")
+        pdf_doc.close()
+    except Exception as e:
+        print(f"[VLM-Answer] Page render failed for {source_pdf} page {target_page}: {e}")
+        return None
+
+    # Call VLM with the user's exact question as the prompt
+    query = state.query or state.resolved_query or state.original_query
+    vlm_prompt = (
+        f"You are analyzing page/slide {target_page} of a document. "
+        f"Answer the following question based on what you see in this image:\n\n"
+        f"{query}\n\n"
+        "Be specific and detailed. If the image contains a diagram, flowchart, or chart, "
+        "describe its structure, labels, and key information relevant to the question."
+    )
+    print(f"[VLM-Answer] Querying VLM for '{file_name}' page {target_page}...")
+
+    answer = await vlm_parse_slide(img_bytes, port=PORT1, custom_prompt=vlm_prompt)
+    if answer:
+        print(f"[VLM-Answer] VLM answered ({len(answer)} chars)")
+        return answer
+
+    return None
 
 
 def _calculate_chunk_token_budget(state: AgentState) -> int:

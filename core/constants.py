@@ -18,6 +18,7 @@ SWITCHES = {
     "GLM_OCR": True,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
     "EXCEL_SKILL": True,  # Excel creation/download skill — generates .xlsx from chat or sidebar
     "DOC_BATCH_REDUCER": True,  # MapReduce batching for multi-doc retrieval when token budget overflows
+    "USE_VLM_FOR_ANSWER": True,  # Query-time VLM: render referenced page/slide/figure and answer visually
     "DISABLE_THINKING": True,  # Disable LLM thinking mode (think=false) for faster inference
 }
 

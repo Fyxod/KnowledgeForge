@@ -87,14 +87,21 @@ def _encode_image_base64(image_input, max_dim: int = VLM_MAX_IMAGE_DIM) -> str:
     return base64.b64encode(resized).decode("utf-8")
 
 
-async def vlm_parse_slide(image_input, port: int = PORT1, prompt_type: str = "default") -> str:
+async def vlm_parse_slide(
+    image_input,
+    port: int = PORT1,
+    prompt_type: str = "default",
+    custom_prompt: str | None = None,
+) -> str:
     """
     Send a single image to Ollama VLM for structured text extraction.
 
     Args:
         image_input: File path (str) or raw PNG bytes.
         port: Ollama API port (default: PORT1 from constants).
-        prompt_type: "default", "mermaid", or "retry"
+        prompt_type: "default", "mermaid", or "retry". Ignored when custom_prompt is set.
+        custom_prompt: If provided, overrides prompt_type and sends this exact prompt.
+            Use for query-time VLM where the user's question is the prompt.
 
     Returns:
         Extracted Markdown string, or "" on failure.
@@ -104,12 +111,15 @@ async def vlm_parse_slide(image_input, port: int = PORT1, prompt_type: str = "de
         image_b64 = _encode_image_base64(image_input)
 
         url = f"{LOCAL_BASE_URL}:{port}/api/generate"
-        
-        selected_prompt = VLM_EXTRACTION_PROMPT
-        if prompt_type == "mermaid":
+
+        if custom_prompt:
+            selected_prompt = custom_prompt
+        elif prompt_type == "mermaid":
             selected_prompt = VLM_MERMAID_PROMPT
         elif prompt_type == "retry":
             selected_prompt = VLM_RETRY_PROMPT
+        else:
+            selected_prompt = VLM_EXTRACTION_PROMPT
 
         payload = {
             "model": VLM_MODEL,
