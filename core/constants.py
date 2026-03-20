@@ -17,6 +17,7 @@ SWITCHES = {
     "DOCUMENT_CREATOR": True,  # Interactive document generation (PPTX/DOCX/PDF)
     "GLM_OCR": True,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
     "EXCEL_SKILL": True,  # Excel creation/download skill — generates .xlsx from chat or sidebar
+    "DOC_BATCH_REDUCER": True,  # MapReduce batching for multi-doc retrieval when token budget overflows
     "DISABLE_THINKING": True,  # Disable LLM thinking mode (think=false) for faster inference
 }
 

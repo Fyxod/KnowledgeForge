@@ -373,6 +373,7 @@ def main_prompt(
     triple_context: Optional[str] = None,
     sql_nlp_summary: Optional[str] = None,
     sql_batched_answer: Optional[str] = None,
+    doc_batched_answer: Optional[str] = None,
 ):
     contents = []
 
@@ -454,6 +455,29 @@ def main_prompt(
                     "- **VALIDATION RULE**: If you choose `action='sql_query'`, you **MUST** provide the `sql_query` field with the valid SQL statement. Failing to do so will cause a system error.\n"
                     "- Even if you see some spreadsheet data in the document chunks, ALWAYS use `sql_query` instead. "
                     "The document chunks are only text previews and do NOT contain the full dataset.\n"
+                ),
+            }
+        )
+
+    # ── Pre-analyzed document batch answer (MapReduce result) ──
+    if doc_batched_answer:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "### Pre-Analyzed Document Context (complete multi-document analysis)\n"
+                    f"{doc_batched_answer}\n\n"
+                    "**INSTRUCTIONS:**\n"
+                    "The **Pre-Analyzed Document Context** above was generated from the COMPLETE retrieved "
+                    "document set (all chunks processed in batches). A raw sample follows for reference.\n\n"
+                    "You MUST:\n"
+                    '1. Set `action` to `"answer"`.\n'
+                    "2. Write your answer based primarily on the **Pre-Analyzed Document Context**.\n"
+                    "3. Enhance and format it using Markdown (tables, headings, bullet points).\n"
+                    "4. Use the raw document chunks below only to quote specific excerpts if helpful.\n\n"
+                    "You MUST NOT:\n"
+                    "- Ignore the pre-analyzed context in favour of only the raw chunks.\n"
+                    "- Return a blank or empty answer.\n"
                 ),
             }
         )

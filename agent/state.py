@@ -42,6 +42,7 @@ class AgentState(BaseModel):
     sql_last_executed_query: Optional[str] = None  # tracks last executed query for loop detection
     sql_nlp_summary: Optional[str] = None  # pre-extracted NLP theme summary from chunked analysis
     sql_batched_answer: Optional[str] = None  # combined answer from batched SQL processing
+    doc_batched_answer: Optional[str] = None  # combined answer from batched multi-doc MapReduce
     requires_full_data: Optional[bool] = None  # LLM-classified: query needs full-data NLP analysis
     sql_attempts: int = 0
     has_spreadsheet_data: bool = False

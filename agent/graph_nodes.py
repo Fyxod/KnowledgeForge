@@ -209,6 +209,55 @@ async def retriever(state: AgentState) -> AgentState:
     except Exception as e:
         print(f"[Triples] Error querying triples: {e}")
 
+    # ── Lost in the Middle mitigation ──
+    # Reorder so highest-scored chunks are at positions 0 and -1,
+    # and lowest-scored chunks sit in the middle — combats positional
+    # attention bias shown by transformer models on long contexts.
+    if len(state.chunks) > 2:
+        sorted_by_score = sorted(
+            state.chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True
+        )
+        reordered: list = []
+        # Place chunks at positions: even → front, odd → back
+        # e.g. rank 0→pos 0, rank 1→pos -1, rank 2→pos 1, rank 3→pos -2, ...
+        front: list = []
+        back: list = []
+        for i, chunk in enumerate(sorted_by_score):
+            if i % 2 == 0:
+                front.append(chunk)
+            else:
+                back.append(chunk)
+        reordered = front + list(reversed(back))
+        state.chunks = reordered
+        print(f"[LostInMiddle] Reordered {len(state.chunks)} chunks (best at positions 0 and -1)")
+
+    # ── MapReduce: batch over document chunks if context budget overflows ──
+    if SWITCHES.get("DOC_BATCH_REDUCER", False) and state.chunks:
+        from core.constants import MAIN_MODEL
+        from core.utils.count_tokens import count_tokens
+
+        # Measure total token cost of all chunks
+        all_chunk_text = "\n".join(c.get("content", "") for c in state.chunks)
+        chunk_tokens = count_tokens(all_chunk_text, MAIN_MODEL)
+        budget_tokens = _calculate_chunk_token_budget(state)
+
+        if chunk_tokens > budget_tokens:
+            print(
+                f"[Doc Batch] Chunk tokens ({chunk_tokens}) exceed budget ({budget_tokens}) — "
+                f"triggering MapReduce over {len(state.chunks)} chunks"
+            )
+            try:
+                batched = await _batch_doc_answer(
+                    chunks=state.chunks,
+                    user_question=query,
+                    budget_tokens=budget_tokens,
+                )
+                if batched:
+                    state.doc_batched_answer = batched
+                    print(f"[Doc Batch] MapReduce complete — pre-analyzed answer stored")
+            except Exception as e:
+                print(f"[Doc Batch] MapReduce failed: {e}, falling back to direct chunks")
+
     return state
 
 
@@ -652,6 +701,169 @@ async def _batch_sql_answer(
         return combined.answer
     except Exception as e:
         print(f"[SQL Batch] Combination failed: {e}, returning concatenated")
+        return "\n\n---\n\n".join(valid_answers)
+
+
+def _calculate_chunk_token_budget(state: AgentState) -> int:
+    """Calculate how many tokens are available for document chunk context.
+
+    Builds the main prompt without chunks or doc_batched_answer, counts
+    its tokens, and returns the remaining budget from the 128K context window.
+    """
+    from core.constants import MAIN_MODEL, MODEL_CONTEXT_TOKENS, MODEL_OUTPUT_RESERVE
+    from core.utils.count_tokens import count_tokens
+
+    # Temporarily clear chunk-related fields to measure prompt overhead
+    saved_chunks = state.chunks
+    saved_doc_batched = state.doc_batched_answer
+    state.chunks = []
+    state.doc_batched_answer = None
+
+    try:
+        prompt_contents = build_main_prompt(state)
+        prompt_text = "\n".join(
+            msg["parts"]
+            for msg in prompt_contents
+            if isinstance(msg.get("parts"), str)
+        )
+        overhead_tokens = count_tokens(prompt_text, MAIN_MODEL)
+    except Exception:
+        overhead_tokens = 15_000
+    finally:
+        state.chunks = saved_chunks
+        state.doc_batched_answer = saved_doc_batched
+
+    safety_margin = 2000
+    available = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - safety_margin - overhead_tokens
+    return max(0, available)
+
+
+async def _batch_doc_answer(
+    chunks: list,
+    user_question: str,
+    budget_tokens: int,
+) -> str | None:
+    """
+    MapReduce over document chunks that exceed context budget.
+
+    Groups chunks by document, sorts groups by best rerank score (descending),
+    greedy bin-packs document groups into batches (each fits within budget_tokens),
+    Maps in parallel (one LLM call per batch), filters [NO RELEVANT INFO] responses,
+    and Reduces via combination_prompt.
+    """
+    from core.constants import GPU_QUERY_LLM, GPU_COMBINATION_LLM, MAIN_MODEL
+    from core.llm.output_schemas.main_outputs import CombinationLLMOutput
+    from core.llm.prompts.combination_prompt import combination_prompt
+    from core.llm.prompts.doc_batch_prompt import doc_batch_prompt
+    from core.utils.count_tokens import count_tokens
+
+    if not chunks:
+        return None
+
+    # ── 1. Group chunks by document_id ──
+    doc_groups: dict[str, list] = {}
+    for chunk in chunks:
+        doc_id = chunk.get("document_id", "unknown")
+        doc_groups.setdefault(doc_id, []).append(chunk)
+
+    # ── 2. Sort groups by best rerank_score descending ──
+    def best_score(group):
+        return max(c.get("rerank_score", 0.0) for c in group)
+
+    sorted_groups = sorted(doc_groups.values(), key=best_score, reverse=True)
+
+    # ── 3. Format a group into text and measure tokens ──
+    MAP_PROMPT_OVERHEAD = 3000  # prompt template overhead per batch
+
+    def format_group(group: list) -> str:
+        parts = []
+        for c in group:
+            content = c.get("content", "").strip()
+            parts.append(content)
+        return "\n\n---\n\n".join(parts)
+
+    # ── 4. Greedy bin-packing: fit as many document groups as possible per batch ──
+    tokens_per_batch = budget_tokens - MAP_PROMPT_OVERHEAD
+    batches: list[list[str]] = []  # each batch = list of group text strings
+    current_batch: list[str] = []
+    current_tokens = 0
+
+    for group in sorted_groups:
+        group_text = format_group(group)
+        group_tokens = count_tokens(group_text, MAIN_MODEL)
+
+        if current_batch and (current_tokens + group_tokens > tokens_per_batch):
+            # Flush current batch, start a new one
+            batches.append(current_batch)
+            current_batch = [group_text]
+            current_tokens = group_tokens
+        else:
+            current_batch.append(group_text)
+            current_tokens += group_tokens
+
+    if current_batch:
+        batches.append(current_batch)
+
+    total = len(batches)
+    total_chunks = sum(len(g) for g in doc_groups.values())
+    print(
+        f"[Doc Batch] {total_chunks} chunks across {len(doc_groups)} docs → "
+        f"{total} batch(es) (budget: {tokens_per_batch} tokens/batch)"
+    )
+
+    # ── 5. Map: process each batch in parallel ──
+    async def process_batch(batch_texts: list[str], batch_num: int) -> str | None:
+        combined_text = "\n\n===\n\n".join(batch_texts)
+        prompt = doc_batch_prompt(
+            chunks=combined_text,
+            user_question=user_question,
+            batch_number=batch_num,
+            total_batches=total,
+        )
+        try:
+            result = await invoke_llm(
+                gpu_model=GPU_QUERY_LLM.model,
+                response_schema=CombinationLLMOutput,
+                contents=prompt,
+                port=GPU_QUERY_LLM.port,
+                remove_thinking=True,
+            )
+            answer = result.answer.strip()
+            if "[NO RELEVANT INFO]" in answer.upper():
+                return None
+            return answer
+        except Exception as e:
+            print(f"[Doc Batch] Batch {batch_num} failed: {e}")
+            return None
+
+    partial_answers = await asyncio.gather(
+        *(process_batch(batch, i + 1) for i, batch in enumerate(batches))
+    )
+
+    valid_answers = [a for a in partial_answers if a]
+    if not valid_answers:
+        return None
+
+    if len(valid_answers) == 1:
+        return valid_answers[0]
+
+    # ── 6. Reduce: combine partial answers ──
+    combo_prompt = combination_prompt(
+        query=user_question,
+        sub_answers=valid_answers,
+    )
+    try:
+        combined = await invoke_llm(
+            gpu_model=GPU_COMBINATION_LLM.model,
+            response_schema=CombinationLLMOutput,
+            contents=combo_prompt,
+            port=GPU_COMBINATION_LLM.port,
+            remove_thinking=True,
+        )
+        print(f"[Doc Batch] Combined {len(valid_answers)} partial answers")
+        return combined.answer
+    except Exception as e:
+        print(f"[Doc Batch] Combination failed: {e}, returning concatenated")
         return "\n\n---\n\n".join(valid_answers)
 
 
