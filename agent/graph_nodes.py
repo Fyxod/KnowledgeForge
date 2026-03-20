@@ -7,6 +7,7 @@ import aiofiles
 from langchain_core.messages import AIMessage, HumanMessage
 
 from agent.graph_helpers import (
+    build_grounded_inference_prompt,
     build_main_prompt,
     build_self_knowledge_prompt,
     parallel_search,
@@ -32,6 +33,7 @@ from core.llm.outputs import (
     SelfKnowledgeLLMOutput,
 )
 from core.llm.prompts.evaluator_prompt import evaluator_prompt
+from core.llm.prompts.grounded_inference_prompt import GROUNDED_INFERENCE_PREFIX
 from core.llm.prompts.hyde_prompt import hyde_prompt
 
 os.makedirs("DEBUG", exist_ok=True)
@@ -317,6 +319,42 @@ async def failure(state: AgentState) -> AgentState:
 
 
 async def self_knowledge(state: AgentState) -> AgentState:
+    # ── Grounded inference path ──
+    # Triggered when: INTERNAL mode + self-knowledge off + chunks were retrieved.
+    # The LLM couldn't answer verbatim from the chunks (action='failure'), but the
+    # retrieved context is a valid foundation for analytical / inferential reasoning.
+    if state.mode == INTERNAL and not state.use_self_knowledge and state.chunks:
+        print(
+            f"[grounded-inference] Falling back to grounded inference "
+            f"({len(state.chunks)} chunks available)."
+        )
+        prompt = build_grounded_inference_prompt(state)
+        try:
+            with open("DEBUG/grounded_inference_prompt.json", "w") as f:
+                json.dump(prompt, f, indent=2)
+        except Exception:
+            pass
+
+        try:
+            result = await invoke_llm(
+                response_schema=SelfKnowledgeLLMOutput,
+                contents=prompt,
+                gpu_model=state.llm.model,
+                port=state.llm.port,
+            )
+            result = SelfKnowledgeLLMOutput.model_validate(result)
+            state.answer = GROUNDED_INFERENCE_PREFIX + result.answer
+            state.messages.append(AIMessage(content=state.answer))
+        except Exception as e:
+            print(f"[grounded-inference] LLM call failed: {e}")
+            state.answer = (
+                "I was unable to generate an analytical response for this query. "
+                "Please try rephrasing or asking a different question."
+            )
+        return state
+
+    # ── External mode or self-knowledge explicitly off with no context ──
+    # Return whatever the generate node already produced (usually a refusal).
     if state.mode == EXTERNAL or not state.use_self_knowledge:
         if not state.answer or not state.answer.strip():
             state.answer = (
@@ -325,6 +363,7 @@ async def self_knowledge(state: AgentState) -> AgentState:
             )
         return state
 
+    # ── Full self-knowledge path (use_self_knowledge=True, INTERNAL mode) ──
     print("Using self-knowledge to answer the question.")
     prompt = build_self_knowledge_prompt(state)
     with open(f"DEBUG/self_knowledge_prompt.json", "w") as f:

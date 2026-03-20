@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict, List
 
 from agent.state import AgentState
+from core.llm.prompts.grounded_inference_prompt import grounded_inference_prompt
 from core.llm.prompts.main_prompt import main_prompt
 from core.llm.prompts.self_knowledge_prompt import self_knowledge_prompt
 
@@ -62,6 +63,21 @@ def build_self_knowledge_prompt(
 
     return self_knowledge_prompt(
         messages=[],
+        question=state.query or state.resolved_query or state.original_query,
+        thread_instructions=state.thread_instructions or [],
+    )
+
+
+def build_grounded_inference_prompt(state: AgentState):
+    """
+    Builds the grounded inference prompt.
+
+    Used when the LLM could not answer directly from the retrieved chunks
+    (action='failure') but chunks ARE available as a reasoning foundation.
+    Allows the LLM to reason analytically on top of the document content.
+    """
+    return grounded_inference_prompt(
+        chunks=state.chunks,
         question=state.query or state.resolved_query or state.original_query,
         thread_instructions=state.thread_instructions or [],
     )
