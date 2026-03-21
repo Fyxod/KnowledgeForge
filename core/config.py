@@ -26,11 +26,11 @@ class Settings(BaseSettings):
     # ── vLLM endpoints ──────────────────────────────────────────────────────────
     VLLM_MAIN_URL: str = "http://localhost:8000/v1"        # vLLM main LLM OpenAI-compat endpoint
     VLLM_VLM_URL: str = "http://localhost:8001/v1"          # vLLM VLM OpenAI-compat endpoint
-    VLLM_MAIN_MODEL: str = ""                               # HuggingFace model ID or local path
+    VLLM_MAIN_MODEL: str = "openai/gpt-oss-20b"             # Use "openai/gpt-oss-120b" for 120B variant
     VLLM_VLM_MODEL: str = "Qwen/Qwen2-VL-7B-Instruct-AWQ"  # Multimodal model for slide/PDF parsing
     VLLM_DRAFT_MODEL: str = ""                              # Speculative decoding draft model, empty = disabled
-    VLLM_GPU_MEMORY_UTILIZATION: float = 0.55               # For main LLM instance (leaves room for VLM + embeddings)
-    VLLM_VLM_GPU_MEMORY_UTILIZATION: float = 0.20           # For VLM instance
+    VLLM_GPU_MEMORY_UTILIZATION: float = 0.85               # gpt-oss-20b is ~40GB BF16 on 48GB A6000
+    VLLM_VLM_GPU_MEMORY_UTILIZATION: float = 0.13           # Remaining VRAM slice for VLM (~6GB)
     VLLM_MAX_MODEL_LEN: int = 131072                        # Context window for main LLM
 
     class Config:
