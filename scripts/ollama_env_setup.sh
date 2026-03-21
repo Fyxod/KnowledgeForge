@@ -3,7 +3,13 @@
 # Ollama Performance Environment Variables — Dual Instance Setup (Ubuntu)
 # ==============================================================================
 #
-# This project runs TWO Ollama instances:
+# NOTE: As of the vLLM migration, Ollama is now only used as a FALLBACK for
+# models that have not been migrated to vLLM, or when REMOTE_GPU=True. The
+# primary inference path (local_llm.py, vlm.py) now targets vLLM instances
+# started by scripts/start_vllm.sh. Ollama can be kept running for fallback
+# purposes but is no longer the main serving backend.
+#
+# This project previously ran TWO Ollama instances:
 #   - Instance 1: Port 11434 (default)
 #   - Instance 2: Port 11435
 #

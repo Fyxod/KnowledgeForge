@@ -1,11 +1,13 @@
 """
 VLM (Visual Language Model) Parser Module
 
-Uses Ollama's vision-capable models (e.g., qwen3-vl:8b) to extract
-structured text from presentation slides, complex PDF pages, and
-other visually-rich documents that standard OCR misses.
+Uses a vLLM-hosted multimodal model (e.g., Qwen/Qwen2-VL-7B-Instruct-AWQ) via its
+OpenAI-compatible API to extract structured text from presentation slides, complex
+PDF pages, and other visually-rich documents that standard OCR misses.
 
-Follows the project's async httpx pattern (see core/llm/unload_ollama_model.py).
+Replaces the previous Ollama /api/generate HTTP calls with AsyncOpenAI targeting
+settings.VLLM_VLM_URL. The `port` parameter is kept on the public API for backward
+compatibility but is no longer used — the endpoint URL comes from config.
 """
 
 import asyncio
@@ -14,13 +16,11 @@ import io
 import time
 import traceback
 
-import httpx
+from openai import AsyncOpenAI
 from PIL import Image
 
 from core.config import settings
 from core.constants import PORT1, VLM_MODEL
-
-LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 
 # Max image dimension (pixels) for VLM input — smaller images process faster and more reliably on 8B VLMs
 VLM_MAX_IMAGE_DIM = 1280
@@ -92,79 +92,78 @@ async def vlm_parse_slide(
     port: int = PORT1,
     prompt_type: str = "default",
     custom_prompt: str | None = None,
+    _is_retry: bool = False,
 ) -> str:
     """
-    Send a single image to Ollama VLM for structured text extraction.
+    Send a single image to the vLLM VLM for structured text extraction.
 
     Args:
         image_input: File path (str) or raw PNG bytes.
-        port: Ollama API port (default: PORT1 from constants).
+        port: Kept for backward compatibility — ignored. vLLM URL comes from
+              settings.VLLM_VLM_URL.
         prompt_type: "default", "mermaid", or "retry". Ignored when custom_prompt is set.
         custom_prompt: If provided, overrides prompt_type and sends this exact prompt.
             Use for query-time VLM where the user's question is the prompt.
+        _is_retry: Internal flag — when True, uses VLM_RETRY_IMAGE_DIM and VLM_RETRY_PROMPT.
 
     Returns:
         Extracted Markdown string, or "" on failure.
     """
     try:
         start_time = time.time()
-        image_b64 = _encode_image_base64(image_input)
 
-        url = f"{LOCAL_BASE_URL}:{port}/api/generate"
+        max_dim = VLM_RETRY_IMAGE_DIM if _is_retry else VLM_MAX_IMAGE_DIM
+        image_b64 = _encode_image_base64(image_input, max_dim=max_dim)
 
         if custom_prompt:
             selected_prompt = custom_prompt
         elif prompt_type == "mermaid":
             selected_prompt = VLM_MERMAID_PROMPT
-        elif prompt_type == "retry":
+        elif prompt_type == "retry" or _is_retry:
             selected_prompt = VLM_RETRY_PROMPT
         else:
             selected_prompt = VLM_EXTRACTION_PROMPT
 
-        payload = {
-            "model": VLM_MODEL,
-            "prompt": selected_prompt,
-            "images": [image_b64],
-            "stream": False,
-            "keep_alive": 300,  # Keep model loaded for 5 min between calls
-            "options": {
-                "temperature": 0.1,  # Low temp for factual extraction
-                "num_ctx": 8192,  # More context for complex pages
-                "num_predict": 2048,  # Reduced from 4096: most slide content fits in 1000-1500 tokens
-            },
-        }
+        print(f"[VLM] Sending page to vLLM ({settings.VLLM_VLM_MODEL}) at {settings.VLLM_VLM_URL} ...")
 
-        print(f"[VLM] Sending page to Ollama ({VLM_MODEL}) on port {port}...")
+        client = AsyncOpenAI(base_url=settings.VLLM_VLM_URL, api_key="EMPTY")
+        response = await client.chat.completions.create(
+            model=settings.VLLM_VLM_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{image_b64}"},
+                        },
+                        {"type": "text", "text": selected_prompt},
+                    ],
+                }
+            ],
+            temperature=0.1,
+            max_tokens=2048,
+        )
 
-        async with httpx.AsyncClient(
-            timeout=240
-        ) as client:  # 4 min timeout for complex visual pages
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-
-        result = response.json()
-        content = result.get("response", "").strip()
+        content = (response.choices[0].message.content or "").strip()
 
         elapsed = time.time() - start_time
         print(f"[VLM] Completed in {elapsed:.2f}s  |  {len(content)} chars extracted.")
 
         return content
 
-    except httpx.ConnectError:
-        print(
-            f"[VLM] Connection refused at {LOCAL_BASE_URL}:{port}. "
-            "Is Ollama running? Try: ollama serve"
-        )
-        return ""
-    except httpx.TimeoutException:
-        print(f"[VLM] Request timed out after 240s for model {VLM_MODEL}.")
-        return ""
-    except httpx.HTTPStatusError as e:
-        print(f"[VLM] HTTP error: {e}")
-        return ""
     except Exception as e:
-        print(f"[VLM] Unexpected error: {e}")
-        traceback.print_exc()
+        vllm_url = settings.VLLM_VLM_URL
+        if "connect" in str(e).lower() or "connection" in str(e).lower():
+            print(
+                f"[VLM] Connection refused at {vllm_url}. "
+                "Is the vLLM VLM instance running? Try: bash scripts/start_vllm.sh"
+            )
+        elif "timeout" in str(e).lower():
+            print(f"[VLM] Request timed out for model {settings.VLLM_VLM_MODEL}.")
+        else:
+            print(f"[VLM] Unexpected error: {e}")
+            traceback.print_exc()
         return ""
 
 
@@ -185,7 +184,7 @@ async def vlm_parse_concurrent(
     Args:
         images: List of raw PNG bytes, one per page.
         page_labels: Optional labels for logging (e.g. ["Page 1", "Slide 3"]).
-        port: Ollama API port (default: PORT1 from constants).
+        port: Kept for backward compatibility — ignored. vLLM URL comes from config.
         max_concurrent: Max simultaneous VLM calls (default: 3, balance speed vs VRAM).
         prompt_type: "default", "mermaid", or "retry".
 

@@ -45,7 +45,10 @@ EASYOCR_GPU = (
     True  # GPU mode: ~4-7x faster OCR, uses only ~200MB VRAM (negligible on 48GB)
 )
 
-PORT1 = 11434  # port where ollama is running
+PORT1 = 11434  # port where ollama is running (preserved for remote_llm.py / REMOTE_GPU=True path)
+# NOTE: local_llm.py (REMOTE_GPU=False path) no longer uses PORT1 — it targets
+#       settings.VLLM_MAIN_URL directly. PORT1 is kept here so that remote_llm.py
+#       and any GPULLMConfig(port=PORT1) references compile without changes.
 
 # Model context window (tokens). gpt-oss:20b full = 128K.
 MODEL_CONTEXT_TOKENS = 128_000
@@ -57,7 +60,9 @@ MAIN_MODEL = (
 # MAIN_MODEL = "gpt-oss:20b-50k-8k"
 # QWEN3_14B = "qwen3:14b-39500-8k"
 
-# GPU LLM configurations — all on PORT1 (single Ollama instance for KV cache consistency)
+# GPU LLM configurations — all on PORT1.
+# When REMOTE_GPU=False (local path), local_llm.py uses settings.VLLM_MAIN_URL; PORT1 is ignored.
+# When REMOTE_GPU=True, remote_llm.py uses PORT1 as before.
 GPU_QUERY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_QUERY_LLM2 = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_DECOMPOSITION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)

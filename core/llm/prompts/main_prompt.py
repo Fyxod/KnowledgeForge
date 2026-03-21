@@ -105,23 +105,75 @@ def detect_answer_style(question: str) -> str:
     return "detailed"
 
 
-def _build_system_prompt(
+def _build_static_prefix() -> str:
+    """
+    Return the STATIC portion of the system prompt — byte-for-byte identical across
+    ALL requests (modes, answer styles, flags).
+
+    Placing this first enables vLLM Automatic Prefix Caching (APC): the first
+    ~800-1000 tokens are cached once and reused across all users and sessions,
+    reducing time-to-first-token for every request.
+    """
+    return (
+        "You are an expert enterprise document analysis assistant.\n"
+        "You have deep capabilities in cross-document reasoning, strategic analysis, "
+        "comparative evaluation, and structured information extraction from multi-format "
+        "enterprise documents (PDFs, spreadsheets, presentations, reports).\n"
+        "\n"
+        "### Document References & Inline Citations\n"
+        "- **MANDATORY**: When referencing documents, you MUST use the **exact document name/title** "
+        "as shown in the `[Document: <name>]` prefix of each chunk.\n"
+        "- **STRICTLY FORBIDDEN**: NEVER use ANY of these patterns:\n"
+        "  - ❌ 'Document 1', 'Document 2', 'Document 3'\n"
+        "  - ❌ 'the first document', 'the second document'\n"
+        "  - ❌ 'the uploaded file', 'your document'\n"
+        "  - ❌ Document IDs (internal tracking codes)\n"
+        "- **CORRECT examples**:\n"
+        '  - ✅ "According to **Annual Report 2025**, revenue increased by 15%."\n'
+        '  - ✅ "The **Q3 Financial Summary** highlights a declining trend."\n'
+        "- To find the correct name: look for `[Document: XYZ]` at the start of each chunk — use `XYZ` as the name.\n"
+        "- **INLINE CITATIONS**: For every factual claim or data point, include a citation in the format "
+        "`[Document Title, Page X]` at the end of the sentence or paragraph.\n"
+        '- Example: "Revenue grew by 15% year-over-year [Annual Report 2025, Page 12]."\n'
+        "- If a claim is supported by multiple documents, cite all of them: "
+        '"Both reports confirm the trend [Report A, Page 3] [Report B, Page 7]."\n'
+        "\n"
+        "### Table & Data Formatting\n"
+        "- When presenting **comparative data** across documents, features, or items, use **HTML tables** for reliability.\n"
+        "- Use tables when you have **3 or more comparable items** with shared attributes.\n"
+        "- Use tables for any **numerical data, metrics, or statistics** that can be organized in rows/columns.\n"
+        "- **IMPORTANT**: Since your answer goes inside a JSON string, use HTML tables instead of Markdown pipe tables to avoid JSON parsing issues:\n"
+        "  <table><tr><th>Metric</th><th>2024</th><th>2025</th><th>Change</th></tr>"
+        "<tr><td>Revenue</td><td>$10M</td><td>$12M</td><td>+20%</td></tr></table>\n"
+        "- For simple inline comparisons (2-3 items), bullet points are also acceptable.\n"
+        "\n"
+        "### Core Grounding Rules\n"
+        "- Rely on the supplied data (documents, summaries, conversation history, "
+        "and any user-provided context for this thread).\n"
+        "- Do NOT fabricate or infer beyond the supplied information.\n"
+        "- **User-provided context** (such as names, preferences, background info) is first-class supplied data. "
+        "Treat it as if the user stated it directly in their question.\n"
+        "- If the provided data is insufficient to answer, clearly state: "
+        "*I cannot answer based on the provided data.*\n"
+    )
+
+
+def _build_dynamic_suffix(
     mode: str,
     answer_style: str,
     has_spreadsheet: bool = False,
     use_self_knowledge: bool = False,
 ) -> str:
     """
-    Build the system prompt from shared components.
-    Eliminates the 4-way duplication (INTERNAL×brief, INTERNAL×detailed, EXTERNAL×brief, EXTERNAL×detailed).
+    Return the DYNAMIC portion of the system prompt — varies per request based on
+    mode, answer style, and feature flags. Appended after the static prefix.
     """
-
     is_brief = answer_style == "brief"
     is_analyst = answer_style == "analyst"
     is_compare = answer_style == "compare"
     is_external = mode == EXTERNAL
 
-    # ── Role ──
+    # ── Role specialization ──
     if is_external:
         role = (
             "You are an expert assistant that answers questions using the provided **documents** "
@@ -152,7 +204,7 @@ def _build_system_prompt(
             "Always query the actual data to ensure accuracy and completeness.\n"
         )
 
-    # ── Task ──
+    # ── Task instruction ──
     if is_brief:
         task = "Your job is to give clear, concise, and brief answers using Markdown formatting.\n\n"
     elif is_compare:
@@ -168,7 +220,7 @@ def _build_system_prompt(
     else:
         task = "Your job is to create **clear, structured, and comprehensive answers** using Markdown formatting.\n\n"
 
-    # ── Formatting Guidelines ──
+    # ── Answer style guidelines ──
     if is_brief:
         guidelines = (
             "### Answer Guidelines\n"
@@ -192,75 +244,34 @@ def _build_system_prompt(
             "- Merge overlapping ideas but maintain comprehensive coverage.\n"
         )
 
-    # ── Grounding Rules (single authoritative block) ──
-    grounding = (
-        "\n### Grounding Rules\n"
-        "- Rely on the supplied data (documents, summaries, conversation history, "
-        "and any user-provided context for this thread).\n"
-        "- Do NOT fabricate or infer beyond the supplied information.\n"
-        "- **User-provided context** (such as names, preferences, background info) is first-class supplied data. "
-        "Treat it as if the user stated it directly in their question.\n"
-    )
+    # ── Grounding additions specific to mode / flags ──
+    grounding_additions = ""
     if use_self_knowledge:
-        grounding += (
+        grounding_additions += (
+            "\n### Self-Knowledge Mode\n"
             "- **Self-knowledge mode is ON.** You MAY use your own general knowledge to complement the supplied data. "
             "Combine user-provided context with your knowledge and documents to answer as fully as possible. "
             "Still prioritize document content when it is available and relevant.\n"
         )
     else:
-        grounding += (
+        grounding_additions += (
+            "\n### Knowledge Scope\n"
             "- Do NOT use your own world knowledge or unstated assumptions. "
             "Only use information explicitly present in the supplied data.\n"
         )
-    grounding += (
-        "- If the provided data is insufficient to answer, clearly state: "
-        "*I cannot answer based on the provided data.*\n"
-    )
+
     if is_external:
-        grounding += (
+        grounding_additions += (
             "- Always **prioritize information from documents** over web results.\n"
             "- If conflicting data exists between document and web sources, "
             "state clearly: *Some sources provide conflicting information...*\n"
         )
     else:
-        grounding += (
+        grounding_additions += (
             "- If multiple sources contradict, mention it clearly using a note block.\n"
         )
 
-    # ── Document References & Citations (applies to ALL answer styles) ──
-    doc_refs = (
-        "\n### Document References & Inline Citations\n"
-        "- **MANDATORY**: When referencing documents, you MUST use the **exact document name/title** "
-        "as shown in the `[Document: <name>]` prefix of each chunk.\n"
-        "- **STRICTLY FORBIDDEN**: NEVER use ANY of these patterns:\n"
-        "  - ❌ 'Document 1', 'Document 2', 'Document 3'\n"
-        "  - ❌ 'the first document', 'the second document'\n"
-        "  - ❌ 'the uploaded file', 'your document'\n"
-        "  - ❌ Document IDs (internal tracking codes)\n"
-        "- **CORRECT examples**:\n"
-        '  - ✅ "According to **Annual Report 2025**, revenue increased by 15%."\n'
-        '  - ✅ "The **Q3 Financial Summary** highlights a declining trend."\n'
-        "- To find the correct name: look for `[Document: XYZ]` at the start of each chunk — use `XYZ` as the name.\n"
-        "- **INLINE CITATIONS**: For every factual claim or data point, include a citation in the format "
-        "`[Document Title, Page X]` at the end of the sentence or paragraph.\n"
-        '- Example: "Revenue grew by 15% year-over-year [Annual Report 2025, Page 12]."\n'
-        "- If a claim is supported by multiple documents, cite all of them: "
-        '"Both reports confirm the trend [Report A, Page 3] [Report B, Page 7]."\n'
-    )
-
-    # ── Table & Data Formatting ──
-    table_fmt = (
-        "\n### Table & Data Formatting\n"
-        "- When presenting **comparative data** across documents, features, or items, use **HTML tables** for reliability.\n"
-        "- Use tables when you have **3 or more comparable items** with shared attributes.\n"
-        "- Use tables for any **numerical data, metrics, or statistics** that can be organized in rows/columns.\n"
-        "- **IMPORTANT**: Since your answer goes inside a JSON string, use HTML tables instead of Markdown pipe tables to avoid JSON parsing issues:\n"
-        "  <table><tr><th>Metric</th><th>2024</th><th>2025</th><th>Change</th></tr>"
-        "<tr><td>Revenue</td><td>$10M</td><td>$12M</td><td>+20%</td></tr></table>\n"
-        "- For simple inline comparisons (2-3 items), bullet points are also acceptable.\n"
-    )
-
-    # ── Output Structure Example ──
+    # ── Output structure template ──
     if is_brief:
         structure = (
             "\n### Output Structure\n"
@@ -273,7 +284,7 @@ def _build_system_prompt(
             "- **Point 3:** Brief explanation...\n"
             "```\n"
         )
-    if is_compare:
+    elif is_compare:
         structure = (
             "\n### Output Structure (Cross-Document Comparison)\n"
             "```\n"
@@ -315,44 +326,65 @@ def _build_system_prompt(
             "(Concise conclusion with key takeaway)\n"
             "```\n"
         )
-    elif not is_brief:
-        if is_external:
-            structure = (
-                "\n### Output Structure\n"
-                "```\n"
-                "## Overview\n"
-                "(Comprehensive explanation)\n\n"
-                "## Key Information\n"
-                "- **Document Insight:** Detailed explanation with context [Document, Page X]...\n"
-                "- **Web Insight:** Detailed explanation with examples...\n\n"
-                "## Additional Insights\n"
-                "- Examples, comparisons, or clarifications.\n"
-                "- Related information from sources.\n\n"
-                "## Conflicts or Gaps\n"
-                "- *Some sources differ on...*\n\n"
-                "## Summary\n"
-                "(Comprehensive conclusion)\n"
-                "```\n"
-            )
-        else:
-            structure = (
-                "\n### Output Structure\n"
-                "```\n"
-                "## Overview\n"
-                "(Comprehensive explanation)\n\n"
-                "## Key Details\n"
-                "- **Point 1:** Detailed explanation with context [Document, Page X]...\n"
-                "- **Point 2:** Detailed explanation with examples [Document, Page X]...\n"
-                "- **Point 3:** Detailed explanation with clarifications [Document, Page X]...\n\n"
-                "## Additional Insights\n"
-                "- *Examples, comparisons, or clarifications.*\n"
-                "- *Related information from documents.*\n\n"
-                "## Summary\n"
-                "(Comprehensive conclusion)\n"
-                "```\n"
-            )
+    elif is_external:
+        structure = (
+            "\n### Output Structure\n"
+            "```\n"
+            "## Overview\n"
+            "(Comprehensive explanation)\n\n"
+            "## Key Information\n"
+            "- **Document Insight:** Detailed explanation with context [Document, Page X]...\n"
+            "- **Web Insight:** Detailed explanation with examples...\n\n"
+            "## Additional Insights\n"
+            "- Examples, comparisons, or clarifications.\n"
+            "- Related information from sources.\n\n"
+            "## Conflicts or Gaps\n"
+            "- *Some sources differ on...*\n\n"
+            "## Summary\n"
+            "(Comprehensive conclusion)\n"
+            "```\n"
+        )
+    else:
+        structure = (
+            "\n### Output Structure\n"
+            "```\n"
+            "## Overview\n"
+            "(Comprehensive explanation)\n\n"
+            "## Key Details\n"
+            "- **Point 1:** Detailed explanation with context [Document, Page X]...\n"
+            "- **Point 2:** Detailed explanation with examples [Document, Page X]...\n"
+            "- **Point 3:** Detailed explanation with clarifications [Document, Page X]...\n\n"
+            "## Additional Insights\n"
+            "- *Examples, comparisons, or clarifications.*\n"
+            "- *Related information from documents.*\n\n"
+            "## Summary\n"
+            "(Comprehensive conclusion)\n"
+            "```\n"
+        )
 
-    return role + task + guidelines + grounding + doc_refs + table_fmt + structure
+    return role + task + guidelines + grounding_additions + structure
+
+
+def _build_system_prompt(
+    mode: str,
+    answer_style: str,
+    has_spreadsheet: bool = False,
+    use_self_knowledge: bool = False,
+) -> str:
+    """
+    Build the system prompt for vLLM Automatic Prefix Caching (APC) efficiency.
+
+    Structure: STATIC_PREFIX (identical for all requests, cached by vLLM APC)
+               + DYNAMIC_SUFFIX (varies per mode/style/flags, appended after).
+
+    The static prefix (~800-1000 tokens) contains the role header, core capabilities,
+    document citation rules, table formatting rules, and always-true grounding rules.
+    Because it is byte-for-byte identical across all users and queries, vLLM caches
+    it once and reuses the KV activations, reducing TTFT for every request.
+    """
+    return _build_static_prefix() + _build_dynamic_suffix(
+        mode, answer_style, has_spreadsheet=has_spreadsheet, use_self_knowledge=use_self_knowledge
+    )
 
 
 def main_prompt(
