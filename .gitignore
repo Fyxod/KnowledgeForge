@@ -1,4 +1,5 @@
 .env
+.claude/
 # Debug and output files (specific patterns, not blanket extensions)
 formatted_prompt.txt
 llm_result.json
