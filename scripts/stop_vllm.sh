@@ -1,17 +1,18 @@
 #!/bin/bash
 # ==============================================================================
-# vLLM Stop Script — terminates all running vLLM instances
+# vLLM Stop Script — terminates all vLLM instances and the GLM-OCR SDK server
 # ==============================================================================
 #
 # Usage:
 #   bash scripts/stop_vllm.sh
 #
-# Stops instances started by start_vllm.sh by reading stored PIDs.
-# Falls back to killing all python -m vllm.entrypoints processes if PID
-# files are missing.
+# Stops all instances started by start_vllm.sh by reading stored PID files:
+#   - Main LLM        (port 8000)
+#   - VLM             (port 8001)
+#   - GLM-OCR vLLM    (port 8080)
+#   - GLM-OCR SDK     (port 5002)
 #
-# NOTE: Does NOT stop the GLM-OCR vLLM instance (port 8080) — that is managed
-#       separately by the GLM-OCR SDK.
+# Falls back to killing all vLLM processes via pgrep if PID files are missing.
 #
 # ==============================================================================
 
@@ -39,28 +40,21 @@ kill_by_pid_file() {
     fi
 }
 
+# ── Stop all managed instances ────────────────────────────────────────────────
 kill_by_pid_file "main_llm"
 kill_by_pid_file "vlm"
+kill_by_pid_file "glm_ocr"
+kill_by_pid_file "glm_ocr_sdk"
 
 # ── Fallback: kill any remaining vLLM processes ───────────────────────────────
 # Catches both `vllm serve` (new CLI) and `python -m vllm.entrypoints...` (old).
-# Explicitly excludes the GLM-OCR vLLM instance on port 8080 — that is managed
-# separately by the GLM-OCR SDK and must not be killed here.
 echo ""
-echo "Checking for residual vLLM processes (excluding GLM-OCR on port 8080)..."
+echo "Checking for residual vLLM processes..."
 
-# Collect PIDs from both invocation styles, then exclude port 8080
 remaining=$(
     { pgrep -f "vllm.entrypoints.openai.api_server" 2>/dev/null || true; \
       pgrep -f "vllm serve" 2>/dev/null || true; } \
-    | sort -u \
-    | while read -r pid; do
-        # Skip the GLM-OCR process which binds to port 8080
-        if ! ss -tlnp 2>/dev/null | grep -q "pid=${pid}.*:8080" && \
-           ! lsof -p "$pid" -i :8080 2>/dev/null | grep -q LISTEN; then
-            echo "$pid"
-        fi
-    done
+    | sort -u
 )
 
 if [ -n "$remaining" ]; then
@@ -74,6 +68,20 @@ else
     echo "No residual vLLM processes found."
 fi
 
+# ── Fallback: kill any remaining glmocr SDK server processes ──────────────────
 echo ""
-echo "vLLM instances stopped."
-echo "GLM-OCR (port 8080) was not touched — stop it via the glmocr SDK if needed."
+echo "Checking for residual glmocr SDK processes..."
+
+sdk_remaining=$(pgrep -f "glmocr.server" 2>/dev/null || true)
+
+if [ -n "$sdk_remaining" ]; then
+    echo "Found residual glmocr SDK processes: $(echo "$sdk_remaining" | tr '\n' ' ')"
+    echo "$sdk_remaining" | xargs kill 2>/dev/null || true
+    sleep 1
+    echo "$sdk_remaining" | xargs kill -9 2>/dev/null || true
+else
+    echo "No residual glmocr SDK processes found."
+fi
+
+echo ""
+echo "All vLLM instances and GLM-OCR SDK server stopped."
