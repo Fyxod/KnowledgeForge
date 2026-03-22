@@ -278,7 +278,12 @@ class SQLiteManager:
 
         conn = cls._connections[key]
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        # Exclude __doc_table_registry — it is an internal bookkeeping table
+        # and must not be exposed as user data in schema descriptions.
+        cursor.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name != '__doc_table_registry';"
+        )
         tables = cursor.fetchall()
 
         if not tables:
@@ -395,14 +400,21 @@ class SQLiteManager:
 
     @classmethod
     def has_spreadsheet_data(cls, user_id: str, thread_id: str) -> bool:
-        """Check if there's any spreadsheet data loaded for this user/thread."""
+        """Check if there's any spreadsheet data loaded for this user/thread.
+
+        Excludes __doc_table_registry, which is always created by get_connection()
+        and is an internal bookkeeping table, not user spreadsheet data.
+        """
         key = (user_id, thread_id)
         if key not in cls._connections:
             return False
         conn = cls._connections[key]
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            cursor.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name != '__doc_table_registry';"
+            )
             tables = cursor.fetchall()
             return len(tables) > 0
         except Exception:

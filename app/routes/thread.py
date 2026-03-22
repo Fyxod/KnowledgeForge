@@ -362,20 +362,20 @@ async def add_existing_document(
     if not file_name:
         return {"error": "Document has no associated file"}
 
-    # Load parsed JSON from source thread
+    # Load parsed JSON from source thread.
+    # New layout (post rag-pipeline-improvements): parsed/{doc_id}.json
+    # Legacy layout: parsed/{filename_stem}.json — try new first, fall back for old data.
     name_without_ext = os.path.splitext(file_name)[0]
-    source_parsed_path = os.path.join(
-        "data",
-        user_id,
-        "threads",
-        source_thread_id,
-        "parsed",
-        f"{name_without_ext}.json",
-    )
+    parsed_dir = os.path.join("data", user_id, "threads", source_thread_id, "parsed")
+    source_parsed_path = os.path.join(parsed_dir, f"{doc_id}.json")
     if not os.path.exists(source_parsed_path):
-        return {
-            "error": "Parsed document data not found. Please re-upload the document."
-        }
+        legacy_path = os.path.join(parsed_dir, f"{name_without_ext}.json")
+        if os.path.exists(legacy_path):
+            source_parsed_path = legacy_path
+        else:
+            return {
+                "error": "Parsed document data not found. Please re-upload the document."
+            }
 
     try:
         with open(source_parsed_path, "r", encoding="utf-8") as f:
@@ -417,21 +417,27 @@ async def add_existing_document(
         if os.path.exists(source_upload) and not os.path.exists(target_upload):
             shutil.copy2(source_upload, target_upload)
 
-        # 3. Copy parsed JSON to target thread
+        # 3. Copy parsed JSON to target thread using doc_id filename (new layout).
         target_parsed_dir = os.path.join(
             "data", user_id, "threads", thread_id, "parsed"
         )
         os.makedirs(target_parsed_dir, exist_ok=True)
-        target_parsed = os.path.join(target_parsed_dir, f"{name_without_ext}.json")
+        target_parsed = os.path.join(target_parsed_dir, f"{doc_id}.json")
         if not os.path.exists(target_parsed):
             shutil.copy2(source_parsed_path, target_parsed)
 
-        # 4. Copy images directory if it exists
+        # 4. Copy images directory if it exists.
+        # New layout: images/{doc_id}/; legacy: images/{filename_stem}/.
         source_images_dir = os.path.join(
-            "data", user_id, "threads", source_thread_id, "images", name_without_ext
+            "data", user_id, "threads", source_thread_id, "images", doc_id
         )
+        if not os.path.isdir(source_images_dir):
+            # Fall back to legacy filename-stem layout
+            source_images_dir = os.path.join(
+                "data", user_id, "threads", source_thread_id, "images", name_without_ext
+            )
         target_images_dir = os.path.join(
-            "data", user_id, "threads", thread_id, "images", name_without_ext
+            "data", user_id, "threads", thread_id, "images", doc_id
         )
         if os.path.isdir(source_images_dir) and not os.path.isdir(target_images_dir):
             shutil.copytree(source_images_dir, target_images_dir)
