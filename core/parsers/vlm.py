@@ -124,11 +124,21 @@ async def vlm_parse_slide(
         else:
             selected_prompt = VLM_EXTRACTION_PROMPT
 
-        print(f"[VLM] Sending page to vLLM ({settings.VLLM_VLM_MODEL}) at {settings.VLLM_VLM_URL} ...")
+        vlm_url = settings.effective_vlm_url
+        vlm_model = settings.effective_vlm_model
+        print(f"[VLM] Sending page to vLLM ({vlm_model}) at {vlm_url} ...")
 
-        client = AsyncOpenAI(base_url=settings.VLLM_VLM_URL, api_key="EMPTY")
+        # Disable thinking for OCR/image tasks — reasoning chains waste time on structured
+        # extraction. Server-side --reasoning-parser qwen3 also strips them, but this
+        # ensures Qwen doesn't generate them at all (faster, fewer tokens billed).
+        # No-op for gpt-oss-20b (different chat template, parameter silently ignored).
+        extra_body: dict | None = None
+        if "qwen" in vlm_model.lower():
+            extra_body = {"chat_template_kwargs": {"enable_thinking": False}}
+
+        client = AsyncOpenAI(base_url=vlm_url, api_key="EMPTY")
         response = await client.chat.completions.create(
-            model=settings.VLLM_VLM_MODEL,
+            model=vlm_model,
             messages=[
                 {
                     "role": "user",
@@ -143,6 +153,7 @@ async def vlm_parse_slide(
             ],
             temperature=0.1,
             max_tokens=2048,
+            extra_body=extra_body,
         )
 
         content = (response.choices[0].message.content or "").strip()
@@ -153,14 +164,14 @@ async def vlm_parse_slide(
         return content
 
     except Exception as e:
-        vllm_url = settings.VLLM_VLM_URL
+        vllm_url = settings.effective_vlm_url
         if "connect" in str(e).lower() or "connection" in str(e).lower():
             print(
                 f"[VLM] Connection refused at {vllm_url}. "
                 "Is the vLLM VLM instance running? Try: bash scripts/start_vllm.sh"
             )
         elif "timeout" in str(e).lower():
-            print(f"[VLM] Request timed out for model {settings.VLLM_VLM_MODEL}.")
+            print(f"[VLM] Request timed out for model {settings.effective_vlm_model}.")
         else:
             print(f"[VLM] Unexpected error: {e}")
             traceback.print_exc()

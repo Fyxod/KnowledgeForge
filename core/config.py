@@ -35,6 +35,22 @@ class Settings(BaseSettings):
     VLLM_MAX_MODEL_LEN: int = 65536                         # 64K — safe within ~90K ceiling; total model VRAM ~38.4GB (40GB cap)
     VLLM_VLM_MAX_MODEL_LEN: int = 32768                     # Qwen3.5-9B: 32K for image tasks; raise to 262144 when running VLM alone
 
+    # ── Unified Qwen3.5-9B mode ─────────────────────────────────────────────────
+    # VLLM_MODE=gpt-oss (default): gpt-oss-20b on port 8000, Qwen AWQ VLM on port 8001
+    # VLLM_MODE=qwen-unified: single Qwen3.5-9B BF16 on port 8000 handles both LLM + VLM
+    VLLM_MODE: str = "gpt-oss"
+    VLLM_UNIFIED_MODEL: str = "Qwen/Qwen3.5-9B"  # BF16 full model (~18 GB VRAM) used in unified mode
+
+    @property
+    def effective_vlm_url(self) -> str:
+        """VLM endpoint — port 8000 (shared with main LLM) in unified mode, else port 8001."""
+        return self.VLLM_MAIN_URL if self.VLLM_MODE == "qwen-unified" else self.VLLM_VLM_URL
+
+    @property
+    def effective_vlm_model(self) -> str:
+        """VLM model name — unified BF16 Qwen in unified mode, else AWQ Qwen on port 8001."""
+        return self.VLLM_UNIFIED_MODEL if self.VLLM_MODE == "qwen-unified" else self.VLLM_VLM_MODEL
+
     class Config:
         env_file = ".env"
         extra = "allow"

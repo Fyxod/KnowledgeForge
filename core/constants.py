@@ -50,9 +50,19 @@ PORT1 = 11434  # port where ollama is running (preserved for remote_llm.py / REM
 #       settings.VLLM_MAIN_URL directly. PORT1 is kept here so that remote_llm.py
 #       and any GPULLMConfig(port=PORT1) references compile without changes.
 
-# Model context window (tokens). gpt-oss:20b full = 128K.
-MODEL_CONTEXT_TOKENS = 128_000
+# Model context window — derived from the actual vLLM deployment limit so that
+# budget calculations in graph_nodes.py and studio features stay in sync with
+# what vLLM will accept at runtime.
+#   gpt-oss mode:    settings.VLLM_MAX_MODEL_LEN         (default 65536 / 64K)
+#   qwen-unified:    settings.VLLM_UNIFIED_MAX_MODEL_LEN  (default 131072 / 128K)
+MODEL_CONTEXT_TOKENS: int = (
+    settings.VLLM_UNIFIED_MAX_MODEL_LEN
+    if settings.VLLM_MODE == "qwen-unified"
+    else settings.VLLM_MAX_MODEL_LEN
+)
 MODEL_OUTPUT_RESERVE = 8_000  # Reserve for output generation
+# Safe input budget for compress_global_file_data — output tokens already subtracted.
+MODEL_INPUT_BUDGET: int = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE
 
 MAIN_MODEL = (
     settings.MAIN_MODEL

@@ -6,6 +6,10 @@ map = {
     "qwen3:4b": "cl100k_base",
     "gpt-oss:20b": "o200k_base",
     "gpt-oss:20b-50k-8k": "o200k_base",
+    # Qwen3.5-9B (vLLM unified mode) — uses its own BPE, cl100k_base is the
+    # closest available tiktoken encoding (both are byte-level BPE, ~10% variance).
+    "Qwen/Qwen3.5-9B": "cl100k_base",
+    "cyankiwi/Qwen3.5-9B-AWQ-4bit": "cl100k_base",
 }
 
 

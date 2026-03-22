@@ -1,6 +1,6 @@
 import os
 
-from core.constants import GPU_STRATEGIC_ANALYSIS_LLM
+from core.constants import GPU_STRATEGIC_ANALYSIS_LLM, MODEL_INPUT_BUDGET
 from core.llm.client import invoke_llm
 from core.llm.outputs import StrategicAnalysisLLMOutput
 from core.llm.prompts.strategic_analysis_prompt import strategic_analysis_prompt
@@ -67,7 +67,7 @@ def fetch_document_content(document: Document | list[Document]) -> str:
 
         compressed = compress_global_file_data(
             doc_dicts,
-            max_tokens=50000,
+            max_tokens=MODEL_INPUT_BUDGET,
             gpu_model=GPU_STRATEGIC_ANALYSIS_LLM.model,
             prompt_offset=2500,
         )
