@@ -377,7 +377,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
             # Extract child texts for adjacent-sentence context building
             child_texts = [item["child_text"] for item in hier_chunks]
 
-            for item in hier_chunks:
+            for flat_idx, item in enumerate(hier_chunks):
                 p_idx = item["parent_idx"]
                 c_idx = item["child_idx"]
                 child_text = item["child_text"]
@@ -387,7 +387,6 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                 parent_id = f"{doc.id}_page{page.number}_p{p_idx}"
 
                 # Phase 1.1: Build enriched child chunk with programmatic context
-                flat_idx = hier_chunks.index(item)
                 adjacent_ctx = get_adjacent_sentences(child_texts, flat_idx, _HAS_NLTK)
                 enriched_chunk = build_enriched_chunk(
                     chunk_text=child_text,
@@ -506,27 +505,8 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
         f"Processed {len(chunk_data)} chunks in {end_time - start_time:.2f} seconds for user {user_id}"
     )
 
-    # Build and save BM25 index for hybrid search.
-    # Merge with existing index so that incremental uploads (second doc, third doc, …)
-    # do not evict chunks from previously indexed documents in the same thread.
-    existing_bm25 = load_bm25(user_id, thread_id)
-    if existing_bm25:
-        existing_chunks = list(zip(
-            existing_bm25["chunk_ids"],
-            existing_bm25["chunk_texts"],
-            existing_bm25["chunk_metadatas"],
-        ))
-        # Deduplicate: new chunks override old ones with the same ID (upsert semantics)
-        merged_by_id = {cid: (cid, txt, meta) for cid, txt, meta in existing_chunks}
-        for cid, txt, meta in chunk_data:
-            merged_by_id[cid] = (cid, txt, meta)
-        all_bm25_chunks = list(merged_by_id.values())
-    else:
-        all_bm25_chunks = chunk_data
-
-    await asyncio.to_thread(_build_and_save_bm25, all_bm25_chunks, user_id, thread_id)
-
-    # Batch embedding and upsert
+    # Batch embedding and upsert to Chroma FIRST — BM25 is saved after so both
+    # indexes stay in sync even if a Chroma batch fails partway through.
     batch_size = 1000  # Reduced to avoid VRAM hoarding on 48GB GPU
     total_batches = math.ceil(len(chunk_data) / batch_size)
 
@@ -578,6 +558,26 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
 
     print(f"Saved {len(chunk_data)} chunks to Chroma for user {user_id}")
 
+    # Build and save BM25 index for hybrid search AFTER Chroma succeeds.
+    # Merge with existing index so that incremental uploads (second doc, third doc, …)
+    # do not evict chunks from previously indexed documents in the same thread.
+    existing_bm25 = load_bm25(user_id, thread_id)
+    if existing_bm25:
+        existing_chunks = list(zip(
+            existing_bm25["chunk_ids"],
+            existing_bm25["chunk_texts"],
+            existing_bm25["chunk_metadatas"],
+        ))
+        # Deduplicate: new chunks override old ones with the same ID (upsert semantics)
+        merged_by_id = {cid: (cid, txt, meta) for cid, txt, meta in existing_chunks}
+        for cid, txt, meta in chunk_data:
+            merged_by_id[cid] = (cid, txt, meta)
+        all_bm25_chunks = list(merged_by_id.values())
+    else:
+        all_bm25_chunks = chunk_data
+
+    await asyncio.to_thread(_build_and_save_bm25, all_bm25_chunks, user_id, thread_id)
+
 
 async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
     """
@@ -609,7 +609,7 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
         heading = detect_page_heading(page.text)
         child_texts = [item["child_text"] for item in hier_chunks]
 
-        for item in hier_chunks:
+        for flat_idx, item in enumerate(hier_chunks):
             p_idx = item["parent_idx"]
             c_idx = item["child_idx"]
             child_text = item["child_text"]
@@ -620,7 +620,6 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
             parent_id = f"{thread_id}_{doc.id}_page{page.number}_p{p_idx}"
 
             # Phase 1.1: Build enriched child chunk with programmatic context
-            flat_idx = hier_chunks.index(item)
             adjacent_ctx = get_adjacent_sentences(child_texts, flat_idx, _HAS_NLTK)
             enriched_chunk = build_enriched_chunk(
                 chunk_text=child_text,

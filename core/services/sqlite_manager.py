@@ -278,7 +278,10 @@ class SQLiteManager:
 
         conn = cls._connections[key]
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        cursor.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name != '__doc_table_registry';"
+        )
         tables = cursor.fetchall()
 
         if not tables:
@@ -402,7 +405,10 @@ class SQLiteManager:
         conn = cls._connections[key]
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            cursor.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name != '__doc_table_registry';"
+            )
             tables = cursor.fetchall()
             return len(tables) > 0
         except Exception:

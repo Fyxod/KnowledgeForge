@@ -11,6 +11,7 @@ import uuid
 
 from fastapi import APIRouter, Request
 from fastapi.encoders import jsonable_encoder
+from starlette.responses import JSONResponse
 
 from core.database import db
 from core.embeddings.vectorstore import (
@@ -40,15 +41,20 @@ def _get_authenticated_user(request: Request):
 
     payload = request.state.user
     if not payload:
-        return None, None, {"error": "User not authenticated"}
+        return None, None, JSONResponse({"error": "User not authenticated"}, status_code=401)
 
     user_id = payload.userId
 
     user = db.users.find_one({"userId": user_id}, {"_id": 0, "password": 0})
     if not user:
-        return None, None, {"error": "User not found"}
+        return None, None, JSONResponse({"error": "User not found"}, status_code=404)
 
     return payload, user, None
+
+
+def _error(msg: str, status_code: int = 400) -> JSONResponse:
+    """Return a consistent JSON error response with proper HTTP status code."""
+    return JSONResponse({"error": msg}, status_code=status_code)
 
 
 # ── Thread CRUD ──
@@ -101,7 +107,7 @@ async def get_thread(request: Request, thread_id: str):
 
     # Check if thread exists
     if thread_id not in user.get("threads", {}):
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     return {
         "status": "success",
@@ -133,7 +139,7 @@ async def update_thread(
 
     # Check if thread exists
     if thread_id not in user.get("threads", {}):
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     # Update thread name
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -161,7 +167,7 @@ async def delete_thread(request: Request, thread_id: str):
 
     payload, user, error_response = _get_authenticated_user(request)
     if error_response:
-        print(f"DELETE /thread/{thread_id} - {error_response['error']}")
+        print(f"DELETE /thread/{thread_id} - auth error")
         return error_response
 
     user_id = payload.userId
@@ -170,11 +176,11 @@ async def delete_thread(request: Request, thread_id: str):
 
     if not thread_id:
         print(f"DELETE /thread/{thread_id} - Thread ID is required")
-        return {"error": "Thread ID is required"}
+        return _error("Thread ID is required", 400)
 
     if thread_id not in user.get("threads", {}):
         print(f"DELETE /thread/{thread_id} - Thread not found")
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     try:
         # Remove thread from user
@@ -198,7 +204,7 @@ async def delete_thread(request: Request, thread_id: str):
             }
     except Exception as e:
         print(f"DELETE /thread/{thread_id} - Error deleting thread: {str(e)}")
-        return {"error": f"Error deleting thread: {str(e)}"}
+        return _error(f"Error deleting thread: {str(e)}", 500)
 
 
 @router.delete("/{thread_id}/document/{doc_id}")
@@ -213,12 +219,12 @@ async def delete_document(request: Request, thread_id: str, doc_id: str):
 
     thread = user.get("threads", {}).get(thread_id)
     if not thread:
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     documents = thread.get("documents", [])
     doc_entry = next((d for d in documents if d.get("docId") == doc_id), None)
     if not doc_entry:
-        return {"error": "Document not found in thread"}
+        return _error("Document not found in thread", 404)
 
     file_name = doc_entry.get("file_name", "")
 
@@ -315,7 +321,7 @@ async def delete_document(request: Request, thread_id: str, doc_id: str):
 
     except Exception as e:
         print(f"Error deleting document {doc_id} from thread {thread_id}: {e}")
-        return {"error": f"Failed to delete document: {str(e)}"}
+        return _error(f"Failed to delete document: {str(e)}", 500)
 
 
 @router.post("/{thread_id}/documents/add-existing")
@@ -336,52 +342,50 @@ async def add_existing_document(
 
     # Validate target thread exists
     if thread_id not in user.get("threads", {}):
-        return {"error": "Target thread not found"}
+        return _error("Target thread not found", 404)
 
     # Validate source thread exists
     source_thread = user.get("threads", {}).get(source_thread_id)
     if not source_thread:
-        return {"error": "Source thread not found"}
+        return _error("Source thread not found", 404)
 
     # Cannot add to same thread
     if thread_id == source_thread_id:
-        return {"error": "Source and target thread cannot be the same"}
+        return _error("Source and target thread cannot be the same", 400)
 
     # Find document in source thread
     source_docs = source_thread.get("documents", [])
     doc_entry = next((d for d in source_docs if d.get("docId") == doc_id), None)
     if not doc_entry:
-        return {"error": "Document not found in source thread"}
+        return _error("Document not found in source thread", 404)
 
     # Prevent duplicates in target thread
     target_docs = user["threads"][thread_id].get("documents", [])
     if any(d.get("docId") == doc_id for d in target_docs):
-        return {"error": "Document already exists in target thread"}
+        return _error("Document already exists in target thread", 409)
 
     file_name = doc_entry.get("file_name", "")
     if not file_name:
-        return {"error": "Document has no associated file"}
+        return _error("Document has no associated file", 400)
 
-    # Load parsed JSON from source thread
+    # Load parsed JSON from source thread.
+    # New layout (post rag-pipeline-improvements): parsed/{doc_id}.json
+    # Legacy layout: parsed/{filename_stem}.json — try new first, fall back for old data.
     name_without_ext = os.path.splitext(file_name)[0]
-    source_parsed_path = os.path.join(
-        "data",
-        user_id,
-        "threads",
-        source_thread_id,
-        "parsed",
-        f"{name_without_ext}.json",
-    )
+    parsed_dir = os.path.join("data", user_id, "threads", source_thread_id, "parsed")
+    source_parsed_path = os.path.join(parsed_dir, f"{doc_id}.json")
     if not os.path.exists(source_parsed_path):
-        return {
-            "error": "Parsed document data not found. Please re-upload the document."
-        }
+        legacy_path = os.path.join(parsed_dir, f"{name_without_ext}.json")
+        if os.path.exists(legacy_path):
+            source_parsed_path = legacy_path
+        else:
+            return _error("Parsed document data not found. Please re-upload the document.", 404)
 
     try:
         with open(source_parsed_path, "r", encoding="utf-8") as f:
             doc_data = json.load(f)
     except Exception as e:
-        return {"error": f"Failed to read parsed document: {str(e)}"}
+        return _error(f"Failed to read parsed document: {str(e)}", 500)
 
     # Reconstruct Document object (handle both key conventions)
     pages_raw = doc_data.get("content", doc_data.get("pages", []))
@@ -417,21 +421,27 @@ async def add_existing_document(
         if os.path.exists(source_upload) and not os.path.exists(target_upload):
             shutil.copy2(source_upload, target_upload)
 
-        # 3. Copy parsed JSON to target thread
+        # 3. Copy parsed JSON to target thread using doc_id filename (new layout).
         target_parsed_dir = os.path.join(
             "data", user_id, "threads", thread_id, "parsed"
         )
         os.makedirs(target_parsed_dir, exist_ok=True)
-        target_parsed = os.path.join(target_parsed_dir, f"{name_without_ext}.json")
+        target_parsed = os.path.join(target_parsed_dir, f"{doc_id}.json")
         if not os.path.exists(target_parsed):
             shutil.copy2(source_parsed_path, target_parsed)
 
-        # 4. Copy images directory if it exists
+        # 4. Copy images directory if it exists.
+        # New layout: images/{doc_id}/; legacy: images/{filename_stem}/.
         source_images_dir = os.path.join(
-            "data", user_id, "threads", source_thread_id, "images", name_without_ext
+            "data", user_id, "threads", source_thread_id, "images", doc_id
         )
+        if not os.path.isdir(source_images_dir):
+            # Fall back to legacy filename-stem layout
+            source_images_dir = os.path.join(
+                "data", user_id, "threads", source_thread_id, "images", name_without_ext
+            )
         target_images_dir = os.path.join(
-            "data", user_id, "threads", thread_id, "images", name_without_ext
+            "data", user_id, "threads", thread_id, "images", doc_id
         )
         if os.path.isdir(source_images_dir) and not os.path.isdir(target_images_dir):
             shutil.copytree(source_images_dir, target_images_dir)
@@ -462,7 +472,36 @@ async def add_existing_document(
 
     except Exception as e:
         print(f"Error adding existing document {doc_id} to thread {thread_id}: {e}")
-        return {"error": f"Failed to add document: {str(e)}"}
+        return _error(f"Failed to add document: {str(e)}", 500)
+
+
+@router.get("/{thread_id}/chats")
+async def get_thread_chats(
+    request: Request,
+    thread_id: str,
+    skip: int = 0,
+    limit: int = 50,
+):
+    """Get paginated chat messages for a thread."""
+    payload, user, error_response = _get_authenticated_user(request)
+    if error_response:
+        return error_response
+
+    thread = user.get("threads", {}).get(thread_id)
+    if not thread:
+        return _error("Thread not found", 404)
+
+    chats = thread.get("chats", [])
+    total = len(chats)
+    page = chats[skip : skip + limit]
+
+    return {
+        "status": "success",
+        "chats": jsonable_encoder(page),
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
 
 
 @router.delete("/{thread_id}/chats/{chat_index}")
@@ -477,12 +516,12 @@ async def delete_chat_from_thread(request: Request, thread_id: str, chat_index: 
 
     thread = user.get("threads", {}).get(thread_id)
     if not thread:
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     chats = thread.get("chats", [])
 
     if not isinstance(chat_index, int) or chat_index < 0 or chat_index >= len(chats):
-        return {"error": "Invalid chat index"}
+        return _error("Invalid chat index", 400)
 
     updated_chats = chats[:chat_index] + chats[chat_index + 1 :]
 
@@ -518,7 +557,7 @@ async def clear_thread_chats(request: Request, thread_id: str):
     user_id = payload.userId
 
     if thread_id not in user.get("threads", {}):
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -552,7 +591,7 @@ async def get_instructions(request: Request, thread_id: str):
 
     thread = user.get("threads", {}).get(thread_id)
     if not thread:
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     return {
         "status": "success",
@@ -572,7 +611,7 @@ async def add_instruction(
     user_id = payload.userId
 
     if thread_id not in user.get("threads", {}):
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     instruction = {
         "id": str(uuid.uuid4())[:8],
@@ -611,14 +650,14 @@ async def update_instruction(
 
     thread = user.get("threads", {}).get(thread_id)
     if not thread:
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     instructions = thread.get("instructions", [])
     idx = next(
         (i for i, ins in enumerate(instructions) if ins["id"] == instruction_id), None
     )
     if idx is None:
-        return {"error": "Instruction not found"}
+        return _error("Instruction not found", 404)
 
     update_fields = {}
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -656,13 +695,13 @@ async def delete_instruction(request: Request, thread_id: str, instruction_id: s
 
     thread = user.get("threads", {}).get(thread_id)
     if not thread:
-        return {"error": "Thread not found"}
+        return _error("Thread not found", 404)
 
     instructions = thread.get("instructions", [])
     updated_instructions = [ins for ins in instructions if ins["id"] != instruction_id]
 
     if len(updated_instructions) == len(instructions):
-        return {"error": "Instruction not found"}
+        return _error("Instruction not found", 404)
 
     now = datetime.datetime.now(datetime.timezone.utc)
     db.users.update_one(

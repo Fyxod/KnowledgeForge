@@ -29,7 +29,9 @@ class TripleStore:
     def _get_connection(cls, user_id: str, thread_id: str) -> sqlite3.Connection:
         """Get a connection to the triple store, creating the table if needed."""
         db_path = cls._get_db_path(user_id, thread_id)
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS triples (

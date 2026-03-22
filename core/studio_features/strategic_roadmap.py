@@ -55,6 +55,8 @@ def fetch_document_content(document: Document | list[Document]) -> str:
 
     # If a list of Document, compress contents
     elif isinstance(document, list):
+        if not document:
+            return ""
         doc_dicts = []
         for doc in document:
             if hasattr(doc, "full_text") and word_count(doc.full_text) < 8000:

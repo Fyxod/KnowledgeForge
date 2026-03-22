@@ -216,7 +216,16 @@ async def vlm_parse_concurrent(
     async def _process_one(idx: int, img_bytes: bytes) -> str:
         async with semaphore:
             print(f"[VLM] Starting {labels[idx]} (prompt: {prompt_type})...")
-            result = await vlm_parse_slide(img_bytes, port=port, prompt_type=prompt_type)
+            try:
+                # Timeout inside semaphore so a hanging VLM call releases the
+                # slot promptly instead of blocking other pages for 4+ minutes.
+                result = await asyncio.wait_for(
+                    vlm_parse_slide(img_bytes, port=port, prompt_type=prompt_type),
+                    timeout=270,  # slightly above default vLLM timeout as safety net
+                )
+            except asyncio.TimeoutError:
+                print(f"[VLM] {labels[idx]} timed out (semaphore released)")
+                return ""
             if result:
                 print(f"[VLM] {labels[idx]} done ({len(result)} chars)")
             else:
