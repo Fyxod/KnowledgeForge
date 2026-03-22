@@ -129,9 +129,10 @@ def rerank_chunks(
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        # Normalize to 0-1 range using sigmoid
+        # Normalize to 0-1 range using sigmoid (clamped to prevent overflow)
         def _sigmoid(x):
-            return 1.0 / (1.0 + math.exp(-float(x)))
+            x = max(-500.0, min(500.0, float(x)))
+            return 1.0 / (1.0 + math.exp(-x))
 
         for i, chunk in enumerate(chunks):
             chunk["relevance_score"] = _sigmoid(scores[i])

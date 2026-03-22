@@ -23,9 +23,14 @@ from app.routes import (
     upload,
     user,
 )
-from app.socket_handler import sio
+from app.socket_handler import cancel_all_heartbeats, sio
 
 fastapi_app = FastAPI()
+
+
+@fastapi_app.on_event("shutdown")
+async def shutdown_event():
+    await cancel_all_heartbeats()
 
 excluded_routes = [("POST", "/user"), ("POST", "/user/login")]
 fastapi_app.add_middleware(
