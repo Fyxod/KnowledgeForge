@@ -29,25 +29,25 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Main LLM (port 9000) openai/gpt-oss-20b MXFP4    ~16 GB  ~11 GB   0.57
 # VLM      (port 9001) Qwen3.5-9B AWQ 4-bit         ~6 GB   ~3 GB   0.18
-# GLM-OCR  (port 9080) THUDM/glm-ocr BF16           ~2 GB   ~0 GB   0.05
+# GLM-OCR  (port 9090) zai-org/GLM-OCR                 ~2 GB   ~3 GB   0.10
 # ─────────────────────────────────────────────────────────────────────────────
-# Total: 0.57+0.18+0.05 = 0.80 × 48 GB = 38.4 GB + ~1.5 GB OS = ~40 GB ✓
+# Total: 0.57+0.18+0.10 = 0.85 × 48 GB = 40.8 GB + ~1.5 GB OS = ~42.3 GB ✓
 # gpt-oss-20b KV pool: ~11 GB / 128 KB/token → ~90K theoretical → 64K safe (65536).
 #
 # ── VRAM budget on A6000 48GB — VLLM_MODE=qwen-unified ───────────────────────
 # Instance             Model                        Weights  KV pool GPU util
 # ─────────────────────────────────────────────────────────────────────────────
 # Unified  (port 9000) Qwen3.5-9B BF16             ~18 GB  ~18 GB   0.75
-# GLM-OCR  (port 9080) THUDM/glm-ocr BF16           ~2 GB   ~0 GB   0.05
+# GLM-OCR  (port 9090) zai-org/GLM-OCR                 ~2 GB   ~3 GB   0.10
 # ─────────────────────────────────────────────────────────────────────────────
-# Total: 0.75+0.05 = 0.80 × 48 GB = 38.4 GB + ~1.5 GB OS = ~40 GB ✓
+# Total: 0.75+0.10 = 0.85 × 48 GB = 40.8 GB + ~1.5 GB OS = ~42.3 GB ✓
 # Qwen3.5-9B KV pool: ~18 GB → supports 128K context (131072).
 # Single instance serves both text (LLM) and image (VLM) requests on port 9000.
 # Python: set VLLM_MODE=qwen-unified and MAIN_MODEL=Qwen/Qwen3.5-9B in .env.
 #
 # ── GLM-OCR two-tier deployment ───────────────────────────────────────────────
 # GLM-OCR requires two processes:
-#   1. vLLM (port 9080): serves the raw GLM-OCR 0.9B model
+#   1. vLLM (port 9090): serves the raw GLM-OCR 0.9B model
 #   2. glmocr SDK server (port 5002): handles PP-DocLayout-V3 layout detection
 #      and orchestrates calls to vLLM. This is what glm_ocr.py calls.
 #
@@ -74,7 +74,7 @@
 #   bash scripts/start_vllm.sh --logs    # Tail logs after starting
 #   bash scripts/start_vllm.sh --main    # Start main LLM only (port 9000, or unified in qwen-unified mode)
 #   bash scripts/start_vllm.sh --vlm     # Start VLM only (port 9001, no-op in qwen-unified mode)
-#   bash scripts/start_vllm.sh --glm     # Start GLM-OCR only (vLLM port 9080 + SDK port 5002)
+#   bash scripts/start_vllm.sh --glm     # Start GLM-OCR only (vLLM port 9090 + SDK port 5002)
 #
 # Mode switching (set in .env):
 #   VLLM_MODE=gpt-oss        (default) gpt-oss-20b on 9000 + Qwen AWQ VLM on 9001
@@ -84,12 +84,12 @@
 # Instances managed here (gpt-oss mode):
 #   Instance 1: Main LLM        — port 9000  (VLLM_MAIN_URL)
 #   Instance 2: VLM             — port 9001  (VLLM_VLM_URL)
-#   Instance 3: GLM-OCR vLLM   — port 9080  (raw model backend)
+#   Instance 3: GLM-OCR vLLM   — port 9090  (raw model backend)
 #   Instance 4: GLM-OCR SDK    — port 5002  (layout detection + orchestration)
 #
 # Instances managed here (qwen-unified mode):
 #   Instance 1: Unified LLM+VLM — port 9000  (VLLM_MAIN_URL, also handles VLM requests)
-#   Instance 2: GLM-OCR vLLM    — port 9080  (raw model backend)
+#   Instance 2: GLM-OCR vLLM    — port 9090  (raw model backend)
 #   Instance 3: GLM-OCR SDK     — port 5002  (layout detection + orchestration)
 #
 # ==============================================================================
@@ -152,8 +152,8 @@ MAIN_MODEL="${MAIN_MODEL:-gpt-oss:20b}"
 VLLM_VLM_MODEL="${VLLM_VLM_MODEL:-cyankiwi/Qwen3.5-9B-AWQ-4bit}"
 
 # GLM-OCR: 0.9B model for structured document OCR (tables, formulas, layout).
-# HuggingFace: THUDM/glm-ocr  (zai-org/GLM-OCR on GitHub)
-VLLM_GLM_OCR_MODEL="${VLLM_GLM_OCR_MODEL:-THUDM/glm-ocr}"
+# GitHub: zai-org/GLM-OCR  (HuggingFace: zai-org/GLM-OCR)
+VLLM_GLM_OCR_MODEL="${VLLM_GLM_OCR_MODEL:-zai-org/GLM-OCR}"
 
 VLLM_DRAFT_MODEL="${VLLM_DRAFT_MODEL:-}"
 
@@ -174,10 +174,10 @@ VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-65536}"
 VLLM_VLM_GPU_MEMORY_UTILIZATION="${VLLM_VLM_GPU_MEMORY_UTILIZATION:-0.18}"
 VLLM_VLM_MAX_MODEL_LEN="${VLLM_VLM_MAX_MODEL_LEN:-32768}"
 
-# GLM-OCR: 0.05 × 48 GB = 2.4 GB reserved — ample for a 0.9B BF16 model (~1.8 GB).
-GLM_OCR_VLLM_PORT="${GLM_OCR_VLLM_PORT:-9080}"
+# GLM-OCR: 0.10 × 48 GB = 4.8 GB reserved — ample for a 0.9B model + KV cache.
+GLM_OCR_VLLM_PORT="${GLM_OCR_VLLM_PORT:-9090}"
 GLM_OCR_SDK_PORT="${GLM_OCR_SDK_PORT:-5002}"
-VLLM_GLM_OCR_GPU_MEMORY_UTILIZATION="${VLLM_GLM_OCR_GPU_MEMORY_UTILIZATION:-0.05}"
+VLLM_GLM_OCR_GPU_MEMORY_UTILIZATION="${VLLM_GLM_OCR_GPU_MEMORY_UTILIZATION:-0.10}"
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 
@@ -312,21 +312,22 @@ if [ "$START_VLM" = true ] && [ "$VLLM_MODE" != "qwen-unified" ]; then
         "$VLM_EXTRA_ARGS"
 fi
 
-# ── Instance 3: GLM-OCR vLLM (port 9080) + SDK server (port 5002) ────────────
+# ── Instance 3: GLM-OCR vLLM (port 9090) + SDK server (port 5002) ────────────
 # GLM-OCR uses a two-tier deployment:
-#   - vLLM (port 9080): serves the raw GLM-OCR 0.9B model
+#   - vLLM (port 9090): serves zai-org/GLM-OCR via OpenAI-compat API
 #   - glmocr SDK server (port 5002): runs PP-DocLayout-V3 layout detection,
-#     then calls vLLM at 9080. This is the endpoint glm_ocr.py calls.
+#     then calls vLLM at 9090. This is the endpoint glm_ocr.py calls.
 if [ "$START_GLM" = true ]; then
-    # Step 1: Start the GLM-OCR vLLM backend (port 9080)
+    # Step 1: Start the GLM-OCR vLLM backend (port 9090)
+    # --allowed-local-media-path /: required by GLM-OCR for local file access
     start_instance \
         "glm_ocr" \
         "$GLM_OCR_VLLM_PORT" \
         "$VLLM_GLM_OCR_MODEL" \
         "$VLLM_GLM_OCR_MODEL" \
         "$VLLM_GLM_OCR_GPU_MEMORY_UTILIZATION" \
-        "8192" \
-        "--enable-prefix-caching"
+        "4096" \
+        "--enable-prefix-caching --allowed-local-media-path /"
 
     # Step 2: Start the glmocr SDK server (port 5002)
     # This process handles layout detection and orchestrates calls to vLLM.
