@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     VLLM_MAIN_MODEL: str = "openai/gpt-oss-20b"             # Use "openai/gpt-oss-120b" for 120B variant
     VLLM_VLM_MODEL: str = "cyankiwi/Qwen3.5-9B-AWQ-4bit"   # Qwen3.5-9B AWQ — vision+text+reasoning (~6GB VRAM)
     VLLM_DRAFT_MODEL: str = ""                              # Speculative decoding draft model, empty = disabled
-    VLLM_GLM_OCR_MODEL: str = "zai-org/GLM-OCR"              # GLM-OCR 0.9B vLLM backend (port 9090); SDK server on port 5002
+    VLLM_GLM_OCR_MODEL: str = "zai-org/GLM-OCR"              # GLM-OCR 0.9B vLLM backend (port 8080); SDK server on port 5002
     VLLM_GPU_MEMORY_UTILIZATION: float = 0.57               # gpt-oss-20b MXFP4: 0.57×48=27.4GB → ~16GB weights + ~11.4GB KV → ~90K theoretical max
     VLLM_VLM_GPU_MEMORY_UTILIZATION: float = 0.18           # Qwen3.5-9B AWQ ~6GB; 0.18×48=8.6GB → ~2.6GB KV (sufficient for image tasks)
     VLLM_MAX_MODEL_LEN: int = 65536                         # 64K — safe within ~90K ceiling; total model VRAM ~38.4GB (40GB cap)
