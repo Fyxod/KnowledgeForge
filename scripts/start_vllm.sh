@@ -286,15 +286,10 @@ fi
 # ── Instance 2: VLM (port 9001) ──────────────────────────────────────────────
 # Qwen3.5-9B — vision+text+reasoning for slide/PDF parsing and visual QnA.
 # --reasoning-parser qwen3: strips <think>...</think> server-side.
-# --quantization awq: auto-added for AWQ model variants.
+# vLLM auto-detects quantization (AWQ, GPTQ, etc.) from the model config.
 # Skipped in qwen-unified mode — port 9000 handles all VLM requests.
 if [ "$START_VLM" = true ] && [ "$VLLM_MODE" != "qwen-unified" ]; then
     VLM_EXTRA_ARGS="--enable-prefix-caching --reasoning-parser qwen3"
-
-    if echo "$VLLM_VLM_MODEL" | grep -qi "awq"; then
-        VLM_EXTRA_ARGS="$VLM_EXTRA_ARGS --quantization awq"
-        echo "[VLM] AWQ quantization detected — adding --quantization awq"
-    fi
 
     start_instance \
         "vlm" \
