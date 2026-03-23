@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     # VLLM_MODE=qwen-unified: single Qwen3.5-9B BF16 on port 9000 handles both LLM + VLM
     VLLM_MODE: str = "gpt-oss"
     VLLM_UNIFIED_MODEL: str = "Qwen/Qwen3.5-9B"  # BF16 full model (~18 GB VRAM) used in unified mode
+    VLLM_UNIFIED_GPU_MEMORY_UTILIZATION: float = 0.75  # 0.75×48=36GB → ~18GB weights + ~18GB KV → 128K context
+    VLLM_UNIFIED_MAX_MODEL_LEN: int = 131072           # 128K — full Qwen3.5-9B context window
 
     @property
     def effective_vlm_url(self) -> str:
