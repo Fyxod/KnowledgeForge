@@ -7,9 +7,9 @@
 #   bash scripts/stop_vllm.sh
 #
 # Stops all instances started by start_vllm.sh by reading stored PID files:
-#   - Main LLM        (port 8000)
-#   - VLM             (port 8001)
-#   - GLM-OCR vLLM    (port 8080)
+#   - Main LLM        (port 9000)
+#   - VLM             (port 9001)
+#   - GLM-OCR vLLM    (port 9080)
 #   - GLM-OCR SDK     (port 5002)
 #
 # Falls back to killing all vLLM processes via pgrep if PID files are missing.

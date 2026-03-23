@@ -97,7 +97,7 @@ async def glm_ocr_parse(
 
     Uses standard /glmocr/parse with image data URIs.
     Requires the dual-service deployment:
-      1. vLLM running on port 8080 (serves the raw GLM-OCR model)
+      1. vLLM running on port 9080 (serves the raw GLM-OCR model)
       2. `python -m glmocr.server` running on port 5002 (handles PP-DocLayout-V3 & calls vLLM)
 
     Args:

@@ -5,29 +5,25 @@
 #
 # Uses the official `vllm serve` CLI.
 #
-# ── PREREQUISITE: Custom vLLM build for gpt-oss-20b ──────────────────────────
-# gpt-oss-20b requires OpenAI's custom vLLM wheel, NOT the standard build:
+# ── PREREQUISITE ─────────────────────────────────────────────────────────────
+# Install standard vLLM (gpt-oss is supported natively — no custom wheel needed):
 #
-#   uv pip install --pre "vllm==0.10.1+gptoss" \
-#       --extra-index-url https://wheels.vllm.ai/gpt-oss/ \
-#       --extra-index-url https://download.pytorch.org/whl/nightly/cu128 \
-#       --index-strategy unsafe-best-match
+#   uv pip install vllm --torch-backend=auto
 #
-# Or Docker:  docker pull vllm/vllm-openai:gptoss
+# Or Docker:  docker run --gpus all vllm/vllm-openai --model openai/gpt-oss-20b
 # Docs: https://docs.vllm.ai/projects/recipes/en/latest/OpenAI/GPT-OSS.html
 #
 # ── MXFP4 quantization (built into gpt-oss-20b) ──────────────────────────────
 # gpt-oss-20b ships with MoE weights pre-quantized to MXFP4 (~4.25 bits/weight).
 # Attention layers remain in BF16. Real VRAM footprint: ~16 GB (not ~42 GB BF16).
-# On A6000 Ada (SM 8.9), vLLM automatically falls back to Marlin MXFP4 via Triton.
-# Required env vars for Ada are set below in the "Ada Lovelace" section.
+# vLLM auto-detects the GPU architecture and applies the correct MXFP4 backend.
 #
 # ── VRAM budget on A6000 48GB — VLLM_MODE=gpt-oss (default) ──────────────────
 # Instance             Model                        Weights  KV pool GPU util
 # ─────────────────────────────────────────────────────────────────────────────
-# Main LLM (port 8000) openai/gpt-oss-20b MXFP4    ~16 GB  ~11 GB   0.57
-# VLM      (port 8001) Qwen3.5-9B AWQ 4-bit         ~6 GB   ~3 GB   0.18
-# GLM-OCR  (port 8080) THUDM/glm-ocr BF16           ~2 GB   ~0 GB   0.05
+# Main LLM (port 9000) openai/gpt-oss-20b MXFP4    ~16 GB  ~11 GB   0.57
+# VLM      (port 9001) Qwen3.5-9B AWQ 4-bit         ~6 GB   ~3 GB   0.18
+# GLM-OCR  (port 9080) THUDM/glm-ocr BF16           ~2 GB   ~0 GB   0.05
 # ─────────────────────────────────────────────────────────────────────────────
 # Total: 0.57+0.18+0.05 = 0.80 × 48 GB = 38.4 GB + ~1.5 GB OS = ~40 GB ✓
 # gpt-oss-20b KV pool: ~11 GB / 128 KB/token → ~90K theoretical → 64K safe (65536).
@@ -35,17 +31,17 @@
 # ── VRAM budget on A6000 48GB — VLLM_MODE=qwen-unified ───────────────────────
 # Instance             Model                        Weights  KV pool GPU util
 # ─────────────────────────────────────────────────────────────────────────────
-# Unified  (port 8000) Qwen3.5-9B BF16             ~18 GB  ~18 GB   0.75
-# GLM-OCR  (port 8080) THUDM/glm-ocr BF16           ~2 GB   ~0 GB   0.05
+# Unified  (port 9000) Qwen3.5-9B BF16             ~18 GB  ~18 GB   0.75
+# GLM-OCR  (port 9080) THUDM/glm-ocr BF16           ~2 GB   ~0 GB   0.05
 # ─────────────────────────────────────────────────────────────────────────────
 # Total: 0.75+0.05 = 0.80 × 48 GB = 38.4 GB + ~1.5 GB OS = ~40 GB ✓
 # Qwen3.5-9B KV pool: ~18 GB → supports 128K context (131072).
-# Single instance serves both text (LLM) and image (VLM) requests on port 8000.
+# Single instance serves both text (LLM) and image (VLM) requests on port 9000.
 # Python: set VLLM_MODE=qwen-unified and MAIN_MODEL=Qwen/Qwen3.5-9B in .env.
 #
 # ── GLM-OCR two-tier deployment ───────────────────────────────────────────────
 # GLM-OCR requires two processes:
-#   1. vLLM (port 8080): serves the raw GLM-OCR 0.9B model
+#   1. vLLM (port 9080): serves the raw GLM-OCR 0.9B model
 #   2. glmocr SDK server (port 5002): handles PP-DocLayout-V3 layout detection
 #      and orchestrates calls to vLLM. This is what glm_ocr.py calls.
 #
@@ -57,8 +53,9 @@
 # --quantization awq: added automatically for AWQ model variants.
 #
 # ── gpt-oss-20b serving notes ────────────────────────────────────────────────
-# --trust-remote-code: required for custom MoE architecture.
-# --no-enable-prefix-caching: recommended by official docs for all GPU families.
+# Minimal: vllm serve openai/gpt-oss-20b
+# vLLM handles trust-remote-code and MXFP4 quantization automatically.
+# --no-enable-prefix-caching: recommended by official docs for benchmarking.
 #   Set VLLM_MAIN_APC=1 in .env to enable APC (cross-user static prompt caching).
 #
 # --served-model-name: registers the model under MAIN_MODEL (e.g.
@@ -67,24 +64,24 @@
 # Usage:
 #   bash scripts/start_vllm.sh           # Start all instances for current VLLM_MODE
 #   bash scripts/start_vllm.sh --logs    # Tail logs after starting
-#   bash scripts/start_vllm.sh --main    # Start main LLM only (or unified in qwen-unified mode)
-#   bash scripts/start_vllm.sh --vlm     # Start VLM only (no-op in qwen-unified mode)
-#   bash scripts/start_vllm.sh --glm     # Start GLM-OCR only (vLLM + SDK server)
+#   bash scripts/start_vllm.sh --main    # Start main LLM only (port 9000, or unified in qwen-unified mode)
+#   bash scripts/start_vllm.sh --vlm     # Start VLM only (port 9001, no-op in qwen-unified mode)
+#   bash scripts/start_vllm.sh --glm     # Start GLM-OCR only (vLLM port 9080 + SDK port 5002)
 #
 # Mode switching (set in .env):
-#   VLLM_MODE=gpt-oss        (default) gpt-oss-20b on 8000 + Qwen AWQ VLM on 8001
-#   VLLM_MODE=qwen-unified   Single Qwen3.5-9B BF16 on 8000 — both LLM and VLM
+#   VLLM_MODE=gpt-oss        (default) gpt-oss-20b on 9000 + Qwen AWQ VLM on 9001
+#   VLLM_MODE=qwen-unified   Single Qwen3.5-9B BF16 on 9000 — both LLM and VLM
 #   Also set MAIN_MODEL=Qwen/Qwen3.5-9B in .env when using qwen-unified mode.
 #
 # Instances managed here (gpt-oss mode):
-#   Instance 1: Main LLM        — port 8000  (VLLM_MAIN_URL)
-#   Instance 2: VLM             — port 8001  (VLLM_VLM_URL)
-#   Instance 3: GLM-OCR vLLM   — port 8080  (raw model backend)
+#   Instance 1: Main LLM        — port 9000  (VLLM_MAIN_URL)
+#   Instance 2: VLM             — port 9001  (VLLM_VLM_URL)
+#   Instance 3: GLM-OCR vLLM   — port 9080  (raw model backend)
 #   Instance 4: GLM-OCR SDK    — port 5002  (layout detection + orchestration)
 #
 # Instances managed here (qwen-unified mode):
-#   Instance 1: Unified LLM+VLM — port 8000  (VLLM_MAIN_URL, also handles VLM requests)
-#   Instance 2: GLM-OCR vLLM    — port 8080  (raw model backend)
+#   Instance 1: Unified LLM+VLM — port 9000  (VLLM_MAIN_URL, also handles VLM requests)
+#   Instance 2: GLM-OCR vLLM    — port 9080  (raw model backend)
 #   Instance 3: GLM-OCR SDK     — port 5002  (layout detection + orchestration)
 #
 # ==============================================================================
@@ -99,19 +96,10 @@ if [ -f ".env" ]; then
     set +a
 fi
 
-# ── Ada Lovelace (A6000, SM 8.9) required env vars ───────────────────────────
-# Required for Triton MXFP4 emulation on Ada Lovelace (no native MXFP4 tensor cores).
-# These are no-ops on Hopper (H100) or Blackwell (B200) — safe to leave in.
-# Docs: https://docs.vllm.ai/projects/recipes/en/latest/OpenAI/GPT-OSS.html
-export VLLM_ATTENTION_BACKEND="${VLLM_ATTENTION_BACKEND:-TRITON_ATTN_VLLM_V1}"
-export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.9}"
-# Uncomment if multiple CUDA versions are installed (gptoss build requires cu128):
-# export CUDA_HOME=/usr/local/cuda-12.8
-
 # ── Configuration ─────────────────────────────────────────────────────────────
 # Mode: gpt-oss (default) or qwen-unified.
-# In qwen-unified mode, a single Qwen3.5-9B BF16 instance serves port 8000 for
-# both text (LLM) and image (VLM) requests. Port 8001 is not used.
+# In qwen-unified mode, a single Qwen3.5-9B BF16 instance serves port 9000 for
+# both text (LLM) and image (VLM) requests. Port 9001 is not used.
 VLLM_MODE="${VLLM_MODE:-gpt-oss}"
 
 # Unified mode model — Qwen3.5-9B BF16 (~18 GB VRAM, 128K context, vision+text+reasoning).
@@ -122,7 +110,7 @@ VLLM_UNIFIED_MODEL="${VLLM_UNIFIED_MODEL:-Qwen/Qwen3.5-9B}"
 VLLM_UNIFIED_GPU_MEMORY_UTILIZATION="${VLLM_UNIFIED_GPU_MEMORY_UTILIZATION:-0.75}"
 VLLM_UNIFIED_MAX_MODEL_LEN="${VLLM_UNIFIED_MAX_MODEL_LEN:-131072}"
 
-# Main LLM: official OpenAI gpt-oss model. Requires OpenAI's custom vLLM build.
+# Main LLM: official OpenAI gpt-oss model (supported natively in standard vLLM).
 # Override in .env:  VLLM_MAIN_MODEL=openai/gpt-oss-120b  for the 120B variant.
 VLLM_MAIN_MODEL="${VLLM_MAIN_MODEL:-openai/gpt-oss-20b}"
 
@@ -158,7 +146,7 @@ VLLM_VLM_GPU_MEMORY_UTILIZATION="${VLLM_VLM_GPU_MEMORY_UTILIZATION:-0.18}"
 VLLM_VLM_MAX_MODEL_LEN="${VLLM_VLM_MAX_MODEL_LEN:-32768}"
 
 # GLM-OCR: 0.05 × 48 GB = 2.4 GB reserved — ample for a 0.9B BF16 model (~1.8 GB).
-GLM_OCR_VLLM_PORT="${GLM_OCR_VLLM_PORT:-8080}"
+GLM_OCR_VLLM_PORT="${GLM_OCR_VLLM_PORT:-9080}"
 GLM_OCR_SDK_PORT="${GLM_OCR_SDK_PORT:-5002}"
 VLLM_GLM_OCR_GPU_MEMORY_UTILIZATION="${VLLM_GLM_OCR_GPU_MEMORY_UTILIZATION:-0.05}"
 
@@ -219,14 +207,14 @@ for arg in "$@"; do
     esac
 done
 
-# ── Instance 1: Main LLM (port 8000) ─────────────────────────────────────────
+# ── Instance 1: Main LLM (port 9000) ─────────────────────────────────────────
 if [ "$START_MAIN" = true ]; then
     if [ "$VLLM_MODE" = "qwen-unified" ]; then
         # ── qwen-unified mode: single Qwen3.5-9B BF16 serves both LLM + VLM ────
         # --reasoning-parser qwen3: strips <think>...</think> server-side.
         # --enable-prefix-caching: safe for Qwen (no known issues unlike gpt-oss-20b).
         # No --trust-remote-code needed for standard HuggingFace Qwen models.
-        echo "[qwen-unified] Starting Qwen3.5-9B BF16 as unified LLM+VLM on port 8000"
+        echo "[qwen-unified] Starting Qwen3.5-9B BF16 as unified LLM+VLM on port 9000"
         echo "[qwen-unified] Context: ${VLLM_UNIFIED_MAX_MODEL_LEN} tokens  |  GPU util: ${VLLM_UNIFIED_GPU_MEMORY_UTILIZATION}"
         echo "[qwen-unified] Python: set VLLM_MODE=qwen-unified and MAIN_MODEL=Qwen/Qwen3.5-9B in .env"
 
@@ -234,7 +222,7 @@ if [ "$START_MAIN" = true ]; then
 
         start_instance \
             "main_llm" \
-            "8000" \
+            "9000" \
             "$VLLM_UNIFIED_MODEL" \
             "$MAIN_MODEL" \
             "$VLLM_UNIFIED_GPU_MEMORY_UTILIZATION" \
@@ -242,14 +230,14 @@ if [ "$START_MAIN" = true ]; then
             "$UNIFIED_EXTRA_ARGS"
     else
         # ── gpt-oss mode (default): gpt-oss-20b MXFP4 ───────────────────────────
-        # --trust-remote-code: required for gpt-oss-20b custom MoE architecture.
-        # --no-enable-prefix-caching: recommended by official docs for all GPU families.
+        # vLLM handles trust-remote-code and MXFP4 quantization automatically.
+        # --no-enable-prefix-caching: recommended by official docs for benchmarking.
         #   Set VLLM_MAIN_APC=1 in .env to enable APC (static prompt prefix caching).
         if [ "${VLLM_MAIN_APC:-}" = "1" ]; then
-            MAIN_EXTRA_ARGS="--trust-remote-code --enable-prefix-caching"
+            MAIN_EXTRA_ARGS="--enable-prefix-caching"
             echo "[Main LLM] APC enabled (VLLM_MAIN_APC=1)"
         else
-            MAIN_EXTRA_ARGS="--trust-remote-code --no-enable-prefix-caching"
+            MAIN_EXTRA_ARGS="--no-enable-prefix-caching"
         fi
 
         # Speculative decoding via EAGLE3 — enabled when VLLM_DRAFT_MODEL is non-empty.
@@ -262,7 +250,7 @@ if [ "$START_MAIN" = true ]; then
 
         start_instance \
             "main_llm" \
-            "8000" \
+            "9000" \
             "$VLLM_MAIN_MODEL" \
             "$MAIN_MODEL" \
             "$VLLM_GPU_MEMORY_UTILIZATION" \
@@ -271,11 +259,11 @@ if [ "$START_MAIN" = true ]; then
     fi
 fi
 
-# ── Instance 2: VLM (port 8001) ──────────────────────────────────────────────
+# ── Instance 2: VLM (port 9001) ──────────────────────────────────────────────
 # Qwen3.5-9B — vision+text+reasoning for slide/PDF parsing and visual QnA.
 # --reasoning-parser qwen3: strips <think>...</think> server-side.
 # --quantization awq: auto-added for AWQ model variants.
-# Skipped in qwen-unified mode — port 8000 handles all VLM requests.
+# Skipped in qwen-unified mode — port 9000 handles all VLM requests.
 if [ "$START_VLM" = true ] && [ "$VLLM_MODE" != "qwen-unified" ]; then
     VLM_EXTRA_ARGS="--enable-prefix-caching --reasoning-parser qwen3"
 
@@ -286,7 +274,7 @@ if [ "$START_VLM" = true ] && [ "$VLLM_MODE" != "qwen-unified" ]; then
 
     start_instance \
         "vlm" \
-        "8001" \
+        "9001" \
         "$VLLM_VLM_MODEL" \
         "$VLLM_VLM_MODEL" \
         "$VLLM_VLM_GPU_MEMORY_UTILIZATION" \
@@ -294,13 +282,13 @@ if [ "$START_VLM" = true ] && [ "$VLLM_MODE" != "qwen-unified" ]; then
         "$VLM_EXTRA_ARGS"
 fi
 
-# ── Instance 3: GLM-OCR vLLM (port 8080) + SDK server (port 5002) ────────────
+# ── Instance 3: GLM-OCR vLLM (port 9080) + SDK server (port 5002) ────────────
 # GLM-OCR uses a two-tier deployment:
-#   - vLLM (port 8080): serves the raw GLM-OCR 0.9B model
+#   - vLLM (port 9080): serves the raw GLM-OCR 0.9B model
 #   - glmocr SDK server (port 5002): runs PP-DocLayout-V3 layout detection,
-#     then calls vLLM at 8080. This is the endpoint glm_ocr.py calls.
+#     then calls vLLM at 9080. This is the endpoint glm_ocr.py calls.
 if [ "$START_GLM" = true ]; then
-    # Step 1: Start the GLM-OCR vLLM backend (port 8080)
+    # Step 1: Start the GLM-OCR vLLM backend (port 9080)
     start_instance \
         "glm_ocr" \
         "$GLM_OCR_VLLM_PORT" \
@@ -338,17 +326,17 @@ check_ready() {
     fi
 }
 
-[ "$START_MAIN" = true ] && check_ready "main_llm" "8000"
-[ "$START_VLM"  = true ] && [ "$VLLM_MODE" != "qwen-unified" ] && check_ready "vlm" "8001"
+[ "$START_MAIN" = true ] && check_ready "main_llm" "9000"
+[ "$START_VLM"  = true ] && [ "$VLLM_MODE" != "qwen-unified" ] && check_ready "vlm" "9001"
 [ "$START_GLM"  = true ] && check_ready "glm_ocr"  "$GLM_OCR_VLLM_PORT"
 
 echo ""
 echo "vLLM startup complete.  [mode: ${VLLM_MODE}]"
 if [ "$VLLM_MODE" = "qwen-unified" ]; then
-    [ "$START_MAIN" = true ] && echo "  Unified LLM+VLM: http://localhost:8000/v1  (model: ${VLLM_UNIFIED_MODEL}, ctx: ${VLLM_UNIFIED_MAX_MODEL_LEN})"
+    [ "$START_MAIN" = true ] && echo "  Unified LLM+VLM: http://localhost:9000/v1  (model: ${VLLM_UNIFIED_MODEL}, ctx: ${VLLM_UNIFIED_MAX_MODEL_LEN})"
 else
-    [ "$START_MAIN" = true ] && echo "  Main LLM       : http://localhost:8000/v1  (model: ${MAIN_MODEL}, MXFP4 via Triton, ctx: ${VLLM_MAX_MODEL_LEN})"
-    [ "$START_VLM"  = true ] && echo "  VLM            : http://localhost:8001/v1  (model: ${VLLM_VLM_MODEL})"
+    [ "$START_MAIN" = true ] && echo "  Main LLM       : http://localhost:9000/v1  (model: ${MAIN_MODEL}, MXFP4 via Triton, ctx: ${VLLM_MAX_MODEL_LEN})"
+    [ "$START_VLM"  = true ] && echo "  VLM            : http://localhost:9001/v1  (model: ${VLLM_VLM_MODEL})"
 fi
 [ "$START_GLM"  = true ] && echo "  GLM-OCR vLLM   : http://localhost:${GLM_OCR_VLLM_PORT}/v1  (model: ${VLLM_GLM_OCR_MODEL})"
 [ "$START_GLM"  = true ] && echo "  GLM-OCR SDK    : http://localhost:${GLM_OCR_SDK_PORT}/glmocr/parse  (layout + orchestration)"
