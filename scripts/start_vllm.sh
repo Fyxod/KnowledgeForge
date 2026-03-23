@@ -97,11 +97,14 @@
 set -euo pipefail
 
 # ── Load .env if present ──────────────────────────────────────────────────────
+# Source WITHOUT `set -a` so that custom VLLM_* variables stay shell-local and
+# are NOT exported into the vLLM process environment.  vLLM warns about every
+# unrecognized VLLM_*-prefixed env var it finds, and our config variables
+# (VLLM_MODE, VLLM_MAIN_URL, VLLM_UNIFIED_MODEL, etc.) are not real vLLM
+# env vars.  All values are passed via CLI flags to `vllm serve`.
 if [ -f ".env" ]; then
-    set -a
     # shellcheck disable=SC1091
     source .env
-    set +a
 fi
 
 # ── Activate vLLM venv ──────────────────────────────────────────────────────

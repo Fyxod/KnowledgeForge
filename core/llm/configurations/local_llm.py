@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from langchain_core.language_models import LLM
 from openai import OpenAI
+from pydantic import PrivateAttr
 
 from core.config import settings
 
@@ -26,10 +27,12 @@ class MyServerLLM(LLM):
 
     model: str
     port: int  # Kept for API compatibility — ignored; vLLM URL comes from settings
+    _client: OpenAI = PrivateAttr()
 
     def __init__(self, model: str, port: int = 11434, **kwargs):
         print(f"Initializing MyServerLLM (vLLM) with model={model} at {settings.VLLM_MAIN_URL}")
         super().__init__(model=model, port=port, **kwargs)
+        self._client = OpenAI(base_url=settings.VLLM_MAIN_URL, api_key="EMPTY")
 
     @property
     def _llm_type(self) -> str:
@@ -56,8 +59,7 @@ class MyServerLLM(LLM):
         print(f"[vLLM] Sending request — model={self.model}, disable_thinking={disable_thinking}")
 
         try:
-            client = OpenAI(base_url=settings.VLLM_MAIN_URL, api_key="EMPTY")
-            response = client.chat.completions.create(
+            response = self._client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
