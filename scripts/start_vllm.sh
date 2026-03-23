@@ -61,6 +61,8 @@
 # ── gpt-oss-20b serving notes ────────────────────────────────────────────────
 # Minimal: vllm serve openai/gpt-oss-20b
 # vLLM handles trust-remote-code and MXFP4 quantization automatically.
+# --enforce-eager: required on Ada Lovelace (SM 8.9) — Triton MXFP4 MoE
+#   kernels fail during CUDA graph capture. Hopper (SM 9.0+) may not need it.
 # --no-enable-prefix-caching: recommended by official docs for benchmarking.
 #   Set VLLM_MAIN_APC=1 in .env to enable APC (cross-user static prompt caching).
 #
@@ -255,13 +257,19 @@ if [ "$START_MAIN" = true ]; then
     else
         # ── gpt-oss mode (default): gpt-oss-20b MXFP4 ───────────────────────────
         # vLLM handles trust-remote-code and MXFP4 quantization automatically.
+        # --enforce-eager: disables CUDA graph capture, using eager execution.
+        #   Required on Ada Lovelace (SM 8.9, e.g. A6000/RTX 4090) because the
+        #   Triton-emulated MXFP4 MoE kernels fail during CUDA graph recording.
+        #   Native MXFP4 (Hopper SM 9.0+) may work without this flag.
+        #   Performance impact: ~5-15% decode throughput reduction (kernel launch
+        #   overhead); prefill and startup are unaffected or faster.
         # --no-enable-prefix-caching: recommended by official docs for benchmarking.
         #   Set VLLM_MAIN_APC=1 in .env to enable APC (static prompt prefix caching).
         if [ "${VLLM_MAIN_APC:-}" = "1" ]; then
-            MAIN_EXTRA_ARGS="--enable-prefix-caching"
+            MAIN_EXTRA_ARGS="--enforce-eager --enable-prefix-caching"
             echo "[Main LLM] APC enabled (VLLM_MAIN_APC=1)"
         else
-            MAIN_EXTRA_ARGS="--no-enable-prefix-caching"
+            MAIN_EXTRA_ARGS="--enforce-eager --no-enable-prefix-caching"
         fi
 
         # Speculative decoding via EAGLE3 — enabled when VLLM_DRAFT_MODEL is non-empty.
