@@ -6,9 +6,15 @@
 # Uses the official `vllm serve` CLI.
 #
 # ── PREREQUISITE ─────────────────────────────────────────────────────────────
-# Install standard vLLM (gpt-oss is supported natively — no custom wheel needed):
+# Install vLLM in a dedicated venv (recommended — keeps it isolated from the app):
 #
+#   python -m venv ~/vllm-venv
+#   source ~/vllm-venv/bin/activate
 #   uv pip install vllm --torch-backend=auto
+#   deactivate
+#
+# Then set VLLM_VENV in .env so this script activates it automatically:
+#   VLLM_VENV=~/vllm-venv
 #
 # Or Docker:  docker run --gpus all vllm/vllm-openai --model openai/gpt-oss-20b
 # Docs: https://docs.vllm.ai/projects/recipes/en/latest/OpenAI/GPT-OSS.html
@@ -94,6 +100,24 @@ if [ -f ".env" ]; then
     # shellcheck disable=SC1091
     source .env
     set +a
+fi
+
+# ── Activate vLLM venv ──────────────────────────────────────────────────────
+# Set VLLM_VENV in .env to the path of a dedicated vLLM virtualenv.
+# If unset, the script assumes `vllm` is already on PATH (system install or
+# the caller has already activated the correct environment).
+VLLM_VENV="${VLLM_VENV:-}"
+if [ -n "$VLLM_VENV" ]; then
+    VLLM_VENV_EXPANDED="${VLLM_VENV/#\~/$HOME}"
+    ACTIVATE="$VLLM_VENV_EXPANDED/bin/activate"
+    if [ -f "$ACTIVATE" ]; then
+        echo "Activating vLLM venv: $VLLM_VENV_EXPANDED"
+        # shellcheck disable=SC1090
+        source "$ACTIVATE"
+    else
+        echo "ERROR: VLLM_VENV is set but $ACTIVATE does not exist." >&2
+        exit 1
+    fi
 fi
 
 # ── Configuration ─────────────────────────────────────────────────────────────
