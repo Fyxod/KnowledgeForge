@@ -1,3 +1,7 @@
+# PyTorch with CUDA 12.4 — matches the NVIDIA driver (version 12040) on the
+# GPU server.  Without this, pip pulls the latest torch (cu128+) which crashes
+# at startup with "NVIDIA driver on your system is too old".
+--extra-index-url https://download.pytorch.org/whl/cu124
 bcrypt
 chromadb
 fastapi
@@ -15,7 +19,7 @@ pytesseract
 python-dotenv
 python-multipart
 python-socketio
-torch
+torch>=2.4,<2.11
 uvicorn[standard]
 aiofiles
 google-genai
