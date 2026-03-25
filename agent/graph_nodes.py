@@ -78,6 +78,13 @@ async def retriever(state: AgentState) -> AgentState:
     ):
         additional_queries.append(state.resolved_query)
 
+    # Semantic expansion: LLM-generated alternative phrasings from decomposition
+    if state.retrieval_queries:
+        for rq in state.retrieval_queries:
+            if rq and rq not in additional_queries and rq != query:
+                additional_queries.append(rq)
+        print(f"[Retrieval] +{len(state.retrieval_queries)} semantic expansion queries")
+
     # Phase 2.3: HyDE — generate a hypothetical document passage for retrieval
     if SWITCHES.get("HYDE", False):
         try:

@@ -176,6 +176,15 @@ class DecompositionLLMOutput(LLMOutputBase):
     sub_queries: List[str] = Field(
         description="List of standalone sub-queries generated from the original query."
     )
+    retrieval_queries: List[str] = Field(
+        default_factory=list,
+        description=(
+            "2-3 alternative phrasings of the resolved query using synonyms, related "
+            "terminology, and different vocabulary that documents might use. These are "
+            "used for broader vector search coverage — e.g., 'timelines' → 'milestones "
+            "and schedule', 'SoW' → 'Statement of Work scope and deliverables'."
+        ),
+    )
     requires_full_data: bool = Field(
         default=False,
         description=(

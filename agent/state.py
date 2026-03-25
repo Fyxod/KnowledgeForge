@@ -100,6 +100,12 @@ class AgentState(BaseModel):
         description="Sub-queries from decomposition for parallel retrieval within the agent.",
     )
 
+    # Semantic retrieval expansion — alternative phrasings for broader vector search
+    retrieval_queries: List[str] = Field(
+        default_factory=list,
+        description="LLM-generated alternative query phrasings with synonyms and related terminology for wider retrieval coverage.",
+    )
+
     # Phase 3.2: Triple context — entity relationships injected at retrieval time
     triple_context: Optional[str] = Field(
         default=None,
