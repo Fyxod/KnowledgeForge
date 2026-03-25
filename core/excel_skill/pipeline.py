@@ -280,13 +280,23 @@ async def _extract_sheet_data(
     return pd.DataFrame(columns=col_names)
 
 
+def _rows_to_strings(df: pd.DataFrame) -> list[str]:
+    """Convert each DataFrame row into a readable 'Col: val | Col: val' string."""
+    cols = list(df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        parts = [f"{c}: {row[c]}" for c in cols if pd.notna(row[c]) and str(row[c]).strip()]
+        rows.append(" | ".join(parts) if parts else "(empty row)")
+    return rows
+
+
 async def _process_nlp_column(
     df: pd.DataFrame,
     column_name: str,
     instruction: str,
 ) -> pd.DataFrame:
     """
-    Process an NLP column by sending text data to the LLM in batches.
+    Process an NLP column by sending full row data to the LLM in batches.
 
     The LLM interprets each row according to the instruction
     (e.g., "classify sentiment as positive/negative/neutral").
@@ -295,14 +305,12 @@ async def _process_nlp_column(
         df[column_name] = []
         return df
 
-    # Determine which column to use as input (use the first text column)
-    text_cols = df.select_dtypes(include=["object", "string"]).columns
-    if len(text_cols) == 0:
+    if len(df.columns) == 0:
         df[column_name] = "N/A"
         return df
 
-    input_col = text_cols[0]
-    input_data = df[input_col].fillna("").astype(str).tolist()
+    # Send ALL columns so the LLM can analyze the full row context
+    input_data = _rows_to_strings(df)
 
     # Process in batches
     all_values = []

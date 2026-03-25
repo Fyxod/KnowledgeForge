@@ -138,22 +138,26 @@ def excel_nlp_column_prompt(
     """
     Build the prompt for NLP-based column interpretation.
 
-    The LLM receives a batch of text values and must return
+    The LLM receives a batch of full row data and must return
     one interpreted value per input row.
     """
     # Limit to prevent context overflow — process in batches externally
     data_str = "\n".join(f"{i+1}. {val}" for i, val in enumerate(input_data))
 
     return (
-        f"You are a data analyst. For each input row below, apply this instruction: **{column_instruction}**\n\n"
-        f"Column name: {column_name}\n\n"
+        f"You are a data analyst. For each row below, analyze ALL the fields provided "
+        f"and apply this instruction: **{column_instruction}**\n\n"
+        f"Column to produce: {column_name}\n\n"
         f"## Input Data ({len(input_data)} rows)\n"
+        "Each row shows all available fields in the format `Column: value | Column: value`.\n"
+        "Use ALL fields to make your judgment — do not ignore numeric or categorical data.\n\n"
         f"{data_str}\n\n"
         "## Rules\n"
         f"1. Return exactly {len(input_data)} values in the `values` list, one per input row, in the same order.\n"
-        "2. Each value should be a short string (1-3 words for classifications, or a brief phrase).\n"
-        "3. Be consistent — use the same label for similar inputs.\n"
-        "4. If an input is empty or unclear, return 'N/A'.\n\n"
+        "2. Each value should be a short string (1-3 words for classifications, a number for ratings, or a brief phrase).\n"
+        "3. Be consistent — use the same label/rating for similar inputs.\n"
+        "4. If a row is empty or has insufficient data, return 'N/A'.\n"
+        "5. Base your judgment on the actual data in each row, not assumptions.\n\n"
         "Return ONLY a valid JSON object matching the required schema. "
         "No markdown fencing, no commentary.\n"
     )
