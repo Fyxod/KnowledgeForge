@@ -32,6 +32,7 @@ from core.parsers.excel_utils import (
 from core.parsers.extensions import IMAGE_EXTENSIONS, SUPPORTED_EXTENSIONS
 from core.parsers.image import image_parser
 from core.parsers.slide_export import (
+    _timeout_for_file,
     convert_ppt_to_pptx,
     export_and_ocr_ppt_with_fallback,
     get_libreoffice_command,
@@ -885,19 +886,47 @@ async def extract_document(
             file_path = converted_path
             ext = ".pptx"
 
-        full_slide_ocr_results = []
-        try:
+        # --- Single PPTX→PDF conversion, shared by full-slide OCR, VLM, and GLM-OCR ---
+        shared_pdf_path = None
+        libreoffice_cmd = get_libreoffice_command()
+        if libreoffice_cmd:
+            try:
+                await safe_emit(
+                    f"{user_id}/progress",
+                    {"message": f"Converting {safe_file_name} to PDF for OCR pipeline..."},
+                )
+                ppt_dir = os.path.dirname(file_path)
+                lo_timeout = _timeout_for_file(file_path)
+                proc = await asyncio.create_subprocess_exec(
+                    libreoffice_cmd, "--headless", "--convert-to", "pdf",
+                    "--outdir", ppt_dir, file_path,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                )
+                await asyncio.wait_for(proc.communicate(), timeout=lo_timeout)
+                if proc.returncode == 0:
+                    expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                    if os.path.exists(expected_pdf):
+                        shared_pdf_path = expected_pdf
+                        print(f"[PPT] Single PDF conversion done: {shared_pdf_path} (timeout={lo_timeout}s)")
+            except asyncio.TimeoutError:
+                print(f"[PPT] LibreOffice PDF conversion timed out after {lo_timeout}s for {safe_file_name}")
+            except Exception as e:
+                print(f"[PPT] LibreOffice PDF conversion failed: {e}")
+                traceback.print_exc()
 
-            await safe_emit(
-                f"{user_id}/progress",
-                {"message": f"Running full-slide OCR export for {safe_file_name}..."},
-            )
-            full_slide_ocr_results = await export_and_ocr_ppt_with_fallback(
-                file_path, user_id, thread_id
-            )
-        except Exception as e:
-            print(f"[SlideExport] Full-slide OCR unavailable for {safe_file_name}: {e}")
-            traceback.print_exc()
+        full_slide_ocr_results = []
+        if shared_pdf_path:
+            try:
+                await safe_emit(
+                    f"{user_id}/progress",
+                    {"message": f"Running full-slide OCR export for {safe_file_name}..."},
+                )
+                full_slide_ocr_results = await export_and_ocr_ppt_with_fallback(
+                    file_path, user_id, thread_id, pdf_path=shared_pdf_path
+                )
+            except Exception as e:
+                print(f"[SlideExport] Full-slide OCR unavailable for {safe_file_name}: {e}")
+                traceback.print_exc()
 
         try:
             prs = Presentation(file_path)
@@ -965,187 +994,133 @@ async def extract_document(
                     Page(number=slide_number, text=page_text, images=image_names)
                 )
 
-            # --- Optimised VLM Enhancement for PPT ---
-            if settings.USE_VISION_MODEL:
+            # --- Optimised VLM Enhancement for PPT (reuses shared PDF) ---
+            if settings.USE_VISION_MODEL and shared_pdf_path:
                 try:
-                    print(
-                        f"[PPT] VLM enhancement enabled for {safe_file_name}. Converting to PDF..."
-                    )
+                    print(f"[PPT] VLM enhancement enabled for {safe_file_name} (reusing cached PDF)")
                     await safe_emit(
                         f"{user_id}/progress",
                         {"message": f"Running VLM enhancement on {safe_file_name}..."},
                     )
 
-                    libreoffice_cmd = get_libreoffice_command()
-                    pdf_path = None
-                    if libreoffice_cmd:
-                        try:
-                            # Use LibreOffice to convert PPTX to PDF
-                            ppt_dir = os.path.dirname(file_path)
-                            proc = await asyncio.create_subprocess_exec(
-                                libreoffice_cmd,
-                                "--headless",
-                                "--convert-to",
-                                "pdf",
-                                "--outdir",
-                                ppt_dir,
-                                file_path,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
+                    pdf_doc = fitz.open(shared_pdf_path)
+                    process_count = min(len(pdf_doc), len(pages))
+                    BATCH_SIZE = 10  # Render and process slides in batches to limit memory
+
+                    for batch_start in range(0, process_count, BATCH_SIZE):
+                        batch_end = min(batch_start + BATCH_SIZE, process_count)
+                        vlm_images = []
+                        vlm_labels = []
+
+                        for pg_num in range(batch_start, batch_end):
+                            pg = pdf_doc.load_page(pg_num)
+                            pix = pg.get_pixmap(dpi=150)
+                            vlm_images.append(pix.tobytes("png"))
+                            vlm_labels.append(f"Slide {pg_num + 1}")
+
+                        if vlm_images:
+                            vlm_results = await vlm_parse_concurrent(
+                                images=vlm_images,
+                                page_labels=vlm_labels,
+                                max_concurrent=3,
                             )
-                            await asyncio.wait_for(proc.communicate(), timeout=120)
-                            if proc.returncode == 0:
-                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
-                                if os.path.exists(expected_pdf):
-                                    pdf_path = expected_pdf
-                        except Exception as e:
-                            print(f"[PPT] LibreOffice PDF conversion failed: {e}")
-                            traceback.print_exc()
 
-                    if pdf_path:
+                            for j, vlm_text in enumerate(vlm_results):
+                                idx = batch_start + j
+                                if vlm_text and idx < len(pages):
+                                    pages[idx].text += f"\n\n{vlm_text}"
+                                    combined_texts[idx] += f"\n\n{vlm_text}"
+                                    print(f"[PPT] VLM enhancement added to Slide {idx+1} ({len(vlm_text)} chars)")
+
+                        # Free batch memory
+                        del vlm_images
+                        del vlm_labels
+
+                    pdf_doc.close()
+
+                    # Persist PDF for query-time VLM page rendering
+                    if SWITCHES.get("USE_VLM_FOR_ANSWER", False):
                         try:
-                            pdf_doc = fitz.open(pdf_path)
-                            vlm_images = []
-                            vlm_labels = []
-
-                            # Ensure we don't process more pages than we have slides/pages
-                            num_pdf_pages = len(pdf_doc)
-                            num_slides = len(pages)
-
-                            process_count = min(num_pdf_pages, num_slides)
-
-                            for pg_num in range(process_count):
-                                pg = pdf_doc.load_page(pg_num)
-                                def _render_vlm_ppt(p): return p.get_pixmap(dpi=150).tobytes("png")
-                                vlm_images.append(await asyncio.to_thread(_render_vlm_ppt, pg))
-                                vlm_labels.append(f"Slide {pg_num + 1}")
-                            pdf_doc.close()
-
-                            if vlm_images:
-                                vlm_results = await vlm_parse_concurrent(
-                                    images=vlm_images,
-                                    page_labels=vlm_labels,
-                                    max_concurrent=3,
-                                )
-
-                                # Append results to corresponding pages
-                                for i, vlm_text in enumerate(vlm_results):
-                                    if vlm_text and i < len(pages):
-                                        pages[i].text += f"\n\n{vlm_text}"
-                                        combined_texts[i] += f"\n\n{vlm_text}"
-                                        print(
-                                            f"[PPT] VLM enhancement added to Slide {i+1} ({len(vlm_text)} chars)"
-                                        )
-
+                            persist_dir = os.path.join("data", user_id, "threads", thread_id, "parsed")
+                            os.makedirs(persist_dir, exist_ok=True)
+                            persist_path = os.path.join(persist_dir, f"{doc_id}_slides.pdf")
+                            shutil.copy2(shared_pdf_path, persist_path)
+                            print(f"[PPT] Persisted intermediate PDF → {persist_path}")
                         except Exception as e:
-                            print(f"[PPT] VLM processing failed: {e}")
-                            traceback.print_exc()
-                        finally:
-                            if pdf_path and os.path.exists(pdf_path):
-                                # Persist intermediate PDF for query-time VLM page rendering
-                                if SWITCHES.get("USE_VLM_FOR_ANSWER", False):
-                                    try:
-                                        import shutil
-                                        persist_dir = os.path.join("data", user_id, "threads", thread_id, "parsed")
-                                        os.makedirs(persist_dir, exist_ok=True)
-                                        persist_path = os.path.join(persist_dir, f"{doc_id}_slides.pdf")
-                                        shutil.copy2(pdf_path, persist_path)
-                                        print(f"[PPT] Persisted intermediate PDF → {persist_path}")
-                                    except Exception as e:
-                                        print(f"[PPT] Failed to persist intermediate PDF: {e}")
-                                try:
-                                    os.remove(pdf_path)
-                                except:
-                                    pass
-                    else:
-                        print("[PPT] Skipping VLM: LibreOffice conversion failed")
+                            print(f"[PPT] Failed to persist intermediate PDF: {e}")
+
                 except Exception as e:
                     print(f"[PPT] VLM enhancement error: {e}")
                     traceback.print_exc()
+            elif settings.USE_VISION_MODEL and not shared_pdf_path:
+                print("[PPT] Skipping VLM: PDF conversion failed earlier")
 
-            # --- GLM-OCR Enhancement for PPT (runs alongside existing OCR, additive) ---
-            if SWITCHES.get("GLM_OCR", False):
+            # --- GLM-OCR Enhancement for PPT (reuses shared PDF, batched rendering) ---
+            if SWITCHES.get("GLM_OCR", False) and shared_pdf_path:
                 try:
-                    print(
-                        f"[PPT] GLM-OCR enhancement enabled for {safe_file_name}. Converting to PDF..."
-                    )
+                    print(f"[PPT] GLM-OCR enhancement enabled for {safe_file_name} (reusing cached PDF)")
                     await safe_emit(
                         f"{user_id}/progress",
                         {"message": f"Running GLM-OCR enhancement on {safe_file_name}..."},
                     )
 
-                    libreoffice_cmd = get_libreoffice_command()
-                    pdf_path = None
-                    if libreoffice_cmd:
-                        try:
-                            ppt_dir = os.path.dirname(file_path)
-                            proc = await asyncio.create_subprocess_exec(
-                                libreoffice_cmd,
-                                "--headless",
-                                "--convert-to",
-                                "pdf",
-                                "--outdir",
-                                ppt_dir,
-                                file_path,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
+                    pdf_doc = fitz.open(shared_pdf_path)
+                    process_count = min(len(pdf_doc), len(pages))
+                    GLM_BATCH_SIZE = 10
+
+                    for batch_start in range(0, process_count, GLM_BATCH_SIZE):
+                        batch_end = min(batch_start + GLM_BATCH_SIZE, process_count)
+                        glm_images = []
+                        glm_labels = []
+
+                        for pg_num in range(batch_start, batch_end):
+                            pg = pdf_doc.load_page(pg_num)
+                            pix = pg.get_pixmap(dpi=150)
+                            glm_images.append(pix.tobytes("png"))
+                            glm_labels.append(f"Slide {pg_num + 1}")
+
+                        if glm_images:
+                            glm_results = await glm_ocr_parse_concurrent(
+                                images=glm_images,
+                                page_labels=glm_labels,
+                                mode="text",
+                                max_concurrent=3,
                             )
-                            await asyncio.wait_for(proc.communicate(), timeout=120)
-                            if proc.returncode == 0:
-                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
-                                if os.path.exists(expected_pdf):
-                                    pdf_path = expected_pdf
-                        except Exception as e:
-                            print(f"[PPT] LibreOffice PDF conversion for GLM-OCR failed: {e}")
-                            traceback.print_exc()
 
-                    if pdf_path:
-                        try:
-                            pdf_doc = fitz.open(pdf_path)
-                            glm_images = []
-                            glm_labels = []
+                            for j, glm_text in enumerate(glm_results):
+                                idx = batch_start + j
+                                if glm_text and idx < len(pages):
+                                    pages[idx].text += f"\n\n{glm_text}"
+                                    combined_texts[idx] += f"\n\n{glm_text}"
+                                    print(f"[PPT] GLM-OCR enhancement added to Slide {idx+1} ({len(glm_text)} chars)")
 
-                            num_pdf_pages = len(pdf_doc)
-                            num_slides = len(pages)
-                            process_count = min(num_pdf_pages, num_slides)
+                        del glm_images
+                        del glm_labels
 
-                            for pg_num in range(process_count):
-                                pg = pdf_doc.load_page(pg_num)
-                                def _render_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
-                                glm_images.append(await asyncio.to_thread(_render_glm, pg))
-                                glm_labels.append(f"Slide {pg_num + 1}")
-                            pdf_doc.close()
+                    pdf_doc.close()
 
-                            if glm_images:
-                                glm_results = await glm_ocr_parse_concurrent(
-                                    images=glm_images,
-                                    page_labels=glm_labels,
-                                    mode="text",
-                                    max_concurrent=3,
-                                )
-
-                                for i, glm_text in enumerate(glm_results):
-                                    if glm_text and i < len(pages):
-                                        pages[i].text += f"\n\n{glm_text}"
-                                        combined_texts[i] += f"\n\n{glm_text}"
-                                        print(
-                                            f"[PPT] GLM-OCR enhancement added to Slide {i+1} ({len(glm_text)} chars)"
-                                        )
-
-                        except Exception as e:
-                            print(f"[PPT] GLM-OCR processing failed: {e}")
-                            traceback.print_exc()
-                        finally:
-                            if pdf_path and os.path.exists(pdf_path):
-                                try:
-                                    os.remove(pdf_path)
-                                except:
-                                    pass
-                    else:
-                        print("[PPT] Skipping GLM-OCR: LibreOffice conversion failed")
                 except Exception as e:
                     print(f"[PPT] GLM-OCR enhancement error: {e}")
                     traceback.print_exc()
+            elif SWITCHES.get("GLM_OCR", False) and not shared_pdf_path:
+                print("[PPT] Skipping GLM-OCR: PDF conversion failed earlier")
+
+            # --- GPU memory cleanup after all OCR/VLM/GLM phases ---
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    print("[PPT] GPU cache cleared after all OCR phases")
+            except Exception:
+                pass
+
+            # --- Clean up shared PDF (no longer needed) ---
+            if shared_pdf_path and os.path.exists(shared_pdf_path):
+                try:
+                    os.remove(shared_pdf_path)
+                    print(f"[PPT] Cleaned up shared PDF: {shared_pdf_path}")
+                except Exception:
+                    pass
 
             # Wait for OCR tasks
             for placeholder, task in ocr_tasks.items():
