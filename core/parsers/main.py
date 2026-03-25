@@ -258,7 +258,7 @@ async def extract_document(
                 print(f"[Image] Running GLM-OCR enhancement on {safe_file_name}...")
                 glm_result = await glm_ocr_parse(file_path, mode="text")
                 if glm_result and glm_result.strip():
-                    text += f"\n\n[GLM-OCR Enhanced Content]\n{glm_result.strip()}\n[/GLM-OCR Enhanced Content]"
+                    text += f"\n\n{glm_result.strip()}"
                     print(
                         f"[Image] GLM-OCR enhancement added ({len(glm_result)} chars)"
                     )
@@ -715,14 +715,11 @@ async def extract_document(
                                 )
 
                                 vlm_combined = "\n\n".join(
-                                    f"[VLM Page {i+1}]\n{r}"
-                                    for i, r in enumerate(vlm_results)
-                                    if r
+                                    r for r in vlm_results if r
                                 )
 
                                 if vlm_combined:
-                                    enhancement = f"\n\n[VLM Enhanced Content]\n{vlm_combined}\n[/VLM Enhanced Content]"
-                                    text += enhancement
+                                    text += f"\n\n{vlm_combined}"
                                     print(
                                         f"[DOCX] VLM enhancement added ({len(vlm_combined)} chars)"
                                     )
@@ -812,15 +809,14 @@ async def extract_document(
                                 # We will put the original raw text on Page 1, 
                                 # and then append the GLM-OCR Enhanced Pages exactly as they appear in the PDF.
                                 if text.strip():
-                                    pages.append(Page(number=1, text=f"[Original Extracted Text]\n{text}\n[/Original Extracted Text]"))
-                                    full_text_lines.append(f"[Original Extracted Text]\n{text}\n[/Original Extracted Text]")
+                                    pages.append(Page(number=1, text=text))
+                                    full_text_lines.append(text)
 
                                 page_counter = len(pages) + 1
                                 for i, r in enumerate(glm_results):
                                     if r:
-                                        enhancement = f"[GLM-OCR Enhanced Page {i+1}]\n{r}\n[/GLM-OCR Enhanced Page {i+1}]"
-                                        pages.append(Page(number=page_counter, text=enhancement))
-                                        full_text_lines.append(enhancement)
+                                        pages.append(Page(number=page_counter, text=r))
+                                        full_text_lines.append(r)
                                         page_counter += 1
 
                                 if pages:
@@ -931,7 +927,7 @@ async def extract_document(
                         full_slide_ocr_results[slide_number - 1] or ""
                     ).strip()
                     if full_slide_text:
-                        page_text += f"\n\n[Full Slide OCR]\n{full_slide_text}\n[/Full Slide OCR]"
+                        page_text += f"\n\n{full_slide_text}"
 
                 image_names = []
 
@@ -1035,9 +1031,8 @@ async def extract_document(
                                 # Append results to corresponding pages
                                 for i, vlm_text in enumerate(vlm_results):
                                     if vlm_text and i < len(pages):
-                                        enhancement = f"\n\n[VLM Enhanced Content]\n{vlm_text}\n[/VLM Enhanced Content]"
-                                        pages[i].text += enhancement
-                                        combined_texts[i] += enhancement
+                                        pages[i].text += f"\n\n{vlm_text}"
+                                        combined_texts[i] += f"\n\n{vlm_text}"
                                         print(
                                             f"[PPT] VLM enhancement added to Slide {i+1} ({len(vlm_text)} chars)"
                                         )
@@ -1131,9 +1126,8 @@ async def extract_document(
 
                                 for i, glm_text in enumerate(glm_results):
                                     if glm_text and i < len(pages):
-                                        enhancement = f"\n\n[GLM-OCR Enhanced Content]\n{glm_text}\n[/GLM-OCR Enhanced Content]"
-                                        pages[i].text += enhancement
-                                        combined_texts[i] += enhancement
+                                        pages[i].text += f"\n\n{glm_text}"
+                                        combined_texts[i] += f"\n\n{glm_text}"
                                         print(
                                             f"[PPT] GLM-OCR enhancement added to Slide {i+1} ({len(glm_text)} chars)"
                                         )
@@ -1194,6 +1188,26 @@ async def extract_document(
                 f"{user_id}/progress",
                 {"message": f"Parsing {title} (Word document)..."},
             )
+
+            # --- Docling native DOCX extraction ---
+            docling_md_text = ""
+            if _HAS_DOCLING:
+                try:
+                    print(f"[DOCX] Running Docling extraction for {safe_file_name}...")
+                    await safe_emit(f"{user_id}/progress", {"message": f"Running Docling extraction for {safe_file_name}..."})
+
+                    def _run_docling_docx(p):
+                        converter = DocumentConverter()
+                        result = converter.convert(p)
+                        return result.document.export_to_markdown()
+
+                    docling_md_text = await asyncio.to_thread(_run_docling_docx, file_path)
+                    if docling_md_text:
+                        print(f"[DOCX] Docling extraction successful ({len(docling_md_text)} chars)")
+                except Exception as e:
+                    print(f"[DOCX] Docling extraction failed: {e}")
+                    traceback.print_exc()
+
             docx_doc = DocxDocument(file_path)
 
             pages_text = []
@@ -1269,7 +1283,12 @@ async def extract_document(
                                 traceback.print_exc()
                             break
 
-            page_text = "\n\n".join(body_parts)
+            # Use Docling output as primary text if available, else python-docx
+            if docling_md_text:
+                page_text = docling_md_text
+                print(f"[DOCX] Using Docling markdown as primary text for {safe_file_name}")
+            else:
+                page_text = "\n\n".join(body_parts)
 
             # --- Extract embedded images ---
             img_index = 0
@@ -1314,6 +1333,89 @@ async def extract_document(
                     traceback.print_exc()
                     image_text = "[Image OCR failed]"
                 page_text = page_text.replace(placeholder, image_text, 1)
+
+            # --- VLM Enhancement for DOCX ---
+            if settings.USE_VISION_MODEL:
+                try:
+                    print(
+                        f"[DOCX] VLM enhancement enabled for {safe_file_name}. Converting to PDF..."
+                    )
+                    await safe_emit(
+                        f"{user_id}/progress",
+                        {"message": f"Running VLM enhancement on {safe_file_name}..."},
+                    )
+
+                    libreoffice_cmd = get_libreoffice_command()
+                    vlm_pdf_path = None
+                    if libreoffice_cmd:
+                        try:
+                            docx_dir = os.path.dirname(file_path)
+                            proc = await asyncio.create_subprocess_exec(
+                                libreoffice_cmd,
+                                "--headless",
+                                "--convert-to",
+                                "pdf",
+                                "--outdir",
+                                docx_dir,
+                                file_path,
+                                stdout=asyncio.subprocess.PIPE,
+                                stderr=asyncio.subprocess.PIPE,
+                            )
+                            await asyncio.wait_for(proc.communicate(), timeout=120)
+                            if proc.returncode == 0:
+                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                                if os.path.exists(expected_pdf):
+                                    vlm_pdf_path = expected_pdf
+                        except Exception as e:
+                            print(f"[DOCX] LibreOffice PDF conversion for VLM failed: {e}")
+                            traceback.print_exc()
+
+                    if vlm_pdf_path:
+                        try:
+                            pdf_doc = fitz.open(vlm_pdf_path)
+                            vlm_images = []
+                            vlm_labels = []
+
+                            for pg_num in range(len(pdf_doc)):
+                                pg = pdf_doc.load_page(pg_num)
+                                pix = pg.get_pixmap(dpi=150)
+                                vlm_images.append(pix.tobytes("png"))
+                                vlm_labels.append(f"Page {pg_num + 1}")
+                            pdf_doc.close()
+
+                            if vlm_images:
+                                vlm_results = await vlm_parse_concurrent(
+                                    images=vlm_images,
+                                    page_labels=vlm_labels,
+                                    max_concurrent=3,
+                                )
+
+                                vlm_combined = "\n\n".join(
+                                    r for r in vlm_results if r
+                                )
+
+                                if vlm_combined:
+                                    page_text += f"\n\n{vlm_combined}"
+                                    print(
+                                        f"[DOCX] VLM enhancement added ({len(vlm_combined)} chars)"
+                                    )
+
+                        except Exception as e:
+                            print(f"[DOCX] VLM processing failed: {e}")
+                            traceback.print_exc()
+                        finally:
+                            if vlm_pdf_path and os.path.exists(vlm_pdf_path):
+                                try:
+                                    os.remove(vlm_pdf_path)
+                                except Exception:
+                                    pass
+                    else:
+                        print(
+                            "[DOCX] Skipping VLM: LibreOffice conversion failed or not available"
+                        )
+                except Exception as e:
+                    print(f"[DOCX] VLM enhancement error: {e}")
+                    traceback.print_exc()
 
             # --- GLM-OCR Enhancement for DOCX (runs alongside existing OCR, additive) ---
             if SWITCHES.get("GLM_OCR", False):
@@ -1382,15 +1484,14 @@ async def extract_document(
                                 # We will put the original raw text on Page 1, 
                                 # and then append the GLM-OCR Enhanced Pages exactly as they appear in the PDF.
                                 if page_text.strip():
-                                    pages.append(Page(number=1, text=f"[Original Extracted Text]\n{page_text}\n[/Original Extracted Text]", images=image_names_all))
-                                    full_text_lines.append(f"[Original Extracted Text]\n{page_text}\n[/Original Extracted Text]")
+                                    pages.append(Page(number=1, text=page_text, images=image_names_all))
+                                    full_text_lines.append(page_text)
 
                                 page_counter = len(pages) + 1
                                 for i, r in enumerate(glm_results):
                                     if r:
-                                        enhancement = f"[GLM-OCR Enhanced Page {i+1}]\n{r}\n[/GLM-OCR Enhanced Page {i+1}]"
-                                        pages.append(Page(number=page_counter, text=enhancement))
-                                        full_text_lines.append(enhancement)
+                                        pages.append(Page(number=page_counter, text=r))
+                                        full_text_lines.append(r)
                                         page_counter += 1
 
                                 if pages:
@@ -1543,7 +1644,7 @@ async def extract_document(
             page_text = ""
             if docling_md_text:
                 if page_number == 0:
-                    page_text = f"[Docling Extracted Text]\n{docling_md_text}\n[/Docling Extracted Text]"
+                    page_text = docling_md_text
             else:
                 # --- Original Table-aware text extraction ---
                 try:
@@ -1807,11 +1908,8 @@ async def extract_document(
                     continue
 
                 page_idx = candidate["page_index"]
-                enhanced_text = (
-                    f"[VLM Extracted Content]\n{vlm_text}\n[/VLM Extracted Content]"
-                )
-                pages[page_idx].text += f"\n\n{enhanced_text}"
-                combined_texts[page_idx] += f"\n\n{enhanced_text}"
+                pages[page_idx].text += f"\n\n{vlm_text}"
+                combined_texts[page_idx] += f"\n\n{vlm_text}"
                 print(
                     f"[PDF] VLM content appended to page {candidate['page_number']} ({len(vlm_text)} chars)"
                 )
@@ -1844,11 +1942,8 @@ async def extract_document(
                     continue
 
                 page_idx = candidate["page_index"]
-                enhancement = (
-                    f"\n\n[GLM-OCR Enhanced Content]\n{glm_text}\n[/GLM-OCR Enhanced Content]"
-                )
-                pages[page_idx].text += enhancement
-                combined_texts[page_idx] += enhancement
+                pages[page_idx].text += f"\n\n{glm_text}"
+                combined_texts[page_idx] += f"\n\n{glm_text}"
                 print(
                     f"[PDF] GLM-OCR enhancement added to page {candidate['page_number']} ({len(glm_text)} chars)"
                 )

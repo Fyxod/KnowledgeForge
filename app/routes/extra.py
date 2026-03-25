@@ -6,14 +6,10 @@ import aiofiles
 from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel
 
-from app.socket_handler import sio
-from core.constants import SWITCHES
 from core.database import db
 from core.studio_features.word_cloud import generate_word_cloud
 from core.utils.generation_status import (
     write_pending_status,
-    write_failed_status,
-    write_result,
     read_generation_status,
 )
 
@@ -178,9 +174,6 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
     if not payload:
         return {"error": "User not authenticated"}
 
-    if not SWITCHES["SUMMARIZATION"]:
-        return {"message": "Summarization feature is disabled"}
-
     thread_id = body.thread_id
     document_id = body.document_id
     regenerate = body.regenerate
@@ -207,13 +200,8 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                     content = await f.read()
                 data = json.loads(content)
                 if isinstance(data, dict) and data.get("id") == document_id:
+                    # On regenerate, clear existing summary and kick off generation
                     if regenerate:
-                        from core.studio_features.summarizer import (
-                            process_document_with_chunks,
-                        )
-                        from core.models.document import Document
-
-                        # Mark summary as regenerating with a status marker
                         data["summary"] = ""
                         data["_summary_status"] = "pending"
                         async with aiofiles.open(
@@ -221,45 +209,9 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                         ) as write_f:
                             await write_f.write(json.dumps(data, ensure_ascii=False))
 
-                        async def _regenerate_summary():
-                            try:
-                                doc = Document.model_validate(data)
-                                await process_document_with_chunks(doc)
-                                # load latest state to avoid race condition
-                                async with aiofiles.open(
-                                    file_path, "r", encoding="utf-8"
-                                ) as reread_f:
-                                    reread_content = await reread_f.read()
-                                reread_data = json.loads(reread_content)
-                                reread_data["summary"] = doc.summary or ""
-                                reread_data.pop("_summary_status", None)
-                                async with aiofiles.open(
-                                    file_path, "w", encoding="utf-8"
-                                ) as resave_f:
-                                    await resave_f.write(
-                                        json.dumps(reread_data, ensure_ascii=False)
-                                    )
-                            except Exception as e:
-                                # Mark as failed instead of leaving empty
-                                try:
-                                    async with aiofiles.open(
-                                        file_path, "r", encoding="utf-8"
-                                    ) as err_f:
-                                        err_content = await err_f.read()
-                                    err_data = json.loads(err_content)
-                                    err_data["_summary_status"] = "failed"
-                                    err_data["_summary_error"] = str(e)
-                                    async with aiofiles.open(
-                                        file_path, "w", encoding="utf-8"
-                                    ) as err_wf:
-                                        await err_wf.write(
-                                            json.dumps(err_data, ensure_ascii=False)
-                                        )
-                                except Exception:
-                                    pass
-                                print(f"Failed regenerating individual summary: {e}")
-
-                        asyncio.create_task(_regenerate_summary())
+                        asyncio.create_task(
+                            _generate_document_summary(data, file_path)
+                        )
                         return {
                             "status": False,
                             "error": "Summary not yet generated. Generating...",
@@ -276,25 +228,64 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                         }
 
                     # Check if summary is being generated (pending)
-                    if data.get("_summary_status") == "pending" or (
-                        not data.get("summary") and data.get("summary") == ""
-                    ):
+                    if data.get("_summary_status") == "pending":
                         return {
                             "status": False,
                             "error": "Summary not yet generated. Generating...",
                         }
 
-                    if not data.get("summary"):
-                        return {
-                            "status": False,
-                            "error": "Summary not yet generated. Generating...",
-                        }
+                    # Summary exists — return it
+                    if data.get("summary"):
+                        return {"status": True, "summary": data.get("summary")}
 
-                    return {"status": True, "summary": data.get("summary")}
+                    # No summary yet — trigger first-time on-demand generation
+                    data["_summary_status"] = "pending"
+                    async with aiofiles.open(
+                        file_path, "w", encoding="utf-8"
+                    ) as write_f:
+                        await write_f.write(json.dumps(data, ensure_ascii=False))
+
+                    asyncio.create_task(
+                        _generate_document_summary(data, file_path)
+                    )
+                    return {
+                        "status": False,
+                        "error": "Summary not yet generated. Generating...",
+                    }
             except Exception as e:
                 continue
 
-    return {"status": False, "error": "Summary not yet generated. Generating..."}
+    return {"status": False, "error": "Document not found in parsed data", "failed": True}
+
+
+async def _generate_document_summary(data: dict, file_path: str):
+    """Background task to generate/regenerate a single document summary."""
+    from core.models.document import Document
+    from core.studio_features.summarizer import process_document_with_chunks
+
+    try:
+        doc = Document.model_validate(data)
+        await process_document_with_chunks(doc)
+        # Reload latest state to avoid race condition with concurrent writes
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            reread_content = await f.read()
+        reread_data = json.loads(reread_content)
+        reread_data["summary"] = doc.summary or ""
+        reread_data.pop("_summary_status", None)
+        async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(reread_data, ensure_ascii=False))
+    except Exception as e:
+        try:
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                err_content = await f.read()
+            err_data = json.loads(err_content)
+            err_data["_summary_status"] = "failed"
+            err_data["_summary_error"] = str(e)
+            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(err_data, ensure_ascii=False))
+        except Exception:
+            pass
+        print(f"Failed generating individual summary: {e}")
 
 
 @router.post("/summary/global")
@@ -304,9 +295,6 @@ async def get_global_summary(request: Request, body: GlobalSummaryRequest = Body
 
     if not payload:
         return {"error": "User not authenticated"}
-
-    if not SWITCHES["SUMMARIZATION"]:
-        return {"message": "Summarization feature is disabled"}
 
     thread_id = body.thread_id
     regenerate = body.regenerate
