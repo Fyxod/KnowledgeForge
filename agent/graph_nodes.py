@@ -249,6 +249,22 @@ async def retriever(state: AgentState) -> AgentState:
             import traceback
             traceback.print_exc()
 
+    # ── Filter low-relevance chunks (rerank_score < 0.5) ──
+    # Chunks below 0.5 are essentially noise — the reranker considers them
+    # irrelevant. Passing them to the LLM dilutes good context and can mislead.
+    # Always keep at least the top 2 chunks as fallback.
+    if state.chunks:
+        MIN_RERANK_SCORE = 0.5
+        filtered = [c for c in state.chunks if c.get("rerank_score", 0.0) >= MIN_RERANK_SCORE]
+        if len(filtered) < 2:
+            # Keep top 2 by score as fallback even if below threshold
+            filtered = sorted(state.chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True)[:2]
+        dropped = len(state.chunks) - len(filtered)
+        if dropped > 0:
+            print(f"[ChunkFilter] Dropped {dropped} chunks with rerank_score < {MIN_RERANK_SCORE} "
+                  f"({len(filtered)} remaining)")
+        state.chunks = filtered
+
     # ── Lost in the Middle mitigation ──
     # Reorder so highest-scored chunks are at positions 0 and -1,
     # and lowest-scored chunks sit in the middle — combats positional
