@@ -516,7 +516,6 @@ async def get_thread_documents_retriever(
     query: str = "",
     additional_queries: List[str] = None,
     k: int = None,
-    min_chunks_per_doc: int = 3,
     max_total_chunks: int = 50,
 ) -> List[Dict[str, Any]]:
     """
@@ -540,7 +539,6 @@ async def get_thread_documents_retriever(
         query: The user query for semantic similarity search
         additional_queries: Optional extra query variants for multi-query retrieval
         k: Total number of chunks to retrieve (None for adaptive)
-        min_chunks_per_doc: Kept for API compatibility; not used in the new strategy
         max_total_chunks: Hard upper bound on returned chunks
     """
     # Use hybrid retrieval (vector + BM25) for better recall
@@ -597,14 +595,13 @@ async def get_thread_documents_retriever(
             k = min(max_total_chunks, num_kept * 8)
 
     k = min(k, max_total_chunks)
-    per_doc_cap = max(1, min(4, math.ceil(k / num_kept)))
 
     print(
         f"[MultiDoc] {num_kept}/{num_documents} docs passed quality gate "
-        f"(threshold={threshold:.4f}), budget k={k}, per_doc_cap={per_doc_cap}"
+        f"(threshold={threshold:.4f}), budget k={k}"
     )
 
-    # --- Guarantee top-1 per doc, then fill by score ---
+    # --- Guarantee top-1 per doc, then fill remaining budget by score (no per-doc cap) ---
     guaranteed: List[Dict[str, Any]] = []
     remainder_pool: List[Dict[str, Any]] = []
 
@@ -617,7 +614,7 @@ async def get_thread_documents_retriever(
             reverse=True,
         )
         guaranteed.append(docs_sorted[0])
-        remainder_pool.extend(docs_sorted[1:per_doc_cap])
+        remainder_pool.extend(docs_sorted[1:])
 
     remainder_pool.sort(key=lambda d: d.get("rrf_score", 0.0), reverse=True)
     result = guaranteed + remainder_pool

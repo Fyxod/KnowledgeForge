@@ -29,7 +29,6 @@ GLM_OCR_WORKERS = 3  # Max concurrent GLM-OCR inferences (VRAM-aware)
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
 
 # Adaptive Retrieval Parameters
-MIN_CHUNKS_PER_DOC = 10  # Minimum chunks to retrieve per document
 MAX_TOTAL_CHUNKS = (
     50  # Reduced from 100: reranking selects best chunks, fewer = faster LLM generation
 )

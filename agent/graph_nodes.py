@@ -112,7 +112,6 @@ async def retriever(state: AgentState) -> AgentState:
         query=query,
         additional_queries=additional_queries if additional_queries else None,
         k=None,  # None enables adaptive scaling
-        min_chunks_per_doc=MIN_CHUNKS_PER_DOC,
         max_total_chunks=MAX_TOTAL_CHUNKS,
     )
 
