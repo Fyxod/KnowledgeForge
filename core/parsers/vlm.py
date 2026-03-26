@@ -46,6 +46,19 @@ VLM_RETRY_PROMPT = (
     "Output as Markdown. No filler text."
 )
 
+# Specialized prompt for table extraction
+VLM_TABLE_PROMPT = (
+    "You are a precise table transcription AI. "
+    "This image contains a table. Transcribe it as a proper Markdown table.\n"
+    "Rules:\n"
+    "- Preserve ALL rows and columns exactly as shown.\n"
+    "- Keep the original header text. Use | for column separators.\n"
+    "- Keep blank cells as empty (do not fill in or guess).\n"
+    "- If cells are merged, repeat the value in each spanned cell.\n"
+    "- Do NOT describe the table — just output the Markdown table.\n"
+    "- If there is text above or below the table, include it as context."
+)
+
 # Specialized prompt for extracting flowcharts and ERDs into code
 VLM_MERMAID_PROMPT = (
     "You are an expert graph transcription AI. Analyze this image. "
@@ -116,6 +129,8 @@ async def vlm_parse_slide(
             selected_prompt = custom_prompt
         elif prompt_type == "mermaid":
             selected_prompt = VLM_MERMAID_PROMPT
+        elif prompt_type == "table":
+            selected_prompt = VLM_TABLE_PROMPT
         elif prompt_type == "retry":
             selected_prompt = VLM_RETRY_PROMPT
         else:
@@ -130,7 +145,7 @@ async def vlm_parse_slide(
             "options": {
                 "temperature": 0.1,  # Low temp for factual extraction
                 "num_ctx": 8192,  # More context for complex pages
-                "num_predict": 2048,  # Reduced from 4096: most slide content fits in 1000-1500 tokens
+                "num_predict": 3072,  # Enough for complex tables/charts without truncation
             },
         }
 

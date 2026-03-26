@@ -34,7 +34,6 @@ from core.parsers.image import image_parser
 from core.parsers.slide_export import (
     _timeout_for_file,
     convert_ppt_to_pptx,
-    export_and_ocr_ppt_with_fallback,
     get_libreoffice_command,
 )
 from core.parsers.vlm import vlm_parse_concurrent, vlm_parse_slide
@@ -211,6 +210,8 @@ async def extract_document(
     start_time = time.time()
     file_path = path
     ext = Path(path).suffix.lower()
+    original_type = ext[1:]  # Preserve original format (e.g. "docx", "pptx") for Document.type
+    _converted_pdf_path = None  # Track temp PDF from format conversion for cleanup
 
     # Derive a safe base name even if file_name is None
     try:
@@ -598,20 +599,44 @@ async def extract_document(
             traceback.print_exc()
             return None
 
-    # --- Handle legacy Word .doc files ---
-    # Convert to .docx via LibreOffice first, then fall through to the DOCX handler
+    # --- Handle legacy Word .doc files — convert to PDF, fall through to PDF handler ---
     if ext == ".doc":
         await safe_emit(
             f"{user_id}/progress",
             {"message": f"Converting {title} (.doc) to modern format..."},
         )
 
-        # Try LibreOffice conversion (same approach as PPT → PPTX)
-        converted_path = None
         libreoffice_cmd = get_libreoffice_command()
-        if not libreoffice_cmd:
-            print("[DOC] LibreOffice not found for DOC→DOCX conversion.")
-        else:
+
+        # Try DOC → PDF directly (preferred — feeds into unified PDF pipeline)
+        if libreoffice_cmd:
+            try:
+                doc_dir = os.path.dirname(file_path)
+                proc = await asyncio.create_subprocess_exec(
+                    libreoffice_cmd,
+                    "--headless",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    doc_dir,
+                    file_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await asyncio.wait_for(proc.communicate(), timeout=120)
+                if proc.returncode == 0:
+                    expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                    if os.path.exists(expected_pdf):
+                        _converted_pdf_path = expected_pdf
+                        file_path = expected_pdf
+                        ext = ".pdf"
+                        print(f"[DOC] Converted to PDF, delegating to PDF pipeline")
+            except Exception as e:
+                print(f"[DOC] LibreOffice DOC→PDF conversion failed: {e}")
+                traceback.print_exc()
+
+        # Fallback: DOC → DOCX (which will then try PDF conversion in DOCX handler)
+        if ext == ".doc" and libreoffice_cmd:
             try:
                 doc_dir = os.path.dirname(file_path)
                 proc = await asyncio.create_subprocess_exec(
@@ -629,227 +654,24 @@ async def extract_document(
                 if proc.returncode == 0:
                     expected = os.path.splitext(file_path)[0] + ".docx"
                     if os.path.exists(expected):
-                        converted_path = expected
+                        try:
+                            os.remove(file_path)
+                        except Exception:
+                            pass
+                        file_path = expected
+                        ext = ".docx"
+                        print(f"[DOC] Converted to DOCX, delegating to DOCX handler")
             except Exception as e:
-                print(f"[DOC] LibreOffice conversion failed: {e}")
+                print(f"[DOC] LibreOffice DOC→DOCX conversion failed: {e}")
                 traceback.print_exc()
-
-        if converted_path:
-            # Remove original .doc, update path, and fall through to .docx handler
-            try:
-                os.remove(file_path)
-            except Exception:
-                pass
-            file_path = converted_path
-            ext = ".docx"
-            # Fall through — the .docx handler is below
-        else:
-            # Fallback: legacy binary extraction (best-effort)
+        # Last resort: binary extraction if all conversions failed
+        if ext == ".doc":
             try:
                 text = extract_text_from_doc(file_path)
             except Exception as e:
                 print(f"Error processing .doc file {safe_file_name}: {str(e)}")
                 traceback.print_exc()
                 return None
-
-            await safe_emit(
-                f"{user_id}/progress",
-                {"message": f"Processed {safe_file_name} (.doc) with basic extraction"},
-            )
-            # --- VLM Enhancement for DOCX (Optimized) ---
-            if settings.USE_VISION_MODEL:
-                try:
-                    print(
-                        f"[DOCX] VLM enhancement enabled for {safe_file_name}. Converting to PDF..."
-                    )
-                    await safe_emit(
-                        f"{user_id}/progress",
-                        {"message": f"Running VLM enhancement on {safe_file_name}..."},
-                    )
-
-                    libreoffice_cmd = get_libreoffice_command()
-                    pdf_path = None
-                    if libreoffice_cmd:
-                        try:
-                            # Use LibreOffice to convert DOCX to PDF
-                            docx_dir = os.path.dirname(file_path)
-                            proc = await asyncio.create_subprocess_exec(
-                                libreoffice_cmd,
-                                "--headless",
-                                "--convert-to",
-                                "pdf",
-                                "--outdir",
-                                docx_dir,
-                                file_path,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
-                            )
-                            await asyncio.wait_for(proc.communicate(), timeout=120)
-                            if proc.returncode == 0:
-                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
-                                if os.path.exists(expected_pdf):
-                                    pdf_path = expected_pdf
-                        except Exception as e:
-                            print(f"[DOCX] LibreOffice conversion failed: {e}")
-                            traceback.print_exc()
-
-                    if pdf_path:
-                        try:
-                            pdf_doc = fitz.open(pdf_path)
-                            vlm_images = []
-                            vlm_labels = []
-
-                            # Collect pages (Limit to 50 to avoid massive batch for huge docs?)
-                            # For now, process all. 150 DPI is manageable.
-                            for pg_num in range(len(pdf_doc)):
-                                pg = pdf_doc.load_page(pg_num)
-                                def _render_vlm(p): return p.get_pixmap(dpi=150).tobytes("png")
-                                vlm_images.append(await asyncio.to_thread(_render_vlm, pg))
-                                vlm_labels.append(f"Page {pg_num + 1}")
-                            pdf_doc.close()
-
-                            if vlm_images:
-                                vlm_results = await vlm_parse_concurrent(
-                                    images=vlm_images,
-                                    page_labels=vlm_labels,
-                                    max_concurrent=3,
-                                )
-
-                                vlm_combined = "\n\n".join(
-                                    r for r in vlm_results if r
-                                )
-
-                                if vlm_combined:
-                                    text += f"\n\n{vlm_combined}"
-                                    print(
-                                        f"[DOCX] VLM enhancement added ({len(vlm_combined)} chars)"
-                                    )
-
-                        except Exception as e:
-                            print(f"[DOCX] VLM processing failed: {e}")
-                            traceback.print_exc()
-                        finally:
-                            # Cleanup PDF
-                            if pdf_path and os.path.exists(pdf_path):
-                                try:
-                                    os.remove(pdf_path)
-                                except:
-                                    pass
-                    else:
-                        print(
-                            "[DOCX] Skipping VLM: LibreOffice conversion failed or not available"
-                        )
-                except Exception as e:
-                    print(f"[DOCX] VLM enhancement error: {e}")
-                    traceback.print_exc()
-
-            # --- GLM-OCR Enhancement for DOC (runs alongside existing OCR, additive) ---
-            if SWITCHES.get("GLM_OCR", False):
-                try:
-                    print(
-                        f"[DOC] GLM-OCR enhancement enabled for {safe_file_name}. Converting to PDF..."
-                    )
-                    await safe_emit(
-                        f"{user_id}/progress",
-                        {"message": f"Running GLM-OCR enhancement on {safe_file_name}..."},
-                    )
-
-                    libreoffice_cmd = get_libreoffice_command()
-                    pdf_path = None
-                    if libreoffice_cmd:
-                        try:
-                            doc_dir = os.path.dirname(file_path)
-                            proc = await asyncio.create_subprocess_exec(
-                                libreoffice_cmd,
-                                "--headless",
-                                "--convert-to",
-                                "pdf",
-                                "--outdir",
-                                doc_dir,
-                                file_path,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
-                            )
-                            await asyncio.wait_for(proc.communicate(), timeout=120)
-                            if proc.returncode == 0:
-                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
-                                if os.path.exists(expected_pdf):
-                                    pdf_path = expected_pdf
-                        except Exception as e:
-                            print(f"[DOC] LibreOffice conversion for GLM-OCR failed: {e}")
-                            traceback.print_exc()
-
-                    if pdf_path:
-                        try:
-                            pdf_doc = fitz.open(pdf_path)
-                            glm_images = []
-                            glm_labels = []
-
-                            for pg_num in range(len(pdf_doc)):
-                                pg = pdf_doc.load_page(pg_num)
-                                def _render_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
-                                glm_images.append(await asyncio.to_thread(_render_glm, pg))
-                                glm_labels.append(f"Page {pg_num + 1}")
-                            pdf_doc.close()
-
-                            if glm_images:
-                                glm_results = await glm_ocr_parse_concurrent(
-                                    images=glm_images,
-                                    page_labels=glm_labels,
-                                    mode="text",
-                                    max_concurrent=3,
-                                )
-
-                                # If GLM-OCR ran, we now have page-by-page layout
-                                # We'll build Pages from these results instead of a single blob
-                                pages = []
-                                full_text_lines = []
-                                
-                                # Since python-docx / antiword don't give exact page breaks, 
-                                # the original text is just a single block. 
-                                # We will put the original raw text on Page 1, 
-                                # and then append the GLM-OCR Enhanced Pages exactly as they appear in the PDF.
-                                if text.strip():
-                                    pages.append(Page(number=1, text=text))
-                                    full_text_lines.append(text)
-
-                                page_counter = len(pages) + 1
-                                for i, r in enumerate(glm_results):
-                                    if r:
-                                        pages.append(Page(number=page_counter, text=r))
-                                        full_text_lines.append(r)
-                                        page_counter += 1
-
-                                if pages:
-                                    print(
-                                        f"[DOC] GLM-OCR enhancement added ({len(pages) - (1 if text.strip() else 0)} pages)"
-                                    )
-                                    # Override the single block return with the new paginated structure
-                                    return Document(
-                                        id=doc_id,
-                                        type="doc",
-                                        file_name=safe_file_name,
-                                        content=pages,
-                                        title=title,
-                                        full_text="\n\n".join(full_text_lines),
-                                    )
-
-                        except Exception as e:
-                            print(f"[DOC] GLM-OCR processing failed: {e}")
-                            traceback.print_exc()
-                        finally:
-                            if pdf_path and os.path.exists(pdf_path):
-                                try:
-                                    os.remove(pdf_path)
-                                except:
-                                    pass
-                    else:
-                        print(
-                            "[DOC] Skipping GLM-OCR: LibreOffice conversion failed or not available"
-                        )
-                except Exception as e:
-                    print(f"[DOC] GLM-OCR enhancement error: {e}")
-                    traceback.print_exc()
 
             return Document(
                 id=doc_id,
@@ -860,10 +682,10 @@ async def extract_document(
                 full_text=text,
             )
 
-    # --- Handle PowerPoint files ---
+    # --- Handle PowerPoint files — convert to PDF, fall through to PDF handler ---
     if ext in {".ppt", ".pptx"}:
 
-        # If .ppt, convert to .pptx first
+        # If .ppt, convert to .pptx first (needed for python-pptx fallback)
         if ext == ".ppt":
             await safe_emit(
                 f"{user_id}/progress",
@@ -876,24 +698,21 @@ async def extract_document(
                 print(f"[Parser] Failed to convert {safe_file_name} to .pptx")
                 return None
 
-            # Remove the original .ppt file to save space, since we'll work with the converted .pptx from now on
             try:
                 os.remove(file_path)
             except Exception:
                 pass
 
-            # Update file_path and ext to point to the new .pptx file for the rest of the processing
             file_path = converted_path
             ext = ".pptx"
 
-        # --- Single PPTX→PDF conversion, shared by full-slide OCR, VLM, and GLM-OCR ---
-        shared_pdf_path = None
+        # Convert PPTX → PDF for unified processing
         libreoffice_cmd = get_libreoffice_command()
         if libreoffice_cmd:
             try:
                 await safe_emit(
                     f"{user_id}/progress",
-                    {"message": f"Converting {safe_file_name} to PDF for OCR pipeline..."},
+                    {"message": f"Converting {safe_file_name} to PDF for processing..."},
                 )
                 ppt_dir = os.path.dirname(file_path)
                 lo_timeout = _timeout_for_file(file_path)
@@ -906,28 +725,18 @@ async def extract_document(
                 if proc.returncode == 0:
                     expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
                     if os.path.exists(expected_pdf):
-                        shared_pdf_path = expected_pdf
-                        print(f"[PPT] Single PDF conversion done: {shared_pdf_path} (timeout={lo_timeout}s)")
+                        _converted_pdf_path = expected_pdf
+                        file_path = expected_pdf
+                        ext = ".pdf"
+                        print(f"[PPT] Converted to PDF, delegating to PDF pipeline")
             except asyncio.TimeoutError:
                 print(f"[PPT] LibreOffice PDF conversion timed out after {lo_timeout}s for {safe_file_name}")
             except Exception as e:
                 print(f"[PPT] LibreOffice PDF conversion failed: {e}")
                 traceback.print_exc()
 
-        full_slide_ocr_results = []
-        if shared_pdf_path:
-            try:
-                await safe_emit(
-                    f"{user_id}/progress",
-                    {"message": f"Running full-slide OCR export for {safe_file_name}..."},
-                )
-                full_slide_ocr_results = await export_and_ocr_ppt_with_fallback(
-                    file_path, user_id, thread_id, pdf_path=shared_pdf_path
-                )
-            except Exception as e:
-                print(f"[SlideExport] Full-slide OCR unavailable for {safe_file_name}: {e}")
-                traceback.print_exc()
-
+    # Fallback: python-pptx extraction if PPTX → PDF conversion failed
+    if ext in {".ppt", ".pptx"}:
         try:
             prs = Presentation(file_path)
         except Exception as e:
@@ -949,14 +758,6 @@ async def extract_document(
                 # Extract text recursively (handles GroupShape for flowcharts etc.)
                 slide_text = _extract_shapes_recursive(slide.shapes, slide.part)
                 page_text = "\n".join(slide_text)
-
-                # Add exported full-slide OCR if available.
-                if slide_number - 1 < len(full_slide_ocr_results):
-                    full_slide_text = (
-                        full_slide_ocr_results[slide_number - 1] or ""
-                    ).strip()
-                    if full_slide_text:
-                        page_text += f"\n\n{full_slide_text}"
 
                 image_names = []
 
@@ -994,134 +795,6 @@ async def extract_document(
                     Page(number=slide_number, text=page_text, images=image_names)
                 )
 
-            # --- Optimised VLM Enhancement for PPT (reuses shared PDF) ---
-            if settings.USE_VISION_MODEL and shared_pdf_path:
-                try:
-                    print(f"[PPT] VLM enhancement enabled for {safe_file_name} (reusing cached PDF)")
-                    await safe_emit(
-                        f"{user_id}/progress",
-                        {"message": f"Running VLM enhancement on {safe_file_name}..."},
-                    )
-
-                    pdf_doc = fitz.open(shared_pdf_path)
-                    process_count = min(len(pdf_doc), len(pages))
-                    BATCH_SIZE = 10  # Render and process slides in batches to limit memory
-
-                    for batch_start in range(0, process_count, BATCH_SIZE):
-                        batch_end = min(batch_start + BATCH_SIZE, process_count)
-                        vlm_images = []
-                        vlm_labels = []
-
-                        for pg_num in range(batch_start, batch_end):
-                            pg = pdf_doc.load_page(pg_num)
-                            pix = pg.get_pixmap(dpi=150)
-                            vlm_images.append(pix.tobytes("png"))
-                            vlm_labels.append(f"Slide {pg_num + 1}")
-
-                        if vlm_images:
-                            vlm_results = await vlm_parse_concurrent(
-                                images=vlm_images,
-                                page_labels=vlm_labels,
-                                max_concurrent=3,
-                            )
-
-                            for j, vlm_text in enumerate(vlm_results):
-                                idx = batch_start + j
-                                if vlm_text and idx < len(pages):
-                                    pages[idx].text += f"\n\n{vlm_text}"
-                                    combined_texts[idx] += f"\n\n{vlm_text}"
-                                    print(f"[PPT] VLM enhancement added to Slide {idx+1} ({len(vlm_text)} chars)")
-
-                        # Free batch memory
-                        del vlm_images
-                        del vlm_labels
-
-                    pdf_doc.close()
-
-                    # Persist PDF for query-time VLM page rendering
-                    if SWITCHES.get("USE_VLM_FOR_ANSWER", False):
-                        try:
-                            persist_dir = os.path.join("data", user_id, "threads", thread_id, "parsed")
-                            os.makedirs(persist_dir, exist_ok=True)
-                            persist_path = os.path.join(persist_dir, f"{doc_id}_slides.pdf")
-                            shutil.copy2(shared_pdf_path, persist_path)
-                            print(f"[PPT] Persisted intermediate PDF → {persist_path}")
-                        except Exception as e:
-                            print(f"[PPT] Failed to persist intermediate PDF: {e}")
-
-                except Exception as e:
-                    print(f"[PPT] VLM enhancement error: {e}")
-                    traceback.print_exc()
-            elif settings.USE_VISION_MODEL and not shared_pdf_path:
-                print("[PPT] Skipping VLM: PDF conversion failed earlier")
-
-            # --- GLM-OCR Enhancement for PPT (reuses shared PDF, batched rendering) ---
-            if SWITCHES.get("GLM_OCR", False) and shared_pdf_path:
-                try:
-                    print(f"[PPT] GLM-OCR enhancement enabled for {safe_file_name} (reusing cached PDF)")
-                    await safe_emit(
-                        f"{user_id}/progress",
-                        {"message": f"Running GLM-OCR enhancement on {safe_file_name}..."},
-                    )
-
-                    pdf_doc = fitz.open(shared_pdf_path)
-                    process_count = min(len(pdf_doc), len(pages))
-                    GLM_BATCH_SIZE = 10
-
-                    for batch_start in range(0, process_count, GLM_BATCH_SIZE):
-                        batch_end = min(batch_start + GLM_BATCH_SIZE, process_count)
-                        glm_images = []
-                        glm_labels = []
-
-                        for pg_num in range(batch_start, batch_end):
-                            pg = pdf_doc.load_page(pg_num)
-                            pix = pg.get_pixmap(dpi=150)
-                            glm_images.append(pix.tobytes("png"))
-                            glm_labels.append(f"Slide {pg_num + 1}")
-
-                        if glm_images:
-                            glm_results = await glm_ocr_parse_concurrent(
-                                images=glm_images,
-                                page_labels=glm_labels,
-                                mode="text",
-                                max_concurrent=3,
-                            )
-
-                            for j, glm_text in enumerate(glm_results):
-                                idx = batch_start + j
-                                if glm_text and idx < len(pages):
-                                    pages[idx].text += f"\n\n{glm_text}"
-                                    combined_texts[idx] += f"\n\n{glm_text}"
-                                    print(f"[PPT] GLM-OCR enhancement added to Slide {idx+1} ({len(glm_text)} chars)")
-
-                        del glm_images
-                        del glm_labels
-
-                    pdf_doc.close()
-
-                except Exception as e:
-                    print(f"[PPT] GLM-OCR enhancement error: {e}")
-                    traceback.print_exc()
-            elif SWITCHES.get("GLM_OCR", False) and not shared_pdf_path:
-                print("[PPT] Skipping GLM-OCR: PDF conversion failed earlier")
-
-            # --- GPU memory cleanup after all OCR/VLM/GLM phases ---
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    print("[PPT] GPU cache cleared after all OCR phases")
-            except Exception:
-                pass
-
-            # --- Clean up shared PDF (no longer needed) ---
-            if shared_pdf_path and os.path.exists(shared_pdf_path):
-                try:
-                    os.remove(shared_pdf_path)
-                    print(f"[PPT] Cleaned up shared PDF: {shared_pdf_path}")
-                except Exception:
-                    pass
-
             # Wait for OCR tasks
             for placeholder, task in ocr_tasks.items():
                 try:
@@ -1140,23 +813,18 @@ async def extract_document(
         except Exception:
             traceback.print_exc()
 
-        await safe_emit(
-            f"{user_id}/progress", {"message": f"Processing {title} successfully..."}
-        )
         end_time = time.time()
-        print(
-            f"Time taken to process {title} successfully: {end_time - start_time} seconds"
-        )
+        print(f"Time taken to process {safe_file_name} (.pptx fallback): {end_time - start_time} seconds")
         return Document(
             id=doc_id,
-            type=ext[1:],
+            type=original_type,
             file_name=safe_file_name,
             content=pages,
             title=title,
             full_text="\n".join(combined_texts),
         )
 
-    # --- Handle Word .docx files with python-docx for full structure extraction ---
+    # --- Handle Word .docx files — convert to PDF, fall through to PDF handler ---
     if ext == ".docx":
         try:
             await safe_emit(
@@ -1164,28 +832,44 @@ async def extract_document(
                 {"message": f"Parsing {title} (Word document)..."},
             )
 
-            # --- Docling native DOCX extraction ---
-            docling_md_text = ""
-            if _HAS_DOCLING:
+            # Convert DOCX → PDF for unified processing
+            libreoffice_cmd = get_libreoffice_command()
+            if libreoffice_cmd:
                 try:
-                    print(f"[DOCX] Running Docling extraction for {safe_file_name}...")
-                    await safe_emit(f"{user_id}/progress", {"message": f"Running Docling extraction for {safe_file_name}..."})
-
-                    def _run_docling_docx(p):
-                        converter = DocumentConverter()
-                        result = converter.convert(p)
-                        return result.document.export_to_markdown()
-
-                    docling_md_text = await asyncio.to_thread(_run_docling_docx, file_path)
-                    if docling_md_text:
-                        print(f"[DOCX] Docling extraction successful ({len(docling_md_text)} chars)")
+                    docx_dir = os.path.dirname(file_path)
+                    proc = await asyncio.create_subprocess_exec(
+                        libreoffice_cmd,
+                        "--headless",
+                        "--convert-to",
+                        "pdf",
+                        "--outdir",
+                        docx_dir,
+                        file_path,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    await asyncio.wait_for(proc.communicate(), timeout=120)
+                    if proc.returncode == 0:
+                        expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                        if os.path.exists(expected_pdf):
+                            _converted_pdf_path = expected_pdf
+                            file_path = expected_pdf
+                            ext = ".pdf"
+                            print(f"[DOCX] Converted to PDF, delegating to PDF pipeline")
                 except Exception as e:
-                    print(f"[DOCX] Docling extraction failed: {e}")
+                    print(f"[DOCX] LibreOffice PDF conversion failed: {e}")
                     traceback.print_exc()
+        except Exception as e:
+            print(f"Error during DOCX conversion: {str(e)}")
+            traceback.print_exc()
+            return None
 
+    # Fallback: python-docx extraction if DOCX → PDF conversion failed
+    if ext == ".docx":
+        try:
+            print(f"[DOCX] LibreOffice unavailable, using python-docx fallback for {safe_file_name}")
             docx_doc = DocxDocument(file_path)
 
-            pages_text = []
             image_names_all = []
             ocr_tasks = {}
             image_dir = f"data/{user_id}/threads/{thread_id}/images/{doc_id}"
@@ -1258,12 +942,7 @@ async def extract_document(
                                 traceback.print_exc()
                             break
 
-            # Use Docling output as primary text if available, else python-docx
-            if docling_md_text:
-                page_text = docling_md_text
-                print(f"[DOCX] Using Docling markdown as primary text for {safe_file_name}")
-            else:
-                page_text = "\n\n".join(body_parts)
+            page_text = "\n\n".join(body_parts)
 
             # --- Extract embedded images ---
             img_index = 0
@@ -1309,226 +988,13 @@ async def extract_document(
                     image_text = "[Image OCR failed]"
                 page_text = page_text.replace(placeholder, image_text, 1)
 
-            # --- VLM Enhancement for DOCX ---
-            if settings.USE_VISION_MODEL:
-                try:
-                    print(
-                        f"[DOCX] VLM enhancement enabled for {safe_file_name}. Converting to PDF..."
-                    )
-                    await safe_emit(
-                        f"{user_id}/progress",
-                        {"message": f"Running VLM enhancement on {safe_file_name}..."},
-                    )
-
-                    libreoffice_cmd = get_libreoffice_command()
-                    vlm_pdf_path = None
-                    if libreoffice_cmd:
-                        try:
-                            docx_dir = os.path.dirname(file_path)
-                            proc = await asyncio.create_subprocess_exec(
-                                libreoffice_cmd,
-                                "--headless",
-                                "--convert-to",
-                                "pdf",
-                                "--outdir",
-                                docx_dir,
-                                file_path,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
-                            )
-                            await asyncio.wait_for(proc.communicate(), timeout=120)
-                            if proc.returncode == 0:
-                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
-                                if os.path.exists(expected_pdf):
-                                    vlm_pdf_path = expected_pdf
-                        except Exception as e:
-                            print(f"[DOCX] LibreOffice PDF conversion for VLM failed: {e}")
-                            traceback.print_exc()
-
-                    if vlm_pdf_path:
-                        try:
-                            pdf_doc = fitz.open(vlm_pdf_path)
-                            vlm_images = []
-                            vlm_labels = []
-
-                            for pg_num in range(len(pdf_doc)):
-                                pg = pdf_doc.load_page(pg_num)
-                                pix = pg.get_pixmap(dpi=150)
-                                vlm_images.append(pix.tobytes("png"))
-                                vlm_labels.append(f"Page {pg_num + 1}")
-                            pdf_doc.close()
-
-                            if vlm_images:
-                                vlm_results = await vlm_parse_concurrent(
-                                    images=vlm_images,
-                                    page_labels=vlm_labels,
-                                    max_concurrent=3,
-                                )
-
-                                vlm_combined = "\n\n".join(
-                                    r for r in vlm_results if r
-                                )
-
-                                if vlm_combined:
-                                    page_text += f"\n\n{vlm_combined}"
-                                    print(
-                                        f"[DOCX] VLM enhancement added ({len(vlm_combined)} chars)"
-                                    )
-
-                        except Exception as e:
-                            print(f"[DOCX] VLM processing failed: {e}")
-                            traceback.print_exc()
-                        finally:
-                            if vlm_pdf_path and os.path.exists(vlm_pdf_path):
-                                try:
-                                    os.remove(vlm_pdf_path)
-                                except Exception:
-                                    pass
-                    else:
-                        print(
-                            "[DOCX] Skipping VLM: LibreOffice conversion failed or not available"
-                        )
-                except Exception as e:
-                    print(f"[DOCX] VLM enhancement error: {e}")
-                    traceback.print_exc()
-
-            # --- GLM-OCR Enhancement for DOCX (runs alongside existing OCR, additive) ---
-            if SWITCHES.get("GLM_OCR", False):
-                try:
-                    print(
-                        f"[DOCX] GLM-OCR enhancement enabled for {safe_file_name}. Converting to PDF..."
-                    )
-                    await safe_emit(
-                        f"{user_id}/progress",
-                        {"message": f"Running GLM-OCR enhancement on {safe_file_name}..."},
-                    )
-
-                    libreoffice_cmd = get_libreoffice_command()
-                    pdf_path = None
-                    if libreoffice_cmd:
-                        try:
-                            docx_dir = os.path.dirname(file_path)
-                            proc = await asyncio.create_subprocess_exec(
-                                libreoffice_cmd,
-                                "--headless",
-                                "--convert-to",
-                                "pdf",
-                                "--outdir",
-                                docx_dir,
-                                file_path,
-                                stdout=asyncio.subprocess.PIPE,
-                                stderr=asyncio.subprocess.PIPE,
-                            )
-                            await asyncio.wait_for(proc.communicate(), timeout=120)
-                            if proc.returncode == 0:
-                                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
-                                if os.path.exists(expected_pdf):
-                                    pdf_path = expected_pdf
-                        except Exception as e:
-                            print(f"[DOCX] LibreOffice conversion for GLM-OCR failed: {e}")
-                            traceback.print_exc()
-
-                    if pdf_path:
-                        try:
-                            pdf_doc = fitz.open(pdf_path)
-                            glm_images = []
-                            glm_labels = []
-
-                            for pg_num in range(len(pdf_doc)):
-                                pg = pdf_doc.load_page(pg_num)
-                                def _render_glm(p): return p.get_pixmap(dpi=150).tobytes("png")
-                                glm_images.append(await asyncio.to_thread(_render_glm, pg))
-                                glm_labels.append(f"Page {pg_num + 1}")
-                            pdf_doc.close()
-
-                            if glm_images:
-                                glm_results = await glm_ocr_parse_concurrent(
-                                    images=glm_images,
-                                    page_labels=glm_labels,
-                                    mode="text",
-                                    max_concurrent=3,
-                                )
-
-                                # If GLM-OCR ran, we now have page-by-page layout
-                                # We'll build Pages from these results instead of a single blob
-                                pages = []
-                                full_text_lines = []
-                                
-                                # Since python-docx doesn't give exact page breaks, 
-                                # the original text is just a single block. 
-                                # We will put the original raw text on Page 1, 
-                                # and then append the GLM-OCR Enhanced Pages exactly as they appear in the PDF.
-                                if page_text.strip():
-                                    pages.append(Page(number=1, text=page_text, images=image_names_all))
-                                    full_text_lines.append(page_text)
-
-                                page_counter = len(pages) + 1
-                                for i, r in enumerate(glm_results):
-                                    if r:
-                                        pages.append(Page(number=page_counter, text=r))
-                                        full_text_lines.append(r)
-                                        page_counter += 1
-
-                                if pages:
-                                    print(
-                                        f"[DOCX] GLM-OCR enhancement added ({len(pages) - (1 if page_text.strip() else 0)} pages)"
-                                    )
-                                    # Override the single block return with the new paginated structure
-                                    await safe_emit(
-                                        f"{user_id}/progress",
-                                        {"message": f"Processed {safe_file_name} (Word) successfully"},
-                                    )
-                                    end_time = time.time()
-                                    print(
-                                        f"Time taken to process {safe_file_name} (.docx): {end_time - start_time} seconds"
-                                    )
-                                    return Document(
-                                        id=doc_id,
-                                        type="docx",
-                                        file_name=safe_file_name,
-                                        content=pages,
-                                        title=title,
-                                        full_text="\n\n".join(full_text_lines),
-                                    )
-
-                        except Exception as e:
-                            print(f"[DOCX] GLM-OCR processing failed: {e}")
-                            traceback.print_exc()
-                        finally:
-                            if pdf_path and os.path.exists(pdf_path):
-                                # Persist intermediate PDF for query-time VLM page rendering
-                                if SWITCHES.get("USE_VLM_FOR_ANSWER", False):
-                                    try:
-                                        import shutil
-                                        persist_dir = os.path.join("data", user_id, "threads", thread_id, "parsed")
-                                        os.makedirs(persist_dir, exist_ok=True)
-                                        persist_path = os.path.join(persist_dir, f"{doc_id}_pages.pdf")
-                                        shutil.copy2(pdf_path, persist_path)
-                                        print(f"[DOCX] Persisted intermediate PDF → {persist_path}")
-                                    except Exception as e:
-                                        print(f"[DOCX] Failed to persist intermediate PDF: {e}")
-                                try:
-                                    os.remove(pdf_path)
-                                except:
-                                    pass
-                    else:
-                        print(
-                            "[DOCX] Skipping GLM-OCR: LibreOffice conversion failed or not available"
-                        )
-                except Exception as e:
-                    print(f"[DOCX] GLM-OCR enhancement error: {e}")
-                    traceback.print_exc()
-
-            # --- Fallback if GLM-OCR didn't run ---
-            # For simplicity, treat as single page if short, else split
+            # Split into pages
             if len(page_text) <= 5000:
                 pages = [Page(number=1, text=page_text, images=image_names_all)]
             else:
-                # Split by double newlines into logical sections
                 sections = page_text.split("\n\n")
                 current_page = ""
                 page_num = 1
-                pages = []
                 for section in sections:
                     if len(current_page) + len(section) > 3000 and current_page:
                         pages.append(Page(number=page_num, text=current_page.strip()))
@@ -1537,22 +1003,10 @@ async def extract_document(
                     else:
                         current_page += "\n\n" + section if current_page else section
                 if current_page.strip():
-                    pages.append(
-                        Page(
-                            number=page_num,
-                            text=current_page.strip(),
-                            images=image_names_all,
-                        )
-                    )
+                    pages.append(Page(number=page_num, text=current_page.strip(), images=image_names_all))
 
-            await safe_emit(
-                f"{user_id}/progress",
-                {"message": f"Processed {safe_file_name} (Word) successfully"},
-            )
             end_time = time.time()
-            print(
-                f"Time taken to process {safe_file_name} (.docx): {end_time - start_time} seconds"
-            )
+            print(f"Time taken to process {safe_file_name} (.docx fallback): {end_time - start_time} seconds")
             return Document(
                 id=doc_id,
                 type="docx",
@@ -1568,7 +1022,6 @@ async def extract_document(
             return None
 
     # --- Handle PDFs and other fitz-supported formats ---
-    # NOTE: .docx is handled separately above with python-docx for better table/heading extraction
     if ext in [
         ".pdf",
         ".xlsx",
@@ -1679,6 +1132,7 @@ async def extract_document(
                             "page_number": page_number + 1,
                             "image_bytes": img_bytes,
                             "original_text": page_text,
+                            "has_tables": bool(table_blocks),
                         }
                     )
                 except Exception as e:
@@ -1866,27 +1320,48 @@ async def extract_document(
                 },
             )
 
-            vlm_images = [c["image_bytes"] for c in vlm_candidates]
-            vlm_labels = [f"Page {c['page_number']}" for c in vlm_candidates]
+            # Split into table-heavy and regular pages for prompt specialization
+            table_pages = [c for c in vlm_candidates if c.get("has_tables")]
+            regular_pages = [c for c in vlm_candidates if not c.get("has_tables")]
 
-            vlm_results = await vlm_parse_concurrent(
-                images=vlm_images,
-                page_labels=vlm_labels,
-                max_concurrent=3,
-            )
+            all_vlm_results = {}  # page_index -> vlm_text
+
+            # Run table pages with table-specific prompt
+            if table_pages:
+                print(f"[PDF] {len(table_pages)} pages with tables → table prompt")
+                table_results = await vlm_parse_concurrent(
+                    images=[c["image_bytes"] for c in table_pages],
+                    page_labels=[f"Page {c['page_number']}" for c in table_pages],
+                    max_concurrent=3,
+                    prompt_type="table",
+                )
+                for c, result in zip(table_pages, table_results):
+                    all_vlm_results[c["page_index"]] = result
+
+            # Run regular pages with default prompt
+            if regular_pages:
+                regular_results = await vlm_parse_concurrent(
+                    images=[c["image_bytes"] for c in regular_pages],
+                    page_labels=[f"Page {c['page_number']}" for c in regular_pages],
+                    max_concurrent=3,
+                )
+                for c, result in zip(regular_pages, regular_results):
+                    all_vlm_results[c["page_index"]] = result
 
             # Merge VLM results back into pages (always additive)
             # PyMuPDF text layer + VLM visual layer + Mermaid diagrams + GLM-OCR = maximum coverage.
             # Never replace: content-rich pages would lose good PyMuPDF text extraction.
-            for candidate, vlm_text in zip(vlm_candidates, vlm_results):
+            for candidate in vlm_candidates:
+                vlm_text = all_vlm_results.get(candidate["page_index"], "")
                 if not vlm_text:
                     continue
 
                 page_idx = candidate["page_index"]
                 pages[page_idx].text += f"\n\n{vlm_text}"
                 combined_texts[page_idx] += f"\n\n{vlm_text}"
+                prompt_used = "table" if candidate.get("has_tables") else "default"
                 print(
-                    f"[PDF] VLM content appended to page {candidate['page_number']} ({len(vlm_text)} chars)"
+                    f"[PDF] VLM ({prompt_used}) appended to page {candidate['page_number']} ({len(vlm_text)} chars)"
                 )
 
         # --- Phase 3: Concurrent GLM-OCR processing for candidate pages ---
@@ -1940,6 +1415,23 @@ async def extract_document(
                 txt.replace(placeholder, image_text, 1) for txt in combined_texts
             ]
 
+        # Persist converted PDF for query-time VLM page rendering + cleanup
+        if _converted_pdf_path:
+            if SWITCHES.get("USE_VLM_FOR_ANSWER", False):
+                try:
+                    import shutil
+                    persist_dir = os.path.join("data", user_id, "threads", thread_id, "parsed")
+                    os.makedirs(persist_dir, exist_ok=True)
+                    persist_path = os.path.join(persist_dir, f"{doc_id}_pages.pdf")
+                    shutil.copy2(_converted_pdf_path, persist_path)
+                    print(f"[PDF] Persisted converted PDF → {persist_path}")
+                except Exception as e:
+                    print(f"[PDF] Failed to persist converted PDF: {e}")
+            try:
+                os.remove(_converted_pdf_path)
+            except Exception:
+                pass
+
         await safe_emit(
             f"{user_id}/progress", {"message": f"Processing {title} successfully..."}
         )
@@ -1949,7 +1441,7 @@ async def extract_document(
         )
         return Document(
             id=doc_id,
-            type=ext[1:],
+            type=original_type,
             file_name=safe_file_name,
             content=pages,
             title=title,
