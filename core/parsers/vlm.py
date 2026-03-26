@@ -196,6 +196,7 @@ async def vlm_parse_concurrent(
     port: int = PORT2,
     max_concurrent: int = 3,
     prompt_type: str = "default",
+    custom_prompt: str | None = None,
 ) -> list[str]:
     """
     Process multiple pages concurrently using async single-page VLM calls.
@@ -209,7 +210,8 @@ async def vlm_parse_concurrent(
         page_labels: Optional labels for logging (e.g. ["Page 1", "Slide 3"]).
         port: Ollama API port (default: PORT2 — separate instance from query LLM).
         max_concurrent: Max simultaneous VLM calls (default: 3, balance speed vs VRAM).
-        prompt_type: "default", "mermaid", or "retry".
+        prompt_type: "default", "mermaid", or "retry". Ignored when custom_prompt is set.
+        custom_prompt: If provided, overrides prompt_type for all pages.
 
     Returns:
         List of extracted Markdown strings, one per input image.
@@ -222,17 +224,18 @@ async def vlm_parse_concurrent(
     labels = page_labels or [f"Page {i+1}" for i in range(total)]
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    print(f"[VLM] Concurrent processing: {total} pages, max {max_concurrent} at a time")
+    prompt_label = "custom" if custom_prompt else prompt_type
+    print(f"[VLM] Concurrent processing: {total} pages, max {max_concurrent} at a time, prompt: {prompt_label}")
     overall_start = time.time()
 
     async def _process_one(idx: int, img_bytes: bytes) -> str:
         async with semaphore:
-            print(f"[VLM] Starting {labels[idx]} (prompt: {prompt_type})...")
+            print(f"[VLM] Starting {labels[idx]} (prompt: {prompt_label})...")
             try:
                 # Timeout inside semaphore so a hanging VLM call releases the
                 # slot promptly instead of blocking other pages for 4+ minutes.
                 result = await asyncio.wait_for(
-                    vlm_parse_slide(img_bytes, port=port, prompt_type=prompt_type),
+                    vlm_parse_slide(img_bytes, port=port, prompt_type=prompt_type, custom_prompt=custom_prompt),
                     timeout=270,  # slightly above httpx 240s timeout as safety net
                 )
             except asyncio.TimeoutError:

@@ -215,17 +215,20 @@ async def retriever(state: AgentState) -> AgentState:
     except Exception as e:
         print(f"[Triples] Error querying triples: {e}")
 
-    # ── Query-time VLM for visual reference queries ──
-    # Detects explicit ("slide 3", "figure 2") and implicit ("the flowchart") references,
-    # renders the relevant page from the source document, and answers via VLM.
+    # ── Query-time VLM: send top-ranked pages for visual context ──
+    # For explicit page/slide references → single-page VLM (existing logic).
+    # For all other queries → send pages from high-confidence chunks (score >= 0.8)
+    # to VLM concurrently so the LLM gets visual context (tables, charts, diagrams).
     if SWITCHES.get("USE_VLM_FOR_ANSWER", False) and state.chunks:
         try:
             _query_for_vlm = state.query or state.resolved_query or state.original_query
             is_visual, explicit_page, is_last, is_implicit = _detect_visual_reference(_query_for_vlm)
-            if is_visual:
+
+            if is_visual and (explicit_page is not None or is_last):
+                # Explicit page/slide reference — use existing single-page logic
                 print(
-                    f"[VLM-Answer] Visual reference detected "
-                    f"(explicit_page={explicit_page}, is_last={is_last}, is_implicit={is_implicit})"
+                    f"[VLM-Answer] Explicit visual reference detected "
+                    f"(page={explicit_page}, is_last={is_last})"
                 )
                 vlm_ans = await _resolve_visual_page_vlm(
                     state=state,
@@ -234,9 +237,17 @@ async def retriever(state: AgentState) -> AgentState:
                     is_implicit=is_implicit,
                 )
                 if vlm_ans:
+                    print(f"[VLM-Answer] Single-page VLM response:\n{vlm_ans}")
+                    state.vlm_visual_answer = vlm_ans
+            else:
+                # Multi-page VLM: collect high-confidence pages
+                vlm_ans = await _multi_page_vlm(state, _query_for_vlm)
+                if vlm_ans:
                     state.vlm_visual_answer = vlm_ans
         except Exception as e:
-            print(f"[VLM-Answer] Visual reference VLM failed: {e}")
+            print(f"[VLM-Answer] Query-time VLM failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     # ── Lost in the Middle mitigation ──
     # Reorder so highest-scored chunks are at positions 0 and -1,
@@ -733,6 +744,19 @@ async def _batch_sql_answer(
         return "\n\n---\n\n".join(valid_answers)
 
 
+def _resolve_source_pdf(file_name: str, doc_id: str, user_id: str, thread_id: str) -> str | None:
+    """Resolve the source PDF path for a given document (PDF, PPTX, DOCX)."""
+    ext = os.path.splitext(file_name)[1].lower()
+    base_data = os.path.join("data", user_id, "threads", thread_id)
+    if ext == ".pdf":
+        return os.path.join(base_data, "uploads", file_name)
+    elif ext in (".pptx", ".ppt"):
+        return os.path.join(base_data, "parsed", f"{doc_id}_slides.pdf")
+    elif ext in (".docx", ".doc"):
+        return os.path.join(base_data, "parsed", f"{doc_id}_pages.pdf")
+    return None
+
+
 import re as _re
 
 # Patterns for explicit PAGE/SLIDE references: "page 3", "slide 2"
@@ -781,6 +805,127 @@ def _detect_visual_reference(query: str):
         return True, None, False, True
 
     return False, None, False, False
+
+
+async def _multi_page_vlm(state: AgentState, query: str) -> str | None:
+    """
+    Send high-confidence pages (rerank_score >= 0.8) to VLM concurrently.
+
+    Deduplicates by (document_id, page_no), caps at 5 pages, renders each
+    from the source PDF, and calls VLM with the user's question.
+
+    Returns combined VLM answers with page labels, or None if no pages qualify.
+    """
+    import fitz  # PyMuPDF
+
+    from core.parsers.vlm import vlm_parse_concurrent
+    from core.constants import PORT2
+
+    MIN_SCORE = 0.8
+    MAX_PAGES = 5
+
+    # Collect unique high-confidence pages
+    seen = set()  # (document_id, page_no)
+    page_candidates = []
+    for chunk in state.chunks:
+        score = chunk.get("rerank_score", 0.0)
+        if score < MIN_SCORE:
+            continue
+        doc_id = chunk.get("document_id", "")
+        page_no = chunk.get("page_no", 1)
+        file_name = chunk.get("file_name", "")
+        key = (doc_id, page_no)
+        if key in seen or not doc_id or not file_name:
+            continue
+        seen.add(key)
+        page_candidates.append({
+            "doc_id": doc_id,
+            "page_no": page_no,
+            "file_name": file_name,
+            "score": score,
+        })
+        if len(page_candidates) >= MAX_PAGES:
+            break
+
+    if not page_candidates:
+        print("[VLM-Answer] No chunks with rerank_score >= 0.8, skipping multi-page VLM")
+        return None
+
+    print(f"[VLM-Answer] {len(page_candidates)} high-confidence pages for VLM: "
+          + ", ".join(f"p{c['page_no']} of {c['file_name']} (score={c['score']:.2f})" for c in page_candidates))
+
+    # Render pages from source PDFs
+    images = []
+    labels = []
+    valid_candidates = []
+    pdf_cache = {}  # source_pdf_path -> fitz.Document (avoid reopening same file)
+
+    try:
+        for cand in page_candidates:
+            source_pdf = _resolve_source_pdf(
+                cand["file_name"], cand["doc_id"], state.user_id, state.thread_id
+            )
+            if not source_pdf or not os.path.exists(source_pdf):
+                print(f"[VLM-Answer] Source PDF not found: {source_pdf}")
+                continue
+
+            try:
+                if source_pdf not in pdf_cache:
+                    pdf_cache[source_pdf] = fitz.open(source_pdf)
+                pdf_doc = pdf_cache[source_pdf]
+
+                page_idx = cand["page_no"] - 1
+                if page_idx < 0 or page_idx >= len(pdf_doc):
+                    page_idx = max(0, min(page_idx, len(pdf_doc) - 1))
+
+                page = pdf_doc.load_page(page_idx)
+                img_bytes = page.get_pixmap(dpi=150).tobytes("png")
+                images.append(img_bytes)
+                labels.append(f"Page {cand['page_no']} of {cand['file_name']}")
+                valid_candidates.append(cand)
+            except Exception as e:
+                print(f"[VLM-Answer] Failed to render page {cand['page_no']} of {cand['file_name']}: {e}")
+    finally:
+        for pdf_doc in pdf_cache.values():
+            pdf_doc.close()
+
+    if not images:
+        return None
+
+    # Build VLM prompt with user's question
+    vlm_prompt = (
+        f"**User Question:** {query}\n\n"
+        "Answer the user's question using ONLY what is visible in this image.\n"
+        "Extract specific data: names, numbers, dates, labels, percentages, statuses.\n"
+        "If the image contains tables, extract the relevant rows/columns.\n"
+        "If the image contains charts/diagrams, interpret them to answer the question.\n"
+        "Be specific and use exact values from the image."
+    )
+
+    # Send all pages concurrently
+    results = await vlm_parse_concurrent(
+        images=images,
+        page_labels=labels,
+        port=PORT2,
+        max_concurrent=3,
+        custom_prompt=vlm_prompt,
+    )
+
+    # Combine results with page labels and log each
+    parts = []
+    for label, cand, result in zip(labels, valid_candidates, results):
+        if result:
+            print(f"[VLM-Answer] {label} (score={cand['score']:.2f}):\n{result}")
+            parts.append(f"[{label}]\n{result}")
+        else:
+            print(f"[VLM-Answer] {label}: empty response")
+
+    if not parts:
+        return None
+
+    combined = "\n\n---\n\n".join(parts)
+    print(f"[VLM-Answer] Combined {len(parts)} page answers ({len(combined)} chars total)")
+    return combined
 
 
 async def _resolve_visual_page_vlm(
@@ -833,17 +978,9 @@ async def _resolve_visual_page_vlm(
     print(f"[VLM-Answer] Resolved target page {target_page} from '{file_name}' (top chunk rerank_score={top_chunk.get('rerank_score', 'N/A')})")
 
     # Locate source PDF
-    ext = os.path.splitext(file_name)[1].lower()
-    base_data = os.path.join("data", state.user_id, "threads", state.thread_id)
-
-    if ext == ".pdf":
-        source_pdf = os.path.join(base_data, "uploads", file_name)
-    elif ext in (".pptx", ".ppt"):
-        source_pdf = os.path.join(base_data, "parsed", f"{doc_id}_slides.pdf")
-    elif ext in (".docx", ".doc"):
-        source_pdf = os.path.join(base_data, "parsed", f"{doc_id}_pages.pdf")
-    else:
-        print(f"[VLM-Answer] Unsupported file type for visual rendering: {ext}")
+    source_pdf = _resolve_source_pdf(file_name, doc_id, state.user_id, state.thread_id)
+    if not source_pdf:
+        print(f"[VLM-Answer] Unsupported file type: {os.path.splitext(file_name)[1]}")
         return None
 
     if not os.path.exists(source_pdf):
