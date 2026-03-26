@@ -343,13 +343,21 @@ async def hybrid_retrieve(
     vector_retriever = get_user_retriever(user_id, thread_id, k=per_query_vector_k)
 
     async def get_vector_results(q: str):
-        docs = await vector_retriever.ainvoke(q)
-        return [doc.model_dump() for doc in docs]
+        try:
+            docs = await vector_retriever.ainvoke(q)
+            return [doc.model_dump() for doc in docs]
+        except Exception as e:
+            print(f"[Retrieval] Vector search failed for query '{q[:80]}': {e}")
+            return []
 
     async def get_bm25_results(q: str):
-        return await asyncio.to_thread(
-            search_bm25, user_id, thread_id, q, per_query_bm25_k
-        )
+        try:
+            return await asyncio.to_thread(
+                search_bm25, user_id, thread_id, q, per_query_bm25_k
+            )
+        except Exception as e:
+            print(f"[Retrieval] BM25 search failed for query '{q[:80]}': {e}")
+            return []
 
     # Run vector + BM25 for every query variant in parallel
     tasks = []
