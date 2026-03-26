@@ -777,20 +777,22 @@ async def extract_document(
                     print(f"[PPT] LibreOffice stdout: {stdout.decode(errors='replace')[:500]}")
                 if stderr and stderr.strip():
                     print(f"[PPT] LibreOffice stderr: {stderr.decode(errors='replace')[:500]}")
-                if proc.returncode == 0:
-                    expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
-                    print(f"[PPT] Looking for PDF at: {expected_pdf} (exists={os.path.exists(expected_pdf)})")
-                    if os.path.exists(expected_pdf):
-                        _converted_pdf_path = expected_pdf
-                        file_path = expected_pdf
-                        ext = ".pdf"
+                # LibreOffice may crash (e.g. SIGABRT=134 from GStreamer/multimedia)
+                # AFTER writing the PDF.  Check for the output file regardless of
+                # return code — the conversion often succeeds before the crash.
+                expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                if proc.returncode != 0:
+                    print(f"[PPT] LibreOffice exited with code {proc.returncode}, checking if PDF was written anyway...")
+                if os.path.exists(expected_pdf) and os.path.getsize(expected_pdf) > 0:
+                    _converted_pdf_path = expected_pdf
+                    file_path = expected_pdf
+                    ext = ".pdf"
+                    if proc.returncode == 0:
                         print(f"[PPT] Converted to PDF, delegating to PDF pipeline")
                     else:
-                        # Search for any PDF in the output directory
-                        pdfs = [f for f in os.listdir(ppt_dir) if f.lower().endswith('.pdf')]
-                        print(f"[PPT] Expected PDF not found. PDFs in {ppt_dir}: {pdfs}")
+                        print(f"[PPT] LibreOffice crashed (code {proc.returncode}) but PDF was written — using it")
                 else:
-                    print(f"[PPT] LibreOffice failed with returncode {proc.returncode}")
+                    print(f"[PPT] PDF not found at {expected_pdf}, falling back to python-pptx")
             except asyncio.TimeoutError:
                 print(f"[PPT] LibreOffice PDF conversion timed out after {lo_timeout}s for {safe_file_name}")
             except Exception as e:
@@ -911,13 +913,17 @@ async def extract_document(
                         stderr=asyncio.subprocess.PIPE,
                     )
                     await asyncio.wait_for(proc.communicate(), timeout=120)
-                    if proc.returncode == 0:
-                        expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
-                        if os.path.exists(expected_pdf):
-                            _converted_pdf_path = expected_pdf
-                            file_path = expected_pdf
-                            ext = ".pdf"
+                    expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                    if os.path.exists(expected_pdf) and os.path.getsize(expected_pdf) > 0:
+                        _converted_pdf_path = expected_pdf
+                        file_path = expected_pdf
+                        ext = ".pdf"
+                        if proc.returncode != 0:
+                            print(f"[DOCX] LibreOffice crashed (code {proc.returncode}) but PDF was written — using it")
+                        else:
                             print(f"[DOCX] Converted to PDF, delegating to PDF pipeline")
+                    elif proc.returncode != 0:
+                        print(f"[DOCX] LibreOffice failed (code {proc.returncode}), no PDF produced")
                 except Exception as e:
                     print(f"[DOCX] LibreOffice PDF conversion failed: {e}")
                     traceback.print_exc()
