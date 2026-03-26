@@ -50,6 +50,54 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 SMARTART_URI = "http://schemas.openxmlformats.org/drawingml/2006/diagram"
+
+# Regex to extract the label text from a mermaid node definition: A[label text]
+_MERMAID_LABEL_RE = re.compile(r'\[([^\]]+)\]')
+
+
+def _sanitize_mermaid(raw: str) -> str:
+    """Remove repetitive VLM-hallucinated node chains from mermaid diagrams."""
+    if not raw:
+        return raw
+    cleaned = raw.strip()
+    if cleaned.startswith("```mermaid"):
+        cleaned = cleaned[len("```mermaid"):].strip()
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3].strip()
+
+    lines = cleaned.split("\n")
+    kept_lines = []
+    label_counts: dict = {}
+    trimmed = False
+
+    for line in lines:
+        labels = _MERMAID_LABEL_RE.findall(line)
+        hit_limit = False
+        for label in labels:
+            normalized = label.strip().lower()
+            if not normalized:
+                continue
+            if label_counts.get(normalized, 0) >= 2:
+                hit_limit = True
+                break
+        if hit_limit:
+            trimmed = True
+            break
+        kept_lines.append(line)
+        for label in labels:
+            normalized = label.strip().lower()
+            if normalized:
+                label_counts[normalized] = label_counts.get(normalized, 0) + 1
+
+    result = "\n".join(kept_lines)
+    if trimmed:
+        print(
+            f"[Mermaid] Removed repetitive nodes: kept {len(kept_lines)}/{len(lines)} lines "
+            f"({len(result)} chars from {len(cleaned)})"
+        )
+    return result
+
+
 XML_NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
@@ -1049,21 +1097,27 @@ async def extract_document(
         _ocr_xref_cache = {}  # Cache OCR results by image xref to skip duplicates
 
         # --- Docling native PDF extraction ---
+        # Skip Docling for PDFs converted from PPTX/DOCX: Docling merges all
+        # pages into a single markdown string with no page boundaries, causing
+        # ALL slides' text to land on page 1.  Per-page PyMuPDF extraction is
+        # correct for converted files.
         docling_md_text = ""
-        if ext == ".pdf" and _HAS_DOCLING:
+        if ext == ".pdf" and _HAS_DOCLING and not _converted_pdf_path:
             try:
                 print(f"[PDF] Running Docling extraction for {safe_file_name}...")
                 await safe_emit(f"{user_id}/progress", {"message": f"Running Docling extraction for {safe_file_name}..."})
-                
+
                 def _run_docling(p):
                     converter = DocumentConverter()
                     result = converter.convert(p)
                     return result.document.export_to_markdown()
-                
+
                 docling_md_text = await asyncio.to_thread(_run_docling, file_path)
             except Exception as e:
                 print(f"[PDF] Docling extraction failed: {e}")
                 traceback.print_exc()
+        elif _converted_pdf_path:
+            print(f"[PDF] Skipping Docling for converted file — using per-page PyMuPDF extraction")
 
         for page_number in range(len(doc)):
             page = doc.load_page(page_number)
@@ -1228,7 +1282,8 @@ async def extract_document(
                         async def _mermaid_and_cache(path, xref_id):
                             result = await vlm_parse_slide(path, prompt_type="mermaid")
                             if result:
-                                mermaid_text = f"```mermaid\n{result}\n```"
+                                sanitized = _sanitize_mermaid(result)
+                                mermaid_text = f"```mermaid\n{sanitized}\n```"
                             else:
                                 # Fallback to regular OCR if mermaid extraction fails
                                 mermaid_text = await image_parser(path)
@@ -1330,7 +1385,8 @@ async def extract_document(
                     async def _extract_mermaid(path):
                         result = await vlm_parse_slide(path, prompt_type="mermaid")
                         if result:
-                            return f"```mermaid\n{result}\n```"
+                            sanitized = _sanitize_mermaid(result)
+                            return f"```mermaid\n{sanitized}\n```"
                         return "[Diagram Mermaid Extraction Failed]"
 
                     ocr_tasks[placeholder] = asyncio.create_task(
