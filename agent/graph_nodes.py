@@ -858,11 +858,19 @@ async def _resolve_visual_page_vlm(
     # Call VLM with the user's exact question as the prompt
     query = state.query or state.resolved_query or state.original_query
     vlm_prompt = (
-        f"You are analyzing page/slide {target_page} of a document. "
-        f"Answer the following question based on what you see in this image:\n\n"
-        f"{query}\n\n"
-        "Be specific and detailed. If the image contains a diagram, flowchart, or chart, "
-        "describe its structure, labels, and key information relevant to the question."
+        f"You are an expert analyst reviewing page/slide {target_page} of a document.\n\n"
+        f"**User Question:** {query}\n\n"
+        "**Your task:** Directly answer the user's question using ONLY what is visible in this image.\n\n"
+        "Rules:\n"
+        "1. Answer the question first — do NOT just describe what you see.\n"
+        "2. Extract specific data: names, numbers, dates, labels, percentages, statuses.\n"
+        "3. If the image contains a table, extract the relevant rows/columns that answer the question.\n"
+        "4. If the image contains a chart/diagram/flowchart, interpret it to answer the question "
+        "(e.g., trends, relationships, process steps) — don't just list visual elements.\n"
+        "5. If the answer requires combining information from multiple parts of the image, do so.\n"
+        "6. If the image doesn't contain enough information to fully answer, state what you can answer "
+        "and what is missing.\n"
+        "7. Be specific and use exact values from the image, not vague descriptions."
     )
     print(f"[VLM-Answer] Querying VLM for '{file_name}' page {target_page}...")
 
