@@ -288,9 +288,27 @@ async def query(request: Request, body: QueryRequest):
 
         await asyncio.gather(*workers)
 
+        # Deduplicate chunks across sub-queries (same content from different
+        # sub-queries wastes LLM context). Keep highest rerank_score per chunk.
+        seen_chunk_keys = {}
+        for c in chunks:
+            key = (c.get("document_id", ""), c.get("page_no", 0), c.get("content", "")[:100])
+            existing_score = seen_chunk_keys.get(key, {}).get("rerank_score", -1)
+            if c.get("rerank_score", 0.0) > existing_score:
+                seen_chunk_keys[key] = c
+        deduped_chunks = sorted(
+            seen_chunk_keys.values(),
+            key=lambda c: c.get("rerank_score", 0.0),
+            reverse=True,
+        )
+        if len(deduped_chunks) < len(chunks):
+            print(f"[Combination] Deduplicated chunks: {len(chunks)} → {len(deduped_chunks)}")
+        chunks = deduped_chunks
+
         cs = time.time()
         answer = await combination_node(
-            results, decomposition_result.resolved_query, question
+            results, decomposition_result.resolved_query, question,
+            chunks=chunks,
         )
         ce = time.time() - cs
         print(f"Subqueries combination time: {ce:.2f} seconds")
