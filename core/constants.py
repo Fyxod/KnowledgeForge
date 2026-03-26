@@ -42,7 +42,8 @@ EASYOCR_GPU = (
     True  # GPU mode: ~4-7x faster OCR, uses only ~200MB VRAM (negligible on 48GB)
 )
 
-PORT1 = 11434  # port where ollama is running
+PORT1 = 11434  # Ollama instance 1 — gpt-oss:20b (query answering)
+PORT2 = 11435  # Ollama instance 2 — VLM (document processing, no queue contention with queries)
 
 # Model context window (tokens). gpt-oss:20b full = 128K.
 MODEL_CONTEXT_TOKENS = 128_000

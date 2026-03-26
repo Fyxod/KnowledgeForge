@@ -796,7 +796,7 @@ async def _resolve_visual_page_vlm(
     import fitz  # PyMuPDF
 
     from core.parsers.vlm import vlm_parse_slide
-    from core.constants import PORT1
+    from core.constants import PORT2
 
     if not state.chunks:
         return None
@@ -874,7 +874,7 @@ async def _resolve_visual_page_vlm(
     )
     print(f"[VLM-Answer] Querying VLM for '{file_name}' page {target_page}...")
 
-    answer = await vlm_parse_slide(img_bytes, port=PORT1, custom_prompt=vlm_prompt)
+    answer = await vlm_parse_slide(img_bytes, port=PORT2, custom_prompt=vlm_prompt)
     if answer:
         print(f"[VLM-Answer] VLM answered ({len(answer)} chars)")
         return answer

@@ -18,7 +18,7 @@ import httpx
 from PIL import Image
 
 from core.config import settings
-from core.constants import PORT1, VLM_MODEL
+from core.constants import PORT2, VLM_MODEL
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 
@@ -89,7 +89,7 @@ def _encode_image_base64(image_input, max_dim: int = VLM_MAX_IMAGE_DIM) -> str:
 
 async def vlm_parse_slide(
     image_input,
-    port: int = PORT1,
+    port: int = PORT2,
     prompt_type: str = "default",
     custom_prompt: str | None = None,
 ) -> str:
@@ -98,7 +98,7 @@ async def vlm_parse_slide(
 
     Args:
         image_input: File path (str) or raw PNG bytes.
-        port: Ollama API port (default: PORT1 from constants).
+        port: Ollama API port (default: PORT2 — separate instance from query LLM).
         prompt_type: "default", "mermaid", or "retry". Ignored when custom_prompt is set.
         custom_prompt: If provided, overrides prompt_type and sends this exact prompt.
             Use for query-time VLM where the user's question is the prompt.
@@ -171,7 +171,7 @@ async def vlm_parse_slide(
 async def vlm_parse_concurrent(
     images: list[bytes],
     page_labels: list[str] | None = None,
-    port: int = PORT1,
+    port: int = PORT2,
     max_concurrent: int = 3,
     prompt_type: str = "default",
 ) -> list[str]:
@@ -185,7 +185,7 @@ async def vlm_parse_concurrent(
     Args:
         images: List of raw PNG bytes, one per page.
         page_labels: Optional labels for logging (e.g. ["Page 1", "Slide 3"]).
-        port: Ollama API port (default: PORT1 from constants).
+        port: Ollama API port (default: PORT2 — separate instance from query LLM).
         max_concurrent: Max simultaneous VLM calls (default: 3, balance speed vs VRAM).
         prompt_type: "default", "mermaid", or "retry".
 
