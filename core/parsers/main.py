@@ -765,19 +765,32 @@ async def extract_document(
                 )
                 ppt_dir = os.path.dirname(file_path)
                 lo_timeout = _timeout_for_file(file_path)
+                print(f"[PPT] Running LibreOffice: {libreoffice_cmd} --headless --convert-to pdf --outdir {ppt_dir} {file_path} (timeout={lo_timeout}s)")
                 proc = await asyncio.create_subprocess_exec(
                     libreoffice_cmd, "--headless", "--convert-to", "pdf",
                     "--outdir", ppt_dir, file_path,
                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 )
-                await asyncio.wait_for(proc.communicate(), timeout=lo_timeout)
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=lo_timeout)
+                print(f"[PPT] LibreOffice returncode: {proc.returncode}")
+                if stdout and stdout.strip():
+                    print(f"[PPT] LibreOffice stdout: {stdout.decode(errors='replace')[:500]}")
+                if stderr and stderr.strip():
+                    print(f"[PPT] LibreOffice stderr: {stderr.decode(errors='replace')[:500]}")
                 if proc.returncode == 0:
                     expected_pdf = os.path.splitext(file_path)[0] + ".pdf"
+                    print(f"[PPT] Looking for PDF at: {expected_pdf} (exists={os.path.exists(expected_pdf)})")
                     if os.path.exists(expected_pdf):
                         _converted_pdf_path = expected_pdf
                         file_path = expected_pdf
                         ext = ".pdf"
                         print(f"[PPT] Converted to PDF, delegating to PDF pipeline")
+                    else:
+                        # Search for any PDF in the output directory
+                        pdfs = [f for f in os.listdir(ppt_dir) if f.lower().endswith('.pdf')]
+                        print(f"[PPT] Expected PDF not found. PDFs in {ppt_dir}: {pdfs}")
+                else:
+                    print(f"[PPT] LibreOffice failed with returncode {proc.returncode}")
             except asyncio.TimeoutError:
                 print(f"[PPT] LibreOffice PDF conversion timed out after {lo_timeout}s for {safe_file_name}")
             except Exception as e:
