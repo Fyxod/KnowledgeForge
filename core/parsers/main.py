@@ -1208,15 +1208,47 @@ async def extract_document(
                     page_text += f"\n\n{placeholder}"
                     image_names.append(image_name)
 
-                    # OCR raster images, cache result by xref to avoid re-processing duplicates
-                    async def _ocr_and_cache(path, xref_id):
-                        result = await image_parser(path)
-                        _ocr_xref_cache[xref_id] = result
-                        return result
-
-                    ocr_tasks[placeholder] = asyncio.create_task(
-                        _ocr_and_cache(image_path, xref)
+                    # Detect large images that may be diagrams/flowcharts/ERDs
+                    # Heuristic: image covers >25% of page area and is at least 400px
+                    # in both dimensions — likely a diagram, not a photo or icon.
+                    page_area = page.rect.width * page.rect.height
+                    img_area = image.width * image.height
+                    is_diagram_candidate = (
+                        settings.USE_VISION_MODEL
+                        and image.width >= 400
+                        and image.height >= 400
+                        and page_area > 0
+                        and (img_area / page_area) > 0.25
                     )
+
+                    if is_diagram_candidate:
+                        # Use VLM mermaid prompt for potential diagrams
+                        from core.parsers.vlm import vlm_parse_slide
+
+                        async def _mermaid_and_cache(path, xref_id):
+                            result = await vlm_parse_slide(path, prompt_type="mermaid")
+                            if result:
+                                mermaid_text = f"```mermaid\n{result}\n```"
+                            else:
+                                # Fallback to regular OCR if mermaid extraction fails
+                                mermaid_text = await image_parser(path)
+                            _ocr_xref_cache[xref_id] = mermaid_text
+                            return mermaid_text
+
+                        print(f"[PDF] Page {page_number + 1}: large image {image.width}x{image.height} → Mermaid VLM")
+                        ocr_tasks[placeholder] = asyncio.create_task(
+                            _mermaid_and_cache(image_path, xref)
+                        )
+                    else:
+                        # OCR raster images, cache result by xref to avoid re-processing duplicates
+                        async def _ocr_and_cache(path, xref_id):
+                            result = await image_parser(path)
+                            _ocr_xref_cache[xref_id] = result
+                            return result
+
+                        ocr_tasks[placeholder] = asyncio.create_task(
+                            _ocr_and_cache(image_path, xref)
+                        )
                 except Exception:
                     traceback.print_exc()
 
@@ -1231,7 +1263,10 @@ async def extract_document(
                     if rect.width < 50 or rect.height < 50:
                         continue
                     initial_rects.append(fitz.Rect(rect))
-                
+
+                if initial_rects:
+                    print(f"[PDF] Page {page_number + 1}: {len(drawings)} drawings, {len(initial_rects)} pass size filter")
+
                 # Merge overlapping rects (with a margin) to form complete diagram boxes
                 diagram_rects = []
                 for rect in initial_rects:
@@ -1245,7 +1280,7 @@ async def extract_document(
                     if not merged:
                         diagram_rects.append(rect)
 
-                # Second pass to catch transitive overlaps 
+                # Second pass to catch transitive overlaps
                 final_rects = []
                 for r in diagram_rects:
                     merged = False
@@ -1259,26 +1294,28 @@ async def extract_document(
                         final_rects.append(r)
 
                 # Crop each diagram and schedule for Mermaid VLM extraction
+                diagram_count = 0
                 for d_index, d_rect in enumerate(final_rects):
                     # Ensure rect is within page bounds
                     d_rect.intersect(page.rect)
                     if d_rect.is_empty or d_rect.width < 100 or d_rect.height < 100:
                         continue
 
+                    diagram_count += 1
                     diagram_name = f"page{page_number + 1}_diagram{d_index + 1}.png"
                     diagram_path = os.path.join(image_dir, diagram_name)
-                    
+
                     # Render just the cropped area
                     try:
                         diagram_pix = page.get_pixmap(clip=d_rect, dpi=150)
                         diagram_bytes = diagram_pix.tobytes("png")
-                        
+
                         image = Image.open(io.BytesIO(diagram_bytes))
                         image.save(diagram_path)
                     except Exception:
                         traceback.print_exc()
                         continue
-                        
+
                     placeholder = f"{{PENDING_{diagram_name}}}"
                     # Stitch surrounding caption context into the diagram block so
                     # caption text ("Figure 2: ...") and diagram content always land
@@ -1288,9 +1325,8 @@ async def extract_document(
                     page_text += f"\n\n[Diagram Detected]\n{_ctx_block}{placeholder}\n[/Diagram Detected]"
                     image_names.append(diagram_name)
 
-                    # Import vlm_parse_slide dynamically to avoid circular import if necessary
                     from core.parsers.vlm import vlm_parse_slide
-                    
+
                     async def _extract_mermaid(path):
                         result = await vlm_parse_slide(path, prompt_type="mermaid")
                         if result:
@@ -1300,6 +1336,8 @@ async def extract_document(
                     ocr_tasks[placeholder] = asyncio.create_task(
                         _extract_mermaid(diagram_path)
                     )
+                if diagram_count:
+                    print(f"[PDF] Page {page_number + 1}: {diagram_count} vector diagrams queued for Mermaid extraction")
             except Exception:
                 traceback.print_exc()
 
