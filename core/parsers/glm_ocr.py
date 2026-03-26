@@ -139,16 +139,21 @@ async def glm_ocr_parse(
             # The SDK returns {"result": "markdown..."} or similar
             result_data = response.json()
             
-            # The SDK might return {"result": "..."} or {"responses": ["..."]} depending on version
-            # The official python example implies it returns a structured dict
+            # The SDK response schema varies by version:
+            #   {"result": "markdown..."}
+            #   {"responses": ["markdown..."]}
+            #   {"markdown_result": "markdown...", "json_result": [...]}
             content = ""
             if "result" in result_data:
                 content = result_data["result"]
+            elif "markdown_result" in result_data:
+                content = result_data["markdown_result"]
             elif "responses" in result_data and isinstance(result_data["responses"], list):
                 content = "\n\n".join(result_data["responses"])
             else:
-                # Fallback to stringifying the dict if the schema is unexpected
-                content = str(result_data)
+                # Unknown schema — log it but don't dump raw JSON into page text
+                print(f"[GLM-OCR] Unexpected response keys: {list(result_data.keys())}")
+                content = ""
 
             content = content.strip()
 
