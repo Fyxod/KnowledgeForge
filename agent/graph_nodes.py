@@ -767,7 +767,7 @@ def _resolve_source_pdf(file_name: str, doc_id: str, user_id: str, thread_id: st
     if ext == ".pdf":
         return os.path.join(base_data, "uploads", file_name)
     elif ext in (".pptx", ".ppt"):
-        return os.path.join(base_data, "parsed", f"{doc_id}_slides.pdf")
+        return os.path.join(base_data, "parsed", f"{doc_id}_pages.pdf")
     elif ext in (".docx", ".doc"):
         return os.path.join(base_data, "parsed", f"{doc_id}_pages.pdf")
     return None

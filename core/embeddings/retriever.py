@@ -657,8 +657,12 @@ def expand_to_parent_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
     After retrieval and reranking on small child chunks, this helper replaces
     each chunk's page_content with the larger parent text stored in metadata.
-    Parent chunks are deduplicated by parent_chunk_id so the same section is
-    not repeated even if multiple child chunks from it were retrieved.
+
+    Deduplication is **page-level**: when multiple parent chunks belong to the
+    same (document_id, page_no) they are merged into a single chunk whose
+    page_content is the concatenation of all distinct parent texts for that
+    page, ordered by parent_idx.  This preserves complete slide/page context
+    and prevents the same page from appearing as separate fragments.
 
     Chunks without a parent_chunk_id (summaries, entity profiles) are passed
     through unchanged.
@@ -667,25 +671,67 @@ def expand_to_parent_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]
         chunks: Reranked list of child chunk dicts (with page_content + metadata)
 
     Returns:
-        Deduplicated list of parent-level chunks ready for LLM context assembly
+        Deduplicated list of page-level chunks ready for LLM context assembly
     """
-    seen_parents: set = set()
-    expanded: List[Dict[str, Any]] = []
+    # Pass 1 — group parent texts by (document_id, page_no), dedup by parent_chunk_id
+    # page_key → {best_chunk, parent_parts: {parent_idx: parent_text}, best_score}
+    page_groups: Dict[tuple, dict] = {}
+    seen_parent_ids: set = set()
+    non_parent_chunks: List[Dict[str, Any]] = []
 
     for chunk in chunks:
         meta = chunk.get("metadata", {})
         parent_id = meta.get("parent_chunk_id")
         parent_text = meta.get("parent_text")
 
-        if parent_id and parent_text:
-            if parent_id in seen_parents:
-                continue
-            seen_parents.add(parent_id)
-            parent_chunk = chunk.copy()
-            parent_chunk["page_content"] = parent_text
-            expanded.append(parent_chunk)
-        else:
+        if not (parent_id and parent_text):
             # Summary / entity-profile / legacy chunk — use as-is
-            expanded.append(chunk)
+            non_parent_chunks.append(chunk)
+            continue
 
+        if parent_id in seen_parent_ids:
+            continue
+        seen_parent_ids.add(parent_id)
+
+        doc_id = meta.get("document_id", "")
+        page_no = meta.get("page_no", 0)
+        page_key = (doc_id, page_no)
+        score = chunk.get("rerank_score", 0.0)
+        parent_idx = meta.get("parent_chunk_id", "").rsplit("_p", 1)[-1]
+        try:
+            parent_idx = int(parent_idx)
+        except (ValueError, TypeError):
+            parent_idx = 0
+
+        if page_key not in page_groups:
+            page_groups[page_key] = {
+                "best_chunk": chunk,
+                "best_score": score,
+                "parent_parts": {parent_idx: parent_text},
+            }
+        else:
+            grp = page_groups[page_key]
+            grp["parent_parts"][parent_idx] = parent_text
+            if score > grp["best_score"]:
+                grp["best_chunk"] = chunk
+                grp["best_score"] = score
+
+    # Pass 2 — build merged page-level chunks
+    expanded: List[Dict[str, Any]] = []
+    for page_key, grp in page_groups.items():
+        merged_chunk = grp["best_chunk"].copy()
+        # Concatenate parent texts in document order
+        ordered_parts = [
+            text for _, text in sorted(grp["parent_parts"].items())
+        ]
+        merged_chunk["page_content"] = "\n\n".join(ordered_parts)
+        merged_chunk["rerank_score"] = grp["best_score"]
+        expanded.append(merged_chunk)
+
+    if any(len(g["parent_parts"]) > 1 for g in page_groups.values()):
+        merged_count = sum(1 for g in page_groups.values() if len(g["parent_parts"]) > 1)
+        print(f"[Parent Expand] Merged parent chunks on {merged_count} page(s) into page-level context")
+
+    # Non-parent chunks go after parent-expanded ones
+    expanded.extend(non_parent_chunks)
     return expanded

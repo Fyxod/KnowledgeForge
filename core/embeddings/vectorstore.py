@@ -59,10 +59,10 @@ print("Embedding model loaded.")
 # Hierarchical chunking parameters.
 # Parent chunks: larger, section-level context sent to the LLM.
 # Child chunks: smaller, precise units indexed in Chroma and retrieved/reranked.
-PARENT_CHUNK_SIZE = 1000   # characters (~800-1200 token equivalent)
-PARENT_CHUNK_OVERLAP = 100
-CHILD_CHUNK_SIZE = 300     # characters (~250-350 token equivalent)
-CHILD_CHUNK_OVERLAP = 50
+PARENT_CHUNK_SIZE = 1500   # characters — large enough that most slides fit in 1 parent
+PARENT_CHUNK_OVERLAP = 150
+CHILD_CHUNK_SIZE = 500     # characters — better semantic units for retrieval
+CHILD_CHUNK_OVERLAP = 75
 
 # nomic-embed-text-v1.5 task prefix for document embeddings.
 # Queries use "search_query: " (configured in embeddings.py via query_instruction).
