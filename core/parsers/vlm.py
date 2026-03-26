@@ -123,7 +123,7 @@ async def vlm_parse_slide(
         start_time = time.time()
         image_b64 = _encode_image_base64(image_input)
 
-        url = f"{LOCAL_BASE_URL}:{port}/api/generate"
+        url = f"{LOCAL_BASE_URL}:{port}/api/chat"
 
         if custom_prompt:
             selected_prompt = custom_prompt
@@ -138,9 +138,15 @@ async def vlm_parse_slide(
 
         payload = {
             "model": VLM_MODEL,
-            "prompt": selected_prompt,
-            "images": [image_b64],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": selected_prompt,
+                    "images": [image_b64],
+                }
+            ],
             "stream": False,
+            "think": False,  # Disable qwen3.5 thinking — prevents empty responses
             "keep_alive": 300,  # Keep model loaded for 5 min between calls
             "options": {
                 "temperature": 0.1,  # Low temp for factual extraction
@@ -158,7 +164,8 @@ async def vlm_parse_slide(
             response.raise_for_status()
 
         result = response.json()
-        content = result.get("response", "").strip()
+        # /api/chat returns {"message": {"role": "assistant", "content": "..."}}
+        content = result.get("message", {}).get("content", "").strip()
 
         elapsed = time.time() - start_time
         print(f"[VLM] Completed in {elapsed:.2f}s  |  {len(content)} chars extracted.")
