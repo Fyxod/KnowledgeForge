@@ -460,20 +460,33 @@ def main_prompt(
             }
         )
 
-    # ── Visual Reference Context (query-time VLM analysis of referenced page/figure) ──
+    # ── Visual Reference Answer (query-time VLM for page/slide/figure queries) ──
     if vlm_visual_answer:
         contents.append(
             {
                 "role": "system",
                 "parts": (
-                    "### Visual Context (VLM analysis of the referenced page/figure)\n"
+                    "### Visual Reference Answer (direct VLM analysis of the referenced page/figure)\n"
                     f"{vlm_visual_answer}\n\n"
-                    "The above was extracted by a Vision Language Model that analyzed the image of "
-                    "the referenced page/slide/figure. Treat it as additional context alongside "
-                    "the Document Chunks below. Use it to inform your answer — especially for "
-                    "data points, table contents, chart values, or diagram structures that may "
-                    "not appear in the text chunks. Synthesize all available sources into a "
-                    "single coherent answer.\n"
+                    "**INSTRUCTIONS:**\n"
+                    "The **Visual Reference Answer** above was produced by a Vision Language Model that "
+                    "directly analyzed the image of the referenced page/slide/figure. "
+                    "It contains the direct answer to the user's question extracted from visual content.\n\n"
+                    "You MUST:\n"
+                    '1. Set `action` to `"answer"`.\n'
+                    "2. Use the Visual Reference Answer as the core of your response — it already answers "
+                    "the user's question. Do NOT rephrase it into a generic description.\n"
+                    "3. Preserve all specific data points (numbers, names, dates, statuses) from the VLM answer.\n"
+                    "4. Enrich with additional context from Document Chunks below if they add value.\n"
+                    "5. Format clearly using Markdown (tables, bullet points) for readability.\n"
+                    "6. After presenting the VLM-based answer, add a separate **Additional Insights** section "
+                    "at the bottom with your own analysis or inferences drawn from the Document Chunks — "
+                    "e.g., related context, trends, comparisons, or implications not visible in the image. "
+                    "If you have nothing meaningful to add, omit this section.\n\n"
+                    "You MUST NOT:\n"
+                    "- Contradict the Visual Reference Answer without clear evidence from Document Chunks.\n"
+                    "- Strip out or summarize away specific data that the VLM extracted.\n"
+                    "- Return a blank or empty answer.\n"
                 ),
             }
         )
