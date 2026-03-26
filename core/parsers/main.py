@@ -50,6 +50,33 @@ except ImportError:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 SMARTART_URI = "http://schemas.openxmlformats.org/drawingml/2006/diagram"
+
+# Maximum characters for a single mermaid diagram.  VLM can hallucinate
+# infinitely repetitive node chains (A→B→...→KI).  Truncating at this
+# limit prevents chunk/token bloat while preserving meaningful diagrams.
+_MAX_MERMAID_CHARS = 3000
+
+
+def _sanitize_mermaid(raw: str) -> str:
+    """Cap mermaid output length and strip runaway repetitive node chains."""
+    if not raw:
+        return raw
+    # Strip outer code fences if VLM included them
+    cleaned = raw.strip()
+    if cleaned.startswith("```mermaid"):
+        cleaned = cleaned[len("```mermaid"):].strip()
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3].strip()
+    # Truncate if too long (VLM hallucination)
+    if len(cleaned) > _MAX_MERMAID_CHARS:
+        # Cut at last complete line within the limit
+        truncated = cleaned[:_MAX_MERMAID_CHARS]
+        last_nl = truncated.rfind("\n")
+        if last_nl > 0:
+            truncated = truncated[:last_nl]
+        cleaned = truncated + "\n    %% [truncated — diagram too large]"
+        print(f"[Mermaid] Truncated diagram from {len(raw)} to {len(cleaned)} chars")
+    return cleaned
 XML_NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
@@ -1228,7 +1255,8 @@ async def extract_document(
                         async def _mermaid_and_cache(path, xref_id):
                             result = await vlm_parse_slide(path, prompt_type="mermaid")
                             if result:
-                                mermaid_text = f"```mermaid\n{result}\n```"
+                                sanitized = _sanitize_mermaid(result)
+                                mermaid_text = f"```mermaid\n{sanitized}\n```"
                             else:
                                 # Fallback to regular OCR if mermaid extraction fails
                                 mermaid_text = await image_parser(path)
@@ -1330,7 +1358,8 @@ async def extract_document(
                     async def _extract_mermaid(path):
                         result = await vlm_parse_slide(path, prompt_type="mermaid")
                         if result:
-                            return f"```mermaid\n{result}\n```"
+                            sanitized = _sanitize_mermaid(result)
+                            return f"```mermaid\n{sanitized}\n```"
                         return "[Diagram Mermaid Extraction Failed]"
 
                     ocr_tasks[placeholder] = asyncio.create_task(
@@ -1386,18 +1415,29 @@ async def extract_document(
                 for c, result in zip(regular_pages, regular_results):
                     all_vlm_results[c["page_index"]] = result
 
-            # Merge VLM results back into pages (always additive)
-            # PyMuPDF text layer + VLM visual layer + Mermaid diagrams + GLM-OCR = maximum coverage.
-            # Never replace: content-rich pages would lose good PyMuPDF text extraction.
+            # Merge VLM results back into pages.
+            # Skip VLM append when PyMuPDF already extracted substantial text
+            # (VLM would just duplicate the same content, inflating chunk count).
+            # Only append when the page is image-heavy / text-light.
+            _VLM_SKIP_THRESHOLD = 500  # chars of existing PyMuPDF text
             for candidate in vlm_candidates:
                 vlm_text = all_vlm_results.get(candidate["page_index"], "")
                 if not vlm_text:
                     continue
 
                 page_idx = candidate["page_index"]
+                existing_text = pages[page_idx].text.strip()
+                prompt_used = "table" if candidate.get("has_tables") else "default"
+
+                if len(existing_text) >= _VLM_SKIP_THRESHOLD and prompt_used != "table":
+                    print(
+                        f"[PDF] VLM ({prompt_used}) SKIPPED for page {candidate['page_number']} — "
+                        f"PyMuPDF already has {len(existing_text)} chars"
+                    )
+                    continue
+
                 pages[page_idx].text += f"\n\n{vlm_text}"
                 combined_texts[page_idx] += f"\n\n{vlm_text}"
-                prompt_used = "table" if candidate.get("has_tables") else "default"
                 print(
                     f"[PDF] VLM ({prompt_used}) appended to page {candidate['page_number']} ({len(vlm_text)} chars)"
                 )
