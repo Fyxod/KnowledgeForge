@@ -756,6 +756,7 @@ async def extract_document(
 
         # Convert PPTX → PDF for unified processing
         libreoffice_cmd = get_libreoffice_command()
+        print(f"[PPT] LibreOffice command: {libreoffice_cmd}")
         if libreoffice_cmd:
             try:
                 await safe_emit(
