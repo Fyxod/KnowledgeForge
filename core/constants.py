@@ -29,9 +29,7 @@ GLM_OCR_WORKERS = 3  # Max concurrent GLM-OCR inferences (VRAM-aware)
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
 
 # Adaptive Retrieval Parameters
-MAX_TOTAL_CHUNKS = (
-    50  # Reduced from 100: reranking selects best chunks, fewer = faster LLM generation
-)
+MAX_TOTAL_CHUNKS = 200  # Coverage over speed — MapReduce handles context overflow
 
 
 EASYOCR_WORKERS = (

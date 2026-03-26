@@ -586,13 +586,13 @@ async def get_thread_documents_retriever(
     # --- Adaptive total budget ---
     if k is None:
         if num_kept <= 2:
-            k = 20
+            k = 40
         elif num_kept <= 5:
-            k = 50
-        elif num_kept <= 10:
             k = 80
+        elif num_kept <= 10:
+            k = 150
         else:
-            k = min(max_total_chunks, num_kept * 8)
+            k = min(max_total_chunks, num_kept * 15)
 
     k = min(k, max_total_chunks)
 
