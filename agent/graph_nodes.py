@@ -735,19 +735,25 @@ async def _batch_sql_answer(
 
 import re as _re
 
-# Patterns for explicit visual references: "page 3", "slide 2", "figure 4", "fig. 5", etc.
-_EXPLICIT_VISUAL_RE = _re.compile(
-    r'\b(?:page|slide|figure|fig\.?|chart|diagram|image|photo|illustration|table)\s+(\d+)\b'
-    r'|\b(\d+)(?:st|nd|rd|th)?\s*(?:page|slide|figure|chart|diagram|image)\b'
-    r'|\b(last|final)\s+(?:page|slide|figure|chart|diagram|image)\b'
-    r'|\b(first)\s+(?:page|slide|figure|chart|diagram|image)\b',
+# Patterns for explicit PAGE/SLIDE references: "page 3", "slide 2"
+# Only page/slide numbers map directly to PDF page indices.
+# figure/table/chart numbers do NOT — "figure 5" could be on any page.
+_EXPLICIT_PAGE_RE = _re.compile(
+    r'\b(?:page|slide)\s+(\d+)\b'
+    r'|\b(\d+)(?:st|nd|rd|th)?\s*(?:page|slide)\b'
+    r'|\b(last|final)\s+(?:page|slide)\b'
+    r'|\b(first)\s+(?:page|slide)\b',
     _re.IGNORECASE,
 )
 
-# Words that indicate a visual/spatial query even without an explicit number
+# Words that indicate a visual/spatial query (uses top-ranked chunk's page, not a number)
+# Includes figure/table/chart/diagram references — "figure 5" doesn't mean page 5,
+# so we let retrieval find the right page rather than using the number.
 _IMPLICIT_VISUAL_RE = _re.compile(
     r'\b(?:flowchart|org\s*chart|organizational\s*chart|below\s+the|above\s+the'
-    r'|in\s+the\s+(?:image|figure|diagram|chart)|the\s+(?:diagram|flowchart|chart|figure))\b',
+    r'|in\s+the\s+(?:image|figure|diagram|chart|table)'
+    r'|the\s+(?:diagram|flowchart|chart|figure|table)'
+    r'|(?:figure|fig\.?|chart|diagram|table|image|illustration)\s+\d+)\b',
     _re.IGNORECASE,
 )
 
@@ -759,7 +765,7 @@ def _detect_visual_reference(query: str):
     Returns:
         (is_visual: bool, explicit_page_num: int|None, is_last: bool, is_implicit: bool)
     """
-    m = _EXPLICIT_VISUAL_RE.search(query)
+    m = _EXPLICIT_PAGE_RE.search(query)
     if m:
         num_str = m.group(1) or m.group(2)
         if num_str:
@@ -823,6 +829,8 @@ async def _resolve_visual_page_vlm(
     else:
         # Implicit: use top chunk's page_no
         target_page = top_chunk.get("page_no", 1)
+
+    print(f"[VLM-Answer] Resolved target page {target_page} from '{file_name}' (top chunk rerank_score={top_chunk.get('rerank_score', 'N/A')})")
 
     # Locate source PDF
     ext = os.path.splitext(file_name)[1].lower()
