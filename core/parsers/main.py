@@ -51,14 +51,19 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 SMARTART_URI = "http://schemas.openxmlformats.org/drawingml/2006/diagram"
 
-# Maximum characters for a single mermaid diagram.  VLM can hallucinate
-# infinitely repetitive node chains (A→B→...→KI).  Truncating at this
-# limit prevents chunk/token bloat while preserving meaningful diagrams.
-_MAX_MERMAID_CHARS = 3000
+# Regex to extract the label text from a mermaid node definition: A[label text]
+_MERMAID_LABEL_RE = re.compile(r'\[([^\]]+)\]')
 
 
 def _sanitize_mermaid(raw: str) -> str:
-    """Cap mermaid output length and strip runaway repetitive node chains."""
+    """Remove repetitive VLM-hallucinated node chains from mermaid diagrams.
+
+    VLM often generates a useful initial diagram then loops the same
+    node labels infinitely (e.g., Webcam Input → Sobel Filter → …
+    repeated 50+ times).  This function detects when a node label
+    appears for the 3rd time and trims the rest, keeping the complete
+    first cycle of the diagram.
+    """
     if not raw:
         return raw
     # Strip outer code fences if VLM included them
@@ -67,16 +72,46 @@ def _sanitize_mermaid(raw: str) -> str:
         cleaned = cleaned[len("```mermaid"):].strip()
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3].strip()
-    # Truncate if too long (VLM hallucination)
-    if len(cleaned) > _MAX_MERMAID_CHARS:
-        # Cut at last complete line within the limit
-        truncated = cleaned[:_MAX_MERMAID_CHARS]
-        last_nl = truncated.rfind("\n")
-        if last_nl > 0:
-            truncated = truncated[:last_nl]
-        cleaned = truncated + "\n    %% [truncated — diagram too large]"
-        print(f"[Mermaid] Truncated diagram from {len(raw)} to {len(cleaned)} chars")
-    return cleaned
+
+    lines = cleaned.split("\n")
+    kept_lines = []
+    label_counts: dict = {}  # label_text → count of occurrences
+    trimmed = False
+
+    for line in lines:
+        # Extract all node labels on this line
+        labels = _MERMAID_LABEL_RE.findall(line)
+        # Check if any label has already appeared 2+ times
+        hit_limit = False
+        for label in labels:
+            normalized = label.strip().lower()
+            if not normalized:
+                continue
+            count = label_counts.get(normalized, 0)
+            if count >= 2:
+                hit_limit = True
+                break
+
+        if hit_limit:
+            trimmed = True
+            break
+
+        kept_lines.append(line)
+        # Update counts after deciding to keep the line
+        for label in labels:
+            normalized = label.strip().lower()
+            if normalized:
+                label_counts[normalized] = label_counts.get(normalized, 0) + 1
+
+    result = "\n".join(kept_lines)
+    if trimmed:
+        original_lines = len(lines)
+        kept = len(kept_lines)
+        print(
+            f"[Mermaid] Removed repetitive nodes: kept {kept}/{original_lines} lines "
+            f"({len(result)} chars from {len(cleaned)})"
+        )
+    return result
 XML_NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
@@ -1076,21 +1111,27 @@ async def extract_document(
         _ocr_xref_cache = {}  # Cache OCR results by image xref to skip duplicates
 
         # --- Docling native PDF extraction ---
+        # Skip Docling for PDFs converted from PPTX/DOCX: Docling merges all
+        # pages into a single markdown string with no page boundaries, causing
+        # ALL slides' text to land on page 1.  Per-page PyMuPDF extraction is
+        # correct for converted files.
         docling_md_text = ""
-        if ext == ".pdf" and _HAS_DOCLING:
+        if ext == ".pdf" and _HAS_DOCLING and not _converted_pdf_path:
             try:
                 print(f"[PDF] Running Docling extraction for {safe_file_name}...")
                 await safe_emit(f"{user_id}/progress", {"message": f"Running Docling extraction for {safe_file_name}..."})
-                
+
                 def _run_docling(p):
                     converter = DocumentConverter()
                     result = converter.convert(p)
                     return result.document.export_to_markdown()
-                
+
                 docling_md_text = await asyncio.to_thread(_run_docling, file_path)
             except Exception as e:
                 print(f"[PDF] Docling extraction failed: {e}")
                 traceback.print_exc()
+        elif _converted_pdf_path:
+            print(f"[PDF] Skipping Docling for converted file — using per-page PyMuPDF extraction")
 
         for page_number in range(len(doc)):
             page = doc.load_page(page_number)
@@ -1415,29 +1456,17 @@ async def extract_document(
                 for c, result in zip(regular_pages, regular_results):
                     all_vlm_results[c["page_index"]] = result
 
-            # Merge VLM results back into pages.
-            # Skip VLM append when PyMuPDF already extracted substantial text
-            # (VLM would just duplicate the same content, inflating chunk count).
-            # Only append when the page is image-heavy / text-light.
-            _VLM_SKIP_THRESHOLD = 500  # chars of existing PyMuPDF text
+            # Merge VLM results back into pages (always additive).
+            # PyMuPDF text layer + VLM visual layer = maximum coverage.
             for candidate in vlm_candidates:
                 vlm_text = all_vlm_results.get(candidate["page_index"], "")
                 if not vlm_text:
                     continue
 
                 page_idx = candidate["page_index"]
-                existing_text = pages[page_idx].text.strip()
-                prompt_used = "table" if candidate.get("has_tables") else "default"
-
-                if len(existing_text) >= _VLM_SKIP_THRESHOLD and prompt_used != "table":
-                    print(
-                        f"[PDF] VLM ({prompt_used}) SKIPPED for page {candidate['page_number']} — "
-                        f"PyMuPDF already has {len(existing_text)} chars"
-                    )
-                    continue
-
                 pages[page_idx].text += f"\n\n{vlm_text}"
                 combined_texts[page_idx] += f"\n\n{vlm_text}"
+                prompt_used = "table" if candidate.get("has_tables") else "default"
                 print(
                     f"[PDF] VLM ({prompt_used}) appended to page {candidate['page_number']} ({len(vlm_text)} chars)"
                 )
