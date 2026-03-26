@@ -172,8 +172,10 @@ class SQLiteManager:
                 df = df.convert_dtypes()
 
                 table_name = cls._sanitize_table_name(base_name)
-                # Make table name unique by prefixing with doc_id
-                table_name = f"{table_name}_{doc_id}"
+                # Make table name unique by suffixing with sanitized doc_id
+                # (raw UUIDs contain hyphens which break unquoted SQL)
+                safe_doc_id = cls._sanitize_table_name(doc_id)
+                table_name = f"{table_name}_{safe_doc_id}"
 
                 df.to_sql(table_name, conn, index=False, if_exists="replace")
                 tables_created[table_name] = cls._get_column_info(conn, table_name)
@@ -224,7 +226,8 @@ class SQLiteManager:
                         table_name = cls._sanitize_table_name(
                             f"{base_name}_{sheet_name}"
                         )
-                    table_name = f"{table_name}_{doc_id}"
+                    safe_doc_id = cls._sanitize_table_name(doc_id)
+                    table_name = f"{table_name}_{safe_doc_id}"
 
                     df.to_sql(table_name, conn, index=False, if_exists="replace")
                     tables_created[table_name] = cls._get_column_info(conn, table_name)
@@ -322,8 +325,10 @@ class SQLiteManager:
             except Exception:
                 sample_text = ""
 
+            # Always show the quoted form so LLM-generated SQL is safe
+            # even when the table name contains hyphens (legacy data).
             schema_parts.append(
-                f"Table: {table_name}\n"
+                f'Table: "{table_name}"\n'
                 f"  Rows: {row_count}\n"
                 f"  Columns:\n" + "\n".join(col_lines) + sample_text
             )

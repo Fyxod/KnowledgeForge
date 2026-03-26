@@ -71,16 +71,23 @@ def _ensure_sqlite_loaded(user_id: str, thread_id: str) -> None:
     """
     Ensure spreadsheet data is loaded into SQLiteManager for this thread.
 
-    In-memory SQLite connections are lost on server restart or worker switch.
-    This mirrors the reload logic in app/routes/query.py to recover them.
+    Always opens the persistent SQLite file first (data survives restarts).
+    Falls back to re-parsing uploaded files via MongoDB only if the
+    persistent DB has no tables yet.
     """
     key = (user_id, thread_id)
-    if key in SQLiteManager._connections:
-        # Check if the connection actually has tables
-        if SQLiteManager.has_spreadsheet_data(user_id, thread_id):
-            return
 
-    # Try to reload from uploaded files
+    # Always open the persistent SQLite connection — this loads existing
+    # data and the doc→table registry from the file-based DB even after
+    # a server restart or when invoked from the sidebar (no prior chat).
+    if key not in SQLiteManager._connections:
+        SQLiteManager.get_connection(user_id, thread_id)
+
+    # If the persistent DB already has tables, we're done
+    if SQLiteManager.has_spreadsheet_data(user_id, thread_id):
+        return
+
+    # No tables in persistent DB — try to reload from uploaded files
     try:
         from core.database import db
 
@@ -332,8 +339,10 @@ async def _process_nlp_column(
             )
             result = NLPColumnResult.model_validate(result)
 
-            # Ensure correct length
+            # Ensure correct length and no blank values
             values = result.values
+            # Replace empty/whitespace-only strings with "N/A"
+            values = [v if v and v.strip() else "N/A" for v in values]
             if len(values) < len(batch):
                 values.extend(["N/A"] * (len(batch) - len(values)))
             elif len(values) > len(batch):
