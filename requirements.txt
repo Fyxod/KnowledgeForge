@@ -30,7 +30,8 @@ PyMuPDF
 python-pptx
 beautifulsoup4
 markdown
-lxml[html_clean]
+lxml
+lxml_html_clean
 pandas
 xlrd
 openpyxl
