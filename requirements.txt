@@ -50,5 +50,5 @@ spacy
 docling
 fpdf2
 feedparser
-duckduckgo-search
+ddgs
 trafilatura
