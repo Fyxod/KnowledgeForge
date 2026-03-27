@@ -40,10 +40,22 @@ router = APIRouter(prefix="/sensing", tags=["Tech Sensing"])
 
 
 class SensingGenerateRequest(BaseModel):
-    domain: str = Field(default="Generative AI", description="Target domain")
+    domain: str = Field(default="Generative AI", description="Target domain / topic")
     custom_requirements: str = Field(
         default="",
         description="Additional user guidance for the report",
+    )
+    must_include: Optional[List[str]] = Field(
+        default=None,
+        description="Keywords to prioritize in article discovery and classification",
+    )
+    dont_include: Optional[List[str]] = Field(
+        default=None,
+        description="Keywords to exclude from article discovery and classification",
+    )
+    lookback_days: int = Field(
+        default=7,
+        description="Number of days to look back (7=last week, 30=last month)",
     )
     feed_urls: Optional[List[str]] = Field(
         default=None,
@@ -103,6 +115,9 @@ async def generate_sensing_report(
                 custom_requirements=body.custom_requirements,
                 feed_urls=body.feed_urls,
                 search_queries=body.search_queries,
+                must_include=body.must_include,
+                dont_include=body.dont_include,
+                lookback_days=body.lookback_days,
                 progress_callback=_progress_cb,
             )
 

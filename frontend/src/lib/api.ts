@@ -1871,6 +1871,9 @@ export const api = {
   async sensingGenerate(
     domain: string = 'Generative AI',
     customRequirements: string = '',
+    mustInclude?: string[],
+    dontInclude?: string[],
+    lookbackDays: number = 7,
     feedUrls?: string[],
     searchQueries?: string[],
   ): Promise<{ status: string; tracking_id: string; message: string }> {
@@ -1884,6 +1887,9 @@ export const api = {
       body: JSON.stringify({
         domain,
         custom_requirements: customRequirements,
+        must_include: mustInclude?.length ? mustInclude : null,
+        dont_include: dontInclude?.length ? dontInclude : null,
+        lookback_days: lookbackDays,
         feed_urls: feedUrls || null,
         search_queries: searchQueries || null,
       }),

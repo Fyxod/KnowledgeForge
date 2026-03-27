@@ -42,16 +42,22 @@ async def run_sensing_pipeline(
     custom_requirements: str = "",
     feed_urls: Optional[List[str]] = None,
     search_queries: Optional[List[str]] = None,
+    must_include: Optional[List[str]] = None,
+    dont_include: Optional[List[str]] = None,
+    lookback_days: int = LOOKBACK_DAYS,
     progress_callback: Optional[Callable] = None,
 ) -> SensingPipelineResult:
     """
     Full tech sensing pipeline execution.
 
     Args:
-        domain: Target domain (default: "Generative AI").
+        domain: Target domain (e.g., "Generative AI", "Robotics", "Quantum Computing").
         custom_requirements: User-provided additional guidance.
         feed_urls: Override default RSS feeds.
-        search_queries: Override default DuckDuckGo queries.
+        search_queries: Override default search queries.
+        must_include: Keywords that articles should contain (boosts relevance).
+        dont_include: Keywords to filter out from results.
+        lookback_days: Number of days to look back for articles.
         progress_callback: Async callable(stage, progress_pct, detail_msg).
     """
     start = time.time()
@@ -63,19 +69,41 @@ async def run_sensing_pipeline(
         if progress_callback:
             await progress_callback(stage, pct, msg)
 
-    logger.info(f"========== SENSING PIPELINE START (domain={domain}) ==========")
+    logger.info(
+        f"========== SENSING PIPELINE START (domain={domain}, "
+        f"lookback={lookback_days}d, must_include={must_include}, "
+        f"dont_include={dont_include}) =========="
+    )
+
+    # Build keyword filter instructions for prompts
+    keyword_instructions = _build_keyword_instructions(
+        domain, must_include, dont_include
+    )
+    full_requirements = custom_requirements
+    if keyword_instructions:
+        full_requirements = (
+            f"{custom_requirements}\n\n{keyword_instructions}"
+            if custom_requirements
+            else keyword_instructions
+        )
 
     # --- Stage 1: Ingest ---
     logger.info(f"[Stage 1/5] INGEST — starting RSS feeds... [{_elapsed()}]")
     await _emit("ingest", 10, "Fetching RSS feeds...")
-    rss_articles = await fetch_rss_feeds(feed_urls)
+    rss_articles = await fetch_rss_feeds(
+        feed_urls, lookback_days=lookback_days, domain=domain
+    )
     logger.info(
         f"[Stage 1/5] RSS done: {len(rss_articles)} articles [{_elapsed()}]"
     )
 
     await _emit("ingest", 20, "Searching DuckDuckGo...")
     logger.info(f"[Stage 1/5] INGEST — starting DuckDuckGo... [{_elapsed()}]")
-    ddg_articles = await search_duckduckgo(search_queries, domain)
+    ddg_articles = await search_duckduckgo(
+        search_queries, domain,
+        lookback_days=lookback_days,
+        must_include=must_include,
+    )
     logger.info(
         f"[Stage 1/5] DDG done: {len(ddg_articles)} articles [{_elapsed()}]"
     )
@@ -90,6 +118,21 @@ async def run_sensing_pipeline(
     logger.info(f"[Stage 2/5] DEDUP — starting... [{_elapsed()}]")
     await _emit("dedup", 30, "Deduplicating...")
     unique_articles = deduplicate_articles(all_raw)
+
+    # Apply dont_include keyword filter
+    if dont_include:
+        before_filter = len(unique_articles)
+        dont_lower = [kw.lower() for kw in dont_include]
+        unique_articles = [
+            a for a in unique_articles
+            if not _matches_exclusion(a, dont_lower)
+        ]
+        filtered_out = before_filter - len(unique_articles)
+        logger.info(
+            f"[Stage 2/5] Keyword filter removed {filtered_out} articles "
+            f"(dont_include={dont_include})"
+        )
+
     await _emit("dedup", 35, f"{len(unique_articles)} unique articles")
     logger.info(
         f"[Stage 2/5] DEDUP COMPLETE: {len(all_raw)} -> {len(unique_articles)} unique [{_elapsed()}]"
@@ -122,7 +165,7 @@ async def run_sensing_pipeline(
     )
     await _emit("classify", 55, "Classifying articles with LLM...")
     classified = await classify_articles(
-        list(enriched), domain=domain, custom_requirements=custom_requirements
+        list(enriched), domain=domain, custom_requirements=full_requirements
     )
     await _emit("classify", 75, f"{len(classified)} articles classified")
     logger.info(
@@ -133,14 +176,14 @@ async def run_sensing_pipeline(
     logger.info(f"[Stage 5/5] REPORT — generating final report via LLM... [{_elapsed()}]")
     await _emit("report", 80, "Generating report with LLM...")
     now = datetime.now(timezone.utc)
-    week_ago = now - timedelta(days=LOOKBACK_DAYS)
-    date_range = f"{week_ago.strftime('%b %d')} - {now.strftime('%b %d, %Y')}"
+    lookback_start = now - timedelta(days=lookback_days)
+    date_range = f"{lookback_start.strftime('%b %d')} - {now.strftime('%b %d, %Y')}"
 
     report = await generate_report(
         classified_articles=classified,
         domain=domain,
         date_range=date_range,
-        custom_requirements=custom_requirements,
+        custom_requirements=full_requirements,
     )
     await _emit("complete", 100, "Report ready")
 
@@ -161,3 +204,33 @@ async def run_sensing_pipeline(
         classified_article_count=len(classified),
         execution_time_seconds=round(elapsed, 2),
     )
+
+
+def _matches_exclusion(article: RawArticle, dont_lower: list[str]) -> bool:
+    """Check if an article matches any exclusion keyword."""
+    text = f"{article.title} {article.snippet} {article.content}".lower()
+    return any(kw in text for kw in dont_lower)
+
+
+def _build_keyword_instructions(
+    domain: str,
+    must_include: list[str] | None,
+    dont_include: list[str] | None,
+) -> str:
+    """Build keyword filter instructions for LLM prompts."""
+    parts = []
+    if must_include:
+        kw_list = ", ".join(must_include)
+        parts.append(
+            f"MUST INCLUDE: Prioritize articles and technologies related to "
+            f"these keywords: {kw_list}. Give higher relevance scores to "
+            f"articles mentioning these topics."
+        )
+    if dont_include:
+        kw_list = ", ".join(dont_include)
+        parts.append(
+            f"DON'T INCLUDE: Exclude or deprioritize articles and technologies "
+            f"related to these keywords: {kw_list}. Give low relevance scores "
+            f"to articles primarily about these topics."
+        )
+    return "\n".join(parts)

@@ -8,8 +8,15 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Radar, Loader2, History, Trash2, RefreshCw, Download,
-  Maximize2, Minimize2, X,
+  Maximize2, Minimize2, X, Plus, XCircle,
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { api, getAuthToken } from '@/lib/api';
@@ -22,7 +29,9 @@ import { toast } from '@/components/ui/use-toast';
 import { downloadSensingReportPdf } from '@/lib/sensing-report-pdf';
 
 const POLL_INTERVAL_MS = 10_000;
-const MAX_POLL_COUNT = 360; // 1 hour max (360 * 10s)
+const MAX_POLL_COUNT = 360; // 1 hour max
+
+type DateRangePreset = 'last_week' | 'last_month' | 'custom';
 
 const TechSensing: React.FC = () => {
   const { user } = useAuth();
@@ -30,6 +39,12 @@ const TechSensing: React.FC = () => {
   // Config state
   const [domain, setDomain] = useState('Generative AI');
   const [customReqs, setCustomReqs] = useState('');
+  const [mustInclude, setMustInclude] = useState<string[]>([]);
+  const [dontInclude, setDontInclude] = useState<string[]>([]);
+  const [mustIncludeInput, setMustIncludeInput] = useState('');
+  const [dontIncludeInput, setDontIncludeInput] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangePreset>('last_week');
+  const [customDays, setCustomDays] = useState(14);
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -52,6 +67,8 @@ const TechSensing: React.FC = () => {
   const socketRef = useRef<Socket | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollCountRef = useRef(0);
+
+  const lookbackDays = dateRange === 'last_week' ? 7 : dateRange === 'last_month' ? 30 : customDays;
 
   // Load history on mount
   useEffect(() => {
@@ -99,9 +116,7 @@ const TechSensing: React.FC = () => {
   // ESC to exit full-screen
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullScreen) {
-        setIsFullScreen(false);
-      }
+      if (e.key === 'Escape' && isFullScreen) setIsFullScreen(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -146,7 +161,7 @@ const TechSensing: React.FC = () => {
           return;
         }
       } catch {
-        // Continue polling on transient errors
+        // Continue polling
       }
 
       pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
@@ -181,7 +196,13 @@ const TechSensing: React.FC = () => {
     setReportData(null);
 
     try {
-      const res = await api.sensingGenerate(domain, customReqs);
+      const res = await api.sensingGenerate(
+        domain,
+        customReqs,
+        mustInclude.length > 0 ? mustInclude : undefined,
+        dontInclude.length > 0 ? dontInclude : undefined,
+        lookbackDays,
+      );
       setTrackingId(res.tracking_id);
       startPolling(res.tracking_id);
     } catch (err) {
@@ -206,9 +227,7 @@ const TechSensing: React.FC = () => {
     try {
       await api.sensingDelete(tid);
       setHistory(prev => prev.filter(r => r.tracking_id !== tid));
-      if (reportData?.meta.tracking_id === tid) {
-        setReportData(null);
-      }
+      if (reportData?.meta.tracking_id === tid) setReportData(null);
       toast({ title: 'Report deleted' });
     } catch {
       toast({ title: 'Failed to delete', variant: 'destructive' });
@@ -225,6 +244,40 @@ const TechSensing: React.FC = () => {
     }
   };
 
+  const addKeyword = (
+    list: string[],
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+    inputValue: string,
+    inputSetter: React.Dispatch<React.SetStateAction<string>>,
+  ) => {
+    const trimmed = inputValue.trim();
+    if (trimmed && !list.includes(trimmed)) {
+      setter([...list, trimmed]);
+    }
+    inputSetter('');
+  };
+
+  const removeKeyword = (
+    list: string[],
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+    keyword: string,
+  ) => {
+    setter(list.filter(k => k !== keyword));
+  };
+
+  const handleKeywordKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    list: string[],
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+    inputValue: string,
+    inputSetter: React.Dispatch<React.SetStateAction<string>>,
+  ) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addKeyword(list, setter, inputValue, inputSetter);
+    }
+  };
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
@@ -236,7 +289,6 @@ const TechSensing: React.FC = () => {
   if (isFullScreen && reportData) {
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col">
-        {/* Full-screen header */}
         <div className="flex items-center justify-between px-6 py-3 border-b shrink-0 bg-background">
           <div className="flex items-center gap-3">
             <Radar className="w-5 h-5 text-primary" />
@@ -255,8 +307,6 @@ const TechSensing: React.FC = () => {
             </Button>
           </div>
         </div>
-
-        {/* Full-screen tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
           <div className="px-6 pt-2 shrink-0">
             <TabsList>
@@ -302,17 +352,132 @@ const TechSensing: React.FC = () => {
         {/* Config card */}
         <Card className="flex-1">
           <CardContent className="p-4 space-y-3">
+            {/* Row 1: Domain + Date Range */}
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Domain</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Domain / Topic
+                </label>
                 <Input
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
-                  placeholder="e.g., Generative AI, Robotics, Quantum Computing"
+                  placeholder="e.g., Generative AI, Robotics, Quantum Computing, Cybersecurity"
                   disabled={isGenerating}
                 />
               </div>
+              <div className="w-40">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Date Range
+                </label>
+                <Select
+                  value={dateRange}
+                  onValueChange={(v) => setDateRange(v as DateRangePreset)}
+                  disabled={isGenerating}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="last_week">Last Week</SelectItem>
+                    <SelectItem value="last_month">Last Month</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {dateRange === 'custom' && (
+                <div className="w-28">
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Days
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={customDays}
+                    onChange={(e) => setCustomDays(Math.max(1, Math.min(365, parseInt(e.target.value) || 7)))}
+                    disabled={isGenerating}
+                  />
+                </div>
+              )}
             </div>
+
+            {/* Row 2: Must Include / Don't Include */}
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Must Include Keywords
+                </label>
+                <div className="flex gap-1.5">
+                  <Input
+                    value={mustIncludeInput}
+                    onChange={(e) => setMustIncludeInput(e.target.value)}
+                    onKeyDown={(e) => handleKeywordKeyDown(e, mustInclude, setMustInclude, mustIncludeInput, setMustIncludeInput)}
+                    placeholder="Type keyword and press Enter"
+                    disabled={isGenerating}
+                    className="text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0 h-9 w-9"
+                    onClick={() => addKeyword(mustInclude, setMustInclude, mustIncludeInput, setMustIncludeInput)}
+                    disabled={isGenerating || !mustIncludeInput.trim()}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                {mustInclude.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {mustInclude.map((kw) => (
+                      <Badge key={kw} variant="secondary" className="text-xs gap-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                        {kw}
+                        <button onClick={() => removeKeyword(mustInclude, setMustInclude, kw)} disabled={isGenerating}>
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Don't Include Keywords
+                </label>
+                <div className="flex gap-1.5">
+                  <Input
+                    value={dontIncludeInput}
+                    onChange={(e) => setDontIncludeInput(e.target.value)}
+                    onKeyDown={(e) => handleKeywordKeyDown(e, dontInclude, setDontInclude, dontIncludeInput, setDontIncludeInput)}
+                    placeholder="Type keyword and press Enter"
+                    disabled={isGenerating}
+                    className="text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0 h-9 w-9"
+                    onClick={() => addKeyword(dontInclude, setDontInclude, dontIncludeInput, setDontIncludeInput)}
+                    disabled={isGenerating || !dontIncludeInput.trim()}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                {dontInclude.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {dontInclude.map((kw) => (
+                      <Badge key={kw} variant="secondary" className="text-xs gap-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                        {kw}
+                        <button onClick={() => removeKeyword(dontInclude, setDontInclude, kw)} disabled={isGenerating}>
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Row 3: Custom Requirements */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">
                 Custom Requirements (optional)
@@ -320,11 +485,13 @@ const TechSensing: React.FC = () => {
               <Textarea
                 value={customReqs}
                 onChange={(e) => setCustomReqs(e.target.value)}
-                placeholder="e.g., Focus on open-source models, exclude hardware news..."
+                placeholder="e.g., Focus on enterprise adoption, compare with previous trends..."
                 rows={2}
                 disabled={isGenerating}
               />
             </div>
+
+            {/* Generate button + progress */}
             <div className="flex items-center gap-3">
               <Button onClick={handleGenerate} disabled={isGenerating || !domain.trim()}>
                 {isGenerating ? (
@@ -361,7 +528,7 @@ const TechSensing: React.FC = () => {
                 <RefreshCw className={`w-3 h-3 ${historyLoading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
-            <ScrollArea className="h-40">
+            <ScrollArea className="h-48">
               {history.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-4">No reports yet</p>
               ) : (

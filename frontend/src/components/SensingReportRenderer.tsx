@@ -62,13 +62,16 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
 
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-8 p-1 max-w-5xl mx-auto">
-        {/* Meta bar */}
-        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline">{report.domain}</Badge>
-          <Badge variant="outline">{report.date_range}</Badge>
-          <Badge variant="outline">{report.total_articles_analyzed} articles analyzed</Badge>
-          <Badge variant="outline">{meta.execution_time_seconds}s generation time</Badge>
+      <div className="space-y-8 py-2 px-1 max-w-5xl mx-auto">
+        {/* Report Title + Meta */}
+        <div>
+          <h2 className="text-xl font-bold mb-2">{report.report_title}</h2>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <Badge variant="outline">{report.domain}</Badge>
+            <Badge variant="outline">{report.date_range}</Badge>
+            <Badge variant="outline">{report.total_articles_analyzed} articles analyzed</Badge>
+            <Badge variant="outline">{Math.round(meta.execution_time_seconds / 60)}m generation time</Badge>
+          </div>
         </div>
 
         {/* Executive Summary */}

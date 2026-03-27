@@ -13,11 +13,11 @@ import feedparser
 import trafilatura
 
 from core.sensing.config import (
-    DEFAULT_RSS_FEEDS,
-    DEFAULT_SEARCH_QUERIES,
     LOOKBACK_DAYS,
     MAX_ARTICLES_PER_FEED,
     MAX_SEARCH_RESULTS,
+    get_feeds_for_domain,
+    get_search_queries_for_domain,
 )
 
 logger = logging.getLogger("sensing.ingest")
@@ -46,13 +46,14 @@ class RawArticle:
 async def fetch_rss_feeds(
     feed_urls: Optional[List[str]] = None,
     lookback_days: int = LOOKBACK_DAYS,
+    domain: str = "Generative AI",
 ) -> List[RawArticle]:
     """Parse RSS feeds and return articles from the last N days."""
-    urls = feed_urls or DEFAULT_RSS_FEEDS
+    urls = feed_urls or get_feeds_for_domain(domain)
     cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
     articles: List[RawArticle] = []
 
-    logger.info(f"[RSS] Fetching {len(urls)} feeds (lookback={lookback_days}d)")
+    logger.info(f"[RSS] Fetching {len(urls)} feeds (lookback={lookback_days}d, domain={domain})")
 
     for i, url in enumerate(urls):
         try:
@@ -93,21 +94,29 @@ async def fetch_rss_feeds(
 async def search_duckduckgo(
     queries: Optional[List[str]] = None,
     domain: str = "Generative AI",
+    lookback_days: int = LOOKBACK_DAYS,
+    must_include: Optional[List[str]] = None,
 ) -> List[RawArticle]:
     """Run DuckDuckGo searches and return results as RawArticle."""
-    search_queries = queries or [
-        q.replace("generative AI", domain) if domain != "Generative AI" else q
-        for q in DEFAULT_SEARCH_QUERIES
-    ]
+    search_queries = queries or get_search_queries_for_domain(domain, must_include)
+
+    # Map lookback_days to DDG timelimit
+    if lookback_days <= 7:
+        timelimit = "w"  # past week
+    elif lookback_days <= 30:
+        timelimit = "m"  # past month
+    else:
+        timelimit = "y"  # past year
+
     articles: List[RawArticle] = []
 
-    logger.info(f"[DDG] Running {len(search_queries)} searches")
+    logger.info(f"[DDG] Running {len(search_queries)} searches (timelimit={timelimit})")
 
     for i, query in enumerate(search_queries):
         try:
             logger.info(f"[DDG {i+1}/{len(search_queries)}] Query: '{query}'")
             results = await asyncio.to_thread(
-                _ddgs_search, query, MAX_SEARCH_RESULTS
+                _ddgs_search, query, MAX_SEARCH_RESULTS, timelimit
             )
             for r in results:
                 articles.append(
@@ -149,10 +158,10 @@ async def extract_full_text(article: RawArticle) -> RawArticle:
     return article
 
 
-def _ddgs_search(query: str, max_results: int) -> list:
+def _ddgs_search(query: str, max_results: int, timelimit: str = "w") -> list:
     """Synchronous DuckDuckGo search wrapper."""
     with DDGS() as ddgs:
-        return list(ddgs.text(query, max_results=max_results, timelimit="w"))
+        return list(ddgs.text(query, max_results=max_results, timelimit=timelimit))
 
 
 def _parse_feed_date(entry) -> Optional[datetime]:
