@@ -55,7 +55,7 @@ class LLMOutputBase(BaseModel):
         newlines, quotes, etc.) that would break markdown rendering
         in summary, answer, description, and other text fields.
         """
-        for field_name in self.model_fields:
+        for field_name in self.__class__.model_fields:
             value = getattr(self, field_name, None)
             if isinstance(value, str):
                 setattr(self, field_name, normalize_answer_content(value))
