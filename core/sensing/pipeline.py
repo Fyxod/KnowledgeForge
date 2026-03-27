@@ -1,5 +1,5 @@
 """
-Tech Sensing Pipeline — orchestrates Ingest -> Dedup -> Extract -> Classify -> Report.
+Tech Sensing Pipeline — orchestrates Ingest -> Dedup -> Extract -> Classify -> Report -> Verify.
 
 Main entry point called by the route handler.
 """
@@ -22,6 +22,7 @@ from core.sensing.ingest import (
     search_duckduckgo,
 )
 from core.sensing.report_generator import generate_report
+from core.sensing.verifier import verify_report
 
 logger = logging.getLogger("sensing.pipeline")
 
@@ -88,35 +89,35 @@ async def run_sensing_pipeline(
         )
 
     # --- Stage 1: Ingest ---
-    logger.info(f"[Stage 1/5] INGEST — starting RSS feeds... [{_elapsed()}]")
+    logger.info(f"[Stage 1/6] INGEST — starting RSS feeds... [{_elapsed()}]")
     await _emit("ingest", 10, "Fetching RSS feeds...")
     rss_articles = await fetch_rss_feeds(
         feed_urls, lookback_days=lookback_days, domain=domain
     )
     logger.info(
-        f"[Stage 1/5] RSS done: {len(rss_articles)} articles [{_elapsed()}]"
+        f"[Stage 1/6] RSS done: {len(rss_articles)} articles [{_elapsed()}]"
     )
 
-    await _emit("ingest", 20, "Searching DuckDuckGo...")
-    logger.info(f"[Stage 1/5] INGEST — starting DuckDuckGo... [{_elapsed()}]")
+    await _emit("ingest", 18, "Searching DuckDuckGo...")
+    logger.info(f"[Stage 1/6] INGEST — starting DuckDuckGo... [{_elapsed()}]")
     ddg_articles = await search_duckduckgo(
         search_queries, domain,
         lookback_days=lookback_days,
         must_include=must_include,
     )
     logger.info(
-        f"[Stage 1/5] DDG done: {len(ddg_articles)} articles [{_elapsed()}]"
+        f"[Stage 1/6] DDG done: {len(ddg_articles)} articles [{_elapsed()}]"
     )
 
     all_raw = rss_articles + ddg_articles
-    await _emit("ingest", 25, f"Found {len(all_raw)} raw articles")
+    await _emit("ingest", 22, f"Found {len(all_raw)} raw articles")
     logger.info(
-        f"[Stage 1/5] INGEST COMPLETE: {len(all_raw)} total raw articles [{_elapsed()}]"
+        f"[Stage 1/6] INGEST COMPLETE: {len(all_raw)} total raw articles [{_elapsed()}]"
     )
 
     # --- Stage 2: Dedup ---
-    logger.info(f"[Stage 2/5] DEDUP — starting... [{_elapsed()}]")
-    await _emit("dedup", 30, "Deduplicating...")
+    logger.info(f"[Stage 2/6] DEDUP — starting... [{_elapsed()}]")
+    await _emit("dedup", 25, "Deduplicating...")
     unique_articles = deduplicate_articles(all_raw)
 
     # Apply dont_include keyword filter
@@ -129,20 +130,20 @@ async def run_sensing_pipeline(
         ]
         filtered_out = before_filter - len(unique_articles)
         logger.info(
-            f"[Stage 2/5] Keyword filter removed {filtered_out} articles "
+            f"[Stage 2/6] Keyword filter removed {filtered_out} articles "
             f"(dont_include={dont_include})"
         )
 
-    await _emit("dedup", 35, f"{len(unique_articles)} unique articles")
+    await _emit("dedup", 30, f"{len(unique_articles)} unique articles")
     logger.info(
-        f"[Stage 2/5] DEDUP COMPLETE: {len(all_raw)} -> {len(unique_articles)} unique [{_elapsed()}]"
+        f"[Stage 2/6] DEDUP COMPLETE: {len(all_raw)} -> {len(unique_articles)} unique [{_elapsed()}]"
     )
 
     # --- Stage 3: Extract full text (parallel, throttled) ---
     logger.info(
-        f"[Stage 3/5] EXTRACT — extracting full text for {len(unique_articles)} articles... [{_elapsed()}]"
+        f"[Stage 3/6] EXTRACT — extracting full text for {len(unique_articles)} articles... [{_elapsed()}]"
     )
-    await _emit("extract", 40, "Extracting article text...")
+    await _emit("extract", 35, "Extracting article text...")
     sem = asyncio.Semaphore(5)  # Max 5 concurrent HTTP fetches
 
     async def _extract_with_sem(article: RawArticle) -> RawArticle:
@@ -154,27 +155,27 @@ async def run_sensing_pipeline(
     )
 
     content_count = sum(1 for a in enriched if a.content and len(a.content) > 50)
-    await _emit("extract", 50, "Text extraction complete")
+    await _emit("extract", 45, "Text extraction complete")
     logger.info(
-        f"[Stage 3/5] EXTRACT COMPLETE: {content_count}/{len(enriched)} with substantial content [{_elapsed()}]"
+        f"[Stage 3/6] EXTRACT COMPLETE: {content_count}/{len(enriched)} with substantial content [{_elapsed()}]"
     )
 
     # --- Stage 4: Classify ---
     logger.info(
-        f"[Stage 4/5] CLASSIFY — classifying {len(enriched)} articles via LLM... [{_elapsed()}]"
+        f"[Stage 4/6] CLASSIFY — classifying {len(enriched)} articles via LLM... [{_elapsed()}]"
     )
-    await _emit("classify", 55, "Classifying articles with LLM...")
+    await _emit("classify", 50, "Classifying articles with LLM...")
     classified = await classify_articles(
         list(enriched), domain=domain, custom_requirements=full_requirements
     )
-    await _emit("classify", 75, f"{len(classified)} articles classified")
+    await _emit("classify", 65, f"{len(classified)} articles classified")
     logger.info(
-        f"[Stage 4/5] CLASSIFY COMPLETE: {len(classified)} classified articles [{_elapsed()}]"
+        f"[Stage 4/6] CLASSIFY COMPLETE: {len(classified)} classified articles [{_elapsed()}]"
     )
 
     # --- Stage 5: Generate report ---
-    logger.info(f"[Stage 5/5] REPORT — generating final report via LLM... [{_elapsed()}]")
-    await _emit("report", 80, "Generating report with LLM...")
+    logger.info(f"[Stage 5/6] REPORT — generating final report via LLM... [{_elapsed()}]")
+    await _emit("report", 70, "Generating report with LLM...")
     now = datetime.now(timezone.utc)
     lookback_start = now - timedelta(days=lookback_days)
     date_range = f"{lookback_start.strftime('%b %d')} - {now.strftime('%b %d, %Y')}"
@@ -185,6 +186,25 @@ async def run_sensing_pipeline(
         date_range=date_range,
         custom_requirements=full_requirements,
     )
+    await _emit("report", 85, "Report generated, verifying relevance...")
+    logger.info(
+        f"[Stage 5/6] REPORT COMPLETE [{_elapsed()}]"
+    )
+
+    # --- Stage 6: Verify relevance ---
+    logger.info(
+        f"[Stage 6/6] VERIFY — checking report relevance against '{domain}'... [{_elapsed()}]"
+    )
+    await _emit("verify", 88, "Verifying report relevance...")
+    report = await verify_report(
+        report=report,
+        domain=domain,
+        must_include=must_include,
+        dont_include=dont_include,
+    )
+    await _emit("verify", 95, "Verification complete")
+    logger.info(f"[Stage 6/6] VERIFY COMPLETE [{_elapsed()}]")
+
     await _emit("complete", 100, "Report ready")
 
     elapsed = time.time() - start

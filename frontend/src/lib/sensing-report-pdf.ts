@@ -234,6 +234,65 @@ function buildSensingPdf(data: SensingReportData): TDocumentDefinitions {
         }
     }
 
+    // Technology Radar Overview (table by quadrant)
+    if (report.radar_items?.length > 0) {
+        content.push(sectionHeader(`Technology Radar (${report.radar_items.length} items)`, colors.radar));
+
+        const quadrants = ['Techniques', 'Platforms', 'Tools', 'Languages & Frameworks'];
+        const quadrantColors: Record<string, string> = {
+            'Techniques': '#1ebccd',
+            'Platforms': '#f38a3e',
+            'Tools': '#86b82a',
+            'Languages & Frameworks': '#b32059',
+        };
+
+        for (const quadrant of quadrants) {
+            const items = report.radar_items.filter(r => r.quadrant === quadrant);
+            if (items.length === 0) continue;
+
+            // Quadrant sub-header
+            content.push({
+                text: sanitize(quadrant),
+                fontSize: 11, bold: true,
+                color: quadrantColors[quadrant] || colors.slate800,
+                margin: [0, 8, 0, 4],
+            });
+
+            // Table of items in this quadrant
+            const ringOrder = ['Adopt', 'Trial', 'Assess', 'Hold'];
+            const sorted = [...items].sort((a, b) =>
+                ringOrder.indexOf(a.ring) - ringOrder.indexOf(b.ring)
+            );
+
+            const tableBody: any[] = [
+                [
+                    { text: 'Technology', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
+                    { text: 'Ring', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
+                    { text: 'Description', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
+                    { text: 'New?', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
+                ],
+            ];
+
+            for (const item of sorted) {
+                tableBody.push([
+                    { text: sanitize(item.name), margin: [4, 2, 4, 2], fontSize: 8, bold: true },
+                    { text: sanitize(item.ring), margin: [4, 2, 4, 2], fontSize: 8, color: ringColor(item.ring) },
+                    { text: sanitize(item.description), margin: [4, 2, 4, 2], fontSize: 7, color: colors.slate600 },
+                    { text: item.is_new ? 'NEW' : '-', margin: [4, 2, 4, 2], fontSize: 7, color: item.is_new ? colors.adopt : colors.slate500 },
+                ]);
+            }
+
+            content.push({
+                table: { headerRows: 1, widths: ['auto', 'auto', '*', 'auto'], body: tableBody },
+                layout: {
+                    hLineColor: () => colors.border, vLineColor: () => colors.border,
+                    hLineWidth: () => 0.5, vLineWidth: () => 0.5,
+                },
+                margin: [0, 0, 0, 4],
+            });
+        }
+    }
+
     // Report Sections
     if (report.report_sections?.length > 0) {
         content.push(sectionHeader('Detailed Analysis', colors.sections));
