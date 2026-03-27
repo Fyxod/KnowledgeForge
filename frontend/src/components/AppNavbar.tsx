@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, User, Moon, Sun } from 'lucide-react';
+import { LogOut, User, Moon, Sun, Radar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
@@ -38,6 +38,15 @@ const AppNavbar: React.FC = () => {
             draggable={false}
           />
           <h1 className="text-lg font-semibold">{PROJECT_NAME}</h1>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/dashboard/sensing')}
+            className="ml-4 text-muted-foreground hover:text-foreground"
+          >
+            <Radar className="w-4 h-4 mr-1.5" />
+            Tech Sensing
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">

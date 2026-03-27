@@ -18,6 +18,7 @@ import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import SimHome from "./pages/SimHome";
 import RequireAuth from "./lib/RequireAuth";
+import TechSensing from "./pages/TechSensing";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,7 @@ const App = () => {
                 <Route path="new" element={<NewThread />} />
                 <Route path="threads/:threadId" element={<ThreadView />} />
                 <Route path="profile" element={<Profile />} />
+                <Route path="sensing" element={<TechSensing />} />
               </Route>
               {SIM_PAGE_ENABLED && (
                 <Route

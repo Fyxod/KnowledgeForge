@@ -48,3 +48,6 @@ json-repair
 spacy
 docling
 fpdf2
+feedparser
+duckduckgo-search
+trafilatura

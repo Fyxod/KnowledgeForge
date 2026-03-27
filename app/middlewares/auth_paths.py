@@ -16,4 +16,5 @@ auth_paths = [
     "/document-creator",
     "/excel-skill",
     "/settings",
+    "/sensing",
 ]

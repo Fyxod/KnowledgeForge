@@ -14,6 +14,7 @@ from app.routes import (
     health,
     insights,
     query,
+    sensing,
     settings,
     strategic_analysis,
     strategic_roadmap,
@@ -64,5 +65,6 @@ fastapi_app.include_router(export.router)
 fastapi_app.include_router(document_creator.router)
 fastapi_app.include_router(excel_skill.router)
 fastapi_app.include_router(settings.router)
+fastapi_app.include_router(sensing.router)
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

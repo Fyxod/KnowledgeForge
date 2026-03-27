@@ -20,6 +20,7 @@ SWITCHES = {
     "DOC_BATCH_REDUCER": True,  # MapReduce batching for multi-doc retrieval when token budget overflows
     "USE_VLM_FOR_ANSWER": True,  # Query-time VLM: render referenced page/slide/figure and answer visually
     "DISABLE_THINKING": True,  # Disable LLM thinking mode (think=false) for faster inference
+    "TECH_SENSING": True,  # GenAI Tech Sensing — automated technology radar report generation
 }
 
 # GLM-OCR Configuration
@@ -85,6 +86,10 @@ GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Section iter
 GPU_EXCEL_PLAN_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Excel plan generation
 GPU_EXCEL_NLP_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # NLP column interpretation
 GPU_NLP_THEME_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Chunked NLP theme extraction
+
+# Tech Sensing LLM configurations
+GPU_SENSING_CLASSIFY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Article classification
+GPU_SENSING_REPORT_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Report generation
 
 IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = "qwen3.5:9b"  # Vision Language Model for slide/complex PDF extraction

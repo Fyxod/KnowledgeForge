@@ -511,6 +511,84 @@ export interface TechnicalAnalysisResponse {
   failed?: boolean;
 }
 
+// ── Tech Sensing types ──
+
+export interface SensingRadarItem {
+  name: string;
+  quadrant: string;
+  ring: string;
+  description: string;
+  is_new: boolean;
+  moved_in?: string | null;
+}
+
+export interface SensingTrendItem {
+  trend_name: string;
+  description: string;
+  evidence: string[];
+  impact_level: string;
+  time_horizon: string;
+}
+
+export interface SensingReportSection {
+  section_title: string;
+  content: string;
+}
+
+export interface SensingRecommendation {
+  title: string;
+  description: string;
+  priority: string;
+  related_trends: string[];
+}
+
+export interface SensingClassifiedArticle {
+  title: string;
+  source: string;
+  url: string;
+  published_date: string;
+  summary: string;
+  relevance_score: number;
+  quadrant: string;
+  ring: string;
+  technology_name: string;
+  reasoning: string;
+}
+
+export interface SensingReport {
+  report_title: string;
+  executive_summary: string;
+  domain: string;
+  date_range: string;
+  total_articles_analyzed: number;
+  key_trends: SensingTrendItem[];
+  report_sections: SensingReportSection[];
+  radar_items: SensingRadarItem[];
+  recommendations: SensingRecommendation[];
+  notable_articles: SensingClassifiedArticle[];
+}
+
+export interface SensingReportData {
+  report: SensingReport;
+  meta: {
+    tracking_id: string;
+    domain: string;
+    raw_article_count: number;
+    deduped_article_count: number;
+    classified_article_count: number;
+    execution_time_seconds: number;
+    generated_at: string;
+  };
+}
+
+export interface SensingHistoryItem {
+  tracking_id: string;
+  domain: string;
+  generated_at: string;
+  report_title: string;
+  total_articles: number;
+}
+
 // ── Excel Skill types ──
 
 export interface ExcelSkillGenerateResponse {
@@ -1766,6 +1844,73 @@ export const api = {
     if (!response.ok) {
       const data = await response.json();
       throw new Error(data.detail || 'Failed to delete Excel file');
+    }
+  },
+
+  // --- Tech Sensing ---
+
+  async sensingGenerate(
+    domain: string = 'Generative AI',
+    customRequirements: string = '',
+    feedUrls?: string[],
+    searchQueries?: string[],
+  ): Promise<{ status: string; tracking_id: string; message: string }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/sensing/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        domain,
+        custom_requirements: customRequirements,
+        feed_urls: feedUrls || null,
+        search_queries: searchQueries || null,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to start sensing report generation');
+    }
+    return data;
+  },
+
+  async sensingStatus(
+    trackingId: string,
+  ): Promise<{ status: string; data?: SensingReportData; error?: string }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/sensing/status/${trackingId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to check sensing status');
+    }
+    return data;
+  },
+
+  async sensingHistory(): Promise<{ reports: SensingHistoryItem[] }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/sensing/history`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to load sensing history');
+    }
+    return data;
+  },
+
+  async sensingDelete(reportId: string): Promise<void> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/sensing/report/${reportId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || 'Failed to delete sensing report');
     }
   },
 };
