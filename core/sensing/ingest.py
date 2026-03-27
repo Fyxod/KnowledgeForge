@@ -4,12 +4,12 @@ Returns a list of RawArticle dataclass instances.
 """
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import feedparser
-from duckduckgo_search import DDGS
 import trafilatura
 
 from core.sensing.config import (
@@ -19,6 +19,18 @@ from core.sensing.config import (
     MAX_ARTICLES_PER_FEED,
     MAX_SEARCH_RESULTS,
 )
+
+logger = logging.getLogger("sensing.ingest")
+
+# Handle ddgs package rename: try new name first, fall back to old
+try:
+    from ddgs import DDGS  # type: ignore
+
+    logger.info("Using 'ddgs' package for DuckDuckGo search")
+except ImportError:
+    from duckduckgo_search import DDGS  # type: ignore
+
+    logger.info("Using 'duckduckgo_search' package for DuckDuckGo search")
 
 
 @dataclass
@@ -40,10 +52,14 @@ async def fetch_rss_feeds(
     cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
     articles: List[RawArticle] = []
 
-    for url in urls:
+    logger.info(f"[RSS] Fetching {len(urls)} feeds (lookback={lookback_days}d)")
+
+    for i, url in enumerate(urls):
         try:
+            logger.info(f"[RSS {i+1}/{len(urls)}] Parsing: {url}")
             feed = await asyncio.to_thread(feedparser.parse, url)
             source_name = feed.feed.get("title", url)[:50]
+            count_before = len(articles)
 
             for entry in feed.entries[:MAX_ARTICLES_PER_FEED]:
                 pub_date = _parse_feed_date(entry)
@@ -61,9 +77,16 @@ async def fetch_rss_feeds(
                         snippet=entry.get("summary", "")[:500],
                     )
                 )
-        except Exception as e:
-            print(f"[Sensing:ingest] RSS feed error ({url}): {e}")
 
+            added = len(articles) - count_before
+            logger.info(
+                f"[RSS {i+1}/{len(urls)}] '{source_name}': {added} articles "
+                f"(total entries: {len(feed.entries)})"
+            )
+        except Exception as e:
+            logger.warning(f"[RSS {i+1}/{len(urls)}] FAILED ({url}): {e}")
+
+    logger.info(f"[RSS] Done. Total articles from RSS: {len(articles)}")
     return articles
 
 
@@ -78,8 +101,11 @@ async def search_duckduckgo(
     ]
     articles: List[RawArticle] = []
 
-    for query in search_queries:
+    logger.info(f"[DDG] Running {len(search_queries)} searches")
+
+    for i, query in enumerate(search_queries):
         try:
+            logger.info(f"[DDG {i+1}/{len(search_queries)}] Query: '{query}'")
             results = await asyncio.to_thread(
                 _ddgs_search, query, MAX_SEARCH_RESULTS
             )
@@ -92,9 +118,15 @@ async def search_duckduckgo(
                         snippet=r.get("body", "")[:500],
                     )
                 )
+            logger.info(
+                f"[DDG {i+1}/{len(search_queries)}] Got {len(results)} results"
+            )
         except Exception as e:
-            print(f"[Sensing:ingest] DuckDuckGo error ({query}): {e}")
+            logger.warning(
+                f"[DDG {i+1}/{len(search_queries)}] FAILED ('{query}'): {e}"
+            )
 
+    logger.info(f"[DDG] Done. Total articles from DDG: {len(articles)}")
     return articles
 
 

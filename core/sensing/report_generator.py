@@ -4,6 +4,8 @@ Takes classified articles and produces the complete TechSensingReport.
 """
 
 import json
+import logging
+import time
 from typing import List
 
 from core.constants import GPU_SENSING_REPORT_LLM
@@ -13,6 +15,8 @@ from core.llm.output_schemas.sensing_outputs import (
     TechSensingReport,
 )
 from core.llm.prompts.sensing_prompts import sensing_report_prompt
+
+logger = logging.getLogger("sensing.report")
 
 
 async def generate_report(
@@ -29,11 +33,17 @@ async def generate_report(
         classified_articles, key=lambda a: a.relevance_score, reverse=True
     )[:50]
 
+    logger.info(
+        f"Generating report from {len(sorted_articles)} articles "
+        f"(domain={domain}, range={date_range})"
+    )
+
     articles_json = json.dumps(
         [a.model_dump() for a in sorted_articles],
         indent=2,
         ensure_ascii=False,
     )
+    logger.info(f"Articles JSON payload size: {len(articles_json)} chars")
 
     prompt = sensing_report_prompt(
         classified_articles_json=articles_json,
@@ -41,6 +51,9 @@ async def generate_report(
         date_range=date_range,
         custom_requirements=custom_requirements,
     )
+
+    report_start = time.time()
+    logger.info("Sending report generation request to LLM...")
 
     result = await invoke_llm(
         gpu_model=GPU_SENSING_REPORT_LLM.model,
@@ -50,4 +63,12 @@ async def generate_report(
     )
 
     report = TechSensingReport.model_validate(result)
+    elapsed = time.time() - report_start
+
+    logger.info(
+        f"Report generated in {elapsed:.1f}s — "
+        f"trends={len(report.key_trends)}, radar_items={len(report.radar_items)}, "
+        f"sections={len(report.report_sections)}, recommendations={len(report.recommendations)}"
+    )
+
     return report

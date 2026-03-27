@@ -29,6 +29,10 @@ from core.utils.generation_status import (
     write_result,
 )
 
+# Sensing pipeline can take 10-15 min (RSS + DDG + LLM classify + LLM report).
+# Override the global 8-min stale timeout for sensing status reads.
+SENSING_STALE_TIMEOUT_MINUTES = 20
+
 router = APIRouter(prefix="/sensing", tags=["Tech Sensing"])
 
 
@@ -166,7 +170,7 @@ async def generate_sensing_report(
 
 @router.get("/status/{tracking_id}")
 async def sensing_status(request: Request, tracking_id: str):
-    """Poll for report generation status."""
+    """Poll for report generation status (with extended timeout for sensing)."""
     payload = request.state.user
     if not payload:
         raise HTTPException(status_code=401, detail="User not authenticated")
@@ -176,7 +180,7 @@ async def sensing_status(request: Request, tracking_id: str):
         _get_sensing_dir(user_id), f"status_{tracking_id}.json"
     )
 
-    gen_status = await read_generation_status(status_path)
+    gen_status = await _read_sensing_status(status_path)
     if gen_status is None:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -190,6 +194,63 @@ async def sensing_status(request: Request, tracking_id: str):
         return JSONResponse(
             content={"status": "completed", "data": gen_status["data"]}
         )
+
+
+async def _read_sensing_status(file_path: str) -> dict | None:
+    """
+    Custom status reader for sensing with a longer stale timeout (20 min).
+    The global read_generation_status uses 8 min which is too short for
+    the sensing pipeline (RSS + DDG + LLM classify batches + LLM report).
+    """
+    if not os.path.exists(file_path):
+        return None
+
+    try:
+        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+            content = await f.read()
+    except Exception:
+        return None
+
+    if not content.strip():
+        return {
+            "state": "failed",
+            "error": "Generation failed (empty status file). Please retry.",
+        }
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return {"state": "failed", "error": "Corrupted status file. Please retry."}
+
+    if not isinstance(data, dict):
+        return {"state": "failed", "error": "Unexpected status file format."}
+
+    status_field = data.get("_status")
+
+    if status_field == "pending":
+        started_at = data.get("started_at")
+        if started_at:
+            try:
+                started = datetime.fromisoformat(started_at)
+                elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+                if elapsed > SENSING_STALE_TIMEOUT_MINUTES * 60:
+                    return {
+                        "state": "failed",
+                        "error": (
+                            f"Generation timed out (no result after "
+                            f"{SENSING_STALE_TIMEOUT_MINUTES} minutes). "
+                            f"Please retry."
+                        ),
+                    }
+            except (ValueError, TypeError):
+                pass
+        return {"state": "pending"}
+
+    if status_field == "failed":
+        return {"state": "failed", "error": data.get("error", "Unknown error")}
+
+    # Completed (no _status key)
+    return {"state": "completed", "data": data}
 
 
 # --- History ---

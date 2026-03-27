@@ -2,6 +2,8 @@
 LLM-based article classification for Technology Radar placement.
 """
 
+import logging
+import time
 from typing import List
 
 from core.constants import GPU_SENSING_CLASSIFY_LLM
@@ -14,6 +16,8 @@ from core.llm.prompts.sensing_prompts import sensing_classify_prompt
 from core.sensing.config import ARTICLE_BATCH_SIZE, MIN_RELEVANCE_SCORE
 from core.sensing.ingest import RawArticle
 
+logger = logging.getLogger("sensing.classify")
+
 
 async def classify_articles(
     articles: List[RawArticle],
@@ -25,8 +29,15 @@ async def classify_articles(
     Processes in batches to stay within context window.
     """
     all_classified: List[ClassifiedArticle] = []
+    total_batches = (len(articles) + ARTICLE_BATCH_SIZE - 1) // ARTICLE_BATCH_SIZE
+
+    logger.info(
+        f"Classifying {len(articles)} articles in {total_batches} batches "
+        f"(batch_size={ARTICLE_BATCH_SIZE})"
+    )
 
     for i in range(0, len(articles), ARTICLE_BATCH_SIZE):
+        batch_num = i // ARTICLE_BATCH_SIZE + 1
         batch = articles[i : i + ARTICLE_BATCH_SIZE]
         articles_text = _format_batch_for_prompt(batch)
 
@@ -37,6 +48,11 @@ async def classify_articles(
         )
 
         try:
+            batch_start = time.time()
+            logger.info(
+                f"[Batch {batch_num}/{total_batches}] Sending {len(batch)} articles to LLM..."
+            )
+
             result = await invoke_llm(
                 gpu_model=GPU_SENSING_CLASSIFY_LLM.model,
                 response_schema=ArticleBatchClassification,
@@ -45,17 +61,26 @@ async def classify_articles(
             )
 
             validated = ArticleBatchClassification.model_validate(result)
+            batch_classified = 0
 
             for article in validated.articles:
                 if article.relevance_score >= MIN_RELEVANCE_SCORE:
                     all_classified.append(article)
+                    batch_classified += 1
+
+            batch_time = time.time() - batch_start
+            logger.info(
+                f"[Batch {batch_num}/{total_batches}] Done in {batch_time:.1f}s — "
+                f"{batch_classified} classified (total so far: {len(all_classified)})"
+            )
 
         except Exception as e:
-            print(
-                f"[Sensing:classify] Batch {i // ARTICLE_BATCH_SIZE} failed: {e}"
+            logger.error(
+                f"[Batch {batch_num}/{total_batches}] FAILED: {e}"
             )
             continue
 
+    logger.info(f"Classification complete: {len(all_classified)} total classified articles")
     return all_classified
 
 
