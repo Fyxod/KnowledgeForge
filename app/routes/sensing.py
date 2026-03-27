@@ -131,6 +131,11 @@ async def generate_sensing_report(
                     "classified_article_count": result.classified_article_count,
                     "execution_time_seconds": result.execution_time_seconds,
                     "generated_at": datetime.now(timezone.utc).isoformat(),
+                    # Preserve generation params for regeneration
+                    "custom_requirements": body.custom_requirements,
+                    "must_include": body.must_include,
+                    "dont_include": body.dont_include,
+                    "lookback_days": body.lookback_days,
                 },
             }
 
@@ -302,6 +307,11 @@ async def sensing_history(request: Request):
                         "total_articles": report.get(
                             "total_articles_analyzed", 0
                         ),
+                        # Generation params for regeneration
+                        "custom_requirements": meta.get("custom_requirements", ""),
+                        "must_include": meta.get("must_include"),
+                        "dont_include": meta.get("dont_include"),
+                        "lookback_days": meta.get("lookback_days", 7),
                     }
                 )
             except Exception:

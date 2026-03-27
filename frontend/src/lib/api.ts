@@ -597,6 +597,10 @@ export interface SensingReportData {
     classified_article_count: number;
     execution_time_seconds: number;
     generated_at: string;
+    custom_requirements?: string;
+    must_include?: string[] | null;
+    dont_include?: string[] | null;
+    lookback_days?: number;
   };
 }
 
@@ -606,6 +610,10 @@ export interface SensingHistoryItem {
   generated_at: string;
   report_title: string;
   total_articles: number;
+  custom_requirements?: string;
+  must_include?: string[] | null;
+  dont_include?: string[] | null;
+  lookback_days?: number;
 }
 
 // ── Excel Skill types ──

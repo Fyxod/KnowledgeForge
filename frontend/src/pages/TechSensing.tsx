@@ -15,8 +15,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Radar, Loader2, History, Trash2, RefreshCw, Download,
-  Maximize2, Minimize2, X, Plus, XCircle,
+  Maximize2, Minimize2, X, Plus, XCircle, RotateCcw,
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { api, getAuthToken } from '@/lib/api';
@@ -62,6 +72,9 @@ const TechSensing: React.FC = () => {
 
   // Full-screen state
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<SensingHistoryItem | null>(null);
 
   // Refs
   const socketRef = useRef<Socket | null>(null);
@@ -231,7 +244,35 @@ const TechSensing: React.FC = () => {
       toast({ title: 'Report deleted' });
     } catch {
       toast({ title: 'Failed to delete', variant: 'destructive' });
+    } finally {
+      setDeleteTarget(null);
     }
+  };
+
+  const handleRegenerate = (item: SensingHistoryItem) => {
+    // Populate config form with original generation params
+    setDomain(item.domain || 'Generative AI');
+    setCustomReqs(item.custom_requirements || '');
+    setMustInclude(item.must_include || []);
+    setDontInclude(item.dont_include || []);
+
+    const days = item.lookback_days || 7;
+    if (days === 7) {
+      setDateRange('last_week');
+    } else if (days === 30) {
+      setDateRange('last_month');
+    } else {
+      setDateRange('custom');
+      setCustomDays(days);
+    }
+
+    // Clear the current report so user sees the config form
+    setReportData(null);
+
+    toast({
+      title: 'Parameters loaded',
+      description: 'Adjust the date range or parameters and click Generate Report.',
+    });
   };
 
   const handleDownloadPdf = () => {
@@ -335,6 +376,50 @@ const TechSensing: React.FC = () => {
         </div>
         {reportData && (
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const currentItem = history.find(h => h.tracking_id === reportData.meta.tracking_id);
+                if (currentItem) {
+                  handleRegenerate(currentItem);
+                } else {
+                  // Fallback: use meta from current report
+                  handleRegenerate({
+                    tracking_id: reportData.meta.tracking_id,
+                    domain: reportData.meta.domain,
+                    generated_at: reportData.meta.generated_at,
+                    report_title: reportData.report.report_title,
+                    total_articles: reportData.report.total_articles_analyzed,
+                    custom_requirements: reportData.meta.custom_requirements,
+                    must_include: reportData.meta.must_include,
+                    dont_include: reportData.meta.dont_include,
+                    lookback_days: reportData.meta.lookback_days,
+                  });
+                }
+              }}
+              disabled={isGenerating}
+            >
+              <RotateCcw className="w-4 h-4 mr-1.5" />
+              Regenerate
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const currentItem = history.find(h => h.tracking_id === reportData.meta.tracking_id);
+                setDeleteTarget(currentItem || {
+                  tracking_id: reportData.meta.tracking_id,
+                  domain: reportData.meta.domain,
+                  generated_at: reportData.meta.generated_at,
+                  report_title: reportData.report.report_title,
+                  total_articles: reportData.report.total_articles_analyzed,
+                });
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              Delete
+            </Button>
             <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
               <Download className="w-4 h-4 mr-1.5" />
               Download PDF
@@ -555,10 +640,24 @@ const TechSensing: React.FC = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                        className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
+                        title="Regenerate with new parameters"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteReport(item.tracking_id);
+                          handleRegenerate(item);
+                        }}
+                        disabled={isGenerating}
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
+                        title="Delete report"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(item);
                         }}
                       >
                         <Trash2 className="w-3 h-3 text-destructive" />
@@ -594,6 +693,28 @@ const TechSensing: React.FC = () => {
           </div>
         </div>
       ) : null}
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Report</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteTarget?.report_title || deleteTarget?.domain}"?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && handleDeleteReport(deleteTarget.tracking_id)}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
