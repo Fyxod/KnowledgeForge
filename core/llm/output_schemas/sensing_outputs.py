@@ -74,6 +74,45 @@ class RadarItem(BaseModel):
     )
 
 
+class RadarItemDetail(BaseModel):
+    technology_name: str = Field(
+        description="Technology name (must match a RadarItem name)."
+    )
+    what_it_is: str = Field(
+        description="Clear explanation of what this technology is and how it works (2-4 sentences)."
+    )
+    why_it_matters: str = Field(
+        description="Why this technology is significant and what problems it solves (2-3 sentences)."
+    )
+    current_state: str = Field(
+        description="Current maturity, adoption level, and key developments this week (2-3 sentences)."
+    )
+    key_players: List[str] = Field(
+        description="Companies or organizations actively developing or using this technology."
+    )
+    practical_applications: List[str] = Field(
+        description="Real-world use cases and applications (2-4 items)."
+    )
+
+
+class MarketSignal(BaseModel):
+    company_or_player: str = Field(
+        description="Name of the company or major player."
+    )
+    signal: str = Field(
+        description="What they announced, released, or are doing (2-3 sentences)."
+    )
+    strategic_intent: str = Field(
+        description="Why they are doing this — strategic reasoning (1-2 sentences)."
+    )
+    industry_impact: str = Field(
+        description="How this affects the broader industry direction (1-2 sentences)."
+    )
+    related_technologies: List[str] = Field(
+        description="Technology names related to this signal."
+    )
+
+
 class ReportSection(BaseModel):
     section_title: str = Field(description="Section heading.")
     content: str = Field(description="Section body content in markdown format.")
@@ -93,7 +132,7 @@ class Recommendation(BaseModel):
 class TechSensingReport(LLMOutputBase):
     report_title: str = Field(description="Report title including date range.")
     executive_summary: str = Field(
-        description="Executive summary paragraph (150-250 words)."
+        description="Executive summary paragraph (200-350 words)."
     )
     domain: str = Field(description="The domain analyzed (e.g., 'Generative AI').")
     date_range: str = Field(
@@ -110,6 +149,12 @@ class TechSensingReport(LLMOutputBase):
     )
     radar_items: List[RadarItem] = Field(
         description="Technology radar entries (15-30 items)."
+    )
+    radar_item_details: List[RadarItemDetail] = Field(
+        description="Detailed write-up for each radar item — what it is, why it matters, who is using it, practical applications."
+    )
+    market_signals: List[MarketSignal] = Field(
+        description="5-10 market signals from prominent companies/players showing where the industry is heading."
     )
     recommendations: List[Recommendation] = Field(
         description="3-7 actionable recommendations."

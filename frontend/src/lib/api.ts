@@ -555,6 +555,23 @@ export interface SensingClassifiedArticle {
   reasoning: string;
 }
 
+export interface SensingRadarItemDetail {
+  technology_name: string;
+  what_it_is: string;
+  why_it_matters: string;
+  current_state: string;
+  key_players: string[];
+  practical_applications: string[];
+}
+
+export interface SensingMarketSignal {
+  company_or_player: string;
+  signal: string;
+  strategic_intent: string;
+  industry_impact: string;
+  related_technologies: string[];
+}
+
 export interface SensingReport {
   report_title: string;
   executive_summary: string;
@@ -564,6 +581,8 @@ export interface SensingReport {
   key_trends: SensingTrendItem[];
   report_sections: SensingReportSection[];
   radar_items: SensingRadarItem[];
+  radar_item_details: SensingRadarItemDetail[];
+  market_signals: SensingMarketSignal[];
   recommendations: SensingRecommendation[];
   notable_articles: SensingClassifiedArticle[];
 }

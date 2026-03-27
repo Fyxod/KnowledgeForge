@@ -31,7 +31,7 @@ from core.utils.generation_status import (
 
 # Sensing pipeline can take 10-15 min (RSS + DDG + LLM classify + LLM report).
 # Override the global 8-min stale timeout for sensing status reads.
-SENSING_STALE_TIMEOUT_MINUTES = 20
+SENSING_STALE_TIMEOUT_MINUTES = 60
 
 router = APIRouter(prefix="/sensing", tags=["Tech Sensing"])
 

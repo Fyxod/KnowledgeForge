@@ -8,13 +8,9 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Radar, Loader2, History, Trash2, RefreshCw } from 'lucide-react';
+  Radar, Loader2, History, Trash2, RefreshCw, Download,
+  Maximize2, Minimize2, X,
+} from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { api, getAuthToken } from '@/lib/api';
 import type { SensingReportData, SensingHistoryItem } from '@/lib/api';
@@ -23,9 +19,10 @@ import { API_URL } from '../../config';
 import TechRadar from '@/components/TechRadar';
 import SensingReportRenderer from '@/components/SensingReportRenderer';
 import { toast } from '@/components/ui/use-toast';
+import { downloadSensingReportPdf } from '@/lib/sensing-report-pdf';
 
 const POLL_INTERVAL_MS = 10_000;
-const MAX_POLL_COUNT = 60; // 10 minutes max
+const MAX_POLL_COUNT = 360; // 1 hour max (360 * 10s)
 
 const TechSensing: React.FC = () => {
   const { user } = useAuth();
@@ -47,6 +44,9 @@ const TechSensing: React.FC = () => {
   // History state
   const [history, setHistory] = useState<SensingHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Full-screen state
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Refs
   const socketRef = useRef<Socket | null>(null);
@@ -78,7 +78,6 @@ const TechSensing: React.FC = () => {
       setProgressMessage(payload.message);
 
       if (payload.stage === 'complete') {
-        // Fetch the full report
         fetchReport(trackingId);
       } else if (payload.stage === 'error') {
         setIsGenerating(false);
@@ -87,7 +86,6 @@ const TechSensing: React.FC = () => {
     });
 
     socket.on('connect_error', () => {
-      // Fallback to polling if socket fails
       startPolling(trackingId);
     });
 
@@ -98,13 +96,24 @@ const TechSensing: React.FC = () => {
     };
   }, [isGenerating, trackingId, user]);
 
+  // ESC to exit full-screen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullScreen]);
+
   const loadHistory = async () => {
     setHistoryLoading(true);
     try {
       const res = await api.sensingHistory();
       setHistory(res.reports || []);
     } catch {
-      // Silently handle — history is not critical
+      // Silently handle
     } finally {
       setHistoryLoading(false);
     }
@@ -155,7 +164,6 @@ const TechSensing: React.FC = () => {
         setProgress(100);
         loadHistory();
       } else if (res.status === 'pending') {
-        // Not ready yet — start polling
         startPolling(tid);
       } else {
         setIsGenerating(false);
@@ -207,12 +215,65 @@ const TechSensing: React.FC = () => {
     }
   };
 
+  const handleDownloadPdf = () => {
+    if (!reportData) return;
+    try {
+      downloadSensingReportPdf(reportData);
+      toast({ title: 'PDF download started' });
+    } catch {
+      toast({ title: 'PDF generation failed', variant: 'destructive' });
+    }
+  };
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
   }, []);
+
+  // Full-screen report view
+  if (isFullScreen && reportData) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        {/* Full-screen header */}
+        <div className="flex items-center justify-between px-6 py-3 border-b shrink-0 bg-background">
+          <div className="flex items-center gap-3">
+            <Radar className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-bold truncate">{reportData.report.report_title}</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
+              <Download className="w-4 h-4 mr-1.5" />
+              PDF
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setIsFullScreen(false)}>
+              <Minimize2 className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setIsFullScreen(false)}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Full-screen tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+          <div className="px-6 pt-2 shrink-0">
+            <TabsList>
+              <TabsTrigger value="report">Report</TabsTrigger>
+              <TabsTrigger value="radar">Technology Radar</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="report" className="flex-1 min-h-0 px-6 pb-4 mt-2">
+            <SensingReportRenderer report={reportData.report} meta={reportData.meta} />
+          </TabsContent>
+          <TabsContent value="radar" className="flex-1 min-h-0 px-6 pb-4 mt-2 overflow-auto">
+            <TechRadar items={reportData.report.radar_items || []} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col p-6 gap-4 overflow-hidden">
@@ -222,6 +283,18 @@ const TechSensing: React.FC = () => {
           <Radar className="w-6 h-6 text-primary" />
           <h2 className="text-2xl font-bold">Tech Sensing</h2>
         </div>
+        {reportData && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
+              <Download className="w-4 h-4 mr-1.5" />
+              Download PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setIsFullScreen(true)}>
+              <Maximize2 className="w-4 h-4 mr-1.5" />
+              Full Screen
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Configuration + History row */}
