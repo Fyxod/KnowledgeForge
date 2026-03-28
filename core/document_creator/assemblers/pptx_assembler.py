@@ -116,16 +116,22 @@ class PptxAssembler(BaseDocumentAssembler):
 
         # Key takeaway as a footer-style note
         if version.key_takeaway:
-            from pptx.util import Emu
-
             left = Inches(0.5)
-            top = Inches(6.5)
+            top = Inches(6.15)
             width = Inches(12.333)
-            height = Inches(0.5)
-            txBox = slide.shapes.add_textbox(left, top, width, height)
-            tf = txBox.text_frame
+            height = Inches(0.85)
+            tx_box = slide.shapes.add_textbox(left, top, width, height)
+            tf = tx_box.text_frame
+            tf.clear()
+            tf.word_wrap = True
+
+            # Keep footer readable and within bounds for unusually long model output.
+            takeaway_text = version.key_takeaway.strip()
+            if len(takeaway_text) > 260:
+                takeaway_text = takeaway_text[:257].rstrip() + "..."
+
             p = tf.paragraphs[0]
-            p.text = f"Key Takeaway: {version.key_takeaway}"
+            p.text = f"Key Takeaway: {takeaway_text}"
             p.font.size = Pt(11)
             p.font.italic = True
             p.font.color.rgb = self.ACCENT_COLOR
