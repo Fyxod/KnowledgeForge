@@ -181,7 +181,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
         </Button>
       </div>
 
-      <div className="flex-1 w-full flex flex-col items-start pt-4 px-3 border-l bg-background">
+      <div className="right-sidebar-scroll flex-1 min-h-0 w-full flex flex-col items-start pt-4 px-3 border-l bg-background overflow-y-auto overflow-x-hidden">
         {/* Studio buttons moved up here. When collapsed, show icon-only column; when expanded show labeled buttons */}
         {collapsed ? (
           <div className="flex flex-col items-center w-full space-y-3">
