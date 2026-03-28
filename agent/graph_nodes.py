@@ -1,7 +1,10 @@
 import asyncio
+from datetime import datetime, timezone
 import json
 import os
 import time
+import traceback
+import uuid
 
 import aiofiles
 from langchain_core.messages import AIMessage, HumanMessage
@@ -26,6 +29,9 @@ from core.services.triple_store import TripleStore
 from core.llm.client import invoke_llm
 from core.llm.output_schemas.evaluator_output import EvaluatorLLMOutput
 from core.llm.output_schemas.hyde_output import HyDELLMOutput
+from core.llm.output_schemas.main_outputs import CombinationLLMOutput
+from core.llm.output_schemas.nlp_theme_output import NLPThemeExtraction
+from core.utils.count_tokens import count_tokens
 from core.llm.outputs import (
     MainLLMOutputExternal,
     MainLLMOutputInternal,
@@ -33,8 +39,12 @@ from core.llm.outputs import (
     SelfKnowledgeLLMOutput,
 )
 from core.llm.prompts.evaluator_prompt import evaluator_prompt
+from core.llm.prompts.combination_prompt import combination_prompt
+from core.llm.prompts.doc_batch_prompt import doc_batch_prompt
 from core.llm.prompts.grounded_inference_prompt import GROUNDED_INFERENCE_PREFIX
 from core.llm.prompts.hyde_prompt import hyde_prompt
+from core.llm.prompts.nlp_theme_prompt import nlp_theme_extraction_prompt
+from core.llm.prompts.sql_batch_prompt import sql_batch_prompt
 
 os.makedirs("DEBUG", exist_ok=True)
 
@@ -135,7 +145,9 @@ async def retriever(state: AgentState) -> AgentState:
     # Retrieval and reranking operate on small, precise child chunks; the LLM
     # receives the larger parent section for better answer grounding.
     expanded_docs = expand_to_parent_chunks(reranked_docs)
-    print(f"Expanded {len(reranked_docs)} child chunks → {len(expanded_docs)} parent chunks")
+    print(
+        f"Expanded {len(reranked_docs)} child chunks → {len(expanded_docs)} parent chunks"
+    )
 
     modified_docs = []
     for doc in expanded_docs:
@@ -180,12 +192,20 @@ async def retriever(state: AgentState) -> AgentState:
     if state.retrieval_attempts > 0 and state.chunks:
         existing_keys = set()
         for c in state.chunks:
-            key = (c.get("document_id", ""), c.get("page_no", 0), c.get("content", "")[:100])
+            key = (
+                c.get("document_id", ""),
+                c.get("page_no", 0),
+                c.get("content", "")[:100],
+            )
             existing_keys.add(key)
 
         merged = list(state.chunks)
         for doc in modified_docs:
-            key = (doc.get("document_id", ""), doc.get("page_no", 0), doc.get("content", "")[:100])
+            key = (
+                doc.get("document_id", ""),
+                doc.get("page_no", 0),
+                doc.get("content", "")[:100],
+            )
             if key not in existing_keys:
                 merged.append(doc)
 
@@ -222,7 +242,9 @@ async def retriever(state: AgentState) -> AgentState:
     if SWITCHES.get("USE_VLM_FOR_ANSWER", False) and state.chunks:
         try:
             _query_for_vlm = state.query or state.resolved_query or state.original_query
-            is_visual, explicit_page, is_last, is_implicit = _detect_visual_reference(_query_for_vlm)
+            is_visual, explicit_page, is_last, is_implicit = _detect_visual_reference(
+                _query_for_vlm
+            )
 
             if is_visual and (explicit_page is not None or is_last):
                 # Explicit page/slide reference — use existing single-page logic
@@ -246,7 +268,6 @@ async def retriever(state: AgentState) -> AgentState:
                     state.vlm_visual_answer = vlm_ans
         except Exception as e:
             print(f"[VLM-Answer] Query-time VLM failed: {e}")
-            import traceback
             traceback.print_exc()
 
     # ── Filter low-relevance chunks (rerank_score < 0.5) ──
@@ -255,14 +276,20 @@ async def retriever(state: AgentState) -> AgentState:
     # Always keep at least the top 2 chunks as fallback.
     if state.chunks:
         MIN_RERANK_SCORE = 0.5
-        filtered = [c for c in state.chunks if c.get("rerank_score", 0.0) >= MIN_RERANK_SCORE]
+        filtered = [
+            c for c in state.chunks if c.get("rerank_score", 0.0) >= MIN_RERANK_SCORE
+        ]
         if len(filtered) < 2:
             # Keep top 2 by score as fallback even if below threshold
-            filtered = sorted(state.chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True)[:2]
+            filtered = sorted(
+                state.chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True
+            )[:2]
         dropped = len(state.chunks) - len(filtered)
         if dropped > 0:
-            print(f"[ChunkFilter] Dropped {dropped} chunks with rerank_score < {MIN_RERANK_SCORE} "
-                  f"({len(filtered)} remaining)")
+            print(
+                f"[ChunkFilter] Dropped {dropped} chunks with rerank_score < {MIN_RERANK_SCORE} "
+                f"({len(filtered)} remaining)"
+            )
         state.chunks = filtered
 
     # ── Lost in the Middle mitigation ──
@@ -285,13 +312,12 @@ async def retriever(state: AgentState) -> AgentState:
                 back.append(chunk)
         reordered = front + list(reversed(back))
         state.chunks = reordered
-        print(f"[LostInMiddle] Reordered {len(state.chunks)} chunks (best at positions 0 and -1)")
+        print(
+            f"[LostInMiddle] Reordered {len(state.chunks)} chunks (best at positions 0 and -1)"
+        )
 
     # ── MapReduce: batch over document chunks if context budget overflows ──
     if SWITCHES.get("DOC_BATCH_REDUCER", False) and state.chunks:
-        from core.constants import MAIN_MODEL
-        from core.utils.count_tokens import count_tokens
-
         # Measure total token cost of all chunks
         all_chunk_text = "\n".join(c.get("content", "") for c in state.chunks)
         chunk_tokens = count_tokens(all_chunk_text, MAIN_MODEL)
@@ -310,9 +336,13 @@ async def retriever(state: AgentState) -> AgentState:
                 )
                 if batched:
                     state.doc_batched_answer = batched
-                    print(f"[Doc Batch] MapReduce complete — pre-analyzed answer stored")
+                    print(
+                        f"[Doc Batch] MapReduce complete — pre-analyzed answer stored"
+                    )
             except Exception as e:
-                print(f"[Doc Batch] MapReduce failed: {e}, falling back to direct chunks")
+                print(
+                    f"[Doc Batch] MapReduce failed: {e}, falling back to direct chunks"
+                )
 
     return state
 
@@ -353,7 +383,9 @@ async def generate(state: AgentState) -> AgentState:
             # Guard against blank/empty answers — retry if the model returned nothing
             answer_text = (result.answer or "").strip()
             if not answer_text and result.action in (ANSWER, None):
-                print(f"[generate] Blank answer detected (attempt {attempt+1}/{max_retries}), retrying...")
+                print(
+                    f"[generate] Blank answer detected (attempt {attempt+1}/{max_retries}), retrying..."
+                )
                 if attempt < max_retries - 1:
                     await asyncio.sleep(1)
                     continue
@@ -570,23 +602,46 @@ async def global_summarizer(state: AgentState) -> AgentState:
     return state
 
 
-
 # NLP query detection keywords — triggers chunked theme extraction on large results
 _NLP_KEYWORDS = [
-    "sentiment", "theme", "themes", "tone", "opinion", "opinions",
-    "categorize", "categorise", "classify", "classification",
-    "analyze comments", "analyse comments", "analyze feedback", "analyse feedback",
-    "positive", "negative", "neutral",
-    "overarching", "common patterns", "common themes", "recurring",
-    "feedback analysis", "what do people say", "what are people saying",
-    "mood", "attitude", "complaints", "praise", "criticism",
-    "subjective", "qualitative analysis",
+    "sentiment",
+    "theme",
+    "themes",
+    "tone",
+    "opinion",
+    "opinions",
+    "categorize",
+    "categorise",
+    "classify",
+    "classification",
+    "analyze comments",
+    "analyse comments",
+    "analyze feedback",
+    "analyse feedback",
+    "positive",
+    "negative",
+    "neutral",
+    "overarching",
+    "common patterns",
+    "common themes",
+    "recurring",
+    "feedback analysis",
+    "what do people say",
+    "what are people saying",
+    "mood",
+    "attitude",
+    "complaints",
+    "praise",
+    "criticism",
+    "subjective",
+    "qualitative analysis",
 ]
 
 
 def _has_successful_sql_result(result: str | None) -> bool:
     """True only when the SQL tool returned a successful query payload."""
     return bool(result and result.startswith("**Query executed successfully.**"))
+
 
 # Minimum row count to trigger NLP chunked extraction
 _NLP_MIN_ROWS = 100
@@ -632,9 +687,6 @@ def _calculate_sql_token_budget(state: AgentState) -> int:
     Builds the main prompt without SQL result, counts its tokens,
     and returns the remaining budget from the 128K context window.
     """
-    from core.constants import MAIN_MODEL, MODEL_CONTEXT_TOKENS, MODEL_OUTPUT_RESERVE
-    from core.utils.count_tokens import count_tokens
-
     # Temporarily clear SQL fields to measure prompt overhead
     saved_sql_result = state.sql_result
     saved_sql_nlp = state.sql_nlp_summary
@@ -646,9 +698,7 @@ def _calculate_sql_token_budget(state: AgentState) -> int:
     try:
         prompt_contents = build_main_prompt(state)
         prompt_text = "\n".join(
-            msg["parts"]
-            for msg in prompt_contents
-            if isinstance(msg.get("parts"), str)
+            msg["parts"] for msg in prompt_contents if isinstance(msg.get("parts"), str)
         )
         overhead_tokens = count_tokens(prompt_text, MAIN_MODEL)
     except Exception:
@@ -660,7 +710,9 @@ def _calculate_sql_token_budget(state: AgentState) -> int:
         state.sql_batched_answer = saved_sql_batched
 
     safety_margin = 2000
-    available = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - safety_margin - overhead_tokens
+    available = (
+        MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - safety_margin - overhead_tokens
+    )
     return max(0, available)
 
 
@@ -673,12 +725,6 @@ async def _batch_sql_answer(
     MapReduce over SQL results that exceed context.
     Splits into batches, gets partial answers in parallel, combines them.
     """
-    from core.constants import GPU_QUERY_LLM, GPU_COMBINATION_LLM, MAIN_MODEL
-    from core.llm.output_schemas.main_outputs import CombinationLLMOutput
-    from core.llm.prompts.combination_prompt import combination_prompt
-    from core.llm.prompts.sql_batch_prompt import sql_batch_prompt
-    from core.utils.count_tokens import count_tokens
-
     header_line, separator_line, data_rows = _parse_markdown_table_rows(result_text)
     if not data_rows:
         return None
@@ -760,7 +806,9 @@ async def _batch_sql_answer(
         return "\n\n---\n\n".join(valid_answers)
 
 
-def _resolve_source_pdf(file_name: str, doc_id: str, user_id: str, thread_id: str) -> str | None:
+def _resolve_source_pdf(
+    file_name: str, doc_id: str, user_id: str, thread_id: str
+) -> str | None:
     """Resolve the source PDF path for a given document (PDF, PPTX, DOCX)."""
     ext = os.path.splitext(file_name)[1].lower()
     base_data = os.path.join("data", user_id, "threads", thread_id)
@@ -779,10 +827,10 @@ import re as _re
 # Only page/slide numbers map directly to PDF page indices.
 # figure/table/chart numbers do NOT — "figure 5" could be on any page.
 _EXPLICIT_PAGE_RE = _re.compile(
-    r'\b(?:page|slide)\s+(\d+)\b'
-    r'|\b(\d+)(?:st|nd|rd|th)?\s*(?:page|slide)\b'
-    r'|\b(last|final)\s+(?:page|slide)\b'
-    r'|\b(first)\s+(?:page|slide)\b',
+    r"\b(?:page|slide)\s+(\d+)\b"
+    r"|\b(\d+)(?:st|nd|rd|th)?\s*(?:page|slide)\b"
+    r"|\b(last|final)\s+(?:page|slide)\b"
+    r"|\b(first)\s+(?:page|slide)\b",
     _re.IGNORECASE,
 )
 
@@ -790,10 +838,10 @@ _EXPLICIT_PAGE_RE = _re.compile(
 # Includes figure/table/chart/diagram references — "figure 5" doesn't mean page 5,
 # so we let retrieval find the right page rather than using the number.
 _IMPLICIT_VISUAL_RE = _re.compile(
-    r'\b(?:flowchart|org\s*chart|organizational\s*chart|below\s+the|above\s+the'
-    r'|in\s+the\s+(?:image|figure|diagram|chart|table)'
-    r'|the\s+(?:diagram|flowchart|chart|figure|table)'
-    r'|(?:figure|fig\.?|chart|diagram|table|image|illustration)\s+\d+)\b',
+    r"\b(?:flowchart|org\s*chart|organizational\s*chart|below\s+the|above\s+the"
+    r"|in\s+the\s+(?:image|figure|diagram|chart|table)"
+    r"|the\s+(?:diagram|flowchart|chart|figure|table)"
+    r"|(?:figure|fig\.?|chart|diagram|table|image|illustration)\s+\d+)\b",
     _re.IGNORECASE,
 )
 
@@ -835,7 +883,6 @@ async def _multi_page_vlm(state: AgentState, query: str) -> str | None:
     import fitz  # PyMuPDF
 
     from core.parsers.vlm import vlm_parse_concurrent
-    from core.constants import PORT2
 
     MIN_SCORE = 0.8
     MAX_PAGES = 5
@@ -854,21 +901,30 @@ async def _multi_page_vlm(state: AgentState, query: str) -> str | None:
         if key in seen or not doc_id or not file_name:
             continue
         seen.add(key)
-        page_candidates.append({
-            "doc_id": doc_id,
-            "page_no": page_no,
-            "file_name": file_name,
-            "score": score,
-        })
+        page_candidates.append(
+            {
+                "doc_id": doc_id,
+                "page_no": page_no,
+                "file_name": file_name,
+                "score": score,
+            }
+        )
         if len(page_candidates) >= MAX_PAGES:
             break
 
     if not page_candidates:
-        print("[VLM-Answer] No chunks with rerank_score >= 0.8, skipping multi-page VLM")
+        print(
+            "[VLM-Answer] No chunks with rerank_score >= 0.8, skipping multi-page VLM"
+        )
         return None
 
-    print(f"[VLM-Answer] {len(page_candidates)} high-confidence pages for VLM: "
-          + ", ".join(f"p{c['page_no']} of {c['file_name']} (score={c['score']:.2f})" for c in page_candidates))
+    print(
+        f"[VLM-Answer] {len(page_candidates)} high-confidence pages for VLM: "
+        + ", ".join(
+            f"p{c['page_no']} of {c['file_name']} (score={c['score']:.2f})"
+            for c in page_candidates
+        )
+    )
 
     # Render pages from source PDFs
     images = []
@@ -900,7 +956,9 @@ async def _multi_page_vlm(state: AgentState, query: str) -> str | None:
                 labels.append(f"Page {cand['page_no']} of {cand['file_name']}")
                 valid_candidates.append(cand)
             except Exception as e:
-                print(f"[VLM-Answer] Failed to render page {cand['page_no']} of {cand['file_name']}: {e}")
+                print(
+                    f"[VLM-Answer] Failed to render page {cand['page_no']} of {cand['file_name']}: {e}"
+                )
     finally:
         for pdf_doc in pdf_cache.values():
             pdf_doc.close()
@@ -940,7 +998,9 @@ async def _multi_page_vlm(state: AgentState, query: str) -> str | None:
         return None
 
     combined = "\n\n---\n\n".join(parts)
-    print(f"[VLM-Answer] Combined {len(parts)} page answers ({len(combined)} chars total)")
+    print(
+        f"[VLM-Answer] Combined {len(parts)} page answers ({len(combined)} chars total)"
+    )
     return combined
 
 
@@ -963,7 +1023,6 @@ async def _resolve_visual_page_vlm(
     import fitz  # PyMuPDF
 
     from core.parsers.vlm import vlm_parse_slide
-    from core.constants import PORT2
 
     if not state.chunks:
         return None
@@ -982,16 +1041,16 @@ async def _resolve_visual_page_vlm(
     elif is_last:
         # Highest page_no among chunks for the same document
         doc_page_nos = [
-            c.get("page_no", 1)
-            for c in state.chunks
-            if c.get("document_id") == doc_id
+            c.get("page_no", 1) for c in state.chunks if c.get("document_id") == doc_id
         ]
         target_page = max(doc_page_nos) if doc_page_nos else 1
     else:
         # Implicit: use top chunk's page_no
         target_page = top_chunk.get("page_no", 1)
 
-    print(f"[VLM-Answer] Resolved target page {target_page} from '{file_name}' (top chunk rerank_score={top_chunk.get('rerank_score', 'N/A')})")
+    print(
+        f"[VLM-Answer] Resolved target page {target_page} from '{file_name}' (top chunk rerank_score={top_chunk.get('rerank_score', 'N/A')})"
+    )
 
     # Locate source PDF
     source_pdf = _resolve_source_pdf(file_name, doc_id, state.user_id, state.thread_id)
@@ -1013,7 +1072,9 @@ async def _resolve_visual_page_vlm(
         img_bytes = page.get_pixmap(dpi=150).tobytes("png")
         pdf_doc.close()
     except Exception as e:
-        print(f"[VLM-Answer] Page render failed for {source_pdf} page {target_page}: {e}")
+        print(
+            f"[VLM-Answer] Page render failed for {source_pdf} page {target_page}: {e}"
+        )
         return None
 
     # Call VLM with the user's exact question as the prompt
@@ -1049,9 +1110,6 @@ def _calculate_chunk_token_budget(state: AgentState) -> int:
     Builds the main prompt without chunks or doc_batched_answer, counts
     its tokens, and returns the remaining budget from the 128K context window.
     """
-    from core.constants import MAIN_MODEL, MODEL_CONTEXT_TOKENS, MODEL_OUTPUT_RESERVE
-    from core.utils.count_tokens import count_tokens
-
     # Temporarily clear chunk-related fields to measure prompt overhead
     saved_chunks = state.chunks
     saved_doc_batched = state.doc_batched_answer
@@ -1061,9 +1119,7 @@ def _calculate_chunk_token_budget(state: AgentState) -> int:
     try:
         prompt_contents = build_main_prompt(state)
         prompt_text = "\n".join(
-            msg["parts"]
-            for msg in prompt_contents
-            if isinstance(msg.get("parts"), str)
+            msg["parts"] for msg in prompt_contents if isinstance(msg.get("parts"), str)
         )
         overhead_tokens = count_tokens(prompt_text, MAIN_MODEL)
     except Exception:
@@ -1073,7 +1129,9 @@ def _calculate_chunk_token_budget(state: AgentState) -> int:
         state.doc_batched_answer = saved_doc_batched
 
     safety_margin = 2000
-    available = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - safety_margin - overhead_tokens
+    available = (
+        MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - safety_margin - overhead_tokens
+    )
     return max(0, available)
 
 
@@ -1090,12 +1148,6 @@ async def _batch_doc_answer(
     Maps in parallel (one LLM call per batch), filters [NO RELEVANT INFO] responses,
     and Reduces via combination_prompt.
     """
-    from core.constants import GPU_QUERY_LLM, GPU_COMBINATION_LLM, MAIN_MODEL
-    from core.llm.output_schemas.main_outputs import CombinationLLMOutput
-    from core.llm.prompts.combination_prompt import combination_prompt
-    from core.llm.prompts.doc_batch_prompt import doc_batch_prompt
-    from core.utils.count_tokens import count_tokens
-
     if not chunks:
         return None
 
@@ -1219,16 +1271,14 @@ async def _extract_nlp_themes(
 
     Returns a formatted theme summary string, or None if extraction fails.
     """
-    from core.constants import GPU_NLP_THEME_LLM
-    from core.llm.output_schemas.nlp_theme_output import NLPThemeExtraction
-    from core.llm.prompts.nlp_theme_prompt import nlp_theme_extraction_prompt
-
     header_line, separator_line, data_rows = _parse_markdown_table_rows(result_text)
     if not data_rows or len(data_rows) < _NLP_MIN_ROWS:
         return None
 
     # Split data rows into chunks of ~_NLP_ROWS_PER_CHUNK rows each
-    chunk_count = max(1, (len(data_rows) + _NLP_ROWS_PER_CHUNK - 1) // _NLP_ROWS_PER_CHUNK)
+    chunk_count = max(
+        1, (len(data_rows) + _NLP_ROWS_PER_CHUNK - 1) // _NLP_ROWS_PER_CHUNK
+    )
     chunk_size = max(1, len(data_rows) // chunk_count)
     chunks = []
     for i in range(0, len(data_rows), chunk_size):
@@ -1236,9 +1286,7 @@ async def _extract_nlp_themes(
 
     # Last chunk absorbs any remainder from rounding
     if len(chunks) > chunk_count:
-        chunks[chunk_count - 1].extend(
-            row for c in chunks[chunk_count:] for row in c
-        )
+        chunks[chunk_count - 1].extend(row for c in chunks[chunk_count:] for row in c)
         chunks = chunks[:chunk_count]
 
     print(
@@ -1311,7 +1359,9 @@ async def _extract_nlp_themes(
     sorted_themes = sorted(theme_map.values(), key=lambda x: x["count"], reverse=True)
 
     # Format as readable summary
-    lines = [f"**Pre-Analyzed Themes** (from ALL {total_analyzed} rows across {len(chunks)} batches):\n"]
+    lines = [
+        f"**Pre-Analyzed Themes** (from ALL {total_analyzed} rows across {len(chunks)} batches):\n"
+    ]
     for i, t in enumerate(sorted_themes, 1):
         pct = (t["count"] / total_analyzed * 100) if total_analyzed > 0 else 0
         examples_str = "; ".join(f'"{ex}"' for ex in t["examples"])
@@ -1321,7 +1371,9 @@ async def _extract_nlp_themes(
         )
 
     summary = "\n".join(lines)
-    print(f"[NLP Theme Extraction] Extracted {len(sorted_themes)} themes from {total_analyzed} rows")
+    print(
+        f"[NLP Theme Extraction] Extracted {len(sorted_themes)} themes from {total_analyzed} rows"
+    )
     return summary
 
 
@@ -1402,16 +1454,13 @@ async def sql_query_node(state: AgentState) -> AgentState:
                     "Full-data theme analysis is provided above. "
                     "Use these rows only as example references."
                 )
-                print(f"[sql_query_node] NLP mode — sample truncated to {len(result)} chars")
+                print(
+                    f"[sql_query_node] NLP mode — sample truncated to {len(result)} chars"
+                )
         else:
-            from core.constants import MAIN_MODEL
-            from core.utils.count_tokens import count_tokens
-
             sql_tokens = count_tokens(result, MAIN_MODEL)
             budget_tokens = _calculate_sql_token_budget(state)
-            print(
-                f"[sql_query_node] SQL tokens: {sql_tokens}, budget: {budget_tokens}"
-            )
+            print(f"[sql_query_node] SQL tokens: {sql_tokens}, budget: {budget_tokens}")
 
             if sql_tokens <= budget_tokens:
                 # Single shot — full data fits in context
@@ -1449,7 +1498,9 @@ async def sql_query_node(state: AgentState) -> AgentState:
                         f"... [SAMPLE — {row_count} total rows] ...\n"
                         "A comprehensive batched analysis of ALL rows is provided separately."
                     )
-                    print(f"[sql_query_node] Batched analysis complete, sample: {len(result)} chars")
+                    print(
+                        f"[sql_query_node] Batched analysis complete, sample: {len(result)} chars"
+                    )
                 else:
                     # Batch failed — truncate to what fits
                     max_chars = budget_tokens * 3  # rough token→char conversion
@@ -1462,7 +1513,9 @@ async def sql_query_node(state: AgentState) -> AgentState:
                         f"... [TRUNCATED — showing partial data] ...\n"
                         "Summarize, aggregate, or categorize the data in your answer."
                     )
-                    print(f"[sql_query_node] Batch failed, truncated to {len(result)} chars")
+                    print(
+                        f"[sql_query_node] Batch failed, truncated to {len(result)} chars"
+                    )
 
         state.sql_result = result
         if _has_successful_sql_result(result):
@@ -1527,13 +1580,9 @@ async def excel_skill_node(state: AgentState) -> AgentState:
         )
 
         # Persist status metadata so chat-generated files appear in the list
-        import json
-        import uuid as _uuid
-        from datetime import datetime, timezone
-
         status_dir = f"data/{state.user_id}/threads/{state.thread_id}/excel_exports"
         os.makedirs(status_dir, exist_ok=True)
-        _tracking_id = str(_uuid.uuid4())
+        _tracking_id = str(uuid.uuid4())
         status_data = {
             "file_name": result.file_name,
             "download_url": result.download_url,
@@ -1586,9 +1635,13 @@ def main_router(state: AgentState) -> str:
             new_q = (state.sql_query or "").strip().lower()
             prev_q = state.sql_last_executed_query.strip().lower()
             if new_q == prev_q or not new_q:
-                print("Router -> Same SQL query repeated with valid result, forcing answer (loop breaker)")
+                print(
+                    "Router -> Same SQL query repeated with valid result, forcing answer (loop breaker)"
+                )
                 return ANSWER
-            print(f"Router -> Different SQL query (attempt {state.sql_attempts + 1}), allowing")
+            print(
+                f"Router -> Different SQL query (attempt {state.sql_attempts + 1}), allowing"
+            )
 
         if state.sql_attempts < MAX_SQL_RETRIES:
             print(f"Router -> Executing SQL query (attempt {state.sql_attempts + 1})")
@@ -1689,13 +1742,9 @@ def evaluator_router(state: AgentState) -> str:
         state.retrieval_verdict in ("ambiguous", "insufficient")
         and state.retrieval_attempts < MAX_RETRIEVAL_ATTEMPTS
     ):
-        print(
-            f"[CRAG Router] Re-retrieving (attempt {state.retrieval_attempts + 1})"
-        )
+        print(f"[CRAG Router] Re-retrieving (attempt {state.retrieval_attempts + 1})")
         return RETRIEVER
 
     # sufficient or max attempts exhausted → proceed to generate
-    print(
-        f"[CRAG Router] Proceeding to generate (verdict: {state.retrieval_verdict})"
-    )
+    print(f"[CRAG Router] Proceeding to generate (verdict: {state.retrieval_verdict})")
     return GENERATE

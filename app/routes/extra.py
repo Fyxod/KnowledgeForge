@@ -4,6 +4,7 @@ import os
 
 import aiofiles
 from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from core.database import db
@@ -112,8 +113,6 @@ async def get_word_cloud(
             combined_text, stop_words=list(combined_stop_words), max_words=max_words
         )
 
-        from fastapi.responses import StreamingResponse
-
         return StreamingResponse(img_bytes, media_type="image/png")
 
     except Exception as e:
@@ -209,9 +208,7 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                         ) as write_f:
                             await write_f.write(json.dumps(data, ensure_ascii=False))
 
-                        asyncio.create_task(
-                            _generate_document_summary(data, file_path)
-                        )
+                        asyncio.create_task(_generate_document_summary(data, file_path))
                         return {
                             "status": False,
                             "error": "Summary not yet generated. Generating...",
@@ -245,9 +242,7 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
                     ) as write_f:
                         await write_f.write(json.dumps(data, ensure_ascii=False))
 
-                    asyncio.create_task(
-                        _generate_document_summary(data, file_path)
-                    )
+                    asyncio.create_task(_generate_document_summary(data, file_path))
                     return {
                         "status": False,
                         "error": "Summary not yet generated. Generating...",
@@ -255,7 +250,11 @@ async def get_summary(request: Request, body: MindMapRequest = Body(...)):
             except Exception as e:
                 continue
 
-    return {"status": False, "error": "Document not found in parsed data", "failed": True}
+    return {
+        "status": False,
+        "error": "Document not found in parsed data",
+        "failed": True,
+    }
 
 
 async def _generate_document_summary(data: dict, file_path: str):

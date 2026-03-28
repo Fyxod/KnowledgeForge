@@ -1,4 +1,6 @@
+import asyncio
 import math
+from collections import Counter
 from typing import Any, Dict, List
 
 import numpy as np
@@ -126,6 +128,7 @@ def rerank_chunks(
 
         # Release cached GPU memory after cross-encoder inference
         import torch
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
@@ -144,7 +147,6 @@ def rerank_chunks(
         # Fallback: use original order with default scores
         for i, chunk in enumerate(chunks):
             chunk["relevance_score"] = 1.0 - (i / len(chunks))  # Decreasing scores
-
 
     # Step 2: MMR with cosine similarity for diversity
     reranked_chunks = []
@@ -211,8 +213,6 @@ def rerank_chunks(
 
 def _compute_tfidf_vectors(chunks: List[Dict[str, Any]]) -> List[Dict[str, float]]:
     """Compute simple TF-IDF-like word frequency vectors for cosine similarity."""
-    from collections import Counter
-
     # Build vocabulary from all chunks
     all_words = set()
     chunk_word_counts = []
@@ -321,8 +321,6 @@ async def hybrid_retrieve(
     Returns:
         Merged and deduplicated results sorted by RRF score
     """
-    import asyncio
-
     all_queries = [query]
     if additional_queries:
         all_queries.extend(additional_queries)
@@ -404,7 +402,9 @@ async def hybrid_retrieve(
 
             # Entity boost: match on pipe-delimited boundaries for precision
             if doc_entities_str and entity_lower:
-                doc_entity_list = [e.strip().lower() for e in doc_entities_str.split("|")]
+                doc_entity_list = [
+                    e.strip().lower() for e in doc_entities_str.split("|")
+                ]
                 entity_matches = sum(1 for e in entity_lower if e in doc_entity_list)
                 if entity_matches > 0:
                     boost += 0.25 * entity_matches  # 25% per entity match
@@ -613,9 +613,7 @@ async def get_thread_documents_retriever(
     guaranteed: List[Dict[str, Any]] = []
     remainder_pool: List[Dict[str, Any]] = []
 
-    for doc_id in sorted(
-        kept_docs, key=lambda d: best_score_per_doc[d], reverse=True
-    ):
+    for doc_id in sorted(kept_docs, key=lambda d: best_score_per_doc[d], reverse=True):
         docs_sorted = sorted(
             kept_docs[doc_id],
             key=lambda d: d.get("rrf_score", 0.0),
@@ -642,9 +640,7 @@ async def get_thread_documents_retriever(
     print(f"[MultiDoc] Final: {len(deduped)} chunks from {num_kept} documents")
     for doc_id in kept_docs:
         count = sum(
-            1
-            for d in deduped
-            if d.get("metadata", {}).get("document_id") == doc_id
+            1 for d in deduped if d.get("metadata", {}).get("document_id") == doc_id
         )
         print(f"  Document {doc_id}: {count} chunks")
 
@@ -721,16 +717,18 @@ def expand_to_parent_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]
     for page_key, grp in page_groups.items():
         merged_chunk = grp["best_chunk"].copy()
         # Concatenate parent texts in document order
-        ordered_parts = [
-            text for _, text in sorted(grp["parent_parts"].items())
-        ]
+        ordered_parts = [text for _, text in sorted(grp["parent_parts"].items())]
         merged_chunk["page_content"] = "\n\n".join(ordered_parts)
         merged_chunk["rerank_score"] = grp["best_score"]
         expanded.append(merged_chunk)
 
     if any(len(g["parent_parts"]) > 1 for g in page_groups.values()):
-        merged_count = sum(1 for g in page_groups.values() if len(g["parent_parts"]) > 1)
-        print(f"[Parent Expand] Merged parent chunks on {merged_count} page(s) into page-level context")
+        merged_count = sum(
+            1 for g in page_groups.values() if len(g["parent_parts"]) > 1
+        )
+        print(
+            f"[Parent Expand] Merged parent chunks on {merged_count} page(s) into page-level context"
+        )
 
     # Non-parent chunks go after parent-expanded ones
     expanded.extend(non_parent_chunks)

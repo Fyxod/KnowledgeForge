@@ -1,4 +1,5 @@
 import asyncio
+import glob
 import json
 import os
 import uuid
@@ -83,9 +84,7 @@ def _get_state_dir(user_id: str, thread_id: str) -> str:
 
 
 def _get_state_path(user_id: str, thread_id: str, doc_gen_id: str) -> str:
-    return os.path.join(
-        _get_state_dir(user_id, thread_id), f"state_{doc_gen_id}.json"
-    )
+    return os.path.join(_get_state_dir(user_id, thread_id), f"state_{doc_gen_id}.json")
 
 
 async def _save_state(state: DocumentCreatorState) -> None:
@@ -96,7 +95,9 @@ async def _save_state(state: DocumentCreatorState) -> None:
         await f.write(state.model_dump_json(indent=2))
 
 
-async def _load_state(user_id: str, thread_id: str, doc_gen_id: str) -> DocumentCreatorState:
+async def _load_state(
+    user_id: str, thread_id: str, doc_gen_id: str
+) -> DocumentCreatorState:
     """Load pipeline state from JSON file."""
     path = _get_state_path(user_id, thread_id, doc_gen_id)
     if not os.path.exists(path):
@@ -106,7 +107,9 @@ async def _load_state(user_id: str, thread_id: str, doc_gen_id: str) -> Document
     return DocumentCreatorState.model_validate_json(content)
 
 
-def _load_thread_documents(user_id: str, thread_id: str, source_ids: list[str] | None = None) -> list[Document]:
+def _load_thread_documents(
+    user_id: str, thread_id: str, source_ids: list[str] | None = None
+) -> list[Document]:
     """Load parsed documents from the thread's parsed directory."""
     parsed_dir = f"data/{user_id}/threads/{thread_id}/parsed"
     documents = []
@@ -153,15 +156,19 @@ async def list_documents(request: Request, thread_id: str):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            documents.append({
-                "doc_gen_id": data.get("doc_gen_id", ""),
-                "document_title": data.get("document_title") or "Untitled Document",
-                "phase": data.get("phase", "initialized"),
-                "document_type": data.get("config", {}).get("document_type", "technical_report"),
-                "section_count": len(data.get("sections", [])),
-                "created_at": data.get("created_at", ""),
-                "updated_at": data.get("updated_at", ""),
-            })
+            documents.append(
+                {
+                    "doc_gen_id": data.get("doc_gen_id", ""),
+                    "document_title": data.get("document_title") or "Untitled Document",
+                    "phase": data.get("phase", "initialized"),
+                    "document_type": data.get("config", {}).get(
+                        "document_type", "technical_report"
+                    ),
+                    "section_count": len(data.get("sections", [])),
+                    "created_at": data.get("created_at", ""),
+                    "updated_at": data.get("updated_at", ""),
+                }
+            )
         except Exception:
             continue
 
@@ -179,9 +186,6 @@ async def delete_document(request: Request, doc_gen_id: str):
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     user_id = payload.userId
-
-    import glob
-    import shutil
 
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
@@ -225,9 +229,7 @@ async def create_outline(request: Request, body: OutlineRequest = Body(...)):
     thread_id = body.thread_id
 
     # Load source documents
-    documents = _load_thread_documents(
-        user_id, thread_id, body.source_document_ids
-    )
+    documents = _load_thread_documents(user_id, thread_id, body.source_document_ids)
     if not documents:
         raise HTTPException(status_code=404, detail="No documents found in thread")
 
@@ -309,9 +311,9 @@ async def get_outline_status(request: Request, tracking_id: str):
     user_id = payload.userId
 
     # Search for the status file across threads (tracking_id is unique)
-    import glob
-
-    pattern = f"data/{user_id}/threads/*/document_creator/outline_status_{tracking_id}.json"
+    pattern = (
+        f"data/{user_id}/threads/*/document_creator/outline_status_{tracking_id}.json"
+    )
     matches = glob.glob(pattern)
     if not matches:
         raise HTTPException(status_code=404, detail="Tracking ID not found")
@@ -331,9 +333,7 @@ async def get_outline_status(request: Request, tracking_id: str):
             content={"status": False, "failed": True, "error": gen_status["error"]}
         )
     elif gen_status["state"] == "completed":
-        return JSONResponse(
-            content={"status": True, "outline": gen_status["data"]}
-        )
+        return JSONResponse(content={"status": True, "outline": gen_status["data"]})
 
 
 # ─── Phase 1b: Update Outline (User Edits) ───────────────────────────────
@@ -351,8 +351,6 @@ async def update_outline(
     user_id = payload.userId
 
     # Find the state file
-    import glob
-
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
     if not matches:
@@ -416,8 +414,6 @@ async def start_generation(request: Request, doc_gen_id: str):
 
     user_id = payload.userId
 
-    import glob
-
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
     if not matches:
@@ -478,8 +474,6 @@ async def get_status(request: Request, doc_gen_id: str):
 
     user_id = payload.userId
 
-    import glob
-
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
     if not matches:
@@ -493,11 +487,13 @@ async def get_status(request: Request, doc_gen_id: str):
     sections_status = []
     completed = 0
     for s in state.sections:
-        sections_status.append({
-            "section_id": s.spec.section_id,
-            "title": s.spec.title,
-            "status": s.status.value,
-        })
+        sections_status.append(
+            {
+                "section_id": s.spec.section_id,
+                "title": s.spec.title,
+                "status": s.status.value,
+            }
+        )
         if s.status in (SectionStatus.GENERATED, SectionStatus.APPROVED):
             completed += 1
 
@@ -523,8 +519,6 @@ async def get_preview(request: Request, doc_gen_id: str):
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     user_id = payload.userId
-
-    import glob
 
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
@@ -573,8 +567,6 @@ async def iterate_section(
 
     user_id = payload.userId
 
-    import glob
-
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
     if not matches:
@@ -594,9 +586,7 @@ async def iterate_section(
         await _save_state(state)
 
         # Find updated section
-        section = next(
-            s for s in state.sections if s.spec.section_id == section_id
-        )
+        section = next(s for s in state.sections if s.spec.section_id == section_id)
         return JSONResponse(
             content={
                 "section_id": section_id,
@@ -626,8 +616,6 @@ async def select_version(
 
     user_id = payload.userId
 
-    import glob
-
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
     if not matches:
@@ -638,9 +626,7 @@ async def select_version(
         content = await f.read()
     state = DocumentCreatorState.model_validate_json(content)
 
-    section = next(
-        (s for s in state.sections if s.spec.section_id == section_id), None
-    )
+    section = next((s for s in state.sections if s.spec.section_id == section_id), None)
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
 
@@ -668,8 +654,6 @@ async def approve_section(request: Request, doc_gen_id: str, section_id: str):
 
     user_id = payload.userId
 
-    import glob
-
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
     if not matches:
@@ -680,9 +664,7 @@ async def approve_section(request: Request, doc_gen_id: str, section_id: str):
         content = await f.read()
     state = DocumentCreatorState.model_validate_json(content)
 
-    section = next(
-        (s for s in state.sections if s.spec.section_id == section_id), None
-    )
+    section = next((s for s in state.sections if s.spec.section_id == section_id), None)
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
 
@@ -690,9 +672,7 @@ async def approve_section(request: Request, doc_gen_id: str, section_id: str):
     state.touch()
     await _save_state(state)
 
-    return JSONResponse(
-        content={"section_id": section_id, "status": "approved"}
-    )
+    return JSONResponse(content={"section_id": section_id, "status": "approved"})
 
 
 # ─── Iteration: Edit Section Content ──────────────────────────────────────
@@ -712,8 +692,6 @@ async def edit_section(
 
     user_id = payload.userId
 
-    import glob
-
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
     if not matches:
@@ -724,14 +702,14 @@ async def edit_section(
         content = await f.read()
     state = DocumentCreatorState.model_validate_json(content)
 
-    section = next(
-        (s for s in state.sections if s.spec.section_id == section_id), None
-    )
+    section = next((s for s in state.sections if s.spec.section_id == section_id), None)
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
 
     if not section.versions:
-        raise HTTPException(status_code=422, detail="Section has no generated content to edit")
+        raise HTTPException(
+            status_code=422, detail="Section has no generated content to edit"
+        )
 
     version = section.versions[section.selected_version_index]
 
@@ -747,9 +725,7 @@ async def edit_section(
     state.touch()
     await _save_state(state)
 
-    return JSONResponse(
-        content={"section_id": section_id, "status": "updated"}
-    )
+    return JSONResponse(content={"section_id": section_id, "status": "updated"})
 
 
 # ─── Export: Generate Document File ───────────────────────────────────────
@@ -766,8 +742,6 @@ async def export_document(
 
     user_id = payload.userId
 
-    import glob
-
     pattern = f"data/{user_id}/threads/*/document_creator/state_{doc_gen_id}.json"
     matches = glob.glob(pattern)
     if not matches:
@@ -783,9 +757,7 @@ async def export_document(
         raise HTTPException(status_code=422, detail="Format must be pptx, docx, or pdf")
 
     # Prepare export directory
-    export_dir = os.path.join(
-        _get_state_dir(state.user_id, state.thread_id), "exports"
-    )
+    export_dir = os.path.join(_get_state_dir(state.user_id, state.thread_id), "exports")
     os.makedirs(export_dir, exist_ok=True)
 
     # Sanitize title for filename
@@ -813,9 +785,7 @@ async def export_document(
             output_path=output_path,
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=502, detail=f"Export failed: {e}"
-        )
+        raise HTTPException(status_code=502, detail=f"Export failed: {e}")
 
     state.phase = "exported"
     state.touch()
@@ -842,8 +812,6 @@ async def download_file(request: Request, doc_gen_id: str, filename: str):
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     user_id = payload.userId
-
-    import glob
 
     pattern = f"data/{user_id}/threads/*/document_creator/exports/{filename}"
     matches = glob.glob(pattern)
