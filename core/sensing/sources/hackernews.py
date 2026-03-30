@@ -21,22 +21,21 @@ async def fetch_hackernews(
     lookback_days: int = 7,
     max_results: int = HN_MAX_RESULTS,
 ) -> List[RawArticle]:
-    """Fetch recent HN stories for a domain."""
-    cutoff_ts = int((datetime.now(timezone.utc) - timedelta(days=lookback_days)).timestamp())
-
+    """Fetch HN stories for a domain (0 lookback_days = no date filter)."""
     articles: List[RawArticle] = []
+
+    params: dict = {
+        "query": domain,
+        "tags": "story",
+        "hitsPerPage": max_results,
+    }
+    if lookback_days > 0:
+        cutoff_ts = int((datetime.now(timezone.utc) - timedelta(days=lookback_days)).timestamp())
+        params["numericFilters"] = f"created_at_i>{cutoff_ts}"
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(
-                HN_API_URL,
-                params={
-                    "query": domain,
-                    "tags": "story",
-                    "numericFilters": f"created_at_i>{cutoff_ts}",
-                    "hitsPerPage": max_results,
-                },
-            )
+            resp = await client.get(HN_API_URL, params=params)
             resp.raise_for_status()
             data = resp.json()
 

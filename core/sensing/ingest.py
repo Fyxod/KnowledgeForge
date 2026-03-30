@@ -48,12 +48,12 @@ async def fetch_rss_feeds(
     lookback_days: int = LOOKBACK_DAYS,
     domain: str = "Generative AI",
 ) -> List[RawArticle]:
-    """Parse RSS feeds and return articles from the last N days."""
+    """Parse RSS feeds and return articles from the last N days (0 = no limit)."""
     urls = feed_urls or get_feeds_for_domain(domain)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days) if lookback_days > 0 else None
     articles: List[RawArticle] = []
 
-    logger.info(f"[RSS] Fetching {len(urls)} feeds (lookback={lookback_days}d, domain={domain})")
+    logger.info(f"[RSS] Fetching {len(urls)} feeds (lookback={'all' if not cutoff else f'{lookback_days}d'}, domain={domain})")
 
     for i, url in enumerate(urls):
         try:
@@ -64,7 +64,7 @@ async def fetch_rss_feeds(
 
             for entry in feed.entries[:MAX_ARTICLES_PER_FEED]:
                 pub_date = _parse_feed_date(entry)
-                if pub_date and pub_date < cutoff:
+                if cutoff and pub_date and pub_date < cutoff:
                     continue
 
                 articles.append(
@@ -100,8 +100,10 @@ async def search_duckduckgo(
     """Run DuckDuckGo searches and return results as RawArticle."""
     search_queries = queries or get_search_queries_for_domain(domain, must_include)
 
-    # Map lookback_days to DDG timelimit
-    if lookback_days <= 7:
+    # Map lookback_days to DDG timelimit (0 = no time filter)
+    if lookback_days <= 0:
+        timelimit = None  # no time restriction
+    elif lookback_days <= 7:
         timelimit = "w"  # past week
     elif lookback_days <= 30:
         timelimit = "m"  # past month
@@ -158,7 +160,7 @@ async def extract_full_text(article: RawArticle) -> RawArticle:
     return article
 
 
-def _ddgs_search(query: str, max_results: int, timelimit: str = "w") -> list:
+def _ddgs_search(query: str, max_results: int, timelimit: Optional[str] = "w") -> list:
     """Synchronous DuckDuckGo search wrapper."""
     with DDGS() as ddgs:
         return list(ddgs.text(query, max_results=max_results, timelimit=timelimit))

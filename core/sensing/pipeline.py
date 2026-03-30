@@ -205,8 +205,11 @@ async def run_sensing_pipeline(
     logger.info(f"[Stage 5/7] REPORT — generating final report via LLM... [{_elapsed()}]")
     await _emit("report", 70, "Generating report with LLM...")
     now = datetime.now(timezone.utc)
-    lookback_start = now - timedelta(days=lookback_days)
-    date_range = f"{lookback_start.strftime('%b %d')} - {now.strftime('%b %d, %Y')}"
+    if lookback_days > 0:
+        lookback_start = now - timedelta(days=lookback_days)
+        date_range = f"{lookback_start.strftime('%b %d')} - {now.strftime('%b %d, %Y')}"
+    else:
+        date_range = f"All time (as of {now.strftime('%b %d, %Y')})"
 
     # Load org context for personalized recommendations
     org_context_str = ""

@@ -57,7 +57,7 @@ import { downloadSensingReportPptx } from '@/lib/sensing-report-pptx';
 const POLL_INTERVAL_MS = 10_000;
 const MAX_POLL_COUNT = 360; // 1 hour max
 
-type DateRangePreset = 'last_week' | 'last_month' | 'custom';
+type DateRangePreset = 'last_week' | 'last_month' | 'custom' | 'no_range';
 
 const TechSensing: React.FC = () => {
   const { user } = useAuth();
@@ -137,7 +137,7 @@ const TechSensing: React.FC = () => {
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollCountRef = useRef(0);
 
-  const lookbackDays = dateRange === 'last_week' ? 7 : dateRange === 'last_month' ? 30 : customDays;
+  const lookbackDays = dateRange === 'no_range' ? 0 : dateRange === 'last_week' ? 7 : dateRange === 'last_month' ? 30 : customDays;
 
   // Load history, schedules, and org context on mount
   useEffect(() => {
@@ -316,8 +316,10 @@ const TechSensing: React.FC = () => {
     setMustInclude(item.must_include || []);
     setDontInclude(item.dont_include || []);
 
-    const days = item.lookback_days || 7;
-    if (days === 7) {
+    const days = item.lookback_days ?? 7;
+    if (days === 0) {
+      setDateRange('no_range');
+    } else if (days === 7) {
       setDateRange('last_week');
     } else if (days === 30) {
       setDateRange('last_month');
@@ -727,6 +729,7 @@ const TechSensing: React.FC = () => {
                     <SelectItem value="last_week">Last Week</SelectItem>
                     <SelectItem value="last_month">Last Month</SelectItem>
                     <SelectItem value="custom">Custom</SelectItem>
+                    <SelectItem value="no_range">No Range</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1095,7 +1098,7 @@ const TechSensing: React.FC = () => {
               </Select>
             </div>
             <p className="text-xs text-muted-foreground">
-              Will use current config: <strong>{domain}</strong>, {lookbackDays} day lookback
+              Will use current config: <strong>{domain}</strong>, {lookbackDays === 0 ? 'no time range' : `${lookbackDays} day lookback`}
               {mustInclude.length > 0 && <>, must include: {mustInclude.join(', ')}</>}
             </p>
             <DialogFooter>

@@ -48,17 +48,18 @@ async def fetch_arxiv_papers(
             resp.raise_for_status()
 
         feed = feedparser.parse(resp.text)
-        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days) if lookback_days > 0 else None
 
         for entry in feed.entries:
             # Parse published date
             published = entry.get("published", "")
-            try:
-                pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
-                if pub_dt < cutoff:
-                    continue
-            except (ValueError, TypeError):
-                pass
+            if cutoff:
+                try:
+                    pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                    if pub_dt < cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    pass
 
             authors = ", ".join(a.get("name", "") for a in entry.get("authors", [])[:3])
             categories = " | ".join(t.get("term", "") for t in entry.get("tags", [])[:3])

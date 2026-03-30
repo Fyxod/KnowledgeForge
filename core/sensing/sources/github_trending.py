@@ -24,9 +24,12 @@ async def fetch_github_trending(
     lookback_days: int = 7,
     max_results: int = GITHUB_MAX_RESULTS,
 ) -> List[RawArticle]:
-    """Fetch trending GitHub repos for a domain."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
-    query = f"{domain} created:>{cutoff}"
+    """Fetch trending GitHub repos for a domain (0 lookback_days = no date filter)."""
+    if lookback_days > 0:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+        query = f"{domain} created:>{cutoff}"
+    else:
+        query = f"{domain} stars:>10"
 
     headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
     token = os.environ.get("GITHUB_TOKEN")
