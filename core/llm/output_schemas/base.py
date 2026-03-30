@@ -54,22 +54,31 @@ class LLMOutputBase(BaseModel):
         Fixes formatting artifacts from json_repair (double-escaped
         newlines, quotes, etc.) that would break markdown rendering
         in summary, answer, description, and other text fields.
+
+        Recurses into nested BaseModel instances and lists so that
+        nested schemas (e.g., ReportSection.content, RadarItemDetail.what_it_is)
+        also get normalized.
         """
-        for field_name in self.__class__.model_fields:
-            value = getattr(self, field_name, None)
-            if isinstance(value, str):
-                setattr(self, field_name, normalize_answer_content(value))
-            elif isinstance(value, list):
-                setattr(
-                    self,
-                    field_name,
-                    [
-                        (
-                            normalize_answer_content(item)
-                            if isinstance(item, str)
-                            else item
-                        )
-                        for item in value
-                    ],
-                )
+        _normalize_model_strings(self)
         return self
+
+
+def _normalize_model_strings(model: BaseModel) -> None:
+    """Recursively normalize all string fields in a Pydantic model."""
+    for field_name in model.__class__.model_fields:
+        value = getattr(model, field_name, None)
+        if isinstance(value, str):
+            setattr(model, field_name, normalize_answer_content(value))
+        elif isinstance(value, list):
+            normalized = []
+            for item in value:
+                if isinstance(item, str):
+                    normalized.append(normalize_answer_content(item))
+                elif isinstance(item, BaseModel):
+                    _normalize_model_strings(item)
+                    normalized.append(item)
+                else:
+                    normalized.append(item)
+            setattr(model, field_name, normalized)
+        elif isinstance(value, BaseModel):
+            _normalize_model_strings(value)
