@@ -51,4 +51,5 @@ docling
 fpdf2
 feedparser
 ddgs
+httpx
 trafilatura

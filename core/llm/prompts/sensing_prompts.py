@@ -74,6 +74,7 @@ def sensing_report_prompt(
     domain: str = "Generative AI",
     date_range: str = "",
     custom_requirements: str = "",
+    org_context: str = "",
 ) -> list[dict]:
     """
     Build a chat prompt to generate the final tech sensing report.
@@ -137,6 +138,11 @@ def sensing_report_prompt(
                 + (
                     f"\nADDITIONAL USER REQUIREMENTS:\n{custom_requirements}\n"
                     if custom_requirements
+                    else ""
+                )
+                + (
+                    f"\n{org_context}\n"
+                    if org_context
                     else ""
                 )
             ),

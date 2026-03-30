@@ -7,10 +7,13 @@ interface RadarItem {
   description: string;
   is_new: boolean;
   moved_in?: string | null;
+  signal_strength?: number;
+  source_count?: number;
 }
 
 interface TechRadarProps {
   items: RadarItem[];
+  onBlipClick?: (name: string) => void;
 }
 
 const QUADRANTS: Record<string, { start: number; end: number; color: string; label: string }> = {
@@ -44,7 +47,7 @@ function hashString(s: string): number {
   return Math.abs(hash);
 }
 
-const TechRadar: React.FC<TechRadarProps> = ({ items }) => {
+const TechRadar: React.FC<TechRadarProps> = ({ items, onBlipClick }) => {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; item: RadarItem } | null>(null);
   const [selectedQuadrant, setSelectedQuadrant] = useState<string | null>(null);
 
@@ -71,8 +74,10 @@ const TechRadar: React.FC<TechRadarProps> = ({ items }) => {
       const x = center + radius * Math.cos(angle);
       const y = center - radius * Math.sin(angle);
 
-      return { ...item, x, y, color: q.color };
-    }).filter(Boolean) as (RadarItem & { x: number; y: number; color: string })[];
+      // Scale blip size by signal_strength (4px base + 4px * strength)
+      const blipSize = 4 + 4 * (item.signal_strength || 0.2);
+      return { ...item, x, y, color: q.color, blipSize };
+    }).filter(Boolean) as (RadarItem & { x: number; y: number; color: string; blipSize: number })[];
   }, [items, center, maxRadius]);
 
   const filteredBlips = selectedQuadrant
@@ -128,6 +133,10 @@ const TechRadar: React.FC<TechRadarProps> = ({ items }) => {
         <span className="flex items-center gap-1 ml-2">
           <svg width="10" height="10"><polygon points="5,0 10,10 0,10" fill="currentColor" /></svg>
           New
+        </span>
+        <span className="flex items-center gap-1 ml-2">
+          <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="none" stroke="#f59e0b" strokeWidth="2" /></svg>
+          Moved
         </span>
       </div>
 
@@ -218,11 +227,24 @@ const TechRadar: React.FC<TechRadarProps> = ({ items }) => {
             key={`${blip.name}-${idx}`}
             onMouseEnter={(e) => handleMouseEnter(e, blip)}
             onMouseLeave={handleMouseLeave}
+            onClick={() => onBlipClick?.(blip.name)}
             className="cursor-pointer"
           >
+            {/* Movement indicator ring */}
+            {blip.moved_in && (
+              <circle
+                cx={blip.x}
+                cy={blip.y}
+                r={9}
+                fill="none"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                strokeDasharray="3,2"
+              />
+            )}
             {blip.is_new ? (
               <polygon
-                points={`${blip.x},${blip.y - 6} ${blip.x + 5.2},${blip.y + 3} ${blip.x - 5.2},${blip.y + 3}`}
+                points={`${blip.x},${blip.y - blip.blipSize * 1.2} ${blip.x + blip.blipSize},${blip.y + blip.blipSize * 0.6} ${blip.x - blip.blipSize},${blip.y + blip.blipSize * 0.6}`}
                 fill={blip.color}
                 stroke="white"
                 strokeWidth={1}
@@ -231,7 +253,7 @@ const TechRadar: React.FC<TechRadarProps> = ({ items }) => {
               <circle
                 cx={blip.x}
                 cy={blip.y}
-                r={5}
+                r={blip.blipSize}
                 fill={blip.color}
                 stroke="white"
                 strokeWidth={1}
@@ -241,38 +263,70 @@ const TechRadar: React.FC<TechRadarProps> = ({ items }) => {
         ))}
 
         {/* Tooltip */}
-        {tooltip && (
-          <g>
-            <rect
-              x={tooltip.x + 10}
-              y={tooltip.y - 30}
-              width={Math.max(tooltip.item.name.length * 7, tooltip.item.description.length * 4.5, 160)}
-              height={38}
-              rx={4}
-              fill="hsl(var(--popover))"
-              stroke="hsl(var(--border))"
-              strokeWidth={1}
-              opacity={0.95}
-            />
-            <text
-              x={tooltip.x + 16}
-              y={tooltip.y - 16}
-              fontSize={11}
-              fontWeight="600"
-              fill="hsl(var(--popover-foreground))"
-            >
-              {tooltip.item.name}
-            </text>
-            <text
-              x={tooltip.x + 16}
-              y={tooltip.y - 2}
-              fontSize={9}
-              fill="hsl(var(--muted-foreground))"
-            >
-              {tooltip.item.description.slice(0, 45)}{tooltip.item.description.length > 45 ? '...' : ''}
-            </text>
-          </g>
-        )}
+        {tooltip && (() => {
+          const hasMovement = !!tooltip.item.moved_in;
+          const hasSignal = (tooltip.item.signal_strength || 0) > 0;
+          const extraLines = (hasMovement ? 1 : 0) + (hasSignal ? 1 : 0);
+          const tooltipHeight = 38 + extraLines * 14;
+          const tooltipWidth = Math.max(
+            tooltip.item.name.length * 7,
+            tooltip.item.description.length * 4.5,
+            hasMovement ? 200 : 160,
+          );
+          return (
+            <g>
+              <rect
+                x={tooltip.x + 10}
+                y={tooltip.y - 30}
+                width={tooltipWidth}
+                height={tooltipHeight}
+                rx={4}
+                fill="hsl(var(--popover))"
+                stroke="hsl(var(--border))"
+                strokeWidth={1}
+                opacity={0.95}
+              />
+              <text
+                x={tooltip.x + 16}
+                y={tooltip.y - 16}
+                fontSize={11}
+                fontWeight="600"
+                fill="hsl(var(--popover-foreground))"
+              >
+                {tooltip.item.name}
+              </text>
+              <text
+                x={tooltip.x + 16}
+                y={tooltip.y - 2}
+                fontSize={9}
+                fill="hsl(var(--muted-foreground))"
+              >
+                {tooltip.item.description.slice(0, 45)}{tooltip.item.description.length > 45 ? '...' : ''}
+              </text>
+              {hasMovement && (
+                <text
+                  x={tooltip.x + 16}
+                  y={tooltip.y + 12}
+                  fontSize={9}
+                  fontWeight="600"
+                  fill="#f59e0b"
+                >
+                  Moved from {tooltip.item.moved_in}
+                </text>
+              )}
+              {hasSignal && (
+                <text
+                  x={tooltip.x + 16}
+                  y={tooltip.y + 12 + (hasMovement ? 14 : 0)}
+                  fontSize={9}
+                  fill="hsl(var(--muted-foreground))"
+                >
+                  Signal: {Math.round((tooltip.item.signal_strength || 0) * 100)}% | {tooltip.item.source_count || 0} sources
+                </text>
+              )}
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );

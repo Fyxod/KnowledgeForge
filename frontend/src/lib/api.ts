@@ -520,6 +520,8 @@ export interface SensingRadarItem {
   description: string;
   is_new: boolean;
   moved_in?: string | null;
+  signal_strength?: number;
+  source_count?: number;
 }
 
 export interface SensingTrendItem {
@@ -614,6 +616,146 @@ export interface SensingHistoryItem {
   must_include?: string[] | null;
   dont_include?: string[] | null;
   lookback_days?: number;
+}
+
+// ── Sensing Schedule types ──
+
+export interface SensingSchedule {
+  id: string;
+  user_id: string;
+  domain: string;
+  frequency: string;
+  custom_requirements: string;
+  must_include?: string[] | null;
+  dont_include?: string[] | null;
+  lookback_days: number;
+  enabled: boolean;
+  created_at: string;
+  next_run: string;
+  last_run?: string | null;
+}
+
+// ── Sensing Comparison types ──
+
+export interface RadarDiffItem {
+  name: string;
+  status: 'added' | 'removed' | 'moved' | 'unchanged';
+  quadrant: string;
+  current_ring?: string | null;
+  previous_ring?: string | null;
+  description: string;
+}
+
+export interface TrendDiff {
+  name: string;
+  status: 'new' | 'removed' | 'continuing';
+}
+
+export interface ReportComparison {
+  report_a_id: string;
+  report_b_id: string;
+  report_a_title: string;
+  report_b_title: string;
+  report_a_date: string;
+  report_b_date: string;
+  radar_diff: RadarDiffItem[];
+  trend_diff: TrendDiff[];
+  new_signals: string[];
+  removed_signals: string[];
+  summary: string;
+}
+
+// ── Sensing Timeline types ──
+
+export interface TechnologyTimelineEntry {
+  report_date: string;
+  report_id: string;
+  ring: string;
+  quadrant: string;
+}
+
+export interface TechnologyTimeline {
+  technology_name: string;
+  quadrant: string;
+  entries: TechnologyTimelineEntry[];
+}
+
+export interface TimelineData {
+  domain: string;
+  technologies: TechnologyTimeline[];
+}
+
+// ── Sensing Org Context types ──
+
+export interface OrgTechContext {
+  tech_stack: string[];
+  industry: string;
+  priorities: string[];
+}
+
+// ── Sensing Deep Dive types ──
+
+export interface CompetitorEntry {
+  name: string;
+  approach: string;
+  strengths: string;
+  weaknesses: string;
+}
+
+export interface KeyResource {
+  title: string;
+  url: string;
+  type: string;
+}
+
+export interface DeepDiveReport {
+  technology_name: string;
+  comprehensive_analysis: string;
+  technical_architecture: string;
+  competitive_landscape: CompetitorEntry[];
+  adoption_roadmap: string;
+  risk_assessment: string;
+  key_resources: KeyResource[];
+  recommendations: string[];
+}
+
+// ── Sensing Collaboration types ──
+
+export interface RadarVote {
+  vote_id: string;
+  user_id: string;
+  user_name: string;
+  radar_item_name: string;
+  suggested_ring: string;
+  reasoning: string;
+  created_at: string;
+}
+
+export interface RadarComment {
+  comment_id: string;
+  user_id: string;
+  user_name: string;
+  radar_item_name: string;
+  text: string;
+  created_at: string;
+}
+
+export interface SharedReport {
+  share_id: string;
+  report_tracking_id: string;
+  owner_user_id: string;
+  votes: RadarVote[];
+  comments: RadarComment[];
+  created_at: string;
+}
+
+export interface SharedReportFeedback {
+  share_id: string;
+  votes: RadarVote[];
+  comments: RadarComment[];
+  vote_summary: Record<string, { votes: RadarVote[]; ring_counts: Record<string, number> }>;
+  total_votes: number;
+  total_comments: number;
 }
 
 // ── Excel Skill types ──
@@ -1945,6 +2087,206 @@ export const api = {
       const data = await response.json();
       throw new Error(data.detail || 'Failed to delete sensing report');
     }
+  },
+
+  async sensingCompare(tidA: string, tidB: string): Promise<ReportComparison> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/compare?a=${encodeURIComponent(tidA)}&b=${encodeURIComponent(tidB)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to compare reports');
+    }
+    return data;
+  },
+
+  async sensingCreateSchedule(params: {
+    domain: string; frequency: string; custom_requirements?: string;
+    must_include?: string[] | null; dont_include?: string[] | null; lookback_days?: number;
+  }): Promise<SensingSchedule> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/sensing/schedule`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to create schedule');
+    return data;
+  },
+
+  async sensingGetSchedules(): Promise<{ schedules: SensingSchedule[] }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/sensing/schedules`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load schedules');
+    return data;
+  },
+
+  async sensingUpdateSchedule(id: string, updates: Record<string, unknown>): Promise<SensingSchedule> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/sensing/schedule/${id}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to update schedule');
+    return data;
+  },
+
+  async sensingDeleteSchedule(id: string): Promise<void> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/sensing/schedule/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || 'Failed to delete schedule');
+    }
+  },
+
+  async sensingGetFeeds(domain: string): Promise<{ feeds: string[]; queries: string[] }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/feeds?domain=${encodeURIComponent(domain)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load feeds');
+    return data;
+  },
+
+  async sensingTimeline(domain?: string): Promise<TimelineData> {
+    const token = getAuthToken();
+    const params = domain ? `?domain=${encodeURIComponent(domain)}` : '';
+    const response = await fetch(
+      `${API_URL}/sensing/timeline${params}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load timeline');
+    return data;
+  },
+
+  async sensingGetOrgContext(): Promise<OrgTechContext> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/org-context`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load org context');
+    return data;
+  },
+
+  async sensingUpdateOrgContext(context: OrgTechContext): Promise<OrgTechContext> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/org-context`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(context),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to update org context');
+    return data;
+  },
+
+  async sensingDeepDive(technologyName: string, domain: string): Promise<{ status: string; tracking_id: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/deep-dive`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ technology_name: technologyName, domain }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to start deep dive');
+    return data;
+  },
+
+  async sensingDeepDiveStatus(trackingId: string): Promise<{ status: string; data?: DeepDiveReport; error?: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/deep-dive/status/${trackingId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to get deep dive status');
+    return data;
+  },
+
+  async sensingShare(reportId: string): Promise<SharedReport> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/share/${reportId}`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to share report');
+    return data;
+  },
+
+  async sensingGetShared(shareId: string): Promise<{ shared: SharedReport; report: SensingReportData | null }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/shared/${shareId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load shared report');
+    return data;
+  },
+
+  async sensingVote(shareId: string, radarItemName: string, suggestedRing: string, reasoning?: string): Promise<RadarVote> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/shared/${shareId}/vote`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ radar_item_name: radarItemName, suggested_ring: suggestedRing, reasoning: reasoning || '' }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to submit vote');
+    return data;
+  },
+
+  async sensingComment(shareId: string, text: string, radarItemName?: string): Promise<RadarComment> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/shared/${shareId}/comment`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text, radar_item_name: radarItemName || '' }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to add comment');
+    return data;
+  },
+
+  async sensingGetFeedback(shareId: string): Promise<SharedReportFeedback> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/shared/${shareId}/feedback`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load feedback');
+    return data;
   },
 };
 

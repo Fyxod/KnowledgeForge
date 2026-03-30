@@ -72,6 +72,14 @@ class RadarItem(BaseModel):
         default=None,
         description="If moved, the previous ring. None if unchanged.",
     )
+    signal_strength: float = Field(
+        default=0.0,
+        description="Composite signal confidence 0.0-1.0.",
+    )
+    source_count: int = Field(
+        default=0,
+        description="Number of distinct sources mentioning this technology.",
+    )
 
 
 class RadarItemDetail(BaseModel):
@@ -126,6 +134,44 @@ class Recommendation(BaseModel):
     )
     related_trends: List[str] = Field(
         description="Names of trends this recommendation relates to."
+    )
+
+
+class CompetitorEntry(BaseModel):
+    name: str = Field(description="Competitor or alternative name.")
+    approach: str = Field(description="Their approach or methodology.")
+    strengths: str = Field(description="Key strengths.")
+    weaknesses: str = Field(description="Key weaknesses.")
+
+
+class KeyResource(BaseModel):
+    title: str = Field(description="Resource title.")
+    url: str = Field(default="", description="URL if available.")
+    type: str = Field(description="Resource type: 'paper', 'repo', 'article', 'docs'.")
+
+
+class DeepDiveReport(LLMOutputBase):
+    technology_name: str = Field(description="Name of the technology analyzed.")
+    comprehensive_analysis: str = Field(
+        description="Detailed analysis (500-1000 words) in markdown format."
+    )
+    technical_architecture: str = Field(
+        description="Technical architecture or how it works (200-400 words)."
+    )
+    competitive_landscape: List[CompetitorEntry] = Field(
+        description="3-6 competitors or alternatives with comparison."
+    )
+    adoption_roadmap: str = Field(
+        description="Recommended adoption roadmap for organizations (200-300 words)."
+    )
+    risk_assessment: str = Field(
+        description="Risk assessment and mitigation strategies (150-300 words)."
+    )
+    key_resources: List[KeyResource] = Field(
+        description="5-10 key resources (papers, repos, articles, docs)."
+    )
+    recommendations: List[str] = Field(
+        description="3-5 actionable recommendations."
     )
 
 

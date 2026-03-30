@@ -24,6 +24,7 @@ async def generate_report(
     domain: str = "Generative AI",
     date_range: str = "",
     custom_requirements: str = "",
+    org_context: str = "",
 ) -> TechSensingReport:
     """
     Generate the complete Tech Sensing Report from classified articles.
@@ -50,6 +51,7 @@ async def generate_report(
         domain=domain,
         date_range=date_range,
         custom_requirements=custom_requirements,
+        org_context=org_context,
     )
 
     report_start = time.time()

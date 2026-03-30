@@ -1,5 +1,5 @@
 """
-Tech Sensing Pipeline — orchestrates Ingest -> Dedup -> Extract -> Classify -> Report -> Verify.
+Tech Sensing Pipeline — orchestrates Ingest -> Dedup -> Extract -> Classify -> Report -> Verify -> Movement.
 
 Main entry point called by the route handler.
 """
@@ -21,7 +21,12 @@ from core.sensing.ingest import (
     fetch_rss_feeds,
     search_duckduckgo,
 )
+from core.sensing.movement import detect_radar_movements
 from core.sensing.report_generator import generate_report
+from core.sensing.signal_score import compute_signal_strengths
+from core.sensing.sources.arxiv_search import fetch_arxiv_papers
+from core.sensing.sources.github_trending import fetch_github_trending
+from core.sensing.sources.hackernews import fetch_hackernews
 from core.sensing.verifier import verify_report
 
 logger = logging.getLogger("sensing.pipeline")
@@ -47,6 +52,7 @@ async def run_sensing_pipeline(
     dont_include: Optional[List[str]] = None,
     lookback_days: int = LOOKBACK_DAYS,
     progress_callback: Optional[Callable] = None,
+    user_id: Optional[str] = None,
 ) -> SensingPipelineResult:
     """
     Full tech sensing pipeline execution.
@@ -89,34 +95,56 @@ async def run_sensing_pipeline(
         )
 
     # --- Stage 1: Ingest ---
-    logger.info(f"[Stage 1/6] INGEST — starting RSS feeds... [{_elapsed()}]")
+    logger.info(f"[Stage 1/7] INGEST — starting RSS feeds... [{_elapsed()}]")
     await _emit("ingest", 10, "Fetching RSS feeds...")
     rss_articles = await fetch_rss_feeds(
         feed_urls, lookback_days=lookback_days, domain=domain
     )
     logger.info(
-        f"[Stage 1/6] RSS done: {len(rss_articles)} articles [{_elapsed()}]"
+        f"[Stage 1/7] RSS done: {len(rss_articles)} articles [{_elapsed()}]"
     )
 
     await _emit("ingest", 18, "Searching DuckDuckGo...")
-    logger.info(f"[Stage 1/6] INGEST — starting DuckDuckGo... [{_elapsed()}]")
+    logger.info(f"[Stage 1/7] INGEST — starting DuckDuckGo... [{_elapsed()}]")
     ddg_articles = await search_duckduckgo(
         search_queries, domain,
         lookback_days=lookback_days,
         must_include=must_include,
     )
     logger.info(
-        f"[Stage 1/6] DDG done: {len(ddg_articles)} articles [{_elapsed()}]"
+        f"[Stage 1/7] DDG done: {len(ddg_articles)} articles [{_elapsed()}]"
     )
 
-    all_raw = rss_articles + ddg_articles
-    await _emit("ingest", 22, f"Found {len(all_raw)} raw articles")
+    # GitHub trending repos
+    await _emit("ingest", 19, "Searching GitHub trending...")
+    logger.info(f"[Stage 1/7] INGEST — starting GitHub... [{_elapsed()}]")
+    github_articles = await fetch_github_trending(domain, lookback_days=lookback_days)
+    logger.info(f"[Stage 1/7] GitHub done: {len(github_articles)} repos [{_elapsed()}]")
+
+    # arXiv papers
+    await _emit("ingest", 20, "Searching arXiv...")
+    logger.info(f"[Stage 1/7] INGEST — starting arXiv... [{_elapsed()}]")
+    arxiv_articles = await fetch_arxiv_papers(
+        domain, lookback_days=lookback_days, must_include=must_include,
+    )
+    logger.info(f"[Stage 1/7] arXiv done: {len(arxiv_articles)} papers [{_elapsed()}]")
+
+    # Hacker News
+    await _emit("ingest", 21, "Searching Hacker News...")
+    logger.info(f"[Stage 1/7] INGEST — starting HN... [{_elapsed()}]")
+    hn_articles = await fetch_hackernews(domain, lookback_days=lookback_days)
+    logger.info(f"[Stage 1/7] HN done: {len(hn_articles)} stories [{_elapsed()}]")
+
+    all_raw = rss_articles + ddg_articles + github_articles + arxiv_articles + hn_articles
+    await _emit("ingest", 22, f"Found {len(all_raw)} raw articles from 5 sources")
     logger.info(
-        f"[Stage 1/6] INGEST COMPLETE: {len(all_raw)} total raw articles [{_elapsed()}]"
+        f"[Stage 1/7] INGEST COMPLETE: {len(all_raw)} total raw articles "
+        f"(RSS={len(rss_articles)}, DDG={len(ddg_articles)}, "
+        f"GitHub={len(github_articles)}, arXiv={len(arxiv_articles)}, HN={len(hn_articles)}) [{_elapsed()}]"
     )
 
     # --- Stage 2: Dedup ---
-    logger.info(f"[Stage 2/6] DEDUP — starting... [{_elapsed()}]")
+    logger.info(f"[Stage 2/7] DEDUP — starting... [{_elapsed()}]")
     await _emit("dedup", 25, "Deduplicating...")
     unique_articles = deduplicate_articles(all_raw)
 
@@ -130,18 +158,18 @@ async def run_sensing_pipeline(
         ]
         filtered_out = before_filter - len(unique_articles)
         logger.info(
-            f"[Stage 2/6] Keyword filter removed {filtered_out} articles "
+            f"[Stage 2/7] Keyword filter removed {filtered_out} articles "
             f"(dont_include={dont_include})"
         )
 
     await _emit("dedup", 30, f"{len(unique_articles)} unique articles")
     logger.info(
-        f"[Stage 2/6] DEDUP COMPLETE: {len(all_raw)} -> {len(unique_articles)} unique [{_elapsed()}]"
+        f"[Stage 2/7] DEDUP COMPLETE: {len(all_raw)} -> {len(unique_articles)} unique [{_elapsed()}]"
     )
 
     # --- Stage 3: Extract full text (parallel, throttled) ---
     logger.info(
-        f"[Stage 3/6] EXTRACT — extracting full text for {len(unique_articles)} articles... [{_elapsed()}]"
+        f"[Stage 3/7] EXTRACT — extracting full text for {len(unique_articles)} articles... [{_elapsed()}]"
     )
     await _emit("extract", 35, "Extracting article text...")
     sem = asyncio.Semaphore(5)  # Max 5 concurrent HTTP fetches
@@ -157,12 +185,12 @@ async def run_sensing_pipeline(
     content_count = sum(1 for a in enriched if a.content and len(a.content) > 50)
     await _emit("extract", 45, "Text extraction complete")
     logger.info(
-        f"[Stage 3/6] EXTRACT COMPLETE: {content_count}/{len(enriched)} with substantial content [{_elapsed()}]"
+        f"[Stage 3/7] EXTRACT COMPLETE: {content_count}/{len(enriched)} with substantial content [{_elapsed()}]"
     )
 
     # --- Stage 4: Classify ---
     logger.info(
-        f"[Stage 4/6] CLASSIFY — classifying {len(enriched)} articles via LLM... [{_elapsed()}]"
+        f"[Stage 4/7] CLASSIFY — classifying {len(enriched)} articles via LLM... [{_elapsed()}]"
     )
     await _emit("classify", 50, "Classifying articles with LLM...")
     classified = await classify_articles(
@@ -170,30 +198,43 @@ async def run_sensing_pipeline(
     )
     await _emit("classify", 65, f"{len(classified)} articles classified")
     logger.info(
-        f"[Stage 4/6] CLASSIFY COMPLETE: {len(classified)} classified articles [{_elapsed()}]"
+        f"[Stage 4/7] CLASSIFY COMPLETE: {len(classified)} classified articles [{_elapsed()}]"
     )
 
     # --- Stage 5: Generate report ---
-    logger.info(f"[Stage 5/6] REPORT — generating final report via LLM... [{_elapsed()}]")
+    logger.info(f"[Stage 5/7] REPORT — generating final report via LLM... [{_elapsed()}]")
     await _emit("report", 70, "Generating report with LLM...")
     now = datetime.now(timezone.utc)
     lookback_start = now - timedelta(days=lookback_days)
     date_range = f"{lookback_start.strftime('%b %d')} - {now.strftime('%b %d, %Y')}"
+
+    # Load org context for personalized recommendations
+    org_context_str = ""
+    if user_id:
+        try:
+            from core.sensing.org_context import build_org_context_prompt, load_org_context
+            org_ctx = await load_org_context(user_id)
+            if org_ctx:
+                org_context_str = build_org_context_prompt(org_ctx)
+                logger.info(f"[Stage 5/7] Org context loaded for {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to load org context: {e}")
 
     report = await generate_report(
         classified_articles=classified,
         domain=domain,
         date_range=date_range,
         custom_requirements=full_requirements,
+        org_context=org_context_str,
     )
     await _emit("report", 85, "Report generated, verifying relevance...")
     logger.info(
-        f"[Stage 5/6] REPORT COMPLETE [{_elapsed()}]"
+        f"[Stage 5/7] REPORT COMPLETE [{_elapsed()}]"
     )
 
     # --- Stage 6: Verify relevance ---
     logger.info(
-        f"[Stage 6/6] VERIFY — checking report relevance against '{domain}'... [{_elapsed()}]"
+        f"[Stage 6/7] VERIFY — checking report relevance against '{domain}'... [{_elapsed()}]"
     )
     await _emit("verify", 88, "Verifying report relevance...")
     report = await verify_report(
@@ -202,8 +243,28 @@ async def run_sensing_pipeline(
         must_include=must_include,
         dont_include=dont_include,
     )
-    await _emit("verify", 95, "Verification complete")
-    logger.info(f"[Stage 6/6] VERIFY COMPLETE [{_elapsed()}]")
+    await _emit("verify", 92, "Verification complete")
+    logger.info(f"[Stage 6/7] VERIFY COMPLETE [{_elapsed()}]")
+
+    # --- Stage 7: Movement detection ---
+    if user_id:
+        logger.info(
+            f"[Stage 7/7] MOVEMENT — detecting radar movements... [{_elapsed()}]"
+        )
+        await _emit("movement", 95, "Detecting technology movements...")
+        report = await detect_radar_movements(
+            new_report=report,
+            user_id=user_id,
+            domain=domain,
+        )
+        logger.info(f"[Stage 7/7] MOVEMENT COMPLETE [{_elapsed()}]")
+    else:
+        logger.info("[Stage 7/7] MOVEMENT — skipped (no user_id)")
+
+    # Signal strength scoring
+    logger.info(f"Computing signal strengths... [{_elapsed()}]")
+    await _emit("scoring", 98, "Computing signal strengths...")
+    report = compute_signal_strengths(report, classified)
 
     await _emit("complete", 100, "Report ready")
 

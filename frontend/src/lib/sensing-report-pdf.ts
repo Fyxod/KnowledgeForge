@@ -4,7 +4,7 @@ type Content = any;
 
 import pdfMake from 'pdfmake/build/pdfmake';
 import 'pdfmake/build/vfs_fonts';
-import type { SensingReportData } from './api';
+import type { SensingReportData, SensingRadarItem } from './api';
 
 const g: any = (typeof window !== 'undefined' ? window : globalThis) as any;
 if (g?.pdfMake?.vfs) {
@@ -115,9 +115,150 @@ function ringColor(ring: string): string {
     return colors.hold;
 }
 
+// ── Radar Canvas Renderer ─────────────────────────────────────────────────
+
+const QUADRANT_DEFS: Record<string, { start: number; end: number; color: string; label: string }> = {
+    'Techniques': { start: 90, end: 180, color: '#1ebccd', label: 'Techniques' },
+    'Platforms': { start: 0, end: 90, color: '#f38a3e', label: 'Platforms' },
+    'Tools': { start: 270, end: 360, color: '#86b82a', label: 'Tools' },
+    'Languages & Frameworks': { start: 180, end: 270, color: '#b32059', label: 'Languages & Frameworks' },
+};
+
+const RING_DEFS: Record<string, { inner: number; outer: number }> = {
+    'Adopt': { inner: 0, outer: 0.25 },
+    'Trial': { inner: 0.25, outer: 0.50 },
+    'Assess': { inner: 0.50, outer: 0.75 },
+    'Hold': { inner: 0.75, outer: 1.0 },
+};
+
+const RING_ORDER_PDF = ['Adopt', 'Trial', 'Assess', 'Hold'];
+
+function seededRandom(seed: number): number {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+}
+
+function hashString(s: string): number {
+    let hash = 0;
+    for (let i = 0; i < s.length; i++) {
+        hash = ((hash << 5) - hash) + s.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+export function renderRadarToCanvas(items: SensingRadarItem[]): string {
+    const size = 600;
+    const center = size / 2;
+    const maxRadius = size / 2 - 40;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+
+    // Ring circles
+    for (const ring of RING_ORDER_PDF) {
+        const r = RING_DEFS[ring];
+        ctx.beginPath();
+        ctx.arc(center, center, r.outer * maxRadius, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#d1d5db';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    // Ring labels
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = '#9ca3af';
+    ctx.textAlign = 'center';
+    for (const ring of RING_ORDER_PDF) {
+        const r = RING_DEFS[ring];
+        const labelR = ((r.inner + r.outer) / 2) * maxRadius;
+        ctx.fillText(ring, center + labelR, center - 4);
+    }
+
+    // Quadrant dividing lines
+    ctx.strokeStyle = '#d1d5db';
+    ctx.lineWidth = 1;
+    for (const deg of [0, 90, 180, 270]) {
+        const rad = deg * (Math.PI / 180);
+        ctx.beginPath();
+        ctx.moveTo(center, center);
+        ctx.lineTo(center + maxRadius * Math.cos(rad), center - maxRadius * Math.sin(rad));
+        ctx.stroke();
+    }
+
+    // Quadrant labels
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const [key, q] of Object.entries(QUADRANT_DEFS)) {
+        const midAngle = ((q.start + q.end) / 2) * (Math.PI / 180);
+        const labelR = maxRadius + 22;
+        const lx = center + labelR * Math.cos(midAngle);
+        const ly = center - labelR * Math.sin(midAngle);
+        ctx.fillStyle = q.color;
+        ctx.fillText(key, lx, ly);
+    }
+
+    // Blips
+    for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const q = QUADRANT_DEFS[item.quadrant];
+        const r = RING_DEFS[item.ring];
+        if (!q || !r) continue;
+
+        const seed = hashString(item.name + idx);
+        const anglePad = 8;
+        const angleRange = (q.end - q.start) - 2 * anglePad;
+        const angle = (q.start + anglePad + seededRandom(seed) * angleRange) * (Math.PI / 180);
+
+        const radiusPad = 0.03;
+        const rMin = (r.inner + radiusPad) * maxRadius;
+        const rMax = (r.outer - radiusPad) * maxRadius;
+        const radius = rMin + seededRandom(seed + 1) * (rMax - rMin);
+
+        const x = center + radius * Math.cos(angle);
+        const y = center - radius * Math.sin(angle);
+
+        // Movement indicator
+        if (item.moved_in) {
+            ctx.beginPath();
+            ctx.arc(x, y, 9, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 2]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        // Blip
+        ctx.beginPath();
+        if (item.is_new) {
+            ctx.moveTo(x, y - 6);
+            ctx.lineTo(x + 5.2, y + 3);
+            ctx.lineTo(x - 5.2, y + 3);
+            ctx.closePath();
+        } else {
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+        }
+        ctx.fillStyle = q.color;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    return canvas.toDataURL('image/png');
+}
+
 // ── Build Document ─────────────────────────────────────────────────────────
 
-function buildSensingPdf(data: SensingReportData): TDocumentDefinitions {
+function buildSensingPdf(data: SensingReportData, radarImageDataUrl?: string): TDocumentDefinitions {
     const { report, meta } = data;
     const today = new Date().toLocaleDateString();
     const content: Content[] = [];
@@ -139,6 +280,17 @@ function buildSensingPdf(data: SensingReportData): TDocumentDefinitions {
         columnGap: 6,
         margin: [0, 0, 0, 10],
     });
+
+    // Technology Radar visualization
+    if (radarImageDataUrl && report.radar_items?.length > 0) {
+        content.push(sectionHeader('Technology Radar', colors.radar));
+        content.push({
+            image: radarImageDataUrl,
+            width: 450,
+            alignment: 'center' as const,
+            margin: [0, 0, 0, 12],
+        });
+    }
 
     // Executive Summary
     content.push(sectionHeader('Executive Summary', colors.executive));
@@ -268,22 +420,25 @@ function buildSensingPdf(data: SensingReportData): TDocumentDefinitions {
                 [
                     { text: 'Technology', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
                     { text: 'Ring', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
+                    { text: 'Moved', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
                     { text: 'Description', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
                     { text: 'New?', bold: true, fillColor: '#F8FAFC', color: colors.slate800, margin: [4, 3, 4, 3], fontSize: 8 },
                 ],
             ];
 
             for (const item of sorted) {
+                const movedText = item.moved_in ? `From ${item.moved_in}` : '-';
                 tableBody.push([
                     { text: sanitize(item.name), margin: [4, 2, 4, 2], fontSize: 8, bold: true },
                     { text: sanitize(item.ring), margin: [4, 2, 4, 2], fontSize: 8, color: ringColor(item.ring) },
+                    { text: movedText, margin: [4, 2, 4, 2], fontSize: 7, color: item.moved_in ? '#D97706' : colors.slate500 },
                     { text: sanitize(item.description), margin: [4, 2, 4, 2], fontSize: 7, color: colors.slate600 },
                     { text: item.is_new ? 'NEW' : '-', margin: [4, 2, 4, 2], fontSize: 7, color: item.is_new ? colors.adopt : colors.slate500 },
                 ]);
             }
 
             content.push({
-                table: { headerRows: 1, widths: ['auto', 'auto', '*', 'auto'], body: tableBody },
+                table: { headerRows: 1, widths: ['auto', 'auto', 'auto', '*', 'auto'], body: tableBody },
                 layout: {
                     hLineColor: () => colors.border, vLineColor: () => colors.border,
                     hLineWidth: () => 0.5, vLineWidth: () => 0.5,
@@ -374,8 +529,16 @@ function buildSensingPdf(data: SensingReportData): TDocumentDefinitions {
     };
 }
 
-export function downloadSensingReportPdf(data: SensingReportData, filename?: string) {
-    const doc = buildSensingPdf(data);
+export async function downloadSensingReportPdf(data: SensingReportData, filename?: string) {
+    let radarImageDataUrl: string | undefined;
+    if (data.report.radar_items?.length > 0) {
+        try {
+            radarImageDataUrl = renderRadarToCanvas(data.report.radar_items);
+        } catch {
+            // Fall back to no radar image
+        }
+    }
+    const doc = buildSensingPdf(data, radarImageDataUrl);
     const safe = (data.report.report_title || 'Tech Sensing Report')
         .replace(/[^a-z0-9\-\s]/gi, '').trim() || 'Tech Sensing Report';
     const name = filename || `${safe}.pdf`;

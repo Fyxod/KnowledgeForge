@@ -29,6 +29,12 @@ from app.socket_handler import cancel_all_heartbeats, sio
 fastapi_app = FastAPI()
 
 
+@fastapi_app.on_event("startup")
+async def startup_event():
+    from core.sensing.scheduler import start_scheduler
+    await start_scheduler()
+
+
 @fastapi_app.on_event("shutdown")
 async def shutdown_event():
     await cancel_all_heartbeats()

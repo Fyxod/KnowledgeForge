@@ -13,6 +13,7 @@ from core.llm.output_schemas.sensing_outputs import (
     ClassifiedArticle,
 )
 from core.llm.prompts.sensing_prompts import sensing_classify_prompt
+from core.sensing.cache import cache_classification, get_cached_classification
 from core.sensing.config import ARTICLE_BATCH_SIZE, MIN_RELEVANCE_SCORE
 from core.sensing.ingest import RawArticle
 
@@ -29,16 +30,28 @@ async def classify_articles(
     Processes in batches to stay within context window.
     """
     all_classified: List[ClassifiedArticle] = []
-    total_batches = (len(articles) + ARTICLE_BATCH_SIZE - 1) // ARTICLE_BATCH_SIZE
+
+    # Check cache for already-classified articles
+    uncached_articles: List[RawArticle] = []
+    cache_hits = 0
+    for article in articles:
+        cached = get_cached_classification(article.url)
+        if cached and cached.relevance_score >= MIN_RELEVANCE_SCORE:
+            all_classified.append(cached)
+            cache_hits += 1
+        else:
+            uncached_articles.append(article)
 
     logger.info(
-        f"Classifying {len(articles)} articles in {total_batches} batches "
-        f"(batch_size={ARTICLE_BATCH_SIZE})"
+        f"Cache: {cache_hits}/{len(articles)} hits, "
+        f"{len(uncached_articles)} articles need LLM classification"
     )
 
-    for i in range(0, len(articles), ARTICLE_BATCH_SIZE):
+    total_batches = (len(uncached_articles) + ARTICLE_BATCH_SIZE - 1) // ARTICLE_BATCH_SIZE if uncached_articles else 0
+
+    for i in range(0, len(uncached_articles), ARTICLE_BATCH_SIZE):
         batch_num = i // ARTICLE_BATCH_SIZE + 1
-        batch = articles[i : i + ARTICLE_BATCH_SIZE]
+        batch = uncached_articles[i : i + ARTICLE_BATCH_SIZE]
         articles_text = _format_batch_for_prompt(batch)
 
         prompt = sensing_classify_prompt(
@@ -64,6 +77,8 @@ async def classify_articles(
             batch_classified = 0
 
             for article in validated.articles:
+                # Cache every classified article (regardless of score)
+                cache_classification(article)
                 if article.relevance_score >= MIN_RELEVANCE_SCORE:
                     all_classified.append(article)
                     batch_classified += 1

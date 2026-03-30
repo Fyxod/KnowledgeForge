@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -8,7 +8,7 @@ import {
   Lightbulb, FileText, Building2, Cpu, Target, Newspaper,
 } from 'lucide-react';
 import type {
-  SensingReport, SensingRadarItemDetail, SensingMarketSignal,
+  SensingReport, SensingRadarItem, SensingRadarItemDetail, SensingMarketSignal,
 } from '@/lib/api';
 
 interface Meta {
@@ -24,6 +24,8 @@ interface Meta {
 interface SensingReportRendererProps {
   report: SensingReport;
   meta: Meta;
+  highlightTechnology?: string;
+  onDeepDive?: (technologyName: string) => void;
 }
 
 const impactColors: Record<string, string> = {
@@ -46,10 +48,29 @@ const ringColors: Record<string, string> = {
   'Hold': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
 };
 
-const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, meta }) => {
+const RING_ORDER = ['Adopt', 'Trial', 'Assess', 'Hold'];
+
+const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, meta, highlightTechnology, onDeepDive }) => {
   const [expandedTrends, setExpandedTrends] = useState<Set<number>>(new Set());
   const [expandedRadarDetails, setExpandedRadarDetails] = useState<Set<number>>(new Set());
   const [expandedSignals, setExpandedSignals] = useState<Set<number>>(new Set());
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-expand and scroll to highlighted technology
+  useEffect(() => {
+    if (!highlightTechnology || !report.radar_item_details) return;
+    const idx = report.radar_item_details.findIndex(
+      d => d.technology_name.toLowerCase() === highlightTechnology.toLowerCase()
+    );
+    if (idx >= 0) {
+      setExpandedRadarDetails(prev => new Set(prev).add(idx));
+      // Delay scroll to allow expansion render
+      setTimeout(() => {
+        const el = document.getElementById(`radar-detail-${idx}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [highlightTechnology, report.radar_item_details]);
 
   const toggleSet = (setter: React.Dispatch<React.SetStateAction<Set<number>>>, idx: number) => {
     setter(prev => {
@@ -212,7 +233,7 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
             {report.radar_item_details.map((item: SensingRadarItemDetail, idx: number) => {
               const radarItem = report.radar_items?.find(r => r.name === item.technology_name);
               return (
-                <Card key={idx} className="overflow-hidden border-l-4 border-l-emerald-400">
+                <Card key={idx} id={`radar-detail-${idx}`} className={`overflow-hidden border-l-4 border-l-emerald-400${highlightTechnology?.toLowerCase() === item.technology_name.toLowerCase() ? ' ring-2 ring-emerald-400' : ''}`}>
                   <button
                     onClick={() => toggleSet(setExpandedRadarDetails, idx)}
                     className="w-full text-left p-4 flex items-start justify-between hover:bg-muted/50 transition-colors"
@@ -226,6 +247,11 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                               {radarItem.ring}
                             </Badge>
                             <Badge variant="outline" className="text-xs">{radarItem.quadrant}</Badge>
+                            {radarItem.moved_in && (
+                              <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" variant="secondary">
+                                {RING_ORDER.indexOf(radarItem.ring) < RING_ORDER.indexOf(radarItem.moved_in) ? '\u2191' : '\u2193'} Moved from {radarItem.moved_in}
+                              </Badge>
+                            )}
                           </>
                         )}
                       </div>
@@ -274,6 +300,15 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                             ))}
                           </ul>
                         </div>
+                      )}
+                      {onDeepDive && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDeepDive(item.technology_name); }}
+                          className="text-xs text-emerald-600 hover:text-emerald-700 font-medium mt-2 flex items-center gap-1"
+                        >
+                          <Target className="w-3 h-3" />
+                          Deep Dive Analysis
+                        </button>
                       )}
                     </div>
                   )}
