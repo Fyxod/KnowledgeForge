@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import SafeMarkdownRenderer from '@/components/SafeMarkdownRenderer';
 import {
   ChevronDown, ChevronRight, ExternalLink, Clock, TrendingUp,
-  Lightbulb, FileText, Building2, Cpu, Target, Newspaper,
+  Lightbulb, FileText, Building2, Cpu, Target, Newspaper, Link2,
 } from 'lucide-react';
 import type {
   SensingReport, SensingRadarItem, SensingRadarItemDetail, SensingMarketSignal,
@@ -49,6 +49,29 @@ const ringColors: Record<string, string> = {
 };
 
 const RING_ORDER = ['Adopt', 'Trial', 'Assess', 'Hold'];
+
+/** Compact inline source links — renders [1] [2] [3] badges linking to article URLs */
+const SourceLinks: React.FC<{ urls?: string[] }> = ({ urls }) => {
+  if (!urls?.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1 mt-2">
+      <Link2 className="w-3 h-3 text-muted-foreground shrink-0" />
+      <span className="text-[10px] text-muted-foreground mr-0.5">Sources:</span>
+      {urls.map((url, i) => (
+        <a
+          key={i}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={url}
+          className="inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors"
+        >
+          {i + 1}
+        </a>
+      ))}
+    </div>
+  );
+};
 
 const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, meta, highlightTechnology, onDeepDive }) => {
   const [expandedTrends, setExpandedTrends] = useState<Set<number>>(new Set());
@@ -152,6 +175,7 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                         </ul>
                       </div>
                     )}
+                    <SourceLinks urls={trend.source_urls} />
                   </div>
                 )}
               </Card>
@@ -213,6 +237,7 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                         ))}
                       </div>
                     )}
+                    <SourceLinks urls={signal.source_urls} />
                   </div>
                 )}
               </Card>
@@ -301,6 +326,7 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                           </ul>
                         </div>
                       )}
+                      <SourceLinks urls={item.source_urls} />
                       {onDeepDive && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDeepDive(item.technology_name); }}
@@ -332,6 +358,7 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                 </CardHeader>
                 <CardContent className="prose prose-sm dark:prose-invert max-w-none">
                   <SafeMarkdownRenderer content={section.content} />
+                  <SourceLinks urls={section.source_urls} />
                 </CardContent>
               </Card>
             ))}

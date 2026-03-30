@@ -530,11 +530,13 @@ export interface SensingTrendItem {
   evidence: string[];
   impact_level: string;
   time_horizon: string;
+  source_urls?: string[];
 }
 
 export interface SensingReportSection {
   section_title: string;
   content: string;
+  source_urls?: string[];
 }
 
 export interface SensingRecommendation {
@@ -564,6 +566,7 @@ export interface SensingRadarItemDetail {
   current_state: string;
   key_players: string[];
   practical_applications: string[];
+  source_urls?: string[];
 }
 
 export interface SensingMarketSignal {
@@ -572,6 +575,7 @@ export interface SensingMarketSignal {
   strategic_intent: string;
   industry_impact: string;
   related_technologies: string[];
+  source_urls?: string[];
 }
 
 export interface SensingReport {

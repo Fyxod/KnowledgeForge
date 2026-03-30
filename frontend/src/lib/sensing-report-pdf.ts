@@ -115,6 +115,16 @@ function ringColor(ring: string): string {
     return colors.hold;
 }
 
+function sourceUrlsBlock(urls?: string[]): Content[] {
+    if (!urls?.length) return [];
+    const items = urls.map((url, i) => `[${i + 1}] ${sanitize(url)}`).join('  ');
+    return [{
+        text: `Sources: ${items}`,
+        fontSize: 7, color: colors.slate500, italics: true,
+        margin: [0, 4, 0, 0] as any,
+    }];
+}
+
 // ── Radar Canvas Renderer ─────────────────────────────────────────────────
 
 const QUADRANT_DEFS: Record<string, { start: number; end: number; color: string; label: string }> = {
@@ -402,6 +412,7 @@ function buildSensingPdf(data: SensingReportData, radarImageDataUrl?: string): T
                     ul: trend.evidence.map(e => ({ text: sanitize(e), fontSize: 8, color: colors.slate500 })),
                     margin: [0, 2, 0, 0] as any,
                 }] : []),
+                ...sourceUrlsBlock(trend.source_urls),
             ]));
         }
     }
@@ -431,6 +442,7 @@ function buildSensingPdf(data: SensingReportData, radarImageDataUrl?: string): T
                     columnGap: 10,
                     margin: [0, 2, 0, 0],
                 },
+                ...sourceUrlsBlock(signal.source_urls),
             ], '#DDD6FE'));
         }
     }
@@ -467,6 +479,7 @@ function buildSensingPdf(data: SensingReportData, radarImageDataUrl?: string): T
                     { text: 'Practical Applications', fontSize: 9, bold: true, color: colors.slate800, margin: [0, 2, 0, 1] as any },
                     { ul: item.practical_applications.map((a: string) => ({ text: sanitize(a), fontSize: 8, color: colors.slate600 })), margin: [0, 0, 0, 0] as any },
                 ] : []),
+                ...sourceUrlsBlock(item.source_urls),
             ], '#A7F3D0'));
         }
     }
@@ -540,6 +553,7 @@ function buildSensingPdf(data: SensingReportData, radarImageDataUrl?: string): T
             content.push(card([
                 { text: sanitize(section.section_title), fontSize: 11, bold: true, margin: [0, 0, 0, 4] },
                 { text: sanitize(section.content), fontSize: 9, color: colors.slate600, lineHeight: 1.3 },
+                ...sourceUrlsBlock(section.source_urls),
             ]));
         }
     }

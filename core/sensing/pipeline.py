@@ -201,6 +201,14 @@ async def run_sensing_pipeline(
         f"[Stage 4/7] CLASSIFY COMPLETE: {len(classified)} classified articles [{_elapsed()}]"
     )
 
+    # Build URL→content excerpt map so report LLM gets real article text
+    url_content_map = {
+        a.url: (a.content or "")[:800]
+        for a in enriched
+        if a.url and a.content and len(a.content) > 50
+    }
+    logger.info(f"[Pipeline] Content map: {len(url_content_map)} articles with excerpts")
+
     # --- Stage 5: Generate report ---
     logger.info(f"[Stage 5/7] REPORT — generating final report via LLM... [{_elapsed()}]")
     await _emit("report", 70, "Generating report with LLM...")
@@ -229,6 +237,7 @@ async def run_sensing_pipeline(
         date_range=date_range,
         custom_requirements=full_requirements,
         org_context=org_context_str,
+        article_content_map=url_content_map,
     )
     await _emit("report", 85, "Report generated, verifying relevance...")
     logger.info(

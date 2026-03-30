@@ -54,6 +54,10 @@ class TrendItem(BaseModel):
     time_horizon: str = Field(
         description="Expected time to mainstream: 'Immediate (0-6mo)', 'Near-term (6-18mo)', 'Medium-term (1-3yr)', 'Long-term (3+yr)'."
     )
+    source_urls: List[str] = Field(
+        default_factory=list,
+        description="URLs of articles supporting this trend.",
+    )
 
 
 class RadarItem(BaseModel):
@@ -101,6 +105,10 @@ class RadarItemDetail(BaseModel):
     practical_applications: List[str] = Field(
         description="Real-world use cases and applications (2-4 items)."
     )
+    source_urls: List[str] = Field(
+        default_factory=list,
+        description="URLs of articles informing this technology write-up.",
+    )
 
 
 class MarketSignal(BaseModel):
@@ -119,11 +127,19 @@ class MarketSignal(BaseModel):
     related_technologies: List[str] = Field(
         description="Technology names related to this signal."
     )
+    source_urls: List[str] = Field(
+        default_factory=list,
+        description="URLs of articles reporting this signal.",
+    )
 
 
 class ReportSection(BaseModel):
     section_title: str = Field(description="Section heading.")
     content: str = Field(description="Section body content in markdown format.")
+    source_urls: List[str] = Field(
+        default_factory=list,
+        description="URLs of articles referenced in this section.",
+    )
 
 
 class Recommendation(BaseModel):

@@ -25,6 +25,7 @@ async def generate_report(
     date_range: str = "",
     custom_requirements: str = "",
     org_context: str = "",
+    article_content_map: dict[str, str] | None = None,
 ) -> TechSensingReport:
     """
     Generate the complete Tech Sensing Report from classified articles.
@@ -39,8 +40,16 @@ async def generate_report(
         f"(domain={domain}, range={date_range})"
     )
 
+    # Merge content excerpts from extracted articles for grounding
+    article_dicts = []
+    for a in sorted_articles:
+        d = a.model_dump()
+        if article_content_map and a.url in article_content_map:
+            d["content_excerpt"] = article_content_map[a.url]
+        article_dicts.append(d)
+
     articles_json = json.dumps(
-        [a.model_dump() for a in sorted_articles],
+        article_dicts,
         indent=2,
         ensure_ascii=False,
     )
