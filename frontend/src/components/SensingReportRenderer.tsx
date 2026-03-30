@@ -103,8 +103,8 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
               Executive Summary
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-relaxed whitespace-pre-line">{report.executive_summary}</p>
+          <CardContent className="prose prose-sm dark:prose-invert max-w-none">
+            <SafeMarkdownRenderer content={report.executive_summary} />
           </CardContent>
         </Card>
 

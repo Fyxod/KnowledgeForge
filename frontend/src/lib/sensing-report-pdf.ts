@@ -149,17 +149,19 @@ function hashString(s: string): number {
 
 export function renderRadarToCanvas(items: SensingRadarItem[]): string {
     const size = 600;
+    const legendHeight = 80;
+    const totalHeight = size + legendHeight;
     const center = size / 2;
     const maxRadius = size / 2 - 40;
 
     const canvas = document.createElement('canvas');
     canvas.width = size;
-    canvas.height = size;
+    canvas.height = totalHeight;
     const ctx = canvas.getContext('2d')!;
 
     // White background
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, size, totalHeight);
 
     // Ring circles
     for (const ring of RING_ORDER_PDF) {
@@ -253,6 +255,76 @@ export function renderRadarToCanvas(items: SensingRadarItem[]): string {
         ctx.stroke();
     }
 
+    // ── Legend ──────────────────────────────────────────────────────────
+    const legendY = size + 8;
+
+    // Separator line
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, legendY);
+    ctx.lineTo(size - 40, legendY);
+    ctx.stroke();
+
+    const ly = legendY + 20;
+
+    // Shape legend — new (triangle) vs existing (circle)
+    ctx.fillStyle = '#6b7280';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    // Triangle = New
+    let lx = 50;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly - 5);
+    ctx.lineTo(lx + 5, ly + 3);
+    ctx.lineTo(lx - 5, ly + 3);
+    ctx.closePath();
+    ctx.fillStyle = '#6b7280';
+    ctx.fill();
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#374151';
+    ctx.fillText('New entry', lx + 10, ly);
+
+    // Circle = Existing
+    lx = 140;
+    ctx.beginPath();
+    ctx.arc(lx, ly, 4, 0, 2 * Math.PI);
+    ctx.fillStyle = '#6b7280';
+    ctx.fill();
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#374151';
+    ctx.fillText('Existing', lx + 10, ly);
+
+    // Dashed ring = Moved
+    lx = 220;
+    ctx.beginPath();
+    ctx.arc(lx, ly, 6, 0, 2 * Math.PI);
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 2]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#374151';
+    ctx.fillText('Moved', lx + 12, ly);
+
+    // Quadrant color legend
+    const qLy = ly + 24;
+    let qLx = 50;
+    for (const [key, q] of Object.entries(QUADRANT_DEFS)) {
+        ctx.beginPath();
+        ctx.arc(qLx, qLy, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = q.color;
+        ctx.fill();
+        ctx.font = '10px sans-serif';
+        ctx.fillStyle = '#374151';
+        ctx.textAlign = 'left';
+        ctx.fillText(key, qLx + 10, qLy);
+        qLx += ctx.measureText(key).width + 30;
+    }
+
     return canvas.toDataURL('image/png');
 }
 
@@ -292,11 +364,24 @@ function buildSensingPdf(data: SensingReportData, radarImageDataUrl?: string): T
         });
     }
 
-    // Executive Summary
+    // Executive Summary — split into paragraphs for readability
     content.push(sectionHeader('Executive Summary', colors.executive));
-    content.push(card([
-        { text: sanitize(report.executive_summary), fontSize: 10, color: colors.slate800, lineHeight: 1.4 },
-    ], '#BFDBFE'));
+    const summaryParagraphs = (report.executive_summary || '')
+        .split(/\n\s*\n/)
+        .map(p => p.trim())
+        .filter(Boolean);
+    content.push(card(
+        summaryParagraphs.length > 1
+            ? summaryParagraphs.map((p, i) => ({
+                text: sanitize(p),
+                fontSize: 10,
+                color: colors.slate800,
+                lineHeight: 1.4,
+                margin: [0, 0, 0, i < summaryParagraphs.length - 1 ? 6 : 0] as any,
+            }))
+            : [{ text: sanitize(report.executive_summary), fontSize: 10, color: colors.slate800, lineHeight: 1.4 }],
+        '#BFDBFE',
+    ));
 
     // Key Trends
     if (report.key_trends?.length > 0) {
