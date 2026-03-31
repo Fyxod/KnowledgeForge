@@ -157,7 +157,9 @@ def _escape_control_chars_in_strings(text: str) -> str:
 _SCHEMA_FIELD_RE = re.compile(
     r'\{\s*"(?:answer|action|sql_query|excel_request|summary|outline|sections|content'
     r'|description|reasoning|result|data|items|categories|findings|recommendations'
-    r'|stop_words|nodes|edges|milestones|phases|insights|review)"'
+    r'|stop_words|nodes|edges|milestones|phases|insights|review'
+    r'|articles|report_title|executive_summary|key_trends|radar_items|market_signals'
+    r'|radar_item_details|report_sections)"'
 )
 
 
@@ -236,14 +238,51 @@ def _extract_json_block(text: str) -> str:
     return text[start:end]
 
 
+# Keys that belong to a JSON Schema definition, not to actual data.
+_SCHEMA_META_KEYS = frozenset({
+    "$defs", "$ref", "$schema", "$id",
+    "definitions", "properties", "required",
+    "title", "type", "description", "additionalProperties",
+    "allOf", "anyOf", "oneOf", "not", "enum", "const",
+    "default", "examples",
+})
+
+
+def _strip_schema_metadata(parsed: dict, schema: type) -> dict:
+    """
+    Remove JSON-Schema metadata keys that the LLM erroneously echoed,
+    keeping only data keys that the Pydantic model actually expects.
+
+    Handles Pattern 1 (schema + data mixed) and Pattern 5 (schema only).
+    Also resolves Pattern 4 ($ref values in data).
+    """
+    model_fields = set(getattr(schema, "model_fields", {}).keys())
+    if not model_fields:
+        return parsed
+
+    # Separate data keys from schema-meta keys
+    data_keys = {k for k in parsed if k in model_fields}
+    meta_keys = {k for k in parsed if k in _SCHEMA_META_KEYS and k not in model_fields}
+
+    if not meta_keys:
+        return parsed  # No schema leakage detected
+
+    # If we have data keys alongside meta keys, keep only the data
+    if data_keys:
+        return {k: v for k, v in parsed.items() if k in model_fields}
+
+    # Schema-only output (Pattern 5): nothing usable
+    return parsed
+
+
 def parse_llm_json(raw: str, schema: Type[T]) -> T:
     """
     Parse and validate LLM output against a Pydantic schema with
     multiple fallback strategies.
 
     Strategies (in order):
-    1. Sanitize + json.loads + model_validate
-    2. json_repair.loads + model_validate (if json_repair available)
+    1. Sanitize + json.loads + strip schema metadata + model_validate
+    2. json_repair.loads + strip schema metadata + model_validate
     3. Raise with clear error
 
     Args:
@@ -261,6 +300,8 @@ def parse_llm_json(raw: str, schema: Type[T]) -> T:
     # Strategy 1: Standard json.loads after sanitization
     try:
         parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            parsed = _strip_schema_metadata(parsed, schema)
         return schema.model_validate(parsed)
     except (json.JSONDecodeError, Exception):
         pass
@@ -269,7 +310,9 @@ def parse_llm_json(raw: str, schema: Type[T]) -> T:
     if json_repair is not None:
         try:
             repaired = json_repair.loads(cleaned)
-            if isinstance(repaired, dict) or isinstance(repaired, list):
+            if isinstance(repaired, dict):
+                repaired = _strip_schema_metadata(repaired, schema)
+            if isinstance(repaired, (dict, list)):
                 return schema.model_validate(repaired)
         except Exception:
             pass
@@ -278,7 +321,9 @@ def parse_llm_json(raw: str, schema: Type[T]) -> T:
         # extraction mangled something)
         try:
             repaired = json_repair.loads(sanitize_llm_json(raw))
-            if isinstance(repaired, dict) or isinstance(repaired, list):
+            if isinstance(repaired, dict):
+                repaired = _strip_schema_metadata(repaired, schema)
+            if isinstance(repaired, (dict, list)):
                 return schema.model_validate(repaired)
         except Exception:
             pass

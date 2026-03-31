@@ -177,6 +177,7 @@ JSON RULES:
 3. If you use internal reasoning (e.g. <think> tags), produce the JSON AFTER the closing tag.
 4. The "answer" field should contain your FULL, DETAILED response following the guidelines above. Do NOT truncate or shorten it.
 5. For tables inside the answer field, use HTML <table> tags, NOT Markdown pipe tables.
+6. Do NOT echo the schema definition. Never include "$defs", "$ref", "properties", "required", "title", "type":"object" or "description" as top-level keys. Only output the DATA that conforms to the schema.
 """
     else:
         prompt = f"""Extract structured data according to this model:
@@ -190,6 +191,8 @@ CRITICAL OUTPUT RULES:
 2. Escape newlines as \\n and tabs as \\t within JSON strings.
 3. If you generate internal reasoning (e.g. inside <think> tags), you MUST produce the final JSON object AFTER the closing </think> tag.
 4. Do not output any text before or after the JSON object.
+5. Do NOT echo the schema definition. Never include "$defs", "$ref", "properties", "required", "title", "type":"object" or "description" as top-level keys. Only output the DATA that conforms to the schema.
+6. Every list/array field must contain actual items. Do not return empty arrays unless the input data genuinely contains zero relevant items.
 """
 
     # Track the last failed output and parse error for self-correction context
