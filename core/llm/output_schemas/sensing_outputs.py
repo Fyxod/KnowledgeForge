@@ -100,7 +100,11 @@ class RadarItemDetail(BaseModel):
         description="Current maturity, adoption level, and key developments this week (2-3 sentences)."
     )
     key_players: List[str] = Field(
-        description="Companies or organizations actively developing or using this technology."
+        description=(
+            "Companies or organizations that actively develop, maintain, or officially "
+            "release this technology. Do NOT include entities that only published the "
+            "underlying research paper unless they also released the implementation."
+        )
     )
     practical_applications: List[str] = Field(
         description="Real-world use cases and applications (2-4 items)."

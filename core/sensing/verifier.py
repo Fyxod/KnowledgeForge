@@ -22,7 +22,7 @@ logger = logging.getLogger("sensing.verifier")
 
 
 class VerifiedItems(LLMOutputBase):
-    """LLM output: lists of item names/titles that are on-topic."""
+    """LLM output: lists of item names/titles that are on-topic + attribution warnings."""
 
     relevant_radar_items: List[str] = Field(
         description="Names of radar items that are directly relevant to the specific domain/topic."
@@ -32,6 +32,14 @@ class VerifiedItems(LLMOutputBase):
     )
     relevant_trends: List[str] = Field(
         description="Names of trends that are directly relevant to the specific domain/topic."
+    )
+    attribution_warnings: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Warnings about potential misattributions. Format: "
+            "'technology_name: entity_to_remove | reason'. "
+            "E.g., 'TurboQuant: Google | only published research paper, did not release implementation'."
+        ),
     )
 
 
@@ -52,9 +60,19 @@ async def verify_report(
     signal_companies = [s.company_or_player for s in report.market_signals]
     trend_names = [t.trend_name for t in report.key_trends]
 
+    # Build key_players lookup from radar_item_details
+    detail_key_players = {
+        d.technology_name: d.key_players
+        for d in report.radar_item_details
+    }
+
     items_summary = {
         "radar_items": [
-            {"name": item.name, "description": item.description}
+            {
+                "name": item.name,
+                "description": item.description,
+                "key_players": detail_key_players.get(item.name, []),
+            }
             for item in report.radar_items
         ],
         "market_signals": [
@@ -87,6 +105,14 @@ async def verify_report(
                 f"- If '{domain}' is a specific sub-topic (e.g., 'World Models', 'Graph Neural Networks'), "
                 "do NOT include general parent-topic items unless they directly discuss the sub-topic\n"
                 + must_str + dont_str + "\n\n"
+                "ATTRIBUTION CHECK:\n"
+                "- For each radar item, review key_players against its description.\n"
+                "- Flag cases where a company is listed as a key_player but the description "
+                "only mentions them publishing a research paper, NOT building or releasing the technology.\n"
+                "- Flag cases where community/open-source implementations are attributed to "
+                "the research paper's author instead of the actual implementer.\n"
+                "- Format each warning as: 'technology_name: entity_to_remove | reason'\n"
+                "- E.g., 'TurboQuant: Google | only published research paper, did not release implementation'\n\n"
                 "OUTPUT REQUIREMENT:\n"
                 "Return ONLY a valid JSON object matching the schema below.\n\n"
                 f"OUTPUT SCHEMA:\n```json\n{schema_json}\n```\n\n"
@@ -157,12 +183,34 @@ async def verify_report(
                 if a.technology_name in relevant_radar
             ]
 
+        # Apply attribution warnings — remove misattributed key_players
+        if verified.attribution_warnings:
+            for warning in verified.attribution_warnings:
+                logger.warning(f"Attribution warning: {warning}")
+                # Parse "technology_name: entity_to_remove | reason"
+                if ":" in warning and "|" in warning:
+                    tech_part, rest = warning.split(":", 1)
+                    entity_part = rest.split("|", 1)[0].strip()
+                    tech_name = tech_part.strip()
+                    for detail in report.radar_item_details:
+                        if detail.technology_name == tech_name:
+                            original = list(detail.key_players)
+                            detail.key_players = [
+                                p for p in detail.key_players
+                                if p.lower() != entity_part.lower()
+                            ]
+                            if len(detail.key_players) < len(original):
+                                logger.info(
+                                    f"Removed '{entity_part}' from {tech_name} key_players"
+                                )
+
         elapsed = time.time() - verify_start
         logger.info(
             f"Verification complete in {elapsed:.1f}s — "
             f"radar: {orig_radar}->{len(report.radar_items)}, "
             f"signals: {orig_signals}->{len(report.market_signals)}, "
-            f"trends: {orig_trends}->{len(report.key_trends)}"
+            f"trends: {orig_trends}->{len(report.key_trends)}, "
+            f"attribution_warnings: {len(verified.attribution_warnings)}"
         )
 
     except Exception as e:

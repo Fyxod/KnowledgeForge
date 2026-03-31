@@ -50,6 +50,19 @@ else:
 
 MyServerLLM = llm_module.MyServerLLM
 
+# Import INTERNALLLM if USE_INTERNAL is enabled (graceful fallback if import fails)
+INTERNALLLM = None
+if SWITCHES.get("USE_INTERNAL", False):
+    try:
+        from core.llm.configurations.INTERNAL_llm import INTERNALLLM
+        print("INTERNALLLM imported successfully")
+    except ImportError as e:
+        print(f"INTERNALLLM import failed: {e}. Falling back to existing LLM.")
+        INTERNALLLM = None
+    except Exception as e:
+        print(f"Unexpected error importing INTERNALLLM: {e}. Falling back to existing LLM.")
+        INTERNALLLM = None
+
 # Cache LLM client instances to avoid repeated initialization overhead
 _llm_cache = {}
 
@@ -199,6 +212,43 @@ CRITICAL OUTPUT RULES:
                 "Fix the above errors and return ONLY valid JSON matching the schema."
             )
             print(f"[Self-correction] Injecting previous output + error into prompt")
+
+        # === 0. INTERNAL API (tried first if enabled) ===
+        if SWITCHES.get("USE_INTERNAL", False) and INTERNALLLM is not None:
+            internal_output = None
+            try:
+                print("Trying INTERNAL API...")
+                internal_llm = INTERNALLLM(
+                    model=settings.INTERNAL_MODEL_ID,
+                    base_url=settings.INTERNAL_BASE_URL,
+                    client_key=settings.INTERNAL_CLIENT_KEY,
+                    api_token=settings.INTERNAL_API_TOKEN,
+                    user_email=settings.INTERNAL_USER_EMAIL,
+                )
+                s = time.time()
+                internal_output = await asyncio.to_thread(internal_llm._call, effective_prompt)
+                e = time.time()
+                print(f"Success via INTERNAL API, LLM call took {e - s:.2f}s")
+                structured = _try_parse(internal_output, parser, response_schema)
+                return structured
+            except Exception as exc:
+                error_str = str(exc)
+                print(f"INTERNAL API failed: {error_str}")
+                # LLM produced output but parsing failed — retry with correction context
+                if internal_output:
+                    last_failed_output = internal_output
+                    last_parse_error = error_str
+                    _log_parse_failure(
+                        source="internal",
+                        attempt=attempt,
+                        raw_output=internal_output,
+                        error=error_str,
+                        schema_name=response_schema.__name__,
+                        prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
+                    )
+                    print(f"[Self-correction] Captured failed INTERNAL output ({len(internal_output)} chars) for next attempt")
+                    continue  # Retry with self-correction (same as GPU path)
+                # API/network error (no output) — fall through to GPU server
 
         # === 1. GPU SERVER ===
         if gpu_model:

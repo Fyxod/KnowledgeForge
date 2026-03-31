@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     USE_VISION_MODEL: bool = True  # VLM runs on every page/slide (PDF, DOCX, PPTX). Set False in .env to disable.
     LOCAL_BASE_URL: str = "http://localhost"
 
+    # INTERNAL API Configuration (defaults to disabled for backward compatibility)
+    INTERNAL_BASE_URL: str = ""
+    INTERNAL_CLIENT_KEY: str = ""
+    INTERNAL_API_TOKEN: str = ""
+    INTERNAL_USER_EMAIL: str = ""
+    INTERNAL_MODEL_ID: str = ""
+    USE_INTERNAL: bool = False  # Set to True in .env to enable INTERNAL API
+
     class Config:
         env_file = ".env"
         extra = "allow"
