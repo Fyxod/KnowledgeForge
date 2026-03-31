@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import itertools
 import json
 import os
@@ -62,6 +63,46 @@ except ImportError as e:
 except Exception as e:
     print(f"Unexpected error importing INTERNALLLM: {e}. INTERNAL API will be unavailable.")
     INTERNALLLM = None
+
+# ── Rate limiter for INTERNAL API (3 calls per minute) ─────────────
+
+
+class _RateLimiter:
+    """Async sliding-window rate limiter."""
+
+    def __init__(self, max_calls: int, window_seconds: float):
+        self.max_calls = max_calls
+        self.window = window_seconds
+        self._timestamps: list[float] = []
+        self._lock = asyncio.Lock()
+
+    async def acquire(self):
+        async with self._lock:
+            now = time.time()
+            self._timestamps = [t for t in self._timestamps if now - t < self.window]
+            if len(self._timestamps) >= self.max_calls:
+                wait_time = self.window - (now - self._timestamps[0])
+                if wait_time > 0:
+                    print(
+                        f"[Rate limit] INTERNAL API: {self.max_calls} calls in last "
+                        f"{self.window:.0f}s, waiting {wait_time:.1f}s..."
+                    )
+                    await asyncio.sleep(wait_time)
+                    now = time.time()
+                    self._timestamps = [
+                        t for t in self._timestamps if now - t < self.window
+                    ]
+            self._timestamps.append(time.time())
+
+
+_internal_rate_limiter = _RateLimiter(max_calls=3, window_seconds=60.0)
+
+# ── Sticky fallback: once INTERNAL fails for a request, skip it for
+#    all subsequent invoke_llm() calls in the same async context. ───
+
+_skip_internal: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_skip_internal", default=False
+)
 
 # Cache LLM client instances to avoid repeated initialization overhead
 _llm_cache = {}
@@ -252,31 +293,38 @@ CRITICAL OUTPUT RULES:
 6. Every list/array field must contain actual items. Do not return empty arrays unless the input data genuinely contains zero relevant items.
 """
 
-    # Track the last failed output and parse error for self-correction context
-    last_failed_output = None
-    last_parse_error = None
-
-    for attempt in range(1, MAX_RETRIES + 1):
-        print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
-
-        # Build the effective prompt — append correction context if a previous
-        # attempt produced output that failed parsing
-        effective_prompt = prompt
-        if last_failed_output and last_parse_error:
-            effective_prompt = (
-                f"{prompt}\n\n"
+    # ── Helper: build effective prompt with self-correction context ──
+    def _build_prompt(base, failed_output, parse_error):
+        if failed_output and parse_error:
+            print("[Self-correction] Injecting previous output + error into prompt")
+            return (
+                f"{base}\n\n"
                 "--- PREVIOUS ATTEMPT FAILED ---\n"
                 "Your previous output could not be parsed. Fix the errors and output valid JSON only.\n\n"
-                f"Previous output (rejected):\n{last_failed_output[:2000]}\n\n"
-                f"Parse error:\n{last_parse_error}\n\n"
+                f"Previous output (rejected):\n{failed_output[:2000]}\n\n"
+                f"Parse error:\n{parse_error}\n\n"
                 "Fix the above errors and return ONLY valid JSON matching the schema."
             )
-            print(f"[Self-correction] Injecting previous output + error into prompt")
+        return base
 
-        # === 0. INTERNAL API (tried first if enabled) ===
-        if SWITCHES.get("USE_INTERNAL", False) and INTERNALLLM is not None:
+    # ── Phase 0: INTERNAL API (full retry cycle if enabled) ───────
+    use_internal = (
+        SWITCHES.get("USE_INTERNAL", False)
+        and INTERNALLLM is not None
+        and not _skip_internal.get()
+    )
+
+    if use_internal:
+        last_failed_output = None
+        last_parse_error = None
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            print(f"\n=== INTERNAL Attempt {attempt}/{MAX_RETRIES} ===")
+            effective_prompt = _build_prompt(prompt, last_failed_output, last_parse_error)
+
             internal_output = None
             try:
+                await _internal_rate_limiter.acquire()
                 print("Trying INTERNAL API...")
                 internal_llm = INTERNALLLM(
                     model=settings.INTERNAL_MODEL_ID,
@@ -294,8 +342,8 @@ CRITICAL OUTPUT RULES:
             except Exception as exc:
                 error_str = str(exc)
                 print(f"INTERNAL API failed: {error_str}")
-                # LLM produced output but parsing failed — retry with correction context
                 if internal_output:
+                    # Parse failure — retry with self-correction
                     last_failed_output = internal_output
                     last_parse_error = error_str
                     _log_parse_failure(
@@ -306,11 +354,27 @@ CRITICAL OUTPUT RULES:
                         schema_name=response_schema.__name__,
                         prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
                     )
-                    print(f"[Self-correction] Captured failed INTERNAL output ({len(internal_output)} chars) for next attempt")
-                    continue  # Retry with self-correction (same as GPU path)
-                # API/network error (no output) — fall through to GPU server
+                    print(f"[Self-correction] Captured failed INTERNAL output ({len(internal_output)} chars)")
+                else:
+                    # Network/API error — no point retrying INTERNAL, break to GPU
+                    print("[Sticky fallback] INTERNAL network error, breaking to GPU")
+                    break
 
-        # === 1. GPU SERVER ===
+        # All INTERNAL attempts exhausted (or network error) — sticky fallback
+        print(
+            f"[Sticky fallback] INTERNAL exhausted {MAX_RETRIES} attempts, "
+            "switching to GPU for this request"
+        )
+        _skip_internal.set(True)
+
+    # ── Phase 1: GPU SERVER (full retry cycle) ────────────────────
+    last_failed_output = None
+    last_parse_error = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        print(f"\n=== Attempt {attempt}/{MAX_RETRIES} ===")
+        effective_prompt = _build_prompt(prompt, last_failed_output, last_parse_error)
+
         if gpu_model:
             llm_output = None
             try:
@@ -325,7 +389,6 @@ CRITICAL OUTPUT RULES:
             except Exception as e:
                 error_str = str(e)
                 print(f"GPU server failed at port {port}: {error_str}")
-                # LLM produced output but parsing failed — retry with correction context
                 if llm_output:
                     last_failed_output = llm_output
                     last_parse_error = error_str
@@ -337,8 +400,8 @@ CRITICAL OUTPUT RULES:
                         schema_name=response_schema.__name__,
                         prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
                     )
-                    print(f"[Self-correction] Captured failed output ({len(llm_output)} chars) for next attempt")
-                    continue  # Skip fallbacks, retry on same port with correction
+                    print(f"[Self-correction] Captured failed GPU output ({len(llm_output)} chars)")
+                    continue  # Retry GPU with self-correction
 
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
@@ -429,4 +492,4 @@ CRITICAL OUTPUT RULES:
         await asyncio.sleep(2)
 
     # If all attempts exhausted
-    raise RuntimeError(f"All {MAX_RETRIES} fallback attempts failed.")
+    raise RuntimeError(f"All fallback attempts failed (INTERNAL + GPU + Gemini + OpenAI).")

@@ -55,7 +55,9 @@ def sensing_classify_prompt(
             "role": "user",
             "parts": (
                 f"ARTICLES TO CLASSIFY:\n\n{articles_text}\n\n"
-                "Classify each relevant article and return ONLY valid JSON."
+                "Classify each relevant article above. The articles array in your "
+                "response MUST contain classified entries — do NOT return an empty "
+                "array. Return ONLY valid JSON."
             ),
         },
     ]
