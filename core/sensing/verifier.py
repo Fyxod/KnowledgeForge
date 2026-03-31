@@ -85,8 +85,6 @@ async def verify_report(
         ],
     }
 
-    schema_json = json.dumps(VerifiedItems.model_json_schema(), indent=2)
-
     must_str = f"\nMust-include keywords: {', '.join(must_include)}" if must_include else ""
     dont_str = f"\nDon't-include keywords: {', '.join(dont_include)}" if dont_include else ""
 
@@ -113,10 +111,10 @@ async def verify_report(
                 "the research paper's author instead of the actual implementer.\n"
                 "- Format each warning as: 'technology_name: entity_to_remove | reason'\n"
                 "- E.g., 'TurboQuant: Google | only published research paper, did not release implementation'\n\n"
-                "OUTPUT REQUIREMENT:\n"
-                "Return ONLY a valid JSON object matching the schema below.\n\n"
-                f"OUTPUT SCHEMA:\n```json\n{schema_json}\n```\n\n"
                 "OUTPUT RULES:\n"
+                "- Return ONLY a valid JSON object with keys: relevant_radar_items, "
+                "relevant_signals, relevant_trends, attribution_warnings.\n"
+                "- Do NOT include schema definitions, $defs, $ref, properties, or type metadata.\n"
                 "- Output must be valid JSON only.\n"
                 "- List ONLY the names/companies of items that pass the relevance check.\n"
                 "- Be strict — when in doubt, exclude the item.\n"

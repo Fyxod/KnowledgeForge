@@ -195,7 +195,51 @@ class DeepDiveReport(LLMOutputBase):
     )
 
 
+class TechSensingReportSkeleton(LLMOutputBase):
+    """Phase 1 output: everything EXCEPT radar_item_details (to stay within token limits)."""
+
+    report_title: str = Field(description="Report title including date range.")
+    executive_summary: str = Field(
+        description="Executive summary in markdown (200-350 words). Use bold for key terms, bullet points for highlights, and separate paragraphs for readability."
+    )
+    domain: str = Field(description="The domain analyzed (e.g., 'Generative AI').")
+    date_range: str = Field(
+        description="Date range covered (e.g., 'Mar 20-27, 2026')."
+    )
+    total_articles_analyzed: int = Field(
+        description="Total number of articles analyzed."
+    )
+    key_trends: List[TrendItem] = Field(
+        description="List of 5-10 key trends identified."
+    )
+    report_sections: List[ReportSection] = Field(
+        description="3-6 detailed report sections in markdown."
+    )
+    radar_items: List[RadarItem] = Field(
+        description="Technology radar entries (15-30 items)."
+    )
+    market_signals: List[MarketSignal] = Field(
+        description="5-10 market signals from prominent companies/players showing where the industry is heading."
+    )
+    recommendations: List[Recommendation] = Field(
+        description="3-7 actionable recommendations."
+    )
+    notable_articles: List[ClassifiedArticle] = Field(
+        description="Top 5-10 most notable articles with full classification."
+    )
+
+
+class RadarDetailsOutput(LLMOutputBase):
+    """Phase 2 output: detailed write-ups for each radar item."""
+
+    radar_item_details: List[RadarItemDetail] = Field(
+        description="Detailed write-up for each radar item — what it is, why it matters, who is using it, practical applications."
+    )
+
+
 class TechSensingReport(LLMOutputBase):
+    """Full report (assembled from skeleton + details)."""
+
     report_title: str = Field(description="Report title including date range.")
     executive_summary: str = Field(
         description="Executive summary in markdown (200-350 words). Use bold for key terms, bullet points for highlights, and separate paragraphs for readability."

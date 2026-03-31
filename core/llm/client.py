@@ -50,18 +50,18 @@ else:
 
 MyServerLLM = llm_module.MyServerLLM
 
-# Import INTERNALLLM if USE_INTERNAL is enabled (graceful fallback if import fails)
+# Always import INTERNALLLM so the class is available when the user
+# toggles USE_INTERNAL on at runtime (the switch is checked at call time).
 INTERNALLLM = None
-if SWITCHES.get("USE_INTERNAL", False):
-    try:
-        from core.llm.configurations.INTERNAL_llm import INTERNALLLM
-        print("INTERNALLLM imported successfully")
-    except ImportError as e:
-        print(f"INTERNALLLM import failed: {e}. Falling back to existing LLM.")
-        INTERNALLLM = None
-    except Exception as e:
-        print(f"Unexpected error importing INTERNALLLM: {e}. Falling back to existing LLM.")
-        INTERNALLLM = None
+try:
+    from core.llm.configurations.INTERNAL_llm import INTERNALLLM
+    print("INTERNALLLM imported successfully")
+except ImportError as e:
+    print(f"INTERNALLLM import failed: {e}. INTERNAL API will be unavailable.")
+    INTERNALLLM = None
+except Exception as e:
+    print(f"Unexpected error importing INTERNALLLM: {e}. INTERNAL API will be unavailable.")
+    INTERNALLLM = None
 
 # Cache LLM client instances to avoid repeated initialization overhead
 _llm_cache = {}
@@ -98,26 +98,83 @@ async def _next_api_key():
         return next(_api_key_cycle)
 
 
+def _check_empty_lists(result, response_schema) -> None:
+    """
+    Reject outputs where ALL required list fields are empty.
+    This triggers a self-correction retry instead of accepting useless data
+    (Pattern 2: valid JSON structure but empty arrays).
+
+    Only checks list fields that have NO default / default_factory (i.e. required).
+    Fields like `attribution_warnings: List[str] = Field(default_factory=list)` are skipped.
+    """
+    from pydantic.fields import PydanticUndefined
+
+    model_fields = getattr(response_schema, "model_fields", {})
+    required_list_fields = []
+    for name, info in model_fields.items():
+        annotation = info.annotation
+        # Check if it's a List type (typing.List or list with __origin__)
+        origin = getattr(annotation, "__origin__", None)
+        if origin is not list:
+            continue
+        # Skip fields with defaults or default_factory (optional lists)
+        if info.default is not PydanticUndefined or info.default_factory is not None:
+            continue
+        required_list_fields.append(name)
+
+    if not required_list_fields:
+        return
+
+    all_empty = all(
+        len(getattr(result, f, None) or []) == 0 for f in required_list_fields
+    )
+    if all_empty:
+        raise ValueError(
+            f"All required list fields are empty ({', '.join(required_list_fields)}). "
+            "Expected actual data items, not empty arrays."
+        )
+
+
 def _try_parse(raw_output: str, parser, response_schema):
     """
     Attempt to parse LLM output with sanitization and repair fallbacks.
 
     Strategy:
-    1. Sanitize + PydanticOutputParser.parse() (existing path, now with pre-processing)
-    2. parse_llm_json() with json_repair + model_validate (handles malformed JSON)
+    1. Sanitize + PydanticOutputParser.parse() (existing path)
+    2. Sanitize + json.loads + strip schema metadata + model_validate (fast path for schema-echo)
+    3. parse_llm_json() with json_repair + model_validate (handles malformed JSON)
+
+    Post-validation: reject outputs with all-empty list fields (Pattern 2).
 
     Returns parsed structured data or raises on failure.
     """
     cleaned = sanitize_llm_json(raw_output)
 
-    # Strategy 1: Sanitized output through existing parser
+    # Strategy 1: Sanitized output through LangChain's parser
     try:
-        return parser.parse(cleaned)
+        result = parser.parse(cleaned)
+        _check_empty_lists(result, response_schema)
+        return result
     except Exception:
         pass
 
-    # Strategy 2: json_repair + Pydantic model_validate (no LLM call needed)
-    return parse_llm_json(raw_output, response_schema)
+    # Strategy 2: Direct parse with schema metadata stripping
+    # Handles Pattern 1 (schema + data mixed) without the overhead of json_repair
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            from core.utils.llm_output_sanitizer import _strip_schema_metadata
+            parsed = _strip_schema_metadata(parsed, response_schema)
+        result = response_schema.model_validate(parsed)
+        _check_empty_lists(result, response_schema)
+        return result
+    except Exception:
+        pass
+
+    # Strategy 3: json_repair + Pydantic model_validate (handles malformed JSON)
+    result = parse_llm_json(raw_output, response_schema)
+    _check_empty_lists(result, response_schema)
+    return result
 
 
 def _serialize_prompt_messages(messages: list) -> str:
