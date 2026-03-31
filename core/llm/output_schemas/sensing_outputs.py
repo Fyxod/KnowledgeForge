@@ -198,7 +198,7 @@ class DeepDiveReport(LLMOutputBase):
 class TechSensingReport(LLMOutputBase):
     report_title: str = Field(description="Report title including date range.")
     executive_summary: str = Field(
-        description="Executive summary paragraph (200-350 words)."
+        description="Executive summary in markdown (200-350 words). Use bold for key terms, bullet points for highlights, and separate paragraphs for readability."
     )
     domain: str = Field(description="The domain analyzed (e.g., 'Generative AI').")
     date_range: str = Field(

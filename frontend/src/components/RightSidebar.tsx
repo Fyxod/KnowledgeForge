@@ -362,35 +362,11 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               {settingsOpen && (
                 <div className="space-y-3 px-2 py-2 rounded-md bg-muted/50">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm" htmlFor="sw-disable-thinking">Disable Thinking</label>
+                    <label className="text-sm" htmlFor="sw-internal">Use Internal LLM</label>
                     <Switch
-                      id="sw-disable-thinking"
-                      checked={switches['DISABLE_THINKING'] ?? true}
-                      onCheckedChange={(v) => handleSwitchToggle('DISABLE_THINKING', v)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm" htmlFor="sw-hyde">HyDE Retrieval</label>
-                    <Switch
-                      id="sw-hyde"
-                      checked={switches['HYDE'] ?? false}
-                      onCheckedChange={(v) => handleSwitchToggle('HYDE', v)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm" htmlFor="sw-corrective">Corrective Retrieval</label>
-                    <Switch
-                      id="sw-corrective"
-                      checked={switches['CORRECTIVE_RETRIEVAL'] ?? true}
-                      onCheckedChange={(v) => handleSwitchToggle('CORRECTIVE_RETRIEVAL', v)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm" htmlFor="sw-decomposition">Query Decomposition</label>
-                    <Switch
-                      id="sw-decomposition"
-                      checked={switches['DECOMPOSITION'] ?? true}
-                      onCheckedChange={(v) => handleSwitchToggle('DECOMPOSITION', v)}
+                      id="sw-internal"
+                      checked={switches['USE_INTERNAL'] ?? false}
+                      onCheckedChange={(v) => handleSwitchToggle('USE_INTERNAL', v)}
                     />
                   </div>
                 </div>

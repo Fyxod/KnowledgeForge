@@ -66,6 +66,7 @@ const ThreadView = () => {
     ? `contextPreference:${user.userId}:${threadId}`
     : null;
 
+
   const updateUserThreadState = useCallback(
     (nextChats: Chat[], extra?: Partial<Thread>) => {
       if (!user || !threadId) return;
