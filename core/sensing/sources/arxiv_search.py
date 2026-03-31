@@ -16,7 +16,7 @@ from core.sensing.ingest import RawArticle
 logger = logging.getLogger("sensing.sources.arxiv")
 
 ARXIV_MAX_RESULTS = 20
-ARXIV_API_URL = "http://export.arxiv.org/api/query"
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
 
 async def fetch_arxiv_papers(
