@@ -4,7 +4,7 @@ type Content = any;
 
 import pdfMake from 'pdfmake/build/pdfmake';
 import 'pdfmake/build/vfs_fonts';
-import type { SensingReportData, SensingRadarItem } from './api';
+import type { SensingReportData, SensingRadarItem, SensingHeadlineMove } from './api';
 
 const g: any = (typeof window !== 'undefined' ? window : globalThis) as any;
 if (g?.pdfMake?.vfs) {
@@ -18,6 +18,7 @@ const colors = {
     accent: '#f59e0b',
     // Section tones
     executive: { bg: '#EFF6FF', text: '#1E40AF' },
+    headline: { bg: '#FFF7ED', text: '#9A3412' },
     trends: { bg: '#FEF3C7', text: '#B45309' },
     radar: { bg: '#ECFDF5', text: '#047857' },
     market: { bg: '#EDE9FE', text: '#6D28D9' },
@@ -393,6 +394,33 @@ function buildSensingPdf(data: SensingReportData, radarImageDataUrl?: string): T
         '#BFDBFE',
     ));
 
+    // Headline Moves
+    if (report.headline_moves?.length > 0) {
+        content.push(sectionHeader(`Headline Moves (${report.headline_moves.length})`, colors.headline));
+        for (let idx = 0; idx < report.headline_moves.length; idx++) {
+            const move = report.headline_moves[idx];
+            content.push(card([
+                {
+                    columns: [
+                        { text: `${idx + 1}.`, fontSize: 11, bold: true, color: colors.accent, width: 18 },
+                        { text: sanitize(move.headline), fontSize: 10, color: colors.slate800, width: '*' },
+                    ],
+                    columnGap: 4,
+                    margin: [0, 0, 0, 3],
+                },
+                {
+                    columns: [
+                        pill(move.actor, { bg: '#DBEAFE', text: '#1E40AF' }),
+                        pill(move.segment, colors.headline),
+                    ],
+                    columnGap: 4,
+                    margin: [18, 0, 0, 0],
+                },
+                ...sourceUrlsBlock(move.source_urls),
+            ]));
+        }
+    }
+
     // Key Trends
     if (report.key_trends?.length > 0) {
         content.push(sectionHeader(`Key Trends (${report.key_trends.length})`, colors.trends));
@@ -426,7 +454,14 @@ function buildSensingPdf(data: SensingReportData, radarImageDataUrl?: string): T
         });
         for (const signal of report.market_signals) {
             content.push(card([
-                { text: sanitize(signal.company_or_player), fontSize: 11, bold: true, color: colors.market.text, margin: [0, 0, 0, 3] },
+                {
+                    columns: [
+                        { text: sanitize(signal.company_or_player), fontSize: 11, bold: true, color: colors.market.text, width: '*' },
+                        ...(signal.segment ? [pill(signal.segment, colors.headline)] : []),
+                    ],
+                    columnGap: 6,
+                    margin: [0, 0, 0, 3],
+                },
                 { text: sanitize(signal.signal), fontSize: 9, color: colors.slate800, margin: [0, 0, 0, 3] },
                 {
                     columns: [

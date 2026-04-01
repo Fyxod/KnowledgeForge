@@ -557,6 +557,8 @@ export interface SensingClassifiedArticle {
   ring: string;
   technology_name: string;
   reasoning: string;
+  topic_category?: string;
+  industry_segment?: string;
 }
 
 export interface SensingRadarItemDetail {
@@ -569,11 +571,19 @@ export interface SensingRadarItemDetail {
   source_urls?: string[];
 }
 
+export interface SensingHeadlineMove {
+  headline: string;
+  actor: string;
+  segment: string;
+  source_urls?: string[];
+}
+
 export interface SensingMarketSignal {
   company_or_player: string;
   signal: string;
   strategic_intent: string;
   industry_impact: string;
+  segment?: string;
   related_technologies: string[];
   source_urls?: string[];
 }
@@ -584,6 +594,7 @@ export interface SensingReport {
   domain: string;
   date_range: string;
   total_articles_analyzed: number;
+  headline_moves?: SensingHeadlineMove[];
   key_trends: SensingTrendItem[];
   report_sections: SensingReportSection[];
   radar_items: SensingRadarItem[];

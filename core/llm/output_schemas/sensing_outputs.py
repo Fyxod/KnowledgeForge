@@ -29,6 +29,20 @@ class ClassifiedArticle(BaseModel):
     reasoning: str = Field(
         description="Brief reasoning for quadrant and ring placement."
     )
+    topic_category: str = Field(
+        default="",
+        description=(
+            "Topic category: 'Foundation Models & Agents', 'Safety & Governance', "
+            "'Infrastructure & Compute', 'Open Source & Research', 'Partnerships & Strategy'."
+        ),
+    )
+    industry_segment: str = Field(
+        default="",
+        description=(
+            "Industry segment: 'Frontier Labs', 'Big Tech Platforms', "
+            "'Infra & Chips', 'Ethics & Policy', 'Ecosystem & Investors'."
+        ),
+    )
 
 
 class ArticleBatchClassification(LLMOutputBase):
@@ -115,9 +129,26 @@ class RadarItemDetail(BaseModel):
     )
 
 
+class HeadlineMove(BaseModel):
+    """A top headline development of the week, ranked by significance."""
+
+    headline: str = Field(description="1-2 sentence description of the move.")
+    actor: str = Field(description="Person or organization that made this move.")
+    segment: str = Field(
+        description=(
+            "Industry segment: 'Frontier Labs', 'Big Tech Platforms', "
+            "'Infra & Chips', 'Ethics & Policy', 'Ecosystem & Investors'."
+        )
+    )
+    source_urls: List[str] = Field(
+        default_factory=list,
+        description="URLs of articles reporting this move.",
+    )
+
+
 class MarketSignal(BaseModel):
     company_or_player: str = Field(
-        description="Name of the company or major player."
+        description="Name of the company, major player, or key individual leader."
     )
     signal: str = Field(
         description="What they announced, released, or are doing (2-3 sentences)."
@@ -127,6 +158,13 @@ class MarketSignal(BaseModel):
     )
     industry_impact: str = Field(
         description="How this affects the broader industry direction (1-2 sentences)."
+    )
+    segment: str = Field(
+        default="",
+        description=(
+            "Industry segment: 'Frontier Labs', 'Big Tech Platforms', "
+            "'Infra & Chips', 'Ethics & Policy', 'Ecosystem & Investors'."
+        ),
     )
     related_technologies: List[str] = Field(
         description="Technology names related to this signal."
@@ -209,6 +247,9 @@ class TechSensingReportSkeleton(LLMOutputBase):
     total_articles_analyzed: int = Field(
         description="Total number of articles analyzed."
     )
+    headline_moves: List[HeadlineMove] = Field(
+        description="Top 10 most impactful developments of the week, ranked by significance."
+    )
     key_trends: List[TrendItem] = Field(
         description="List of 5-10 key trends identified."
     )
@@ -250,6 +291,9 @@ class TechSensingReport(LLMOutputBase):
     )
     total_articles_analyzed: int = Field(
         description="Total number of articles analyzed."
+    )
+    headline_moves: List[HeadlineMove] = Field(
+        description="Top 10 most impactful developments of the week, ranked by significance."
     )
     key_trends: List[TrendItem] = Field(
         description="List of 5-10 key trends identified."

@@ -103,6 +103,36 @@ export async function downloadSensingReportPptx(
         valign: 'top',
     });
 
+    // ── Headline Moves slides ──
+    if (report.headline_moves?.length > 0) {
+        const movesPerSlide = 5;
+        for (let i = 0; i < report.headline_moves.length; i += movesPerSlide) {
+            const chunk = report.headline_moves.slice(i, i + movesPerSlide);
+            const slide = pptx.addSlide();
+            const pageNum = Math.floor(i / movesPerSlide) + 1;
+            const totalPages = Math.ceil(report.headline_moves.length / movesPerSlide);
+            addSlideHeader(slide, `Headline Moves${totalPages > 1 ? ` (${pageNum}/${totalPages})` : ''}`);
+
+            let y = 1.2;
+            for (let j = 0; j < chunk.length; j++) {
+                const move = chunk[j];
+                const num = i + j + 1;
+
+                slide.addText([
+                    { text: `${num}. `, options: { bold: true, color: COLORS.accent, fontSize: 11 } },
+                    { text: sanitize(move.headline), options: { fontSize: 11, color: COLORS.textDark } },
+                ], { x: 0.5, y, w: 12.3, h: 0.4 });
+
+                slide.addText([
+                    { text: sanitize(move.actor), options: { bold: true, fontSize: 9, color: '1E40AF' } },
+                    { text: `  |  ${sanitize(move.segment)}`, options: { fontSize: 9, color: COLORS.textMuted } },
+                ], { x: 0.8, y: y + 0.38, w: 11.5, h: 0.3 });
+
+                y += 0.85;
+            }
+        }
+    }
+
     // ── Slide 3: Technology Radar ──
     if (report.radar_items?.length > 0) {
         const slide3 = pptx.addSlide();
@@ -225,6 +255,7 @@ export async function downloadSensingReportPptx(
             const tableRows: PptxGenJS.TableRow[] = [
                 [
                     { text: 'Company / Player', options: { bold: true, fill: { color: COLORS.lightBg }, fontSize: 10, color: COLORS.textDark } },
+                    { text: 'Segment', options: { bold: true, fill: { color: COLORS.lightBg }, fontSize: 10, color: COLORS.textDark } },
                     { text: 'Signal', options: { bold: true, fill: { color: COLORS.lightBg }, fontSize: 10, color: COLORS.textDark } },
                     { text: 'Strategic Intent', options: { bold: true, fill: { color: COLORS.lightBg }, fontSize: 10, color: COLORS.textDark } },
                 ],
@@ -233,15 +264,16 @@ export async function downloadSensingReportPptx(
             for (const signal of chunk) {
                 tableRows.push([
                     { text: sanitize(signal.company_or_player), options: { fontSize: 10, bold: true } },
+                    { text: sanitize(signal.segment), options: { fontSize: 9, color: COLORS.textMuted } },
                     { text: truncate(signal.signal, 150), options: { fontSize: 9, color: COLORS.textMuted } },
-                    { text: truncate(signal.strategic_intent, 150), options: { fontSize: 9, color: COLORS.textMuted } },
+                    { text: truncate(signal.strategic_intent, 120), options: { fontSize: 9, color: COLORS.textMuted } },
                 ]);
             }
 
             slide.addTable(tableRows, {
                 x: 0.5, y: 1.2, w: 12.3,
                 border: { type: 'solid' as const, pt: 0.5, color: COLORS.border },
-                colW: [2.5, 5.0, 4.8],
+                colW: [2.2, 1.6, 4.5, 4.0],
                 autoPage: false,
             });
         }

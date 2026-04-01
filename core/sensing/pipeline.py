@@ -53,6 +53,7 @@ async def run_sensing_pipeline(
     lookback_days: int = LOOKBACK_DAYS,
     progress_callback: Optional[Callable] = None,
     user_id: Optional[str] = None,
+    key_people: Optional[List[str]] = None,
 ) -> SensingPipelineResult:
     """
     Full tech sensing pipeline execution.
@@ -194,7 +195,8 @@ async def run_sensing_pipeline(
     )
     await _emit("classify", 50, "Classifying articles with LLM...")
     classified = await classify_articles(
-        list(enriched), domain=domain, custom_requirements=full_requirements
+        list(enriched), domain=domain, custom_requirements=full_requirements,
+        key_people=key_people,
     )
     await _emit("classify", 65, f"{len(classified)} articles classified")
     logger.info(
@@ -238,6 +240,7 @@ async def run_sensing_pipeline(
         custom_requirements=full_requirements,
         org_context=org_context_str,
         article_content_map=url_content_map,
+        key_people=key_people,
     )
     await _emit("report", 85, "Report generated, verifying relevance...")
     logger.info(

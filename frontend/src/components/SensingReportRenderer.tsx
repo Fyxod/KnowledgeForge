@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type {
   SensingReport, SensingRadarItem, SensingRadarItemDetail, SensingMarketSignal,
+  SensingHeadlineMove,
 } from '@/lib/api';
 
 interface Meta {
@@ -131,6 +132,39 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
           </CardContent>
         </Card>
 
+        {/* Headline Moves */}
+        {report.headline_moves?.length > 0 && (
+          <Card className="border-l-4 border-l-orange-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-orange-500" />
+                Top {report.headline_moves.length} Headline Moves
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ol className="space-y-3">
+                {report.headline_moves.map((move: SensingHeadlineMove, idx: number) => (
+                  <li key={idx} className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-bold flex items-center justify-center mt-0.5">
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">{move.headline}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <Badge variant="outline" className="text-xs">{move.actor}</Badge>
+                        {move.segment && (
+                          <Badge variant="secondary" className="text-xs">{move.segment}</Badge>
+                        )}
+                        <SourceLinks urls={move.source_urls} />
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Key Trends */}
         {report.key_trends?.length > 0 && (
           <div className="space-y-3">
@@ -204,6 +238,9 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                       <span className="font-semibold text-violet-700 dark:text-violet-300">
                         {signal.company_or_player}
                       </span>
+                      {signal.segment && (
+                        <Badge variant="secondary" className="text-xs">{signal.segment}</Badge>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{signal.signal}</p>
                   </div>
@@ -425,6 +462,12 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                         <Badge className={ringColors[article.ring] || 'bg-gray-100'} variant="secondary">
                           {article.ring}
                         </Badge>
+                        {article.topic_category && (
+                          <Badge variant="secondary" className="text-xs">{article.topic_category}</Badge>
+                        )}
+                        {article.industry_segment && (
+                          <Badge variant="secondary" className="text-xs">{article.industry_segment}</Badge>
+                        )}
                         <span className="text-xs text-muted-foreground">
                           Score: {article.relevance_score?.toFixed(2)}
                         </span>

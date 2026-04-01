@@ -2,6 +2,7 @@ def sensing_classify_prompt(
     articles_text: str,
     domain: str = "Generative AI",
     custom_requirements: str = "",
+    key_people: list[str] | None = None,
 ) -> list[dict]:
     """
     Build a chat prompt to classify and summarize a batch of articles.
@@ -11,6 +12,16 @@ def sensing_classify_prompt(
     it twice causes the LLM to echo the schema definition back instead of
     producing actual classified article data.
     """
+    # Build optional key-people watchlist block
+    people_block = ""
+    if key_people:
+        names = ", ".join(key_people)
+        people_block = (
+            f"\nKEY PEOPLE WATCHLIST:\n"
+            f"Pay special attention to articles mentioning these leaders: {names}.\n"
+            "Boost relevance_score by ~0.1 for articles featuring their actions or statements.\n"
+        )
+
     contents = [
         {
             "role": "system",
@@ -23,7 +34,9 @@ def sensing_classify_prompt(
                 "2. Relevance score (0.0-1.0) to the domain\n"
                 "3. Technology Radar quadrant placement\n"
                 "4. Technology Radar ring placement\n"
-                "5. A short technology name for the radar blip\n\n"
+                "5. A short technology name for the radar blip\n"
+                "6. Topic category\n"
+                "7. Industry segment\n\n"
                 "QUADRANT DEFINITIONS:\n"
                 "- Techniques: Processes, methodologies, architectural patterns (e.g., RAG, RLHF, prompt engineering)\n"
                 "- Platforms: Infrastructure, cloud services, compute platforms (e.g., CUDA, cloud GPU, training clusters)\n"
@@ -34,10 +47,24 @@ def sensing_classify_prompt(
                 "- Trial: Worth pursuing in projects that can handle some risk\n"
                 "- Assess: Worth exploring to understand its impact\n"
                 "- Hold: Proceed with caution, not recommended for new work\n\n"
-                "OUTPUT RULES:\n"
+                "TOPIC CATEGORY DEFINITIONS:\n"
+                "- Foundation Models & Agents: Foundation model releases, agents, major product launches, benchmarks\n"
+                "- Safety & Governance: AI safety, alignment, regulation, governance, ethics, responsible AI\n"
+                "- Infrastructure & Compute: GPUs, TPUs, data centers, compute infrastructure, large investments\n"
+                "- Open Source & Research: Open-source releases, research papers, benchmark results, datasets\n"
+                "- Partnerships & Strategy: M&A, partnerships, strategic shifts, funding rounds, market moves\n\n"
+                "INDUSTRY SEGMENT DEFINITIONS:\n"
+                "- Frontier Labs: Frontier AI labs and their leaders (e.g., OpenAI, Anthropic, Google DeepMind, xAI)\n"
+                "- Big Tech Platforms: Major tech platforms integrating AI (e.g., Microsoft, Google/Alphabet, Meta, Apple, Amazon)\n"
+                "- Infra & Chips: Hardware, compute, and infrastructure providers (e.g., NVIDIA, Qualcomm, AMD, cloud providers)\n"
+                "- Ethics & Policy: AI safety researchers, regulators, policy makers, governance bodies\n"
+                "- Ecosystem & Investors: Independent founders, VCs, startups, ecosystem builders, public intellectuals\n\n"
+                + people_block
+                + "OUTPUT RULES:\n"
                 "- Return ONLY a valid JSON object with an \"articles\" array.\n"
                 "- Each element must have: title, source, url, published_date, summary, "
-                "relevance_score, quadrant, ring, technology_name, reasoning.\n"
+                "relevance_score, quadrant, ring, technology_name, reasoning, "
+                "topic_category, industry_segment.\n"
                 "- Do NOT include schema definitions, $defs, $ref, properties, or type metadata.\n"
                 "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
                 '- Double quotes inside string values MUST be escaped as \\".\n'
@@ -70,6 +97,7 @@ def sensing_report_prompt(
     date_range: str = "",
     custom_requirements: str = "",
     org_context: str = "",
+    key_people: list[str] | None = None,
 ) -> list[dict]:
     """
     Build a chat prompt to generate the final tech sensing report.
@@ -78,6 +106,15 @@ def sensing_report_prompt(
     injects it via PydanticOutputParser.  Only list expected top-level keys
     to guide the LLM without causing schema echo.
     """
+    # Build optional key-people watchlist block
+    people_block = ""
+    if key_people:
+        names = ", ".join(key_people)
+        people_block = (
+            f"\nKEY PEOPLE WATCHLIST:\n"
+            f"Track actions and statements by these leaders: {names}.\n"
+            "Include their moves in headline_moves and market_signals where relevant.\n"
+        )
 
     contents = [
         {
@@ -87,12 +124,25 @@ def sensing_report_prompt(
                 f"Tech Sensing Report for the {domain} domain.\n\n"
                 "Based on the classified articles provided, generate a "
                 "comprehensive, in-depth report that:\n"
-                "1. Identifies key trends and patterns across the articles\n"
-                "2. Places technologies on a Technology Radar (quadrants + rings)\n"
-                "3. Analyzes market signals from prominent companies\n"
-                "4. Offers actionable recommendations\n"
-                "5. Highlights notable developments\n\n"
-                "REPORT QUALITY GUIDELINES:\n"
+                "1. Ranks the top 10 headline moves of the week\n"
+                "2. Identifies key trends and patterns across the articles\n"
+                "3. Places technologies on a Technology Radar (quadrants + rings)\n"
+                "4. Analyzes market signals from companies AND key individual leaders\n"
+                "5. Offers actionable, enterprise-relevant recommendations\n"
+                "6. Highlights notable developments\n\n"
+                "INDUSTRY SEGMENTS (use these for headline_moves and market_signals):\n"
+                "- Frontier Labs: Frontier AI labs (OpenAI, Anthropic, Google DeepMind, xAI) and their leaders\n"
+                "- Big Tech Platforms: Major tech platforms (Microsoft, Google/Alphabet, Meta, Apple, Amazon)\n"
+                "- Infra & Chips: Hardware and compute providers (NVIDIA, Qualcomm, AMD, cloud providers)\n"
+                "- Ethics & Policy: AI safety researchers, regulators, governance bodies\n"
+                "- Ecosystem & Investors: Independent founders, VCs, startups, public intellectuals\n\n"
+                + people_block
+                + "REPORT QUALITY GUIDELINES:\n"
+                "- Headline moves: Identify the TOP 10 most impactful developments of the week, "
+                "ranked by significance across ALL segments. Each move should name the actor "
+                "(person or organization), describe what happened in 1-2 sentences, and tag its "
+                "industry segment. These should be the developments an enterprise leader would "
+                "want to know about first.\n\n"
                 "- Executive summary: decisive, forward-looking, 200-350 words. "
                 "Use markdown formatting: bold (**term**) for key technologies, "
                 "bullet points for the top 3-5 highlights, and separate paragraphs. "
@@ -100,19 +150,23 @@ def sensing_report_prompt(
                 "- Key trends: identify 5-10 major trends with supporting evidence from the articles. "
                 "Each trend should have a clear description of WHY it matters.\n\n"
                 "- Radar items: 15-30 distinct technologies/techniques — consolidate duplicates.\n\n"
-                "- Market signals: 5-10 signals from prominent companies (Google, OpenAI, Meta, "
-                "Microsoft, NVIDIA, Anthropic, Apple, Amazon, startups, etc.). For each signal:\n"
-                "  * What the company announced or is doing\n"
+                "- Market signals: 5-10 signals from companies AND key individual leaders "
+                "(CEO statements, researcher announcements, investor moves). For each signal:\n"
+                "  * What the company/person announced or is doing\n"
                 "  * Their strategic intent (why they are doing this)\n"
                 "  * How it impacts the broader industry direction\n"
+                "  * Industry segment tag\n"
                 "  * Related technologies from the radar\n"
-                "  This section should give readers a clear picture of WHERE the industry is "
+                "  Include actions by individual leaders (not just corporate entities). "
+                "This section should give readers a clear picture of WHERE the industry is "
                 "heading and WHY it matters.\n\n"
                 "- Report sections: 3-6 deep-dive sections with markdown formatting. "
                 "These should elaborate on the most important themes, providing practical "
                 "context, real-world implications, and technical depth.\n\n"
                 "- Recommendations: actionable, prioritized, linked to trends. "
-                "Focus on what practitioners should DO based on these signals.\n\n"
+                "Frame recommendations for an enterprise technology and strategy leader. "
+                "Focus on actionable decisions: what to adopt now, what to evaluate, "
+                "what risks to monitor, and how these developments affect enterprise strategy.\n\n"
                 "- Notable articles: select the 5-10 most impactful articles.\n\n"
                 "GROUNDING AND CITATION RULES:\n"
                 "- Every claim, trend, and insight MUST be grounded in the provided articles. "
@@ -121,6 +175,7 @@ def sensing_report_prompt(
                 "- For key_trends: populate source_urls with URLs of articles that support each trend.\n"
                 "- For market_signals: populate source_urls with URLs of articles reporting each signal.\n"
                 "- For report_sections: populate source_urls with URLs of articles referenced in that section.\n"
+                "- For headline_moves: populate source_urls with URLs of articles reporting each move.\n"
                 "- If an article includes a 'content_excerpt' field, use it for deeper context beyond the summary.\n"
                 "- Prefer specific facts from articles over general knowledge. "
                 "If the articles don't support a claim, don't make it.\n"
@@ -136,8 +191,8 @@ def sensing_report_prompt(
                 "- If the articles don't clearly state who built or released something, say so rather than guessing.\n\n"
                 "OUTPUT RULES:\n"
                 "- Return ONLY a valid JSON object with these top-level keys: report_title, "
-                "executive_summary, domain, date_range, total_articles_analyzed, key_trends, "
-                "radar_items, market_signals, report_sections, recommendations, notable_articles.\n"
+                "executive_summary, domain, date_range, total_articles_analyzed, headline_moves, "
+                "key_trends, radar_items, market_signals, report_sections, recommendations, notable_articles.\n"
                 "- Do NOT include radar_item_details — those will be generated separately.\n"
                 "- Do NOT include schema definitions, $defs, $ref, properties, or type metadata.\n"
                 "- Output must be valid JSON only, no markdown fencing or trailing commas.\n"

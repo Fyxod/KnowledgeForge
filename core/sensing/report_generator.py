@@ -38,6 +38,7 @@ async def generate_report(
     custom_requirements: str = "",
     org_context: str = "",
     article_content_map: dict[str, str] | None = None,
+    key_people: list[str] | None = None,
 ) -> TechSensingReport:
     """
     Generate the complete Tech Sensing Report from classified articles.
@@ -78,6 +79,7 @@ async def generate_report(
         date_range=date_range,
         custom_requirements=custom_requirements,
         org_context=org_context,
+        key_people=key_people,
     )
 
     phase1_start = time.time()
@@ -142,6 +144,7 @@ async def generate_report(
         domain=skeleton.domain,
         date_range=skeleton.date_range,
         total_articles_analyzed=skeleton.total_articles_analyzed,
+        headline_moves=skeleton.headline_moves,
         key_trends=skeleton.key_trends,
         report_sections=skeleton.report_sections,
         radar_items=skeleton.radar_items,
