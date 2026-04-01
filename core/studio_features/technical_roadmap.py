@@ -155,6 +155,3 @@ def word_count(text: str) -> int:
     return len(text.split())
 
 
-def build_technical_roadmap_prompt(document_text: str, n_years: int):
-    prompt = technical_roadmap_prompt(document=document_text, n_years=n_years)
-    return prompt
