@@ -2,8 +2,10 @@ import asyncio
 import contextvars
 import itertools
 import json
+import logging
 import os
 import time
+import traceback
 from datetime import datetime, timezone
 
 from google import genai
@@ -13,6 +15,8 @@ from openai import AsyncOpenAI
 from core.config import settings
 from core.constants import FALLBACK_GEMINI_MODEL, FALLBACK_OPENAI_MODEL, SWITCHES
 from core.utils.llm_output_sanitizer import parse_llm_json, sanitize_llm_json
+
+logger = logging.getLogger("llm.client")
 
 # Directory for logging parse failures
 _PARSE_ERRORS_DIR = "DEBUG/parse_errors"
@@ -341,11 +345,20 @@ CRITICAL OUTPUT RULES:
                 return structured
             except Exception as exc:
                 error_str = str(exc)
+                tb_str = traceback.format_exc()
+                logger.error(
+                    f"INTERNAL API attempt {attempt}/{MAX_RETRIES} failed "
+                    f"(schema={response_schema.__name__}): {error_str}\n{tb_str}"
+                )
                 print(f"INTERNAL API failed: {error_str}")
                 if internal_output:
                     # Parse failure — retry with self-correction
                     last_failed_output = internal_output
                     last_parse_error = error_str
+                    logger.error(
+                        f"INTERNAL raw output ({len(internal_output)} chars): "
+                        f"{internal_output[:1000]}"
+                    )
                     _log_parse_failure(
                         source="internal",
                         attempt=attempt,
@@ -357,6 +370,9 @@ CRITICAL OUTPUT RULES:
                     print(f"[Self-correction] Captured failed INTERNAL output ({len(internal_output)} chars)")
                 else:
                     # Network/API error — no point retrying INTERNAL, break to GPU
+                    logger.error(
+                        f"INTERNAL network/API error (no output received): {error_str}\n{tb_str}"
+                    )
                     print("[Sticky fallback] INTERNAL network error, breaking to GPU")
                     break
 
