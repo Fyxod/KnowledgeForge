@@ -160,12 +160,18 @@ _SCHEMA_FIELD_RE = re.compile(
     r'|stop_words|nodes|edges|milestones|phases|insights|review'
     r'|articles|report_title|executive_summary|key_trends|radar_items|market_signals'
     r'|radar_item_details|report_sections'
+    # Roadmap schemas
     r'|roadmap_title|overall_vision|current_state_analysis|technology_domains'
     r'|key_technology_enablers|risks_and_mitigations|innovation_opportunities'
     r'|tabular_summary|llm_inferred_additions|phased_roadmap'
     r'|vision_and_end_goal|current_baseline|strategic_pillars'
     r'|enablers_and_dependencies|risks_and_mitigation|key_metrics_and_milestones'
-    r'|future_opportunities)"'
+    r'|future_opportunities'
+    # Agent, analysis, document creator, and other schemas
+    r'|requires_decomposition|hypothetical_document|verdict|themes'
+    r'|file_name|values|document_title|heading|overall_score'
+    r'|analysis_title|mind_map|document_summary|title'
+    r'|technology_name|stopwords)"'
 )
 
 
