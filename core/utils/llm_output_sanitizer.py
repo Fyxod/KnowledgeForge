@@ -159,7 +159,13 @@ _SCHEMA_FIELD_RE = re.compile(
     r'|description|reasoning|result|data|items|categories|findings|recommendations'
     r'|stop_words|nodes|edges|milestones|phases|insights|review'
     r'|articles|report_title|executive_summary|key_trends|radar_items|market_signals'
-    r'|radar_item_details|report_sections)"'
+    r'|radar_item_details|report_sections'
+    r'|roadmap_title|overall_vision|current_state_analysis|technology_domains'
+    r'|key_technology_enablers|risks_and_mitigations|innovation_opportunities'
+    r'|tabular_summary|llm_inferred_additions|phased_roadmap'
+    r'|vision_and_end_goal|current_baseline|strategic_pillars'
+    r'|enablers_and_dependencies|risks_and_mitigation|key_metrics_and_milestones'
+    r'|future_opportunities)"'
 )
 
 
@@ -169,35 +175,51 @@ def _extract_json_block(text: str) -> str:
     preamble or postamble content.
 
     Strategy:
-    1. Look for a JSON object starting with a known schema field name
-       (e.g., {"answer": ...) to skip markdown/HTML preamble with stray braces.
-    2. Fall back to the first { or [ if no schema match is found.
+    1. If the text starts with { or [, use it directly — the first bracket
+       IS the root JSON object.  Skip the schema-field regex which can
+       accidentally match a nested sub-object.
+    2. Otherwise there is preamble text: use the schema-field regex to find
+       the correct JSON object (skipping stray braces in prose).
+    3. Fall back to the first { or [ if no regex match.
 
     Uses bracket counting to find the correct closing bracket,
     properly handling strings (including escaped quotes).
     """
-    # Strategy 1: Find a JSON object that starts with a known schema field
-    schema_match = _SCHEMA_FIELD_RE.search(text)
-    if schema_match:
-        start = schema_match.start()
+    # Strategy 1: Text starts with JSON — use the first bracket directly.
+    # This avoids the schema-field regex matching a nested sub-object
+    # (e.g. {"summary":...} inside {"roadmap_title":...,"current_state_analysis":{"summary":...}}).
+    if text.startswith("{"):
+        start = 0
         open_char = "{"
         close_char = "}"
+    elif text.startswith("["):
+        start = 0
+        open_char = "["
+        close_char = "]"
     else:
-        # Strategy 2: Fall back to first { or [
-        start = -1
-        open_char = None
-        close_char = None
-        for i, ch in enumerate(text):
-            if ch == "{":
-                start = i
-                open_char = "{"
-                close_char = "}"
-                break
-            elif ch == "[":
-                start = i
-                open_char = "["
-                close_char = "]"
-                break
+        # There is preamble text before the JSON — use schema-field regex
+        # to skip stray braces in prose and find the real JSON object.
+        schema_match = _SCHEMA_FIELD_RE.search(text)
+        if schema_match:
+            start = schema_match.start()
+            open_char = "{"
+            close_char = "}"
+        else:
+            # Fall back to first { or [
+            start = -1
+            open_char = None
+            close_char = None
+            for i, ch in enumerate(text):
+                if ch == "{":
+                    start = i
+                    open_char = "{"
+                    close_char = "}"
+                    break
+                elif ch == "[":
+                    start = i
+                    open_char = "["
+                    close_char = "]"
+                    break
 
     if start == -1:
         return text  # No JSON structure found, return as-is
