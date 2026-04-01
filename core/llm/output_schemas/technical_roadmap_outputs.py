@@ -94,6 +94,47 @@ class LLMInferredAddition(BaseModel):
     content: str = Field(description="Summarized insight or recommendation")
 
 
+class TechnicalRoadmapSkeleton(LLMOutputBase):
+    """Phase 1 output: everything except phased_roadmap."""
+
+    roadmap_title: str = Field(
+        description="Concise, professional title summarizing the technology direction"
+    )
+    overall_vision: OverallVision = Field(
+        description="Long-term vision and success metrics"
+    )
+    current_state_analysis: CurrentStateAnalysis = Field(
+        description="Snapshot and gap analysis of the current state"
+    )
+    technology_domains: List[TechnologyDomain] = Field(
+        description="List of technology domains and their scope"
+    )
+    key_technology_enablers: List[KeyTechnologyEnabler] = Field(
+        description="Critical enablers for the roadmap"
+    )
+    risks_and_mitigations: List[RiskAndMitigation] = Field(
+        description="List of risks and mitigation strategies"
+    )
+    innovation_opportunities: List[InnovationOpportunity] = Field(
+        description="Potential innovations and their maturity"
+    )
+    tabular_summary: List[TabularSummaryRow] = Field(
+        description="Condensed phase-by-phase summary"
+    )
+    llm_inferred_additions: Optional[List[LLMInferredAddition]] = Field(
+        default=None,
+        description="Optional model-inferred additions such as ethical AI or governance",
+    )
+
+
+class TechnicalPhasedRoadmapOutput(LLMOutputBase):
+    """Phase 2 output: detailed phased roadmap only."""
+
+    phased_roadmap: PhasedRoadmap = Field(
+        description="Phased roadmap detailing short-term, mid-term, and long-term plans"
+    )
+
+
 class TechnicalRoadmapLLMOutput(LLMOutputBase):
     roadmap_title: str = Field(
         description="Concise, professional title summarizing the technology direction"

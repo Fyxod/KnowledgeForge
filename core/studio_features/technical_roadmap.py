@@ -1,40 +1,85 @@
+import json
+import logging
 import os
+import time
 
 from core.constants import GPU_TECHNICAL_ROADMAP_LLM
 from core.llm.client import invoke_llm
 from core.llm.outputs import TechnicalRoadmapLLMOutput
-from core.llm.prompts.technical_roadmap_prompt import technical_roadmap_prompt
+from core.llm.output_schemas.technical_roadmap_outputs import (
+    TechnicalRoadmapSkeleton,
+    TechnicalPhasedRoadmapOutput,
+)
+from core.llm.prompts.technical_roadmap_prompt import (
+    technical_roadmap_skeleton_prompt,
+    technical_roadmap_phases_prompt,
+)
 from core.models.document import Document
 from core.utils.compress_data import compress_global_file_data
 
 os.makedirs("DEBUG", exist_ok=True)
+logger = logging.getLogger("studio.technical_roadmap")
 
 
 async def generate_technical_roadmap(
     document: Document | list[Document], n_years: int = 5
 ) -> TechnicalRoadmapLLMOutput:
     """
-    Generate a technical roadmap based on the provided document.
+    Generate a technical roadmap using two-phase LLM generation.
 
-    Args:
-            document (Document): The document to base the roadmap on.
-            n_years (int): The number of years for the roadmap.
-
-    Returns:
-            TechnicalRoadmapLLMOutput: The generated technical roadmap.
+    Phase 1 (Skeleton): vision, current state, domains, enablers, risks, innovations, summary
+    Phase 2 (Phases): detailed phased roadmap (short/mid/long term) aligned with skeleton
     """
     document_text = fetch_document_content(document)
 
-    prompt = build_technical_roadmap_prompt(document_text, n_years)
+    # ── Phase 1: Skeleton ──
+    phase1_start = time.time()
+    logger.info("[Phase 1/2] Generating technical roadmap skeleton...")
 
-    response: TechnicalRoadmapLLMOutput = await invoke_llm(
+    skeleton_prompt = technical_roadmap_skeleton_prompt(document_text, n_years)
+    skeleton = await invoke_llm(
         gpu_model=GPU_TECHNICAL_ROADMAP_LLM.model,
-        response_schema=TechnicalRoadmapLLMOutput,
-        contents=prompt,
+        response_schema=TechnicalRoadmapSkeleton,
+        contents=skeleton_prompt,
         port=GPU_TECHNICAL_ROADMAP_LLM.port,
     )
+    skeleton = TechnicalRoadmapSkeleton.model_validate(skeleton)
 
-    return response
+    phase1_time = time.time() - phase1_start
+    logger.info(
+        f"[Phase 1/2] Skeleton generated in {phase1_time:.1f}s — "
+        f"domains={len(skeleton.technology_domains)}, enablers={len(skeleton.key_technology_enablers)}"
+    )
+
+    # ── Phase 2: Phased Roadmap ──
+    phase2_start = time.time()
+    logger.info("[Phase 2/2] Generating phased roadmap...")
+
+    skeleton_json = json.dumps(skeleton.model_dump(), indent=2, ensure_ascii=False)
+    phases_prompt = technical_roadmap_phases_prompt(document_text, n_years, skeleton_json)
+    phases = await invoke_llm(
+        gpu_model=GPU_TECHNICAL_ROADMAP_LLM.model,
+        response_schema=TechnicalPhasedRoadmapOutput,
+        contents=phases_prompt,
+        port=GPU_TECHNICAL_ROADMAP_LLM.port,
+    )
+    phases = TechnicalPhasedRoadmapOutput.model_validate(phases)
+
+    phase2_time = time.time() - phase2_start
+    logger.info(f"[Phase 2/2] Phased roadmap generated in {phase2_time:.1f}s")
+
+    # ── Merge ──
+    result = TechnicalRoadmapLLMOutput(
+        **skeleton.model_dump(),
+        phased_roadmap=phases.phased_roadmap,
+    )
+
+    logger.info(
+        f"Technical roadmap complete in {phase1_time + phase2_time:.1f}s "
+        f"(phase1={phase1_time:.1f}s, phase2={phase2_time:.1f}s)"
+    )
+
+    return result
 
 
 def fetch_document_content(document: Document | list[Document]) -> str:

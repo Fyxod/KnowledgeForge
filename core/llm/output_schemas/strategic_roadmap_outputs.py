@@ -66,6 +66,44 @@ class LLMInferredAddition(BaseModel):
     content: str = Field(description="Model-added insight or recommendation.")
 
 
+class StrategicRoadmapSkeleton(LLMOutputBase):
+    """Phase 1 output: everything except phased_roadmap."""
+
+    roadmap_title: str = Field(description="Concise and visionary roadmap title.")
+    vision_and_end_goal: VisionAndEndGoal = Field(
+        description="Vision description and success criteria for the end goal."
+    )
+    current_baseline: CurrentBaseline = Field(
+        description="Current baseline overview and SWOT analysis."
+    )
+    strategic_pillars: List[StrategicPillar] = Field(
+        description="List of strategic pillars."
+    )
+    enablers_and_dependencies: EnablersAndDependencies = Field(
+        description="Enabling technologies, skills/resources, and stakeholders."
+    )
+    risks_and_mitigation: List[RiskAndMitigation] = Field(
+        description="List of risks and corresponding mitigation strategies."
+    )
+    key_metrics_and_milestones: List[KeyMetricsAndMilestone] = Field(
+        description="Key metrics and milestones by year or phase."
+    )
+    future_opportunities: List[str] = Field(
+        description="Opportunities or emerging trends beyond the roadmap horizon."
+    )
+    llm_inferred_additions: List[LLMInferredAddition] = Field(
+        description="Model-inferred additional sections with insights."
+    )
+
+
+class StrategicPhasedRoadmapOutput(LLMOutputBase):
+    """Phase 2 output: detailed phased roadmap only."""
+
+    phased_roadmap: List[PhasedRoadmapItem] = Field(
+        description="Phased roadmap with objectives, initiatives, and outcomes."
+    )
+
+
 class StrategicRoadmapLLMOutput(LLMOutputBase):
     roadmap_title: str = Field(description="Concise and visionary roadmap title.")
     vision_and_end_goal: VisionAndEndGoal = Field(
