@@ -7,11 +7,13 @@ from core.constants import GPU_STRATEGIC_ROADMAP_LLM
 from core.llm.client import invoke_llm
 from core.llm.outputs import StrategicRoadmapLLMOutput
 from core.llm.output_schemas.strategic_roadmap_outputs import (
-    StrategicRoadmapSkeleton,
+    StrategicRoadmapFoundation,
+    StrategicRoadmapAnalysis,
     StrategicPhasedRoadmapOutput,
 )
 from core.llm.prompts.strategic_roadmap_prompt import (
-    strategic_roadmap_skeleton_prompt,
+    strategic_roadmap_foundation_prompt,
+    strategic_roadmap_analysis_prompt,
     strategic_roadmap_phases_prompt,
 )
 from core.models.document import Document
@@ -25,38 +27,59 @@ async def generate_strategic_roadmap(
     document: Document | list[Document], n_years: int = 5
 ) -> StrategicRoadmapLLMOutput:
     """
-    Generate a strategic roadmap using two-phase LLM generation.
+    Generate a strategic roadmap using three-phase LLM generation.
 
-    Phase 1 (Skeleton): vision, baseline, pillars, enablers, risks, metrics, opportunities
-    Phase 2 (Phases): detailed phased roadmap aligned with the skeleton
+    Phase 1 (Foundation): title, vision, baseline, strategic pillars
+    Phase 2 (Analysis): enablers, risks, metrics, opportunities, inferred additions
+    Phase 3 (Phases): detailed phased roadmap aligned with foundation
     """
     document_text = fetch_document_content(document)
 
-    # ── Phase 1: Skeleton ──
+    # ── Phase 1: Foundation ──
     phase1_start = time.time()
-    logger.info("[Phase 1/2] Generating strategic roadmap skeleton...")
+    logger.info("[Phase 1/3] Generating strategic roadmap foundation...")
 
-    skeleton_prompt = strategic_roadmap_skeleton_prompt(document_text, n_years)
-    skeleton = await invoke_llm(
+    foundation_prompt = strategic_roadmap_foundation_prompt(document_text, n_years)
+    foundation = await invoke_llm(
         gpu_model=GPU_STRATEGIC_ROADMAP_LLM.model,
-        response_schema=StrategicRoadmapSkeleton,
-        contents=skeleton_prompt,
+        response_schema=StrategicRoadmapFoundation,
+        contents=foundation_prompt,
         port=GPU_STRATEGIC_ROADMAP_LLM.port,
     )
-    skeleton = StrategicRoadmapSkeleton.model_validate(skeleton)
+    foundation = StrategicRoadmapFoundation.model_validate(foundation)
 
     phase1_time = time.time() - phase1_start
     logger.info(
-        f"[Phase 1/2] Skeleton generated in {phase1_time:.1f}s — "
-        f"pillars={len(skeleton.strategic_pillars)}, risks={len(skeleton.risks_and_mitigation)}"
+        f"[Phase 1/3] Foundation generated in {phase1_time:.1f}s — "
+        f"pillars={len(foundation.strategic_pillars)}"
     )
 
-    # ── Phase 2: Phased Roadmap ──
-    phase2_start = time.time()
-    logger.info("[Phase 2/2] Generating phased roadmap...")
+    foundation_json = json.dumps(foundation.model_dump(), indent=2, ensure_ascii=False)
 
-    skeleton_json = json.dumps(skeleton.model_dump(), indent=2, ensure_ascii=False)
-    phases_prompt = strategic_roadmap_phases_prompt(document_text, n_years, skeleton_json)
+    # ── Phase 2: Analysis ──
+    phase2_start = time.time()
+    logger.info("[Phase 2/3] Generating analysis (enablers, risks, metrics)...")
+
+    analysis_prompt = strategic_roadmap_analysis_prompt(document_text, n_years, foundation_json)
+    analysis = await invoke_llm(
+        gpu_model=GPU_STRATEGIC_ROADMAP_LLM.model,
+        response_schema=StrategicRoadmapAnalysis,
+        contents=analysis_prompt,
+        port=GPU_STRATEGIC_ROADMAP_LLM.port,
+    )
+    analysis = StrategicRoadmapAnalysis.model_validate(analysis)
+
+    phase2_time = time.time() - phase2_start
+    logger.info(
+        f"[Phase 2/3] Analysis generated in {phase2_time:.1f}s — "
+        f"risks={len(analysis.risks_and_mitigation)}, metrics={len(analysis.key_metrics_and_milestones)}"
+    )
+
+    # ── Phase 3: Phased Roadmap ──
+    phase3_start = time.time()
+    logger.info("[Phase 3/3] Generating phased roadmap...")
+
+    phases_prompt = strategic_roadmap_phases_prompt(document_text, n_years, foundation_json)
     phases = await invoke_llm(
         gpu_model=GPU_STRATEGIC_ROADMAP_LLM.model,
         response_schema=StrategicPhasedRoadmapOutput,
@@ -65,21 +88,23 @@ async def generate_strategic_roadmap(
     )
     phases = StrategicPhasedRoadmapOutput.model_validate(phases)
 
-    phase2_time = time.time() - phase2_start
+    phase3_time = time.time() - phase3_start
     logger.info(
-        f"[Phase 2/2] Phased roadmap generated in {phase2_time:.1f}s — "
+        f"[Phase 3/3] Phased roadmap generated in {phase3_time:.1f}s — "
         f"phases={len(phases.phased_roadmap)}"
     )
 
     # ── Merge ──
+    total_time = phase1_time + phase2_time + phase3_time
     result = StrategicRoadmapLLMOutput(
-        **skeleton.model_dump(),
+        **foundation.model_dump(),
+        **analysis.model_dump(),
         phased_roadmap=phases.phased_roadmap,
     )
 
     logger.info(
-        f"Strategic roadmap complete in {phase1_time + phase2_time:.1f}s "
-        f"(phase1={phase1_time:.1f}s, phase2={phase2_time:.1f}s)"
+        f"Strategic roadmap complete in {total_time:.1f}s "
+        f"(phase1={phase1_time:.1f}s, phase2={phase2_time:.1f}s, phase3={phase3_time:.1f}s)"
     )
 
     return result

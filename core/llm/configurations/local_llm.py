@@ -60,6 +60,7 @@ class MyServerLLM(LLM):
             model=model,
             base_url=f"{LOCAL_BASE_URL}:{port}",
             timeout=1000,
+            num_predict=8192,
             **kwargs,
         )
 
