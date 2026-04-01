@@ -44,7 +44,7 @@ class INTERNALLLM(LLM):
         self,
         prompt: str,
         stop: Optional[List[str]] = None,
-        max_new_tokens: int = 8192,
+        max_new_tokens: int = 2024,
         temperature: float = 0.4,
         top_k: int = 14,
         top_p: float = 0.94,
