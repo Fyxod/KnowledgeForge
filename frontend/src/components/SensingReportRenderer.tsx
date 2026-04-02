@@ -5,11 +5,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import SafeMarkdownRenderer from '@/components/SafeMarkdownRenderer';
 import {
   ChevronDown, ChevronRight, ExternalLink, Clock, TrendingUp,
-  Lightbulb, FileText, Building2, Cpu, Target, Newspaper, Link2,
+  Lightbulb, FileText, Building2, Cpu, Target, Newspaper, Link2, Play,
 } from 'lucide-react';
 import type {
   SensingReport, SensingRadarItem, SensingRadarItemDetail, SensingMarketSignal,
-  SensingHeadlineMove,
+  SensingHeadlineMove, SensingTrendingVideo,
 } from '@/lib/api';
 
 interface Meta {
@@ -50,6 +50,12 @@ const ringColors: Record<string, string> = {
 };
 
 const RING_ORDER = ['Adopt', 'Trial', 'Assess', 'Hold'];
+
+const formatViewCount = (count: number): string => {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M views`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K views`;
+  return `${count} views`;
+};
 
 /** Compact inline source links — renders [1] [2] [3] badges linking to article URLs */
 const SourceLinks: React.FC<{ urls?: string[] }> = ({ urls }) => {
@@ -364,6 +370,59 @@ const SensingReportRenderer: React.FC<SensingReportRendererProps> = ({ report, m
                         </div>
                       )}
                       <SourceLinks urls={item.source_urls} />
+                      {(() => {
+                        const videos = report.trending_videos?.filter(
+                          (v: SensingTrendingVideo) => v.technology_name === item.technology_name
+                        );
+                        if (!videos?.length) return null;
+                        return (
+                          <div>
+                            <h5 className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-2 flex items-center gap-1">
+                              <Play className="w-3 h-3" />
+                              Trending Videos
+                            </h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {videos.map((video: SensingTrendingVideo, vi: number) => (
+                                <a
+                                  key={vi}
+                                  href={video.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="group block rounded-lg border bg-card hover:bg-muted/50 transition-colors overflow-hidden"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {video.thumbnail_url && (
+                                    <div className="relative aspect-video bg-muted">
+                                      <img
+                                        src={video.thumbnail_url}
+                                        alt={video.title}
+                                        className="w-full h-full object-cover"
+                                        loading="lazy"
+                                      />
+                                      {video.duration && (
+                                        <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1 py-0.5 rounded">
+                                          {video.duration}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                  <div className="p-2">
+                                    <p className="text-xs font-medium line-clamp-2 group-hover:text-emerald-600 transition-colors">
+                                      {video.title}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                                      {video.uploader && <span>{video.uploader}</span>}
+                                      {video.view_count > 0 && (
+                                        <span>{formatViewCount(video.view_count)}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {onDeepDive && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDeepDive(item.technology_name); }}

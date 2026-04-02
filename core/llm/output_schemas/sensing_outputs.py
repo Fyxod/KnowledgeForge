@@ -123,6 +123,22 @@ class RadarItemDetail(BaseModel):
     )
 
 
+class TrendingVideoItem(BaseModel):
+    """A trending YouTube video associated with a radar technology."""
+
+    technology_name: str = Field(
+        description="Radar item name this video is associated with."
+    )
+    title: str = Field(description="Video title.")
+    url: str = Field(description="YouTube video URL.")
+    description: str = Field(default="", description="Video description excerpt.")
+    uploader: str = Field(default="", description="YouTube channel name.")
+    duration: str = Field(default="", description="Video duration (e.g., '12:34').")
+    published: str = Field(default="", description="Publication date.")
+    view_count: int = Field(default=0, description="Number of views.")
+    thumbnail_url: str = Field(default="", description="Thumbnail image URL.")
+
+
 class HeadlineMove(BaseModel):
     """A top headline development of the week, ranked by significance."""
 
@@ -264,6 +280,7 @@ class ReportAnalysis(LLMOutputBase):
 
 
 class RadarDetailsOutput(LLMOutputBase):
+
     """Phase 3 output: detailed write-ups for each radar item."""
 
     radar_item_details: List[RadarItemDetail] = Field(
@@ -308,4 +325,8 @@ class TechSensingReport(LLMOutputBase):
     )
     notable_articles: List[ClassifiedArticle] = Field(
         description="Top 5-10 most notable articles with full classification."
+    )
+    trending_videos: List[TrendingVideoItem] = Field(
+        default_factory=list,
+        description="Trending YouTube videos for radar technologies.",
     )

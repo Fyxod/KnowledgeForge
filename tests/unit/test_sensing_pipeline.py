@@ -90,6 +90,7 @@ def _make_report():
 @pytest.mark.unit
 class TestRunSensingPipeline:
     @pytest.mark.asyncio
+    @patch("core.sensing.pipeline.fetch_youtube_videos")
     @patch("core.sensing.pipeline.generate_report")
     @patch("core.sensing.pipeline.classify_articles")
     @patch("core.sensing.pipeline.extract_full_text")
@@ -104,6 +105,7 @@ class TestRunSensingPipeline:
         mock_extract,
         mock_classify,
         mock_report,
+        mock_youtube,
     ):
         raw_articles = _make_raw_articles(5)
         classified = _make_classified_articles(3)
@@ -115,6 +117,7 @@ class TestRunSensingPipeline:
         mock_extract.side_effect = lambda a: a  # pass through
         mock_classify.return_value = classified
         mock_report.return_value = report
+        mock_youtube.return_value = []
 
         from core.sensing.pipeline import run_sensing_pipeline
 
@@ -133,6 +136,7 @@ class TestRunSensingPipeline:
         mock_report.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("core.sensing.pipeline.fetch_youtube_videos")
     @patch("core.sensing.pipeline.generate_report")
     @patch("core.sensing.pipeline.classify_articles")
     @patch("core.sensing.pipeline.extract_full_text")
@@ -147,6 +151,7 @@ class TestRunSensingPipeline:
         mock_extract,
         mock_classify,
         mock_report,
+        mock_youtube,
     ):
         mock_rss.return_value = []
         mock_ddg.return_value = []
@@ -154,6 +159,7 @@ class TestRunSensingPipeline:
         mock_extract.side_effect = lambda a: a
         mock_classify.return_value = []
         mock_report.return_value = _make_report()
+        mock_youtube.return_value = []
 
         callback = AsyncMock()
 
@@ -170,4 +176,5 @@ class TestRunSensingPipeline:
         assert "dedup" in stages
         assert "extract" in stages
         assert "classify" in stages
+        assert "videos" in stages
         assert "complete" in stages

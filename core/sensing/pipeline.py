@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Callable, List, Optional
 
-from core.llm.output_schemas.sensing_outputs import TechSensingReport
+from core.llm.output_schemas.sensing_outputs import TechSensingReport, TrendingVideoItem
 from core.sensing.classify import classify_articles
 from core.sensing.config import DEFAULT_DOMAIN, LOOKBACK_DAYS, get_preset_for_domain
 from core.sensing.dedup import deduplicate_articles
@@ -27,6 +27,7 @@ from core.sensing.signal_score import compute_signal_strengths
 from core.sensing.sources.arxiv_search import fetch_arxiv_papers
 from core.sensing.sources.github_trending import fetch_github_trending
 from core.sensing.sources.hackernews import fetch_hackernews
+from core.sensing.sources.youtube_videos import fetch_youtube_videos
 from core.sensing.verifier import verify_report
 
 logger = logging.getLogger("sensing.pipeline")
@@ -285,8 +286,43 @@ async def run_sensing_pipeline(
 
     # Signal strength scoring
     logger.info(f"Computing signal strengths... [{_elapsed()}]")
-    await _emit("scoring", 98, "Computing signal strengths...")
+    await _emit("scoring", 96, "Computing signal strengths...")
     report = compute_signal_strengths(report, classified)
+
+    # --- YouTube Video Enrichment ---
+    logger.info(f"Enriching with YouTube videos... [{_elapsed()}]")
+    await _emit("videos", 98, "Finding trending YouTube videos...")
+    try:
+        sorted_radar = sorted(
+            report.radar_items,
+            key=lambda r: r.signal_strength,
+            reverse=True,
+        )
+        tech_names = [item.name for item in sorted_radar[:10]]
+
+        raw_videos = await fetch_youtube_videos(tech_names)
+
+        report.trending_videos = [
+            TrendingVideoItem(
+                technology_name=v.technology_name,
+                title=v.title,
+                url=v.url,
+                description=v.description,
+                uploader=v.uploader,
+                duration=v.duration,
+                published=v.published,
+                view_count=v.view_count,
+                thumbnail_url=v.thumbnail_url,
+            )
+            for v in raw_videos
+        ]
+        logger.info(
+            f"YouTube enrichment: {len(report.trending_videos)} videos "
+            f"for {len(tech_names)} technologies [{_elapsed()}]"
+        )
+    except Exception as e:
+        logger.warning(f"YouTube video enrichment failed (non-fatal): {e}")
+        report.trending_videos = []
 
     await _emit("complete", 100, "Report ready")
 

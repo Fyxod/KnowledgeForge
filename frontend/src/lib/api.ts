@@ -588,6 +588,18 @@ export interface SensingMarketSignal {
   source_urls?: string[];
 }
 
+export interface SensingTrendingVideo {
+  technology_name: string;
+  title: string;
+  url: string;
+  description: string;
+  uploader: string;
+  duration: string;
+  published: string;
+  view_count: number;
+  thumbnail_url: string;
+}
+
 export interface SensingReport {
   report_title: string;
   executive_summary: string;
@@ -602,6 +614,7 @@ export interface SensingReport {
   market_signals: SensingMarketSignal[];
   recommendations: SensingRecommendation[];
   notable_articles: SensingClassifiedArticle[];
+  trending_videos?: SensingTrendingVideo[];
 }
 
 export interface SensingReportData {
