@@ -1,21 +1,23 @@
 """
 YouTube Trending Videos — searches for trending videos related to radar technologies.
 
-Uses DDGS().videos() (DuckDuckGo video search) — no API key required.
+Uses the YouTube Data API v3 search endpoint via httpx.
+Requires YOUTUBE_API_KEY in .env (free tier: 10,000 units/day).
 """
 
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
+
+import httpx
+
+from core.config import settings
 
 logger = logging.getLogger("sensing.sources.youtube")
 
-# Handle ddgs package rename: try new name first, fall back to old
-try:
-    from ddgs import DDGS  # type: ignore
-except ImportError:
-    from duckduckgo_search import DDGS  # type: ignore
+YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
+YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 
 # Defaults
 MAX_VIDEOS_PER_TECH = 3
@@ -32,16 +34,30 @@ class TrendingVideo:
     url: str
     description: str
     uploader: str  # channel name
-    duration: str  # e.g., "12:34"
-    published: str  # date string
+    duration: str  # e.g., "PT12M34S" -> "12:34"
+    published: str  # ISO date string
     view_count: int
     thumbnail_url: str
 
 
-def _ddgs_video_search(query: str, max_results: int) -> list:
-    """Synchronous DuckDuckGo video search wrapper."""
-    with DDGS() as ddgs:
-        return list(ddgs.videos(query, max_results=max_results))
+def _parse_iso_duration(iso_duration: str) -> str:
+    """Convert ISO 8601 duration (PT12M34S) to human-readable (12:34)."""
+    if not iso_duration or not iso_duration.startswith("PT"):
+        return ""
+    rest = iso_duration[2:]  # strip "PT"
+    hours, minutes, seconds = 0, 0, 0
+    if "H" in rest:
+        h_part, rest = rest.split("H", 1)
+        hours = int(h_part)
+    if "M" in rest:
+        m_part, rest = rest.split("M", 1)
+        minutes = int(m_part)
+    if "S" in rest:
+        s_part = rest.replace("S", "")
+        seconds = int(s_part)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
 
 
 async def fetch_youtube_videos(
@@ -60,67 +76,117 @@ async def fetch_youtube_videos(
     Returns:
         List of TrendingVideo results across all technologies.
     """
+    api_key = getattr(settings, "YOUTUBE_API_KEY", "")
+    if not api_key:
+        logger.warning("YOUTUBE_API_KEY not set — skipping YouTube video enrichment")
+        return []
+
     techs_to_search = technology_names[:max_technologies]
     all_videos: List[TrendingVideo] = []
     sem = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
-    async def _search_one(tech_name: str) -> List[TrendingVideo]:
+    async def _search_one(
+        client: httpx.AsyncClient, tech_name: str
+    ) -> List[TrendingVideo]:
         async with sem:
             try:
-                results = await asyncio.to_thread(
-                    _ddgs_video_search, tech_name, max_videos_per_tech + 2
+                # Step 1: Search for videos
+                search_resp = await client.get(
+                    YOUTUBE_SEARCH_URL,
+                    params={
+                        "part": "snippet",
+                        "q": tech_name,
+                        "type": "video",
+                        "order": "relevance",
+                        "maxResults": max_videos_per_tech,
+                        "key": api_key,
+                    },
                 )
-                videos = []
-                for r in results:
-                    content_url = r.get("content", "")
-                    if (
-                        "youtube.com" not in content_url
-                        and "youtu.be" not in content_url
-                    ):
-                        continue
+                search_resp.raise_for_status()
+                search_data = search_resp.json()
 
-                    # Parse view count from statistics
-                    stats = r.get("statistics", {})
-                    view_count = 0
-                    if isinstance(stats, dict):
-                        vc = stats.get("viewCount", 0)
-                        try:
-                            view_count = int(vc)
-                        except (ValueError, TypeError):
-                            view_count = 0
+                items = search_data.get("items", [])
+                if not items:
+                    logger.info(f"YouTube: no results for '{tech_name}'")
+                    return []
 
-                    # Get thumbnail
-                    images = r.get("images", {})
-                    thumbnail = ""
-                    if isinstance(images, dict):
-                        thumbnail = images.get(
-                            "medium", images.get("small", images.get("large", ""))
+                # Collect video IDs for statistics lookup
+                video_ids = [
+                    item["id"]["videoId"]
+                    for item in items
+                    if item.get("id", {}).get("videoId")
+                ]
+
+                # Step 2: Get video details (duration, view count)
+                stats_map: dict = {}
+                if video_ids:
+                    details_resp = await client.get(
+                        YOUTUBE_VIDEOS_URL,
+                        params={
+                            "part": "contentDetails,statistics",
+                            "id": ",".join(video_ids),
+                            "key": api_key,
+                        },
+                    )
+                    details_resp.raise_for_status()
+                    for detail in details_resp.json().get("items", []):
+                        vid = detail["id"]
+                        duration = (
+                            detail.get("contentDetails", {}).get("duration", "")
                         )
+                        view_count = (
+                            detail.get("statistics", {}).get("viewCount", "0")
+                        )
+                        stats_map[vid] = {
+                            "duration": _parse_iso_duration(duration),
+                            "view_count": _safe_int(view_count),
+                        }
+
+                # Step 3: Build TrendingVideo list
+                videos = []
+                for item in items:
+                    video_id = item.get("id", {}).get("videoId", "")
+                    if not video_id:
+                        continue
+                    snippet = item.get("snippet", {})
+                    stats = stats_map.get(video_id, {})
+                    thumbnails = snippet.get("thumbnails", {})
+                    thumb = (
+                        thumbnails.get("medium", {}).get("url")
+                        or thumbnails.get("default", {}).get("url", "")
+                    )
 
                     videos.append(
                         TrendingVideo(
                             technology_name=tech_name,
-                            title=r.get("title", ""),
-                            url=content_url,
-                            description=r.get("description", "")[:300],
-                            uploader=r.get("uploader", ""),
-                            duration=r.get("duration", ""),
-                            published=r.get("published", ""),
-                            view_count=view_count,
-                            thumbnail_url=thumbnail,
+                            title=snippet.get("title", ""),
+                            url=f"https://www.youtube.com/watch?v={video_id}",
+                            description=snippet.get("description", "")[:300],
+                            uploader=snippet.get("channelTitle", ""),
+                            duration=stats.get("duration", ""),
+                            published=snippet.get("publishedAt", ""),
+                            view_count=stats.get("view_count", 0),
+                            thumbnail_url=thumb,
                         )
                     )
 
-                    if len(videos) >= max_videos_per_tech:
-                        break
-
                 logger.info(f"YouTube: found {len(videos)} videos for '{tech_name}'")
                 return videos
+            except httpx.HTTPStatusError as e:
+                logger.warning(
+                    f"YouTube API error for '{tech_name}': "
+                    f"{e.response.status_code} {e.response.text[:200]}"
+                )
+                return []
             except Exception as e:
                 logger.warning(f"YouTube search failed for '{tech_name}': {e}")
                 return []
 
-    results = await asyncio.gather(*[_search_one(t) for t in techs_to_search])
+    async with httpx.AsyncClient(timeout=30) as client:
+        results = await asyncio.gather(
+            *[_search_one(client, t) for t in techs_to_search]
+        )
+
     for video_list in results:
         all_videos.extend(video_list)
 
@@ -129,3 +195,11 @@ async def fetch_youtube_videos(
         f"{len(techs_to_search)} technologies"
     )
     return all_videos
+
+
+def _safe_int(value: Optional[str]) -> int:
+    """Safely parse a string to int, returning 0 on failure."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return 0
