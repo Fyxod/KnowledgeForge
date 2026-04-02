@@ -31,17 +31,11 @@ class ClassifiedArticle(BaseModel):
     )
     topic_category: str = Field(
         default="",
-        description=(
-            "Topic category: 'Foundation Models & Agents', 'Safety & Governance', "
-            "'Infrastructure & Compute', 'Open Source & Research', 'Partnerships & Strategy'."
-        ),
+        description="Topic category as defined in the classification prompt.",
     )
     industry_segment: str = Field(
         default="",
-        description=(
-            "Industry segment: 'Frontier Labs', 'Big Tech Platforms', "
-            "'Infra & Chips', 'Ethics & Policy', 'Ecosystem & Investors'."
-        ),
+        description="Industry segment as defined in the classification prompt.",
     )
 
 
@@ -135,10 +129,7 @@ class HeadlineMove(BaseModel):
     headline: str = Field(description="1-2 sentence description of the move.")
     actor: str = Field(description="Person or organization that made this move.")
     segment: str = Field(
-        description=(
-            "Industry segment: 'Frontier Labs', 'Big Tech Platforms', "
-            "'Infra & Chips', 'Ethics & Policy', 'Ecosystem & Investors'."
-        )
+        description="Industry segment of the actor."
     )
     source_urls: List[str] = Field(
         default_factory=list,
@@ -161,10 +152,7 @@ class MarketSignal(BaseModel):
     )
     segment: str = Field(
         default="",
-        description=(
-            "Industry segment: 'Frontier Labs', 'Big Tech Platforms', "
-            "'Infra & Chips', 'Ethics & Policy', 'Ecosystem & Investors'."
-        ),
+        description="Industry segment of the company or player.",
     )
     related_technologies: List[str] = Field(
         description="Technology names related to this signal."

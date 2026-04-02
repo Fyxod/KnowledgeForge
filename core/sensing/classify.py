@@ -14,7 +14,7 @@ from core.llm.output_schemas.sensing_outputs import (
 )
 from core.llm.prompts.sensing_prompts import sensing_classify_prompt
 from core.sensing.cache import cache_classification, get_cached_classification
-from core.sensing.config import ARTICLE_BATCH_SIZE, MIN_RELEVANCE_SCORE
+from core.sensing.config import ARTICLE_BATCH_SIZE, MIN_RELEVANCE_SCORE, get_preset_for_domain
 from core.sensing.ingest import RawArticle
 
 logger = logging.getLogger("sensing.classify")
@@ -50,6 +50,8 @@ async def classify_articles(
 
     total_batches = (len(uncached_articles) + ARTICLE_BATCH_SIZE - 1) // ARTICLE_BATCH_SIZE if uncached_articles else 0
 
+    preset = get_preset_for_domain(domain)
+
     for i in range(0, len(uncached_articles), ARTICLE_BATCH_SIZE):
         batch_num = i // ARTICLE_BATCH_SIZE + 1
         batch = uncached_articles[i : i + ARTICLE_BATCH_SIZE]
@@ -60,6 +62,8 @@ async def classify_articles(
             domain=domain,
             custom_requirements=custom_requirements,
             key_people=key_people,
+            topic_categories_text=preset.topic_categories,
+            industry_segments_text=preset.industry_segments,
         )
 
         try:

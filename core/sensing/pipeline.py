@@ -13,7 +13,7 @@ from typing import Callable, List, Optional
 
 from core.llm.output_schemas.sensing_outputs import TechSensingReport
 from core.sensing.classify import classify_articles
-from core.sensing.config import DEFAULT_DOMAIN, LOOKBACK_DAYS
+from core.sensing.config import DEFAULT_DOMAIN, LOOKBACK_DAYS, get_preset_for_domain
 from core.sensing.dedup import deduplicate_articles
 from core.sensing.ingest import (
     RawArticle,
@@ -82,6 +82,13 @@ async def run_sensing_pipeline(
         f"lookback={lookback_days}d, must_include={must_include}, "
         f"dont_include={dont_include}) =========="
     )
+
+    # Default key_people from domain preset when caller doesn't provide any
+    if not key_people:
+        preset = get_preset_for_domain(domain)
+        if preset.key_people:
+            key_people = preset.key_people
+            logger.info(f"Using default key_people from preset: {key_people}")
 
     # Build keyword filter instructions for prompts
     keyword_instructions = _build_keyword_instructions(

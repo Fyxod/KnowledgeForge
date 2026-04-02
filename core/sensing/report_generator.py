@@ -27,6 +27,7 @@ from core.llm.prompts.sensing_prompts import (
     sensing_details_prompt,
     sensing_report_prompt,
 )
+from core.sensing.config import get_preset_for_domain
 
 logger = logging.getLogger("sensing.report")
 
@@ -73,6 +74,7 @@ async def generate_report(
     logger.info(f"Articles JSON payload size: {len(articles_json)} chars")
 
     # ── Phase 1: Skeleton ──────────────────────────────────────────────
+    preset = get_preset_for_domain(domain)
     skeleton_prompt = sensing_report_prompt(
         classified_articles_json=articles_json,
         domain=domain,
@@ -80,6 +82,7 @@ async def generate_report(
         custom_requirements=custom_requirements,
         org_context=org_context,
         key_people=key_people,
+        industry_segments_text=preset.industry_segments,
     )
 
     phase1_start = time.time()

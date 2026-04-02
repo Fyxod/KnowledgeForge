@@ -3,6 +3,8 @@ def sensing_classify_prompt(
     domain: str = "Generative AI",
     custom_requirements: str = "",
     key_people: list[str] | None = None,
+    topic_categories_text: str = "",
+    industry_segments_text: str = "",
 ) -> list[dict]:
     """
     Build a chat prompt to classify and summarize a batch of articles.
@@ -11,6 +13,9 @@ def sensing_classify_prompt(
     the schema via PydanticOutputParser.get_format_instructions().  Embedding
     it twice causes the LLM to echo the schema definition back instead of
     producing actual classified article data.
+
+    topic_categories_text and industry_segments_text are pre-rendered text
+    blocks from the domain preset (see core/sensing/config.py).
     """
     # Build optional key-people watchlist block
     people_block = ""
@@ -38,27 +43,17 @@ def sensing_classify_prompt(
                 "6. Topic category\n"
                 "7. Industry segment\n\n"
                 "QUADRANT DEFINITIONS:\n"
-                "- Techniques: Processes, methodologies, architectural patterns (e.g., RAG, RLHF, prompt engineering)\n"
-                "- Platforms: Infrastructure, cloud services, compute platforms (e.g., CUDA, cloud GPU, training clusters)\n"
-                "- Tools: Software tools, libraries, frameworks for development (e.g., LangChain, vLLM, Hugging Face)\n"
-                "- Languages & Frameworks: Programming languages, major ML frameworks (e.g., PyTorch, JAX, Rust)\n\n"
+                "- Techniques: Processes, methodologies, architectural patterns\n"
+                "- Platforms: Infrastructure, cloud services, compute platforms\n"
+                "- Tools: Software tools, libraries, frameworks for development\n"
+                "- Languages & Frameworks: Programming languages, major frameworks\n\n"
                 "RING DEFINITIONS:\n"
                 "- Adopt: Proven technology, recommend for wide use\n"
                 "- Trial: Worth pursuing in projects that can handle some risk\n"
                 "- Assess: Worth exploring to understand its impact\n"
                 "- Hold: Proceed with caution, not recommended for new work\n\n"
-                "TOPIC CATEGORY DEFINITIONS:\n"
-                "- Foundation Models & Agents: Foundation model releases, agents, major product launches, benchmarks\n"
-                "- Safety & Governance: AI safety, alignment, regulation, governance, ethics, responsible AI\n"
-                "- Infrastructure & Compute: GPUs, TPUs, data centers, compute infrastructure, large investments\n"
-                "- Open Source & Research: Open-source releases, research papers, benchmark results, datasets\n"
-                "- Partnerships & Strategy: M&A, partnerships, strategic shifts, funding rounds, market moves\n\n"
-                "INDUSTRY SEGMENT DEFINITIONS:\n"
-                "- Frontier Labs: Frontier AI labs and their leaders (e.g., OpenAI, Anthropic, Google DeepMind, xAI)\n"
-                "- Big Tech Platforms: Major tech platforms integrating AI (e.g., Microsoft, Google/Alphabet, Meta, Apple, Amazon)\n"
-                "- Infra & Chips: Hardware, compute, and infrastructure providers (e.g., NVIDIA, Qualcomm, AMD, cloud providers)\n"
-                "- Ethics & Policy: AI safety researchers, regulators, policy makers, governance bodies\n"
-                "- Ecosystem & Investors: Independent founders, VCs, startups, ecosystem builders, public intellectuals\n\n"
+                + topic_categories_text + "\n"
+                + industry_segments_text + "\n"
                 + people_block
                 + "OUTPUT RULES:\n"
                 "- Return ONLY a valid JSON object with an \"articles\" array.\n"
@@ -98,6 +93,7 @@ def sensing_report_prompt(
     custom_requirements: str = "",
     org_context: str = "",
     key_people: list[str] | None = None,
+    industry_segments_text: str = "",
 ) -> list[dict]:
     """
     Build a chat prompt to generate the final tech sensing report.
@@ -105,6 +101,9 @@ def sensing_report_prompt(
     NOTE: Do NOT embed the full JSON schema here — invoke_llm() already
     injects it via PydanticOutputParser.  Only list expected top-level keys
     to guide the LLM without causing schema echo.
+
+    industry_segments_text is a pre-rendered text block from the domain
+    preset (see core/sensing/config.py).
     """
     # Build optional key-people watchlist block
     people_block = ""
@@ -130,12 +129,7 @@ def sensing_report_prompt(
                 "4. Analyzes market signals from companies AND key individual leaders\n"
                 "5. Offers actionable, enterprise-relevant recommendations\n"
                 "6. Highlights notable developments\n\n"
-                "INDUSTRY SEGMENTS (use these for headline_moves and market_signals):\n"
-                "- Frontier Labs: Frontier AI labs (OpenAI, Anthropic, Google DeepMind, xAI) and their leaders\n"
-                "- Big Tech Platforms: Major tech platforms (Microsoft, Google/Alphabet, Meta, Apple, Amazon)\n"
-                "- Infra & Chips: Hardware and compute providers (NVIDIA, Qualcomm, AMD, cloud providers)\n"
-                "- Ethics & Policy: AI safety researchers, regulators, governance bodies\n"
-                "- Ecosystem & Investors: Independent founders, VCs, startups, public intellectuals\n\n"
+                + industry_segments_text + "\n"
                 + people_block
                 + "REPORT QUALITY GUIDELINES:\n"
                 "- Headline moves: Identify the TOP 10 most impactful developments of the week, "
