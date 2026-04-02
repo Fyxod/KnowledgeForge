@@ -86,7 +86,7 @@ def sensing_classify_prompt(
     return contents
 
 
-def sensing_report_prompt(
+def sensing_report_core_prompt(
     classified_articles_json: str,
     domain: str = "Generative AI",
     date_range: str = "",
@@ -96,23 +96,18 @@ def sensing_report_prompt(
     industry_segments_text: str = "",
 ) -> list[dict]:
     """
-    Build a chat prompt to generate the final tech sensing report.
+    Phase 1 prompt: executive summary, headline moves, and key trends.
 
-    NOTE: Do NOT embed the full JSON schema here — invoke_llm() already
-    injects it via PydanticOutputParser.  Only list expected top-level keys
-    to guide the LLM without causing schema echo.
-
-    industry_segments_text is a pre-rendered text block from the domain
-    preset (see core/sensing/config.py).
+    NOTE: Do NOT embed the JSON schema here — invoke_llm() already injects
+    the schema via PydanticOutputParser.get_format_instructions().
     """
-    # Build optional key-people watchlist block
     people_block = ""
     if key_people:
         names = ", ".join(key_people)
         people_block = (
             f"\nKEY PEOPLE WATCHLIST:\n"
             f"Track actions and statements by these leaders: {names}.\n"
-            "Include their moves in headline_moves and market_signals where relevant.\n"
+            "Include their moves in headline_moves where relevant.\n"
         )
 
     contents = [
@@ -121,86 +116,33 @@ def sensing_report_prompt(
             "parts": (
                 "You are a senior technology strategist creating a weekly "
                 f"Tech Sensing Report for the {domain} domain.\n\n"
-                "Based on the classified articles provided, generate a "
-                "comprehensive, in-depth report that:\n"
-                "1. Ranks the top 10 headline moves of the week\n"
-                "2. Identifies key trends and patterns across the articles\n"
-                "3. Places technologies on a Technology Radar (quadrants + rings)\n"
-                "4. Analyzes market signals from companies AND key individual leaders\n"
-                "5. Offers actionable, enterprise-relevant recommendations\n"
-                "6. Highlights notable developments\n\n"
+                "Based on the classified articles provided, generate the CORE "
+                "of the report: the executive summary, headline moves, and key trends.\n\n"
                 + industry_segments_text + "\n"
                 + people_block
-                + "REPORT QUALITY GUIDELINES:\n"
+                + "SECTION GUIDELINES:\n"
                 "- Headline moves: Identify the TOP 10 most impactful developments of the week, "
                 "ranked by significance across ALL segments. Each move should name the actor "
                 "(person or organization), describe what happened in 1-2 sentences, and tag its "
-                "industry segment. These should be the developments an enterprise leader would "
-                "want to know about first.\n\n"
+                "industry segment.\n\n"
                 "- Executive summary: decisive, forward-looking, 200-350 words. "
                 "Use markdown formatting: bold (**term**) for key technologies, "
                 "bullet points for the top 3-5 highlights, and separate paragraphs. "
                 "Do NOT write it as a single wall of text.\n\n"
                 "- Key trends: identify 5-10 major trends with supporting evidence from the articles. "
                 "Each trend should have a clear description of WHY it matters.\n\n"
-                "- Radar items: 15-30 distinct technologies/techniques — consolidate duplicates.\n\n"
-                "- Market signals: 5-10 signals from companies AND key individual leaders "
-                "(CEO statements, researcher announcements, investor moves). For each signal:\n"
-                "  * What the company/person announced or is doing\n"
-                "  * Their strategic intent (why they are doing this)\n"
-                "  * How it impacts the broader industry direction\n"
-                "  * Industry segment tag\n"
-                "  * Related technologies from the radar\n"
-                "  Include actions by individual leaders (not just corporate entities). "
-                "This section should give readers a clear picture of WHERE the industry is "
-                "heading and WHY it matters.\n\n"
-                "- Report sections: 3-6 deep-dive sections with markdown formatting. "
-                "These should elaborate on the most important themes, providing practical "
-                "context, real-world implications, and technical depth.\n\n"
-                "- Recommendations: actionable, prioritized, linked to trends. "
-                "Frame recommendations for an enterprise technology and strategy leader. "
-                "Focus on actionable decisions: what to adopt now, what to evaluate, "
-                "what risks to monitor, and how these developments affect enterprise strategy.\n\n"
-                "- Notable articles: select the 5-10 most impactful articles.\n\n"
                 "GROUNDING AND CITATION RULES:\n"
-                "- Every claim, trend, and insight MUST be grounded in the provided articles. "
-                "Do NOT fabricate or hallucinate information not present in the articles.\n"
-                "- Each article has a 'url' field. Use these URLs to populate source_urls arrays.\n"
-                "- For key_trends: populate source_urls with URLs of articles that support each trend.\n"
-                "- For market_signals: populate source_urls with URLs of articles reporting each signal.\n"
-                "- For report_sections: populate source_urls with URLs of articles referenced in that section.\n"
-                "- For headline_moves: populate source_urls with URLs of articles reporting each move.\n"
-                "- If an article includes a 'content_excerpt' field, use it for deeper context beyond the summary.\n"
-                "- Prefer specific facts from articles over general knowledge. "
-                "If the articles don't support a claim, don't make it.\n"
-                "- Each source_urls array should contain 1-5 article URLs.\n\n"
-                "ATTRIBUTION ACCURACY RULES:\n"
-                "- CRITICAL: Distinguish between research authors and implementation authors.\n"
-                "  * If a company published a PAPER or RESEARCH but did NOT release code, say "
-                "'based on research by [Company]' — do NOT list them as having released or built the tool/library.\n"
-                "  * If an independent developer or community built an implementation based on "
-                "someone else's paper, credit the ACTUAL developer/org, not the paper's author.\n"
-                "- For market_signals: The company_or_player must be the entity that TOOK THE ACTION "
-                "(announced, released, invested). Do not attribute community actions to a company that only inspired them.\n"
-                "- If the articles don't clearly state who built or released something, say so rather than guessing.\n\n"
-                "OUTPUT RULES:\n"
-                "- Return ONLY a valid JSON object with these top-level keys: report_title, "
-                "executive_summary, domain, date_range, total_articles_analyzed, headline_moves, "
-                "key_trends, radar_items, market_signals, report_sections, recommendations, notable_articles.\n"
-                "- Do NOT include radar_item_details — those will be generated separately.\n"
-                "- Do NOT include schema definitions, $defs, $ref, properties, or type metadata.\n"
-                "- Output must be valid JSON only, no markdown fencing or trailing commas.\n"
-                "- Newlines inside string values MUST be written as \\n (escaped), NOT as actual line breaks.\n"
-                '- Double quotes inside string values MUST be escaped as \\".\n'
-                "- Use markdown in report_sections content fields.\n"
-                "- Include all top-level keys listed above, even if some arrays are empty.\n"
+                "- Every claim MUST be grounded in the provided articles.\n"
+                "- Use article URLs to populate source_urls arrays (1-5 per entry).\n"
+                "- If an article includes a 'content_excerpt' field, use it for deeper context.\n"
+                "- Do NOT fabricate information not present in the articles.\n\n"
                 + (
-                    f"\nADDITIONAL USER REQUIREMENTS:\n{custom_requirements}\n"
+                    f"ADDITIONAL USER REQUIREMENTS:\n{custom_requirements}\n\n"
                     if custom_requirements
                     else ""
                 )
                 + (
-                    f"\n{org_context}\n"
+                    f"{org_context}\n\n"
                     if org_context
                     else ""
                 )
@@ -212,7 +154,95 @@ def sensing_report_prompt(
                 f"DATE RANGE: {date_range}\n"
                 f"DOMAIN: {domain}\n\n"
                 f"CLASSIFIED ARTICLES:\n\n{classified_articles_json}\n\n"
-                "Generate the complete Tech Sensing Report. Return ONLY valid JSON."
+                "Generate the report core: report_title, executive_summary, domain, "
+                "date_range, total_articles_analyzed, headline_moves, key_trends. "
+                "Return ONLY valid JSON."
+            ),
+        },
+    ]
+    return contents
+
+
+def sensing_report_analysis_prompt(
+    classified_articles_json: str,
+    core_context_json: str,
+    domain: str = "Generative AI",
+    date_range: str = "",
+    custom_requirements: str = "",
+    key_people: list[str] | None = None,
+    industry_segments_text: str = "",
+) -> list[dict]:
+    """
+    Phase 2 prompt: radar items, market signals, report sections,
+    recommendations, and notable articles.
+
+    Receives Phase 1 core (headline_moves + key_trends) as grounding context
+    so analysis aligns with the already-identified trends.
+
+    NOTE: Do NOT embed the JSON schema here — invoke_llm() already injects
+    the schema via PydanticOutputParser.get_format_instructions().
+    """
+    people_block = ""
+    if key_people:
+        names = ", ".join(key_people)
+        people_block = (
+            f"\nKEY PEOPLE WATCHLIST:\n"
+            f"Track actions and statements by these leaders: {names}.\n"
+            "Include their moves in market_signals where relevant.\n"
+        )
+
+    contents = [
+        {
+            "role": "system",
+            "parts": (
+                "You are a senior technology strategist continuing a weekly "
+                f"Tech Sensing Report for the {domain} domain.\n\n"
+                "Phase 1 (executive summary, headline moves, key trends) has already "
+                "been generated. You will now generate Phase 2: the technology radar, "
+                "market signals, deep-dive sections, recommendations, and notable articles.\n\n"
+                "Use the Phase 1 context below to ensure consistency — your radar items "
+                "and signals should align with the identified trends and headline moves.\n\n"
+                + industry_segments_text + "\n"
+                + people_block
+                + "SECTION GUIDELINES:\n"
+                "- Radar items: 15-30 distinct technologies/techniques — consolidate duplicates.\n\n"
+                "- Market signals: 5-10 signals from companies AND key individual leaders "
+                "(CEO statements, researcher announcements, investor moves). For each signal:\n"
+                "  * What the company/person announced or is doing\n"
+                "  * Their strategic intent (why they are doing this)\n"
+                "  * How it impacts the broader industry direction\n"
+                "  * Industry segment tag\n"
+                "  * Related technologies from the radar\n\n"
+                "- Report sections: 3-6 deep-dive sections with markdown formatting. "
+                "Elaborate on the most important themes with practical context and technical depth.\n\n"
+                "- Recommendations: actionable, prioritized, linked to trends. "
+                "Frame for an enterprise technology and strategy leader.\n\n"
+                "- Notable articles: select the 5-10 most impactful articles.\n\n"
+                "GROUNDING AND CITATION RULES:\n"
+                "- Every claim MUST be grounded in the provided articles.\n"
+                "- Use article URLs to populate source_urls arrays (1-5 per entry).\n"
+                "- If an article includes a 'content_excerpt' field, use it for deeper context.\n"
+                "- Do NOT fabricate information not present in the articles.\n\n"
+                "ATTRIBUTION ACCURACY RULES:\n"
+                "- Distinguish between research authors and implementation authors.\n"
+                "- For market_signals: The company_or_player must be the entity that TOOK THE ACTION.\n"
+                "- If the articles don't clearly state who built something, say so.\n\n"
+                + (
+                    f"ADDITIONAL USER REQUIREMENTS:\n{custom_requirements}\n\n"
+                    if custom_requirements
+                    else ""
+                )
+            ),
+        },
+        {
+            "role": "user",
+            "parts": (
+                f"DATE RANGE: {date_range}\n"
+                f"DOMAIN: {domain}\n\n"
+                f"PHASE 1 CONTEXT (headline moves and key trends):\n{core_context_json}\n\n"
+                f"CLASSIFIED ARTICLES:\n\n{classified_articles_json}\n\n"
+                "Generate the analysis: radar_items, market_signals, report_sections, "
+                "recommendations, notable_articles. Return ONLY valid JSON."
             ),
         },
     ]

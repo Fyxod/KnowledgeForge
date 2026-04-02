@@ -2,12 +2,13 @@
 Final report generation via LLM.
 Takes classified articles and produces the complete TechSensingReport.
 
-Uses a two-phase approach to stay within output token limits:
-  Phase 1 (Skeleton): executive_summary, key_trends, radar_items, market_signals,
-                       report_sections, recommendations, notable_articles
-  Phase 2 (Details):  radar_item_details for every radar item
+Uses a three-phase approach to stay within output token limits:
+  Phase 1 (Core):     report_title, executive_summary, headline_moves, key_trends
+  Phase 2 (Analysis): radar_items, market_signals, report_sections,
+                       recommendations, notable_articles
+  Phase 3 (Details):  radar_item_details for every radar item
 
-The two phases are merged into the final TechSensingReport.
+The three phases are merged into the final TechSensingReport.
 """
 
 import json
@@ -20,12 +21,14 @@ from core.llm.client import invoke_llm
 from core.llm.output_schemas.sensing_outputs import (
     ClassifiedArticle,
     RadarDetailsOutput,
+    ReportAnalysis,
+    ReportCore,
     TechSensingReport,
-    TechSensingReportSkeleton,
 )
 from core.llm.prompts.sensing_prompts import (
     sensing_details_prompt,
-    sensing_report_prompt,
+    sensing_report_analysis_prompt,
+    sensing_report_core_prompt,
 )
 from core.sensing.config import get_preset_for_domain
 
@@ -44,9 +47,10 @@ async def generate_report(
     """
     Generate the complete Tech Sensing Report from classified articles.
 
-    Two-phase generation:
-      Phase 1 — Skeleton (everything except radar_item_details)
-      Phase 2 — Radar item details (detailed write-up for each radar item)
+    Three-phase generation:
+      Phase 1 — Core (executive summary, headline moves, key trends)
+      Phase 2 — Analysis (radar, signals, sections, recommendations)
+      Phase 3 — Details (detailed write-up for each radar item)
     """
     # Truncate to top 50 by relevance if too many (avoid context overflow)
     sorted_articles = sorted(
@@ -73,9 +77,10 @@ async def generate_report(
     )
     logger.info(f"Articles JSON payload size: {len(articles_json)} chars")
 
-    # ── Phase 1: Skeleton ──────────────────────────────────────────────
     preset = get_preset_for_domain(domain)
-    skeleton_prompt = sensing_report_prompt(
+
+    # ── Phase 1: Core (executive summary, headline moves, key trends) ──
+    core_prompt = sensing_report_core_prompt(
         classified_articles_json=articles_json,
         domain=domain,
         date_range=date_range,
@@ -86,29 +91,71 @@ async def generate_report(
     )
 
     phase1_start = time.time()
-    logger.info("[Phase 1/2] Generating report skeleton...")
+    logger.info("[Phase 1/3] Generating report core...")
 
-    skeleton_result = await invoke_llm(
+    core_result = await invoke_llm(
         gpu_model=GPU_SENSING_REPORT_LLM.model,
-        response_schema=TechSensingReportSkeleton,
-        contents=skeleton_prompt,
+        response_schema=ReportCore,
+        contents=core_prompt,
         port=GPU_SENSING_REPORT_LLM.port,
     )
 
-    skeleton = TechSensingReportSkeleton.model_validate(skeleton_result)
+    core = ReportCore.model_validate(core_result)
     phase1_time = time.time() - phase1_start
 
     logger.info(
-        f"[Phase 1/2] Skeleton generated in {phase1_time:.1f}s — "
-        f"trends={len(skeleton.key_trends)}, radar_items={len(skeleton.radar_items)}, "
-        f"signals={len(skeleton.market_signals)}, sections={len(skeleton.report_sections)}"
+        f"[Phase 1/3] Core generated in {phase1_time:.1f}s — "
+        f"headline_moves={len(core.headline_moves)}, trends={len(core.key_trends)}"
     )
 
-    # ── Phase 2: Radar item details ────────────────────────────────────
+    # ── Phase 2: Analysis (radar, signals, sections, recommendations) ──
+    # Pass Phase 1 headline moves + key trends as grounding context
+    core_context = {
+        "headline_moves": [
+            {"headline": m.headline, "actor": m.actor, "segment": m.segment}
+            for m in core.headline_moves
+        ],
+        "key_trends": [
+            {"trend_name": t.trend_name, "description": t.description}
+            for t in core.key_trends
+        ],
+    }
+    core_context_json = json.dumps(core_context, indent=2, ensure_ascii=False)
+
+    analysis_prompt = sensing_report_analysis_prompt(
+        classified_articles_json=articles_json,
+        core_context_json=core_context_json,
+        domain=domain,
+        date_range=date_range,
+        custom_requirements=custom_requirements,
+        key_people=key_people,
+        industry_segments_text=preset.industry_segments,
+    )
+
+    phase2_start = time.time()
+    logger.info("[Phase 2/3] Generating report analysis...")
+
+    analysis_result = await invoke_llm(
+        gpu_model=GPU_SENSING_REPORT_LLM.model,
+        response_schema=ReportAnalysis,
+        contents=analysis_prompt,
+        port=GPU_SENSING_REPORT_LLM.port,
+    )
+
+    analysis = ReportAnalysis.model_validate(analysis_result)
+    phase2_time = time.time() - phase2_start
+
+    logger.info(
+        f"[Phase 2/3] Analysis generated in {phase2_time:.1f}s — "
+        f"radar_items={len(analysis.radar_items)}, signals={len(analysis.market_signals)}, "
+        f"sections={len(analysis.report_sections)}"
+    )
+
+    # ── Phase 3: Radar item details ────────────────────────────────────
     radar_items_json = json.dumps(
         [
             {"name": item.name, "quadrant": item.quadrant, "ring": item.ring}
-            for item in skeleton.radar_items
+            for item in analysis.radar_items
         ],
         indent=2,
         ensure_ascii=False,
@@ -120,9 +167,9 @@ async def generate_report(
         domain=domain,
     )
 
-    phase2_start = time.time()
+    phase3_start = time.time()
     logger.info(
-        f"[Phase 2/2] Generating details for {len(skeleton.radar_items)} radar items..."
+        f"[Phase 3/3] Generating details for {len(analysis.radar_items)} radar items..."
     )
 
     details_result = await invoke_llm(
@@ -133,33 +180,24 @@ async def generate_report(
     )
 
     details = RadarDetailsOutput.model_validate(details_result)
-    phase2_time = time.time() - phase2_start
+    phase3_time = time.time() - phase3_start
 
     logger.info(
-        f"[Phase 2/2] Details generated in {phase2_time:.1f}s — "
+        f"[Phase 3/3] Details generated in {phase3_time:.1f}s — "
         f"{len(details.radar_item_details)} detail entries"
     )
 
     # ── Merge into final report ────────────────────────────────────────
     report = TechSensingReport(
-        report_title=skeleton.report_title,
-        executive_summary=skeleton.executive_summary,
-        domain=skeleton.domain,
-        date_range=skeleton.date_range,
-        total_articles_analyzed=skeleton.total_articles_analyzed,
-        headline_moves=skeleton.headline_moves,
-        key_trends=skeleton.key_trends,
-        report_sections=skeleton.report_sections,
-        radar_items=skeleton.radar_items,
+        **core.model_dump(),
+        **analysis.model_dump(),
         radar_item_details=details.radar_item_details,
-        market_signals=skeleton.market_signals,
-        recommendations=skeleton.recommendations,
-        notable_articles=skeleton.notable_articles,
     )
 
-    total_time = phase1_time + phase2_time
+    total_time = phase1_time + phase2_time + phase3_time
     logger.info(
-        f"Report complete in {total_time:.1f}s (phase1={phase1_time:.1f}s, phase2={phase2_time:.1f}s) — "
+        f"Report complete in {total_time:.1f}s "
+        f"(p1={phase1_time:.1f}s, p2={phase2_time:.1f}s, p3={phase3_time:.1f}s) — "
         f"trends={len(report.key_trends)}, radar_items={len(report.radar_items)}, "
         f"details={len(report.radar_item_details)}, recommendations={len(report.recommendations)}"
     )

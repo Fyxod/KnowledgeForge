@@ -221,14 +221,14 @@ class DeepDiveReport(LLMOutputBase):
     )
 
 
-class TechSensingReportSkeleton(LLMOutputBase):
-    """Phase 1 output: everything EXCEPT radar_item_details (to stay within token limits)."""
+class ReportCore(LLMOutputBase):
+    """Phase 1 output: executive overview, headline moves, and key trends."""
 
     report_title: str = Field(description="Report title including date range.")
     executive_summary: str = Field(
         description="Executive summary in markdown (200-350 words). Use bold for key terms, bullet points for highlights, and separate paragraphs for readability."
     )
-    domain: str = Field(description="The domain analyzed (e.g., 'Generative AI').")
+    domain: str = Field(description="The domain analyzed.")
     date_range: str = Field(
         description="Date range covered (e.g., 'Mar 20-27, 2026')."
     )
@@ -241,14 +241,19 @@ class TechSensingReportSkeleton(LLMOutputBase):
     key_trends: List[TrendItem] = Field(
         description="List of 5-10 key trends identified."
     )
-    report_sections: List[ReportSection] = Field(
-        description="3-6 detailed report sections in markdown."
-    )
+
+
+class ReportAnalysis(LLMOutputBase):
+    """Phase 2 output: radar, signals, deep-dive sections, recommendations."""
+
     radar_items: List[RadarItem] = Field(
         description="Technology radar entries (15-30 items)."
     )
     market_signals: List[MarketSignal] = Field(
         description="5-10 market signals from prominent companies/players showing where the industry is heading."
+    )
+    report_sections: List[ReportSection] = Field(
+        description="3-6 detailed report sections in markdown."
     )
     recommendations: List[Recommendation] = Field(
         description="3-7 actionable recommendations."
@@ -259,7 +264,7 @@ class TechSensingReportSkeleton(LLMOutputBase):
 
 
 class RadarDetailsOutput(LLMOutputBase):
-    """Phase 2 output: detailed write-ups for each radar item."""
+    """Phase 3 output: detailed write-ups for each radar item."""
 
     radar_item_details: List[RadarItemDetail] = Field(
         description="Detailed write-up for each radar item — what it is, why it matters, who is using it, practical applications."
@@ -267,7 +272,7 @@ class RadarDetailsOutput(LLMOutputBase):
 
 
 class TechSensingReport(LLMOutputBase):
-    """Full report (assembled from skeleton + details)."""
+    """Full report (assembled from Phase 1 core + Phase 2 analysis + Phase 3 details)."""
 
     report_title: str = Field(description="Report title including date range.")
     executive_summary: str = Field(
