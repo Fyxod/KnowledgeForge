@@ -163,9 +163,56 @@ def sensing_report_core_prompt(
     return contents
 
 
-def sensing_report_analysis_prompt(
+def sensing_report_radar_prompt(
     classified_articles_json: str,
     core_context_json: str,
+    domain: str = "Generative AI",
+    date_range: str = "",
+) -> list[dict]:
+    """
+    Phase 2 prompt: technology radar items only.
+
+    Receives Phase 1 core context for alignment with identified trends.
+    """
+    contents = [
+        {
+            "role": "system",
+            "parts": (
+                "You are a senior technology strategist building the Technology Radar "
+                f"for a weekly Tech Sensing Report on the {domain} domain.\n\n"
+                "Phase 1 (executive summary, headline moves, key trends) has already "
+                "been generated. You will now generate the technology radar entries.\n\n"
+                "Use the Phase 1 context to ensure your radar items align with the "
+                "identified trends and headline moves.\n\n"
+                "RADAR GUIDELINES:\n"
+                "- 15-30 distinct technologies/techniques — consolidate duplicates.\n"
+                "- Each entry: name, quadrant (Tools/Techniques/Platforms/Languages & Frameworks), "
+                "ring (Adopt/Trial/Assess/Hold), brief description (1-2 sentences), "
+                "is_new flag, signal_strength (0.0-1.0), source_count.\n"
+                "- Keep descriptions concise to stay within output limits.\n\n"
+                "GROUNDING AND CITATION RULES:\n"
+                "- Every radar item MUST be grounded in the provided articles.\n"
+                "- Do NOT fabricate technologies not mentioned in the articles.\n"
+            ),
+        },
+        {
+            "role": "user",
+            "parts": (
+                f"DATE RANGE: {date_range}\n"
+                f"DOMAIN: {domain}\n\n"
+                f"PHASE 1 CONTEXT (headline moves and key trends):\n{core_context_json}\n\n"
+                f"CLASSIFIED ARTICLES:\n\n{classified_articles_json}\n\n"
+                "Generate ONLY the radar_items array. Return ONLY valid JSON."
+            ),
+        },
+    ]
+    return contents
+
+
+def sensing_report_insights_prompt(
+    classified_articles_json: str,
+    core_context_json: str,
+    radar_context_json: str,
     domain: str = "Generative AI",
     date_range: str = "",
     custom_requirements: str = "",
@@ -173,14 +220,10 @@ def sensing_report_analysis_prompt(
     industry_segments_text: str = "",
 ) -> list[dict]:
     """
-    Phase 2 prompt: radar items, market signals, report sections,
-    recommendations, and notable articles.
+    Phase 3 prompt: market signals, report sections, recommendations,
+    and notable articles.
 
-    Receives Phase 1 core (headline_moves + key_trends) as grounding context
-    so analysis aligns with the already-identified trends.
-
-    NOTE: Do NOT embed the JSON schema here — invoke_llm() already injects
-    the schema via PydanticOutputParser.get_format_instructions().
+    Receives Phase 1 core + Phase 2 radar items as grounding context.
     """
     people_block = ""
     if key_people:
@@ -197,15 +240,14 @@ def sensing_report_analysis_prompt(
             "parts": (
                 "You are a senior technology strategist continuing a weekly "
                 f"Tech Sensing Report for the {domain} domain.\n\n"
-                "Phase 1 (executive summary, headline moves, key trends) has already "
-                "been generated. You will now generate Phase 2: the technology radar, "
-                "market signals, deep-dive sections, recommendations, and notable articles.\n\n"
-                "Use the Phase 1 context below to ensure consistency — your radar items "
-                "and signals should align with the identified trends and headline moves.\n\n"
+                "Phase 1 (executive summary, headline moves, key trends) and "
+                "Phase 2 (technology radar items) have already been generated. "
+                "You will now generate: market signals, deep-dive report sections, "
+                "recommendations, and notable articles.\n\n"
+                "Use the Phase 1 and Phase 2 context to ensure consistency.\n\n"
                 + industry_segments_text + "\n"
                 + people_block
                 + "SECTION GUIDELINES:\n"
-                "- Radar items: 15-30 distinct technologies/techniques — consolidate duplicates.\n\n"
                 "- Market signals: 5-10 signals from companies AND key individual leaders "
                 "(CEO statements, researcher announcements, investor moves). For each signal:\n"
                 "  * What the company/person announced or is doing\n"
@@ -240,9 +282,10 @@ def sensing_report_analysis_prompt(
                 f"DATE RANGE: {date_range}\n"
                 f"DOMAIN: {domain}\n\n"
                 f"PHASE 1 CONTEXT (headline moves and key trends):\n{core_context_json}\n\n"
+                f"PHASE 2 CONTEXT (radar items):\n{radar_context_json}\n\n"
                 f"CLASSIFIED ARTICLES:\n\n{classified_articles_json}\n\n"
-                "Generate the analysis: radar_items, market_signals, report_sections, "
-                "recommendations, notable_articles. Return ONLY valid JSON."
+                "Generate: market_signals, report_sections, recommendations, "
+                "notable_articles. Return ONLY valid JSON."
             ),
         },
     ]

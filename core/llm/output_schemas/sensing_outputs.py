@@ -260,12 +260,17 @@ class ReportCore(LLMOutputBase):
     )
 
 
-class ReportAnalysis(LLMOutputBase):
-    """Phase 2 output: radar, signals, deep-dive sections, recommendations."""
+class ReportRadar(LLMOutputBase):
+    """Phase 2 output: technology radar entries."""
 
     radar_items: List[RadarItem] = Field(
         description="Technology radar entries (15-30 items)."
     )
+
+
+class ReportInsights(LLMOutputBase):
+    """Phase 3 output: market signals, analysis sections, recommendations, notable articles."""
+
     market_signals: List[MarketSignal] = Field(
         description="5-10 market signals from prominent companies/players showing where the industry is heading."
     )
@@ -281,8 +286,7 @@ class ReportAnalysis(LLMOutputBase):
 
 
 class RadarDetailsOutput(LLMOutputBase):
-
-    """Phase 3 output: detailed write-ups for each radar item."""
+    """Phase 4 output: detailed write-ups for each radar item."""
 
     radar_item_details: List[RadarItemDetail] = Field(
         description="Detailed write-up for each radar item — what it is, why it matters, who is using it, practical applications."
@@ -290,7 +294,7 @@ class RadarDetailsOutput(LLMOutputBase):
 
 
 class TechSensingReport(LLMOutputBase):
-    """Full report (assembled from Phase 1 core + Phase 2 analysis + Phase 3 details)."""
+    """Full report (assembled from Phase 1 core + Phase 2 radar + Phase 3 insights + Phase 4 details)."""
 
     report_title: str = Field(description="Report title including date range.")
     executive_summary: str = Field(

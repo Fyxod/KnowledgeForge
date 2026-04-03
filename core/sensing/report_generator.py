@@ -2,13 +2,13 @@
 Final report generation via LLM.
 Takes classified articles and produces the complete TechSensingReport.
 
-Uses a three-phase approach to stay within output token limits:
+Uses a four-phase approach to stay within output token limits:
   Phase 1 (Core):     report_title, executive_summary, headline_moves, key_trends
-  Phase 2 (Analysis): radar_items, market_signals, report_sections,
-                       recommendations, notable_articles
-  Phase 3 (Details):  radar_item_details for every radar item
+  Phase 2 (Radar):    radar_items (15-30 entries)
+  Phase 3 (Insights): market_signals, report_sections, recommendations, notable_articles
+  Phase 4 (Details):  radar_item_details for every radar item (batched, ≤5 per call)
 
-The three phases are merged into the final TechSensingReport.
+The four phases are merged into the final TechSensingReport.
 """
 
 import json
@@ -21,14 +21,16 @@ from core.llm.client import invoke_llm
 from core.llm.output_schemas.sensing_outputs import (
     ClassifiedArticle,
     RadarDetailsOutput,
-    ReportAnalysis,
     ReportCore,
+    ReportInsights,
+    ReportRadar,
     TechSensingReport,
 )
 from core.llm.prompts.sensing_prompts import (
     sensing_details_prompt,
-    sensing_report_analysis_prompt,
     sensing_report_core_prompt,
+    sensing_report_insights_prompt,
+    sensing_report_radar_prompt,
 )
 from core.sensing.config import get_preset_for_domain
 
@@ -47,10 +49,11 @@ async def generate_report(
     """
     Generate the complete Tech Sensing Report from classified articles.
 
-    Three-phase generation:
+    Four-phase generation:
       Phase 1 — Core (executive summary, headline moves, key trends)
-      Phase 2 — Analysis (radar, signals, sections, recommendations)
-      Phase 3 — Details (detailed write-up for each radar item)
+      Phase 2 — Radar (technology radar entries)
+      Phase 3 — Insights (signals, sections, recommendations, notable articles)
+      Phase 4 — Details (detailed write-up for each radar item, batched)
     """
     # Truncate to top 50 by relevance if too many (avoid context overflow)
     sorted_articles = sorted(
@@ -91,7 +94,7 @@ async def generate_report(
     )
 
     phase1_start = time.time()
-    logger.info("[Phase 1/3] Generating report core...")
+    logger.info("[Phase 1/4] Generating report core...")
 
     core_result = await invoke_llm(
         gpu_model=GPU_SENSING_REPORT_LLM.model,
@@ -104,12 +107,11 @@ async def generate_report(
     phase1_time = time.time() - phase1_start
 
     logger.info(
-        f"[Phase 1/3] Core generated in {phase1_time:.1f}s — "
+        f"[Phase 1/4] Core generated in {phase1_time:.1f}s — "
         f"headline_moves={len(core.headline_moves)}, trends={len(core.key_trends)}"
     )
 
-    # ── Phase 2: Analysis (radar, signals, sections, recommendations) ──
-    # Pass Phase 1 headline moves + key trends as grounding context
+    # ── Phase 2: Radar (technology radar entries) ──────────────────────
     core_context = {
         "headline_moves": [
             {"headline": m.headline, "actor": m.actor, "segment": m.segment}
@@ -122,9 +124,42 @@ async def generate_report(
     }
     core_context_json = json.dumps(core_context, indent=2, ensure_ascii=False)
 
-    analysis_prompt = sensing_report_analysis_prompt(
+    radar_prompt = sensing_report_radar_prompt(
         classified_articles_json=articles_json,
         core_context_json=core_context_json,
+        domain=domain,
+        date_range=date_range,
+    )
+
+    phase2_start = time.time()
+    logger.info("[Phase 2/4] Generating radar items...")
+
+    radar_result = await invoke_llm(
+        gpu_model=GPU_SENSING_REPORT_LLM.model,
+        response_schema=ReportRadar,
+        contents=radar_prompt,
+        port=GPU_SENSING_REPORT_LLM.port,
+    )
+
+    radar = ReportRadar.model_validate(radar_result)
+    phase2_time = time.time() - phase2_start
+
+    logger.info(
+        f"[Phase 2/4] Radar generated in {phase2_time:.1f}s — "
+        f"radar_items={len(radar.radar_items)}"
+    )
+
+    # ── Phase 3: Insights (signals, sections, recommendations) ─────────
+    radar_context = [
+        {"name": item.name, "quadrant": item.quadrant, "ring": item.ring}
+        for item in radar.radar_items
+    ]
+    radar_context_json = json.dumps(radar_context, indent=2, ensure_ascii=False)
+
+    insights_prompt = sensing_report_insights_prompt(
+        classified_articles_json=articles_json,
+        core_context_json=core_context_json,
+        radar_context_json=radar_context_json,
         domain=domain,
         date_range=date_range,
         custom_requirements=custom_requirements,
@@ -132,36 +167,36 @@ async def generate_report(
         industry_segments_text=preset.industry_segments,
     )
 
-    phase2_start = time.time()
-    logger.info("[Phase 2/3] Generating report analysis...")
+    phase3_start = time.time()
+    logger.info("[Phase 3/4] Generating insights...")
 
-    analysis_result = await invoke_llm(
+    insights_result = await invoke_llm(
         gpu_model=GPU_SENSING_REPORT_LLM.model,
-        response_schema=ReportAnalysis,
-        contents=analysis_prompt,
+        response_schema=ReportInsights,
+        contents=insights_prompt,
         port=GPU_SENSING_REPORT_LLM.port,
     )
 
-    analysis = ReportAnalysis.model_validate(analysis_result)
-    phase2_time = time.time() - phase2_start
+    insights = ReportInsights.model_validate(insights_result)
+    phase3_time = time.time() - phase3_start
 
     logger.info(
-        f"[Phase 2/3] Analysis generated in {phase2_time:.1f}s — "
-        f"radar_items={len(analysis.radar_items)}, signals={len(analysis.market_signals)}, "
-        f"sections={len(analysis.report_sections)}"
+        f"[Phase 3/4] Insights generated in {phase3_time:.1f}s — "
+        f"signals={len(insights.market_signals)}, sections={len(insights.report_sections)}, "
+        f"recommendations={len(insights.recommendations)}"
     )
 
-    # ── Phase 3: Radar item details (batched to avoid output truncation) ─
+    # ── Phase 4: Radar item details (batched to avoid output truncation) ─
     DETAILS_BATCH_SIZE = 5
-    all_radar_items = list(analysis.radar_items)
+    all_radar_items = list(radar.radar_items)
     batches = [
         all_radar_items[i : i + DETAILS_BATCH_SIZE]
         for i in range(0, len(all_radar_items), DETAILS_BATCH_SIZE)
     ]
 
-    phase3_start = time.time()
+    phase4_start = time.time()
     logger.info(
-        f"[Phase 3/3] Generating details for {len(all_radar_items)} radar items "
+        f"[Phase 4/4] Generating details for {len(all_radar_items)} radar items "
         f"in {len(batches)} batch(es) of ≤{DETAILS_BATCH_SIZE}..."
     )
 
@@ -183,7 +218,7 @@ async def generate_report(
         )
 
         logger.info(
-            f"[Phase 3/3] Batch {batch_idx}/{len(batches)}: "
+            f"[Phase 4/4] Batch {batch_idx}/{len(batches)}: "
             f"{', '.join(item.name for item in batch)}"
         )
 
@@ -197,29 +232,31 @@ async def generate_report(
         batch_details = RadarDetailsOutput.model_validate(batch_result)
         all_details.extend(batch_details.radar_item_details)
         logger.info(
-            f"[Phase 3/3] Batch {batch_idx}/{len(batches)} done — "
+            f"[Phase 4/4] Batch {batch_idx}/{len(batches)} done — "
             f"{len(batch_details.radar_item_details)} details"
         )
 
     details = RadarDetailsOutput(radar_item_details=all_details)
-    phase3_time = time.time() - phase3_start
+    phase4_time = time.time() - phase4_start
 
     logger.info(
-        f"[Phase 3/3] Details generated in {phase3_time:.1f}s — "
+        f"[Phase 4/4] Details generated in {phase4_time:.1f}s — "
         f"{len(details.radar_item_details)} detail entries across {len(batches)} batches"
     )
 
     # ── Merge into final report ────────────────────────────────────────
     report = TechSensingReport(
         **core.model_dump(),
-        **analysis.model_dump(),
+        **radar.model_dump(),
+        **insights.model_dump(),
         radar_item_details=details.radar_item_details,
     )
 
-    total_time = phase1_time + phase2_time + phase3_time
+    total_time = phase1_time + phase2_time + phase3_time + phase4_time
     logger.info(
         f"Report complete in {total_time:.1f}s "
-        f"(p1={phase1_time:.1f}s, p2={phase2_time:.1f}s, p3={phase3_time:.1f}s) — "
+        f"(p1={phase1_time:.1f}s, p2={phase2_time:.1f}s, "
+        f"p3={phase3_time:.1f}s, p4={phase4_time:.1f}s) — "
         f"trends={len(report.key_trends)}, radar_items={len(report.radar_items)}, "
         f"details={len(report.radar_item_details)}, recommendations={len(report.recommendations)}"
     )
