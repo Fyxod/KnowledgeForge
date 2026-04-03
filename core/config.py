@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     USE_VISION_MODEL: bool = True  # VLM runs on every page/slide (PDF, DOCX, PPTX). Set False in .env to disable.
     LOCAL_BASE_URL: str = "http://localhost"
 
+    # YouTube Data API v3 (for tech sensing video enrichment)
+    YOUTUBE_API_KEY: str = ""
+
     # INTERNAL API Configuration (defaults to disabled for backward compatibility)
     INTERNAL_BASE_URL: str = ""
     INTERNAL_CLIENT_KEY: str = ""
