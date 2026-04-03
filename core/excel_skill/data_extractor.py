@@ -24,17 +24,21 @@ async def extract_from_spreadsheet(
     """
     Execute a SQL query against the user's spreadsheet data and return a DataFrame.
 
+    Uses SQLiteManager.execute_query() for security validation (SELECT-only,
+    no dangerous keywords), then reads directly via pandas for a clean DataFrame.
+
     Returns:
         pandas DataFrame with the query results. Empty DataFrame on error.
     """
-    result = SQLiteManager.execute_query(user_id, thread_id, sql_query)
+    # Validate via execute_query (checks SELECT-only, blocks dangerous keywords)
+    # but don't use its markdown result — read directly with pandas instead
+    validation = SQLiteManager.execute_query(user_id, thread_id, sql_query, max_rows=1)
 
-    if not result.get("success"):
-        error = result.get("error", "Unknown error")
+    if not validation.get("success"):
+        error = validation.get("error", "Unknown error")
         print(f"[ExcelSkill:data_extractor] SQL error: {error}")
         return pd.DataFrame()
 
-    # Re-execute with pandas for clean DataFrame (execute_query returns markdown)
     key = (user_id, thread_id)
     if key not in SQLiteManager._connections:
         return pd.DataFrame()

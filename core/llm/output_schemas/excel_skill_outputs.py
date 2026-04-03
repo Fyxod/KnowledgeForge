@@ -104,3 +104,26 @@ class NLPColumnResult(LLMOutputBase):
     values: List[str] = Field(
         description="List of interpreted values, one per input row, in the same order as the input data"
     )
+
+
+class TaxonomyCategory(BaseModel):
+    """A single category in a discovered taxonomy."""
+
+    label: str = Field(description="Category label (short, 1-4 words)")
+    keywords: List[str] = Field(
+        description=(
+            "List of keywords/phrases that indicate this category (lowercase). "
+            "Include common variations, abbreviations, and synonyms."
+        )
+    )
+    description: str = Field(
+        description="Brief description of what this category covers"
+    )
+
+
+class TaxonomyResult(LLMOutputBase):
+    """LLM-discovered taxonomy for classifying text data."""
+
+    categories: List[TaxonomyCategory] = Field(
+        description="List of discovered categories with keyword rules, ordered by expected frequency (most common first)"
+    )

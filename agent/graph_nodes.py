@@ -1508,18 +1508,24 @@ async def excel_skill_node(state: AgentState) -> AgentState:
         state.excel_result = result.download_url
 
         # Build a user-friendly answer with download link
-        # Preserve any LLM-generated summary (e.g., when auto-routing large output to Excel)
-        llm_summary = state.answer.strip() if state.answer else ""
-        download_info = (
-            f"I've created your Excel file: **{result.file_name}**\n\n"
-            f"{result.description}\n\n"
-            f"- **Sheets:** {result.sheet_count}\n"
-            f"- **Total rows:** {result.total_rows}\n\n"
-            f"[Download {result.file_name}]({result.download_url})"
-        )
-        if llm_summary:
-            state.answer = f"{llm_summary}\n\n---\n\n{download_info}"
+        if result.total_rows == 0:
+            # Warn the user that no data was found
+            state.answer = (
+                f"I created the Excel file **{result.file_name}**, but it contains "
+                f"**0 rows of data**. This usually means the SQL query didn't match "
+                f"any rows in your spreadsheet, or the data source couldn't be read.\n\n"
+                f"Please check that the correct file is uploaded and try rephrasing "
+                f"your request.\n\n"
+                f"[Download {result.file_name}]({result.download_url})"
+            )
         else:
+            download_info = (
+                f"I've created your Excel file: **{result.file_name}**\n\n"
+                f"{result.description}\n\n"
+                f"- **Sheets:** {result.sheet_count}\n"
+                f"- **Total rows:** {result.total_rows}\n\n"
+                f"[Download {result.file_name}]({result.download_url})"
+            )
             state.answer = download_info
 
         state.messages.append(
