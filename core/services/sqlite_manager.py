@@ -172,8 +172,9 @@ class SQLiteManager:
                 df = df.convert_dtypes()
 
                 table_name = cls._sanitize_table_name(base_name)
-                # Make table name unique by prefixing with doc_id
-                table_name = f"{table_name}_{doc_id}"
+                # Make table name unique by suffixing with doc_id
+                # Replace hyphens in UUID to keep the name SQL-safe
+                table_name = f"{table_name}_{doc_id.replace('-', '_')}"
 
                 df.to_sql(table_name, conn, index=False, if_exists="replace")
                 tables_created[table_name] = cls._get_column_info(conn, table_name)
@@ -224,7 +225,8 @@ class SQLiteManager:
                         table_name = cls._sanitize_table_name(
                             f"{base_name}_{sheet_name}"
                         )
-                    table_name = f"{table_name}_{doc_id}"
+                    # Replace hyphens in UUID to keep the name SQL-safe
+                    table_name = f"{table_name}_{doc_id.replace('-', '_')}"
 
                     df.to_sql(table_name, conn, index=False, if_exists="replace")
                     tables_created[table_name] = cls._get_column_info(conn, table_name)
@@ -323,7 +325,7 @@ class SQLiteManager:
                 sample_text = ""
 
             schema_parts.append(
-                f"Table: {table_name}\n"
+                f'Table: "{table_name}"\n'
                 f"  Rows: {row_count}\n"
                 f"  Columns:\n" + "\n".join(col_lines) + sample_text
             )
