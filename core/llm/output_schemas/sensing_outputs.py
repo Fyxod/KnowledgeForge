@@ -41,7 +41,8 @@ class ClassifiedArticle(BaseModel):
 
 class ArticleBatchClassification(LLMOutputBase):
     articles: List[ClassifiedArticle] = Field(
-        description="List of classified articles from the batch."
+        default_factory=list,
+        description="List of classified articles from the batch.",
     )
 
 
