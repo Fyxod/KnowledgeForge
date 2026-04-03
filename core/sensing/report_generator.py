@@ -151,40 +151,62 @@ async def generate_report(
         f"sections={len(analysis.report_sections)}"
     )
 
-    # ── Phase 3: Radar item details ────────────────────────────────────
-    radar_items_json = json.dumps(
-        [
-            {"name": item.name, "quadrant": item.quadrant, "ring": item.ring}
-            for item in analysis.radar_items
-        ],
-        indent=2,
-        ensure_ascii=False,
-    )
-
-    details_prompt = sensing_details_prompt(
-        radar_items_json=radar_items_json,
-        classified_articles_json=articles_json,
-        domain=domain,
-    )
+    # ── Phase 3: Radar item details (batched to avoid output truncation) ─
+    DETAILS_BATCH_SIZE = 5
+    all_radar_items = list(analysis.radar_items)
+    batches = [
+        all_radar_items[i : i + DETAILS_BATCH_SIZE]
+        for i in range(0, len(all_radar_items), DETAILS_BATCH_SIZE)
+    ]
 
     phase3_start = time.time()
     logger.info(
-        f"[Phase 3/3] Generating details for {len(analysis.radar_items)} radar items..."
+        f"[Phase 3/3] Generating details for {len(all_radar_items)} radar items "
+        f"in {len(batches)} batch(es) of ≤{DETAILS_BATCH_SIZE}..."
     )
 
-    details_result = await invoke_llm(
-        gpu_model=GPU_SENSING_REPORT_LLM.model,
-        response_schema=RadarDetailsOutput,
-        contents=details_prompt,
-        port=GPU_SENSING_REPORT_LLM.port,
-    )
+    all_details = []
+    for batch_idx, batch in enumerate(batches, 1):
+        batch_json = json.dumps(
+            [
+                {"name": item.name, "quadrant": item.quadrant, "ring": item.ring}
+                for item in batch
+            ],
+            indent=2,
+            ensure_ascii=False,
+        )
 
-    details = RadarDetailsOutput.model_validate(details_result)
+        batch_prompt = sensing_details_prompt(
+            radar_items_json=batch_json,
+            classified_articles_json=articles_json,
+            domain=domain,
+        )
+
+        logger.info(
+            f"[Phase 3/3] Batch {batch_idx}/{len(batches)}: "
+            f"{', '.join(item.name for item in batch)}"
+        )
+
+        batch_result = await invoke_llm(
+            gpu_model=GPU_SENSING_REPORT_LLM.model,
+            response_schema=RadarDetailsOutput,
+            contents=batch_prompt,
+            port=GPU_SENSING_REPORT_LLM.port,
+        )
+
+        batch_details = RadarDetailsOutput.model_validate(batch_result)
+        all_details.extend(batch_details.radar_item_details)
+        logger.info(
+            f"[Phase 3/3] Batch {batch_idx}/{len(batches)} done — "
+            f"{len(batch_details.radar_item_details)} details"
+        )
+
+    details = RadarDetailsOutput(radar_item_details=all_details)
     phase3_time = time.time() - phase3_start
 
     logger.info(
         f"[Phase 3/3] Details generated in {phase3_time:.1f}s — "
-        f"{len(details.radar_item_details)} detail entries"
+        f"{len(details.radar_item_details)} detail entries across {len(batches)} batches"
     )
 
     # ── Merge into final report ────────────────────────────────────────
