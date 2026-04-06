@@ -74,13 +74,24 @@ def _estimate_nlp_batch_size(sample_rows: List[str]) -> int:
         1, count_tokens(sample_text, MAIN_MODEL) / sample_count
     )
 
-    budget = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - _NLP_PROMPT_OVERHEAD_TOKENS
-    rows = int(budget / avg_tokens_per_row)
+    # Input budget: how many rows fit in the context window
+    input_budget = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - _NLP_PROMPT_OVERHEAD_TOKENS
+    rows_by_input = int(input_budget / avg_tokens_per_row)
+
+    # Output budget: each classification value needs ~10 tokens (label + JSON syntax).
+    # num_predict is 8192, MODEL_OUTPUT_RESERVE is 8000 — use the conservative one.
+    _OUTPUT_OVERHEAD = 200   # JSON wrapper: {"values": [...]}
+    _TOKENS_PER_VALUE = 10   # ~2-3 word labels like "battery replacement request"
+    rows_by_output = (MODEL_OUTPUT_RESERVE - _OUTPUT_OVERHEAD) // _TOKENS_PER_VALUE
+
+    rows = min(rows_by_input, rows_by_output)
     rows = max(NLP_BATCH_MIN, min(NLP_BATCH_MAX, rows))
 
     print(
         f"[ExcelSkill:nlp] Dynamic batch size: ~{avg_tokens_per_row:.0f} tok/row, "
-        f"budget={budget} tok → {rows} rows/batch"
+        f"input_budget={input_budget} tok ({rows_by_input} rows), "
+        f"output_budget={MODEL_OUTPUT_RESERVE} tok ({rows_by_output} rows) "
+        f"→ {rows} rows/batch"
     )
     return rows
 
