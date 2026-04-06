@@ -133,6 +133,75 @@ def _ensure_sqlite_loaded(user_id: str, thread_id: str) -> None:
         print(f"[ExcelSkill] SQLite reload error: {e}")
 
 
+# Keywords that signal the user wants NLP-based column processing
+_NLP_INTENT_KEYWORDS = [
+    "classify", "categorize", "categorise", "category", "categories",
+    "sentiment", "tag", "label", "intent", "extract intent",
+    "summarize", "summarise", "group by meaning", "subcategor",
+    "analyze text", "analyse text", "topic", "theme",
+    "nlp", "language", "interpret",
+]
+
+
+def _validate_nlp_plan(
+    user_request: str,
+    plan,
+    nlp_columns: list,
+) -> None:
+    """
+    Warn (and auto-fix) when the user clearly wants NLP columns but the
+    planner didn't generate any.
+
+    Scans the user request for NLP-intent keywords. If found and the plan
+    has zero nlp: columns, converts non-SQL columns (those whose name
+    suggests classification/categorization) to nlp: sources.
+    """
+    request_lower = user_request.lower()
+    has_nlp_intent = any(kw in request_lower for kw in _NLP_INTENT_KEYWORDS)
+
+    if not has_nlp_intent or nlp_columns:
+        return  # Either no NLP intent, or plan already has NLP columns — nothing to do
+
+    print(
+        "[ExcelSkill] WARNING: User request mentions NLP "
+        f"({[kw for kw in _NLP_INTENT_KEYWORDS if kw in request_lower]}) "
+        "but plan has 0 nlp: columns. Attempting auto-fix..."
+    )
+
+    # Find columns that are marked 'sql' but don't exist in any source_query
+    # These are likely the ones the planner should have marked as nlp:
+    for sheet in plan.sheets:
+        sql_cols = set()
+        if sheet.source_query:
+            # Quick parse: extract column names/aliases from SELECT clause
+            select_part = sheet.source_query.upper().split("FROM")[0] if "FROM" in sheet.source_query.upper() else ""
+            sql_cols = {
+                tok.strip().lower()
+                for tok in select_part.replace("SELECT", "").split(",")
+                if tok.strip()
+            }
+            # Also capture aliases: "col AS alias"
+            for tok in select_part.replace("SELECT", "").split(","):
+                parts = tok.strip().split()
+                if len(parts) >= 3 and parts[-2].upper() == "AS":
+                    sql_cols.add(parts[-1].strip().lower())
+
+        for col in sheet.columns:
+            if col.source != "sql":
+                continue
+            col_lower = col.name.strip().lower()
+            # Check if this column name exists in the SQL result
+            col_in_sql = any(col_lower in s for s in sql_cols) if sql_cols else False
+            if col_in_sql:
+                continue
+            # This column is marked 'sql' but doesn't exist in the query — convert to nlp:
+            col.source = f"nlp:analyze each row and assign a {col.name.lower()}"
+            print(
+                f"[ExcelSkill] Auto-fixed column '{col.name}' on sheet "
+                f"'{sheet.sheet_name}': sql → {col.source}"
+            )
+
+
 async def generate_excel(
     user_request: str,
     user_id: str,
@@ -169,12 +238,26 @@ async def generate_excel(
         prior_sql_query=prior_sql_query,
     )
 
+    # Log NLP column detection
+    nlp_columns = [
+        (sheet.sheet_name, col.name, col.source)
+        for sheet in plan.sheets
+        for col in sheet.columns
+        if col.source.startswith("nlp:")
+    ]
     print(
         f"[ExcelSkill] Plan: {plan.file_name} — "
         f"{len(plan.sheets)} sheet(s), "
         f"charts={'yes' if plan.charts else 'no'}, "
-        f"summary={plan.summary_sheet}"
+        f"summary={plan.summary_sheet}, "
+        f"nlp_columns={len(nlp_columns)}"
     )
+    if nlp_columns:
+        for sheet_name, col_name, source in nlp_columns:
+            print(f"[ExcelSkill] NLP column: [{sheet_name}] {col_name} → {source}")
+
+    # ── 2b. Validate: detect NLP intent in request but missing NLP columns ──
+    _validate_nlp_plan(user_request, plan, nlp_columns)
 
     # ── 3. Extract data ──
     sheet_data: Dict[str, pd.DataFrame] = {}
