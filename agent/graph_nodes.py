@@ -597,7 +597,7 @@ def _has_successful_sql_result(result: str | None) -> bool:
 # Minimum row count to trigger NLP chunked extraction
 _NLP_MIN_ROWS = 100
 # Target rows per chunk — keeps each chunk within LLM context
-_NLP_ROWS_PER_CHUNK = 200
+_NLP_ROWS_PER_CHUNK = 500
 
 
 def _is_nlp_query(question: str) -> bool:
