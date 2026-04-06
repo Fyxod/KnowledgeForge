@@ -61,7 +61,7 @@ class ExcelSkillResult:
 
 
 # NLP batch size — process this many rows per LLM call to stay within context
-NLP_BATCH_SIZE = 500
+NLP_BATCH_SIZE = 300
 
 # Smart NLP threshold — sheets above this row count use the taxonomy pipeline
 NLP_SMART_THRESHOLD = 1500
