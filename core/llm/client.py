@@ -327,54 +327,70 @@ CRITICAL OUTPUT RULES:
             effective_prompt = _build_prompt(prompt, last_failed_output, last_parse_error)
 
             internal_output = None
-            try:
-                await _internal_rate_limiter.acquire()
-                print("Trying INTERNAL API...")
-                internal_llm = INTERNALLLM(
-                    model=settings.INTERNAL_MODEL_ID,
-                    base_url=settings.INTERNAL_BASE_URL,
-                    client_key=settings.INTERNAL_CLIENT_KEY,
-                    api_token=settings.INTERNAL_API_TOKEN,
-                    user_email=settings.INTERNAL_USER_EMAIL,
-                )
-                s = time.time()
-                internal_output = await asyncio.to_thread(internal_llm._call, effective_prompt)
-                e = time.time()
-                print(f"Success via INTERNAL API, LLM call took {e - s:.2f}s")
-                structured = _try_parse(internal_output, parser, response_schema)
-                return structured
-            except Exception as exc:
-                error_str = str(exc)
-                tb_str = traceback.format_exc()
-                logger.error(
-                    f"INTERNAL API attempt {attempt}/{MAX_RETRIES} failed "
-                    f"(schema={response_schema.__name__}): {error_str}\n{tb_str}"
-                )
-                print(f"INTERNAL API failed: {error_str}")
-                if internal_output:
-                    # Parse failure — retry with self-correction
-                    last_failed_output = internal_output
-                    last_parse_error = error_str
+            # Retry blank responses within the same attempt (up to 2 tries)
+            for blank_retry in range(2):
+                try:
+                    await _internal_rate_limiter.acquire()
+                    print("Trying INTERNAL API...")
+                    internal_llm = INTERNALLLM(
+                        model=settings.INTERNAL_MODEL_ID,
+                        base_url=settings.INTERNAL_BASE_URL,
+                        client_key=settings.INTERNAL_CLIENT_KEY,
+                        api_token=settings.INTERNAL_API_TOKEN,
+                        user_email=settings.INTERNAL_USER_EMAIL,
+                    )
+                    s = time.time()
+                    internal_output = await asyncio.to_thread(internal_llm._call, effective_prompt)
+                    e = time.time()
+                    print(f"Success via INTERNAL API, LLM call took {e - s:.2f}s")
+
+                    # Blank/empty response — retry immediately without burning the attempt
+                    if not internal_output or not internal_output.strip():
+                        print(f"[Blank response] INTERNAL returned empty output, retrying same attempt ({blank_retry + 1}/2)")
+                        internal_output = None
+                        continue
+
+                    structured = _try_parse(internal_output, parser, response_schema)
+                    return structured
+                except Exception as exc:
+                    error_str = str(exc)
+                    tb_str = traceback.format_exc()
                     logger.error(
-                        f"INTERNAL raw output ({len(internal_output)} chars): "
-                        f"{internal_output[:1000]}"
+                        f"INTERNAL API attempt {attempt}/{MAX_RETRIES} failed "
+                        f"(schema={response_schema.__name__}): {error_str}\n{tb_str}"
                     )
-                    _log_parse_failure(
-                        source="internal",
-                        attempt=attempt,
-                        raw_output=internal_output,
-                        error=error_str,
-                        schema_name=response_schema.__name__,
-                        prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
-                    )
-                    print(f"[Self-correction] Captured failed INTERNAL output ({len(internal_output)} chars)")
-                else:
-                    # Network/API error — no point retrying INTERNAL, break to GPU
-                    logger.error(
-                        f"INTERNAL network/API error (no output received): {error_str}\n{tb_str}"
-                    )
-                    print("[Sticky fallback] INTERNAL network error, breaking to GPU")
-                    break
+                    print(f"INTERNAL API failed: {error_str}")
+                    if internal_output:
+                        # Parse failure — retry with self-correction
+                        last_failed_output = internal_output
+                        last_parse_error = error_str
+                        logger.error(
+                            f"INTERNAL raw output ({len(internal_output)} chars): "
+                            f"{internal_output[:1000]}"
+                        )
+                        _log_parse_failure(
+                            source="internal",
+                            attempt=attempt,
+                            raw_output=internal_output,
+                            error=error_str,
+                            schema_name=response_schema.__name__,
+                            prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
+                        )
+                        print(f"[Self-correction] Captured failed INTERNAL output ({len(internal_output)} chars)")
+                    else:
+                        # Network/API error — no point retrying INTERNAL, break to GPU
+                        logger.error(
+                            f"INTERNAL network/API error (no output received): {error_str}\n{tb_str}"
+                        )
+                        print("[Sticky fallback] INTERNAL network error, breaking to GPU")
+                    break  # Exit blank-retry loop on error
+            else:
+                # Both blank retries exhausted
+                print(f"[Blank response] INTERNAL returned empty output twice, moving to next attempt")
+                continue
+            # If we broke out due to network error, also break the outer loop
+            if not internal_output and not last_failed_output:
+                break
 
         # All INTERNAL attempts exhausted (or network error) — sticky fallback
         print(
@@ -393,31 +409,45 @@ CRITICAL OUTPUT RULES:
 
         if gpu_model:
             llm_output = None
-            try:
-                print("Trying GPU server...")
-                gpu_llm = _get_cached_llm(gpu_model, port)
-                s = time.time()
-                llm_output = await asyncio.to_thread(gpu_llm._call, effective_prompt)
-                e = time.time()
-                print(f"Success via GPU server, LLM call took {e - s:.2f}s")
-                structured = _try_parse(llm_output, parser, response_schema)
-                return structured
-            except Exception as e:
-                error_str = str(e)
-                print(f"GPU server failed at port {port}: {error_str}")
-                if llm_output:
-                    last_failed_output = llm_output
-                    last_parse_error = error_str
-                    _log_parse_failure(
-                        source="gpu",
-                        attempt=attempt,
-                        raw_output=llm_output,
-                        error=error_str,
-                        schema_name=response_schema.__name__,
-                        prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
-                    )
-                    print(f"[Self-correction] Captured failed GPU output ({len(llm_output)} chars)")
-                    continue  # Retry GPU with self-correction
+            # Retry blank responses within the same attempt (up to 2 tries)
+            for blank_retry in range(2):
+                try:
+                    print("Trying GPU server...")
+                    gpu_llm = _get_cached_llm(gpu_model, port)
+                    s = time.time()
+                    llm_output = await asyncio.to_thread(gpu_llm._call, effective_prompt)
+                    e = time.time()
+                    print(f"Success via GPU server, LLM call took {e - s:.2f}s")
+
+                    # Blank/empty response — retry immediately without burning the attempt
+                    if not llm_output or not llm_output.strip():
+                        print(f"[Blank response] GPU returned empty output, retrying same attempt ({blank_retry + 1}/2)")
+                        llm_output = None
+                        continue
+
+                    structured = _try_parse(llm_output, parser, response_schema)
+                    return structured
+                except Exception as e:
+                    error_str = str(e)
+                    print(f"GPU server failed at port {port}: {error_str}")
+                    if llm_output:
+                        last_failed_output = llm_output
+                        last_parse_error = error_str
+                        _log_parse_failure(
+                            source="gpu",
+                            attempt=attempt,
+                            raw_output=llm_output,
+                            error=error_str,
+                            schema_name=response_schema.__name__,
+                            prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
+                        )
+                        print(f"[Self-correction] Captured failed GPU output ({len(llm_output)} chars)")
+                    break  # Parse/network error — exit blank-retry loop, proceed to next attempt
+            else:
+                # Both blank retries exhausted — treat as a failed attempt
+                print(f"[Blank response] GPU returned empty output twice, moving to next attempt")
+            if last_failed_output:
+                continue  # Retry with self-correction
 
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:

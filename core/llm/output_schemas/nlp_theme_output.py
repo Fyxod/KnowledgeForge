@@ -18,7 +18,7 @@ class ThemeItem(BaseModel):
     theme: str = Field(description="Short name of the theme or category (e.g., 'Customer service complaints')")
     count: int = Field(description="Number of entries in this batch that belong to this theme")
     examples: List[str] = Field(
-        description="2-3 representative example entries (verbatim or abbreviated) that illustrate this theme"
+        description="Exactly 2 short representative examples (max 60 chars each, truncated if needed)"
     )
 
 
