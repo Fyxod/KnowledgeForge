@@ -40,6 +40,10 @@ def nlp_theme_extraction_prompt(
         "4. An entry can belong to multiple themes if applicable.\n"
         "5. Order themes by frequency (most common first).\n"
         f"6. Set `total_rows_analyzed` to {len(entries)}.\n\n"
-        "Return ONLY a valid JSON object matching the required schema. "
+        "## EXACT output structure (each theme is a SEPARATE object in the array):\n"
+        '{"themes":[{"theme":"Topic A","count":5,"examples":["short ex1","short ex2"]},'
+        '{"theme":"Topic B","count":3,"examples":["short ex3","short ex4"]}],'
+        f'"total_rows_analyzed":{len(entries)}}}\n\n'
+        "Return ONLY a valid JSON object matching this structure. "
         "No markdown fencing, no commentary.\n"
     )

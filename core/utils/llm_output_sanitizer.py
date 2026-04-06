@@ -39,6 +39,41 @@ _THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _REASONING_TAG_RE = re.compile(r"<reasoning>.*?</reasoning>", re.DOTALL)
 
 
+def _repair_merged_array_objects(text: str) -> str:
+    """
+    Fix JSON where objects in an array are merged into one with duplicate keys.
+
+    LLMs sometimes output:
+        [{"theme":"A","count":1,"examples":[...],"theme":"B","count":2,"examples":[...]}]
+    instead of:
+        [{"theme":"A","count":1,"examples":[...]},{"theme":"B","count":2,"examples":[...]}]
+
+    Detects the first key after [{ and inserts },{ before each duplicate occurrence.
+    Only triggers when the same key appears 3+ times (strong signal of merging).
+    """
+    match = re.search(r'\[\s*\{\s*"(\w+)"\s*:', text)
+    if not match:
+        return text
+
+    first_key = match.group(1)
+    escaped_key = re.escape(first_key)
+
+    # Count occurrences of this key as a JSON key (not inside string values).
+    # 3+ means at least 2 objects were merged — safe to repair.
+    key_pattern = r'"' + escaped_key + r'"\s*:'
+    if len(re.findall(key_pattern, text)) < 3:
+        return text
+
+    # The first occurrence is [{"key": (no leading comma).
+    # Duplicates appear as ,"key": — insert },{ before each.
+    repaired = re.sub(
+        r',\s*"' + escaped_key + r'"\s*:',
+        '},{"' + first_key + '":',
+        text,
+    )
+    return repaired
+
+
 def sanitize_llm_json(raw: str) -> str:
     """
     Pre-process raw LLM output to maximize JSON parsing success.
@@ -85,6 +120,9 @@ def sanitize_llm_json(raw: str) -> str:
 
     # 6. Escape control characters within strings (e.g., literal newlines in JSON values)
     text = _escape_control_chars_in_strings(text)
+
+    # 7. Repair merged array objects (LLM puts all items as duplicate keys in one object)
+    text = _repair_merged_array_objects(text)
 
     return text
 
