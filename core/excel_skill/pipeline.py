@@ -47,11 +47,11 @@ class ExcelSkillResult:
 
 # NLP batch limits — dynamic sizing fills up to the context window budget,
 # but never exceeds NLP_BATCH_MAX or goes below NLP_BATCH_MIN.
-NLP_BATCH_MAX = 300
+NLP_BATCH_MAX = 2000
 NLP_BATCH_MIN = 20
 
 # Token budget for NLP data (context window minus output reserve minus prompt overhead)
-_NLP_PROMPT_OVERHEAD_TOKENS = 3000  # system prompt + instruction template
+_NLP_PROMPT_OVERHEAD_TOKENS = 2000  # prompt template + invoke_llm schema overhead
 
 
 def _estimate_nlp_batch_size(sample_rows: List[str]) -> int:
