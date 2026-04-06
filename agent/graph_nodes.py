@@ -364,7 +364,13 @@ async def generate(state: AgentState) -> AgentState:
             state.messages.append(AIMessage(content=result.answer))
             state.messages.append(AIMessage("Action taken: " + result.action))
 
-            state.answer = result.answer
+            # For actions that delegate to a dedicated node (excel_create),
+            # don't store the LLM's fabricated answer — the downstream node
+            # will set the real answer after actual processing.
+            if result.action == EXCEL_CREATE:
+                state.answer = ""
+            else:
+                state.answer = result.answer
             state.action = result.action
             state.chunks_used = result.chunks_used or []
             state.web_search_queries = getattr(result, "web_search_queries", []) or []
