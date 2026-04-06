@@ -1235,11 +1235,11 @@ async def _extract_nlp_themes(
     from core.constants import MAIN_MODEL, MODEL_CONTEXT_TOKENS, MODEL_OUTPUT_RESERVE
     from core.utils.count_tokens import count_tokens
 
-    _prompt_overhead = 3000  # theme extraction prompt template
+    _prompt_overhead = 2000  # theme extraction prompt template + invoke_llm overhead
     budget = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - _prompt_overhead
     sample = data_rows[: min(20, len(data_rows))]
     avg_tok = max(1, count_tokens("\n".join(sample), MAIN_MODEL) / len(sample))
-    rows_per_chunk = max(20, min(300, int(budget / avg_tok)))
+    rows_per_chunk = max(20, min(2000, int(budget / avg_tok)))
 
     chunk_count = max(1, (len(data_rows) + rows_per_chunk - 1) // rows_per_chunk)
     chunk_size = max(1, len(data_rows) // chunk_count)
@@ -1292,6 +1292,24 @@ async def _extract_nlp_themes(
     chunk_results = await asyncio.gather(
         *(extract_chunk(chunk, i + 1) for i, chunk in enumerate(chunks))
     )
+
+    # Single-chunk fast path: skip merge when everything fits in one call
+    if len(chunks) == 1 and chunk_results[0] is not None:
+        cr = chunk_results[0]
+        sorted_themes = sorted(cr.themes, key=lambda t: t.count, reverse=True)
+        if not sorted_themes:
+            return None
+        lines = [f"**Pre-Analyzed Themes** (from ALL {cr.total_rows_analyzed} rows):\n"]
+        for i, t in enumerate(sorted_themes, 1):
+            pct = (t.count / cr.total_rows_analyzed * 100) if cr.total_rows_analyzed > 0 else 0
+            examples_str = "; ".join(f'"{ex}"' for ex in t.examples[:3])
+            lines.append(
+                f"{i}. **{t.theme}** — {t.count} entries ({pct:.0f}%)\n"
+                f"   Examples: {examples_str}"
+            )
+        summary = "\n".join(lines)
+        print(f"[NLP Theme Extraction] Extracted {len(sorted_themes)} themes from {cr.total_rows_analyzed} rows (single chunk)")
+        return summary
 
     # Merge themes across chunks
     theme_map = {}  # theme_name_lower -> {theme, count, examples}
@@ -1508,12 +1526,6 @@ async def excel_skill_node(state: AgentState) -> AgentState:
         # Fallback: use the original query as the request
         request_text = state.query or state.original_query or "Export all data"
 
-    # The original user query may contain NLP-intent keywords (classify,
-    # categorize, sentiment, etc.) that the generate LLM stripped when
-    # rephrasing into excel_request.  Pass it through so the planner and
-    # the NLP-validation safety net can detect the intent.
-    original_query = state.original_query or state.query or ""
-
     print(f"[excel_skill_node] Generating Excel: {request_text}")
 
     try:
@@ -1522,7 +1534,6 @@ async def excel_skill_node(state: AgentState) -> AgentState:
             user_id=state.user_id,
             thread_id=state.thread_id,
             prior_sql_query=state.sql_last_executed_query or None,
-            original_user_query=original_query,
         )
 
         state.excel_result = result.download_url
