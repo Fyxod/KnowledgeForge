@@ -604,6 +604,21 @@ def _is_nlp_query(question: str) -> bool:
     return any(kw in q_lower for kw in _NLP_KEYWORDS)
 
 
+# Excel-intent keywords — when present, skip NLP theme extraction so the
+# Excel skill handles per-row classification directly (avoids premature
+# fabricated answers from the generate LLM).
+_EXCEL_REQUEST_KEYWORDS = [
+    "excel", "spreadsheet", "xlsx", "export to file",
+    "download file", "create a file", "pivot table",
+]
+
+
+def _is_excel_request(question: str) -> bool:
+    """Check if the user explicitly wants an Excel/spreadsheet file."""
+    q_lower = question.lower()
+    return any(kw in q_lower for kw in _EXCEL_REQUEST_KEYWORDS)
+
+
 def _parse_markdown_table_rows(result_text: str) -> tuple:
     """
     Parse a markdown table into header and data rows.
@@ -1395,6 +1410,18 @@ async def sql_query_node(state: AgentState) -> AgentState:
         # LLM flag (requires_full_data) takes priority; keyword matching is fallback.
         user_q = state.original_query or state.query or ""
         is_nlp = state.requires_full_data or _is_nlp_query(user_q)
+
+        # When the user explicitly wants Excel output, skip theme extraction —
+        # the Excel skill will handle per-row NLP classification directly.
+        # Theme extraction here would only cause the generate LLM to fabricate
+        # a premature answer before the Excel file is created.
+        if is_nlp and _is_excel_request(user_q):
+            print(
+                "[sql_query_node] NLP query but Excel output requested "
+                "— skipping theme extraction (Excel skill will handle NLP)"
+            )
+            is_nlp = False
+
         if is_nlp:
             # Re-fetch with no row limit so NLP extraction sees the COMPLETE dataset
             full_result = await execute_sql_query(
@@ -1525,6 +1552,13 @@ async def excel_skill_node(state: AgentState) -> AgentState:
     if not request_text:
         # Fallback: use the original query as the request
         request_text = state.query or state.original_query or "Export all data"
+
+    # Enrich with user's original query so detailed instructions
+    # (e.g., "granular subcategories like 'battery replacement request'")
+    # reach the planner and NLP column prompts.
+    original = state.original_query or state.query or ""
+    if original and request_text and original.strip().lower() != request_text.strip().lower():
+        request_text = f"{original}\n\n(Excel specifics: {request_text})"
 
     print(f"[excel_skill_node] Generating Excel: {request_text}")
 
