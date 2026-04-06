@@ -176,6 +176,7 @@ def excel_taxonomy_discovery_prompt(
     sample_values: List[str],
     instruction: str,
     column_name: str,
+    user_context: str = "",
 ) -> str:
     """
     Build the prompt for taxonomy discovery from a sample of data values.
@@ -186,10 +187,19 @@ def excel_taxonomy_discovery_prompt(
     """
     data_str = "\n".join(f"{i+1}. {val}" for i, val in enumerate(sample_values))
 
+    context_section = ""
+    if user_context and user_context.strip():
+        context_section = (
+            f"\n## User Context\n"
+            f"The user's original request: \"{user_context.strip()}\"\n"
+            f"Use this to understand WHAT they want classified and WHY.\n\n"
+        )
+
     return (
         "You are a data analyst building a classification system.\n\n"
         f"**Task**: {instruction}\n"
-        f"**Column to produce**: {column_name}\n\n"
+        f"**Column to produce**: {column_name}\n"
+        f"{context_section}\n"
         f"## Sample Data ({len(sample_values)} representative entries)\n"
         f"{data_str}\n\n"
         "## Instructions\n"
@@ -204,7 +214,8 @@ def excel_taxonomy_discovery_prompt(
         "1. Discover 5-30 categories (enough to cover the data, not so many that they overlap).\n"
         "2. Categories should be mutually exclusive where possible.\n"
         "3. Order categories by expected frequency (most common first).\n"
-        "4. Keywords must be lowercase and should match substrings in the text.\n"
+        "4. Keywords must be lowercase. Single-word keywords are matched with word boundaries "
+        "(e.g. 'bug' will NOT match 'debugging'). Multi-word phrases are matched as substrings.\n"
         "5. Include a catch-all category like 'Other' or 'General' for entries that "
         "don't fit any specific category.\n"
         "6. Think about what keywords would appear in entries BEYOND this sample — "
@@ -219,6 +230,7 @@ def excel_nlp_fallback_prompt(
     instruction: str,
     column_name: str,
     category_labels: List[str],
+    user_context: str = "",
 ) -> str:
     """
     Build the prompt for NLP classification with a known taxonomy.
@@ -229,10 +241,15 @@ def excel_nlp_fallback_prompt(
     data_str = "\n".join(f"{i+1}. {val}" for i, val in enumerate(values))
     labels_str = ", ".join(f'"{label}"' for label in category_labels)
 
+    context_line = ""
+    if user_context and user_context.strip():
+        context_line = f"User's original request: \"{user_context.strip()}\"\n\n"
+
     return (
         f"You are a data analyst. Classify each entry below according to this instruction: "
         f"**{instruction}**\n\n"
         f"Column to produce: {column_name}\n\n"
+        f"{context_line}"
         f"## Allowed Categories\n"
         f"You MUST use ONLY these labels: {labels_str}\n"
         f"Do NOT invent new categories. Pick the closest match from the list above.\n\n"

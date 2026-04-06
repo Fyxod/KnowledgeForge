@@ -7,7 +7,7 @@ LLM is called only for:
 
 Everything else (SQL queries, Excel assembly, formulas, charts) is deterministic.
 
-For large datasets (>1,500 rows), NLP columns use a smart pipeline:
+For datasets with >50 rows or >50 unique values, NLP columns use a smart pipeline:
   1. Deduplicate values in the source column
   2. Discover a classification taxonomy from a sample via LLM
   3. Apply taxonomy rules deterministically (keyword matching)
@@ -25,7 +25,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
-from core.constants import GPU_EXCEL_NLP_LLM
+from core.constants import GPU_EXCEL_NLP_LLM, MAIN_MODEL, MODEL_CONTEXT_TOKENS, MODEL_OUTPUT_RESERVE
 from core.excel_skill.assembler import assemble_excel
 from core.excel_skill.data_extractor import (
     extract_from_documents,
@@ -60,17 +60,55 @@ class ExcelSkillResult:
     total_rows: int
 
 
-# NLP batch size — process this many rows per LLM call to stay within context
-NLP_BATCH_SIZE = 300
+# NLP batch limits — dynamic sizing fills up to the context window budget,
+# but never exceeds NLP_BATCH_MAX or goes below NLP_BATCH_MIN.
+NLP_BATCH_MAX = 300
+NLP_BATCH_MIN = 20
 
-# Smart NLP threshold — sheets above this row count use the taxonomy pipeline
-NLP_SMART_THRESHOLD = 1500
+# Token budget for NLP data (context window minus output reserve minus prompt overhead)
+_NLP_PROMPT_OVERHEAD_TOKENS = 3000  # system prompt + instruction template
+
+# Brute-force ceiling — datasets at or below this threshold (both total rows
+# AND unique values) skip taxonomy discovery and batch everything through LLM.
+# Above this, the smart taxonomy pipeline provides consistent labels + dedup.
+NLP_BRUTE_FORCE_MAX = 50
 
 # Taxonomy sample size — how many unique values to sample for taxonomy discovery
 TAXONOMY_SAMPLE_SIZE = 200
 
 # Parallel concurrency for NLP fallback batches
 NLP_PARALLEL_CONCURRENCY = 5
+
+
+def _estimate_nlp_batch_size(sample_rows: List[str]) -> int:
+    """
+    Dynamically calculate how many rows fit in one NLP LLM call.
+
+    Samples a few rows, estimates tokens per row via tiktoken, then
+    fills the context window budget (model context − output reserve −
+    prompt overhead).  Clamps to [NLP_BATCH_MIN, NLP_BATCH_MAX].
+    """
+    from core.utils.count_tokens import count_tokens
+
+    if not sample_rows:
+        return NLP_BATCH_MIN
+
+    # Estimate avg tokens per row from a small sample
+    sample_text = "\n".join(sample_rows[: min(20, len(sample_rows))])
+    sample_count = min(20, len(sample_rows))
+    avg_tokens_per_row = max(
+        1, count_tokens(sample_text, MAIN_MODEL) / sample_count
+    )
+
+    budget = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - _NLP_PROMPT_OVERHEAD_TOKENS
+    rows = int(budget / avg_tokens_per_row)
+    rows = max(NLP_BATCH_MIN, min(NLP_BATCH_MAX, rows))
+
+    print(
+        f"[ExcelSkill:nlp] Dynamic batch size: ~{avg_tokens_per_row:.0f} tok/row, "
+        f"budget={budget} tok → {rows} rows/batch"
+    )
+    return rows
 
 
 def _sanitize_export_name(name: str) -> str:
@@ -135,11 +173,24 @@ def _ensure_sqlite_loaded(user_id: str, thread_id: str) -> None:
 
 # Keywords that signal the user wants NLP-based column processing
 _NLP_INTENT_KEYWORDS = [
+    # Classification
     "classify", "categorize", "categorise", "category", "categories",
-    "sentiment", "tag", "label", "intent", "extract intent",
-    "summarize", "summarise", "group by meaning", "subcategor",
-    "analyze text", "analyse text", "topic", "theme",
+    "classification", "reclassify", "subcategor",
+    # Labeling / Tagging
+    "tag", "label", "annotate", "mark as",
+    # Sentiment / Opinion
+    "sentiment", "positive negative", "opinion", "tone",
+    # Intent / Topic
+    "intent", "extract intent", "topic", "theme",
+    "group by meaning", "group by type",
+    # Text Analysis
+    "analyze text", "analyse text", "analyze each",
     "nlp", "language", "interpret",
+    "summarize", "summarise",
+    # Common request phrasings
+    "assign a type", "determine the type", "identify the type",
+    "bucket", "cluster", "segment",
+    "priority", "severity", "urgency",
 ]
 
 
@@ -195,7 +246,11 @@ def _validate_nlp_plan(
             if col_in_sql:
                 continue
             # This column is marked 'sql' but doesn't exist in the query — convert to nlp:
-            col.source = f"nlp:analyze each row and assign a {col.name.lower()}"
+            # Use the original user request for a specific instruction
+            col.source = (
+                f"nlp:{user_request.strip()} — "
+                f"produce a value for the '{col.name}' column"
+            )
             print(
                 f"[ExcelSkill] Auto-fixed column '{col.name}' on sheet "
                 f"'{sheet.sheet_name}': sql → {col.source}"
@@ -295,6 +350,7 @@ async def generate_excel(
                     df=df,
                     column_name=col_spec.name,
                     instruction=instruction,
+                    original_user_query=original_user_query or user_request,
                 )
 
         # Add static columns
@@ -415,15 +471,16 @@ async def _process_nlp_column(
     df: pd.DataFrame,
     column_name: str,
     instruction: str,
+    original_user_query: str = "",
 ) -> pd.DataFrame:
     """
     Process an NLP column by sending data to the LLM.
 
-    For small datasets (≤NLP_SMART_THRESHOLD rows), uses the brute-force
-    approach: batch all rows through the LLM sequentially.
-
-    For large datasets (>NLP_SMART_THRESHOLD rows), uses the smart pipeline:
-    deduplicate → discover taxonomy → apply rules → parallel LLM fallback.
+    Routing:
+      - Tiny datasets (≤NLP_BRUTE_FORCE_MAX rows AND unique values) use the
+        brute-force approach: batch all rows through the LLM sequentially.
+      - Everything else uses the smart pipeline: deduplicate → discover
+        taxonomy → apply keyword rules → parallel LLM fallback.
     """
     if df.empty:
         df[column_name] = []
@@ -433,18 +490,25 @@ async def _process_nlp_column(
         df[column_name] = "N/A"
         return df
 
-    if len(df) > NLP_SMART_THRESHOLD:
+    # Estimate unique text values to decide routing
+    source_col = _identify_source_column(df, instruction)
+    unique_count = df[source_col].fillna("").astype(str).str.strip().nunique()
+
+    # Both total rows AND unique values must be small for brute-force
+    if len(df) <= NLP_BRUTE_FORCE_MAX and unique_count <= NLP_BRUTE_FORCE_MAX:
         print(
-            f"[ExcelSkill:nlp] Column '{column_name}': {len(df)} rows "
-            f"(>{NLP_SMART_THRESHOLD}) — using smart taxonomy pipeline"
+            f"[ExcelSkill:nlp] Column '{column_name}': {len(df)} rows, "
+            f"{unique_count} unique — using brute-force pipeline"
         )
-        return await _process_nlp_column_smart(df, column_name, instruction)
+        return await _process_nlp_column_brute(df, column_name, instruction)
 
     print(
-        f"[ExcelSkill:nlp] Column '{column_name}': {len(df)} rows "
-        f"(≤{NLP_SMART_THRESHOLD}) — using standard batch pipeline"
+        f"[ExcelSkill:nlp] Column '{column_name}': {len(df)} rows, "
+        f"{unique_count} unique — using smart taxonomy pipeline"
     )
-    return await _process_nlp_column_brute(df, column_name, instruction)
+    return await _process_nlp_column_smart(
+        df, column_name, instruction, original_user_query, source_col
+    )
 
 
 async def _process_nlp_column_brute(
@@ -454,12 +518,13 @@ async def _process_nlp_column_brute(
 ) -> pd.DataFrame:
     """Original brute-force NLP pipeline: batch all rows through the LLM."""
     input_data = _rows_to_strings(df)
-    total_batches = (len(input_data) + NLP_BATCH_SIZE - 1) // NLP_BATCH_SIZE
+    batch_size = _estimate_nlp_batch_size(input_data)
+    total_batches = (len(input_data) + batch_size - 1) // batch_size
 
     all_values = []
-    for batch_start in range(0, len(input_data), NLP_BATCH_SIZE):
-        batch = input_data[batch_start : batch_start + NLP_BATCH_SIZE]
-        batch_idx = batch_start // NLP_BATCH_SIZE + 1
+    for batch_start in range(0, len(input_data), batch_size):
+        batch = input_data[batch_start : batch_start + batch_size]
+        batch_idx = batch_start // batch_size + 1
 
         print(
             f"[ExcelSkill:nlp] Column '{column_name}': "
@@ -505,20 +570,23 @@ async def _process_nlp_column_smart(
     df: pd.DataFrame,
     column_name: str,
     instruction: str,
+    original_user_query: str = "",
+    source_col: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Smart NLP pipeline for large datasets.
+    Smart NLP pipeline: dedup → taxonomy → keyword rules → parallel fallback.
 
     Steps:
       1. Identify the best source column (most text content)
       2. Deduplicate values
       3. Sample ~200 values → LLM discovers taxonomy with keyword rules
-      4. Apply rules deterministically via keyword matching
+      4. Apply rules deterministically via word-boundary keyword matching
       5. Batch remaining unclassified values through LLM (in parallel)
       6. Map results back to all rows
     """
-    # Step 1: Identify source column
-    source_col = _identify_source_column(df)
+    # Step 1: Identify source column (may already be resolved by caller)
+    if source_col is None:
+        source_col = _identify_source_column(df, instruction)
     print(f"[ExcelSkill:smart_nlp] Source column: '{source_col}'")
 
     # Step 2: Deduplicate
@@ -546,18 +614,23 @@ async def _process_nlp_column_smart(
         f"{len(sample)} sample values..."
     )
 
-    taxonomy = await _discover_taxonomy(sample, instruction, column_name)
+    taxonomy = await _discover_taxonomy(
+        sample, instruction, column_name, original_user_query
+    )
     print(
         f"[ExcelSkill:smart_nlp] Discovered {len(taxonomy.categories)} categories: "
         f"{', '.join(c.label for c in taxonomy.categories)}"
     )
+
+    # Step 3.5: Pre-compile keyword patterns (word-boundary aware)
+    compiled_patterns = _compile_taxonomy_patterns(taxonomy)
 
     # Step 4: Apply rules deterministically
     classified: Dict[str, str] = {}
     unclassified: List[str] = []
 
     for val in unique_values:
-        label = _apply_taxonomy_rules(val, taxonomy)
+        label = _apply_taxonomy_rules(val, taxonomy, compiled_patterns)
         if label:
             classified[val] = label
         else:
@@ -578,6 +651,7 @@ async def _process_nlp_column_smart(
             instruction=instruction,
             column_name=column_name,
             category_labels=category_labels,
+            original_user_query=original_user_query,
         )
         classified.update(fallback_results)
 
@@ -595,15 +669,49 @@ async def _process_nlp_column_smart(
     return df
 
 
-def _identify_source_column(df: pd.DataFrame) -> str:
-    """
-    Find the column with the most text content in the DataFrame.
+# Column names that typically contain free-text content
+_TEXT_COLUMN_HINTS = [
+    "description", "summary", "comment", "note", "detail",
+    "text", "content", "message", "body", "title", "subject",
+    "feedback", "review", "issue", "ticket", "report",
+]
 
-    Prefers columns with longer average string length (likely free-text fields
-    like 'summary', 'description', 'comment') over short/numeric columns.
+
+def _identify_source_column(df: pd.DataFrame, instruction: str = "") -> str:
     """
+    Find the best source column for NLP processing.
+
+    Strategy (in priority order):
+      1. If the instruction explicitly mentions a column name that exists
+         in the DataFrame, use it.
+      2. If a column name matches a known text-content hint (e.g.
+         'description', 'summary', 'comment'), prefer it.
+      3. Fall back to the column with the longest average string length.
+    """
+    col_names_lower = {col.lower().strip(): col for col in df.columns}
+    instruction_lower = instruction.lower()
+
+    # Strategy 1: Instruction mentions a column name explicitly
+    # Check longest names first to avoid "Issue" matching before "Issue Description"
+    sorted_cols = sorted(col_names_lower.keys(), key=len, reverse=True)
+    for col_lower in sorted_cols:
+        if len(col_lower) >= 3 and col_lower in instruction_lower:
+            return col_names_lower[col_lower]
+
+    # Strategy 2: Known text-content column name hints
+    for hint in _TEXT_COLUMN_HINTS:
+        for col_lower, col_original in col_names_lower.items():
+            if hint in col_lower:
+                try:
+                    avg_len = df[col_original].dropna().astype(str).str.len().mean()
+                    if avg_len > 20:
+                        return col_original
+                except Exception:
+                    continue
+
+    # Strategy 3: Longest average string length (original heuristic)
     best_col = df.columns[0]
-    best_avg_len = 0
+    best_avg_len = 0.0
 
     for col in df.columns:
         try:
@@ -624,6 +732,7 @@ async def _discover_taxonomy(
     sample_values: List[str],
     instruction: str,
     column_name: str,
+    original_user_query: str = "",
 ) -> TaxonomyResult:
     """
     Ask the LLM to discover a classification taxonomy from sample values.
@@ -634,6 +743,7 @@ async def _discover_taxonomy(
         sample_values=sample_values,
         instruction=instruction,
         column_name=column_name,
+        user_context=original_user_query,
     )
 
     result = await invoke_llm(
@@ -646,15 +756,63 @@ async def _discover_taxonomy(
     return TaxonomyResult.model_validate(result)
 
 
-def _apply_taxonomy_rules(value: str, taxonomy: TaxonomyResult) -> Optional[str]:
+def _compile_taxonomy_patterns(
+    taxonomy: TaxonomyResult,
+) -> List[tuple]:
+    """
+    Pre-compile keyword patterns for each category.
+
+    Single-word keywords use word boundaries (``\\b``) so "bug" won't match
+    "debugging".  Multi-word phrases use plain substring matching since
+    words already provide natural boundaries.
+
+    Returns list of ``(category_label, compiled_pattern)`` tuples,
+    preserving the taxonomy's category order (most frequent first).
+    """
+    compiled: List[tuple] = []
+    for category in taxonomy.categories:
+        patterns: List[str] = []
+        for kw in category.keywords:
+            kw_lower = kw.lower().strip()
+            if not kw_lower:
+                continue
+            if " " in kw_lower:
+                # Multi-word phrase: match as-is
+                patterns.append(re.escape(kw_lower))
+            else:
+                # Single word: word boundaries prevent partial matches
+                patterns.append(r"\b" + re.escape(kw_lower) + r"\b")
+        if patterns:
+            combined = re.compile("|".join(patterns), re.IGNORECASE)
+            compiled.append((category.label, combined))
+    return compiled
+
+
+def _apply_taxonomy_rules(
+    value: str,
+    taxonomy: TaxonomyResult,
+    compiled_patterns: Optional[List[tuple]] = None,
+) -> Optional[str]:
     """
     Try to classify a value using the taxonomy's keyword rules.
 
-    Returns the category label if any keywords match, or None if no match.
-    Checks categories in order (most frequent first) so the first match wins.
+    When *compiled_patterns* is provided (pre-compiled via
+    ``_compile_taxonomy_patterns``), uses regex with word boundaries for
+    single-word keywords.  Falls back to simple substring matching when
+    patterns are ``None``.
+
+    Returns the category label if any keywords match, or ``None``.
+    Checks categories in order (most frequent first) — first match wins.
     """
     value_lower = value.lower()
 
+    if compiled_patterns:
+        for label, pattern in compiled_patterns:
+            if pattern.search(value_lower):
+                return label
+        return None
+
+    # Fallback: original substring matching
     for category in taxonomy.categories:
         for keyword in category.keywords:
             if keyword.lower() in value_lower:
@@ -668,6 +826,7 @@ async def _parallel_nlp_classify(
     instruction: str,
     column_name: str,
     category_labels: List[str],
+    original_user_query: str = "",
 ) -> Dict[str, str]:
     """
     Classify values through the LLM in parallel batches.
@@ -678,15 +837,17 @@ async def _parallel_nlp_classify(
     results: Dict[str, str] = {}
     sem = asyncio.Semaphore(NLP_PARALLEL_CONCURRENCY)
 
+    batch_size = _estimate_nlp_batch_size(values)
     batches = [
-        values[i : i + NLP_BATCH_SIZE]
-        for i in range(0, len(values), NLP_BATCH_SIZE)
+        values[i : i + batch_size]
+        for i in range(0, len(values), batch_size)
     ]
     total_batches = len(batches)
 
     print(
         f"[ExcelSkill:smart_nlp] LLM fallback: {len(values)} values "
-        f"in {total_batches} batch(es), concurrency={NLP_PARALLEL_CONCURRENCY}"
+        f"in {total_batches} batch(es) (~{batch_size}/batch), "
+        f"concurrency={NLP_PARALLEL_CONCURRENCY}"
     )
 
     async def _classify_batch(
@@ -703,6 +864,7 @@ async def _parallel_nlp_classify(
                     instruction=instruction,
                     column_name=column_name,
                     category_labels=category_labels,
+                    user_context=original_user_query,
                 )
 
                 result = await invoke_llm(

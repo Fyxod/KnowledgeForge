@@ -596,8 +596,6 @@ def _has_successful_sql_result(result: str | None) -> bool:
 
 # Minimum row count to trigger NLP chunked extraction
 _NLP_MIN_ROWS = 100
-# Target rows per chunk — keeps each chunk within LLM context
-_NLP_ROWS_PER_CHUNK = 300
 
 
 def _is_nlp_query(question: str) -> bool:
@@ -1233,8 +1231,17 @@ async def _extract_nlp_themes(
     if not data_rows or len(data_rows) < _NLP_MIN_ROWS:
         return None
 
-    # Split data rows into chunks of ~_NLP_ROWS_PER_CHUNK rows each
-    chunk_count = max(1, (len(data_rows) + _NLP_ROWS_PER_CHUNK - 1) // _NLP_ROWS_PER_CHUNK)
+    # Dynamically size chunks to fit within context window
+    from core.constants import MAIN_MODEL, MODEL_CONTEXT_TOKENS, MODEL_OUTPUT_RESERVE
+    from core.utils.count_tokens import count_tokens
+
+    _prompt_overhead = 3000  # theme extraction prompt template
+    budget = MODEL_CONTEXT_TOKENS - MODEL_OUTPUT_RESERVE - _prompt_overhead
+    sample = data_rows[: min(20, len(data_rows))]
+    avg_tok = max(1, count_tokens("\n".join(sample), MAIN_MODEL) / len(sample))
+    rows_per_chunk = max(20, min(300, int(budget / avg_tok)))
+
+    chunk_count = max(1, (len(data_rows) + rows_per_chunk - 1) // rows_per_chunk)
     chunk_size = max(1, len(data_rows) // chunk_count)
     chunks = []
     for i in range(0, len(data_rows), chunk_size):
