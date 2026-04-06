@@ -1501,6 +1501,12 @@ async def excel_skill_node(state: AgentState) -> AgentState:
         # Fallback: use the original query as the request
         request_text = state.query or state.original_query or "Export all data"
 
+    # The original user query may contain NLP-intent keywords (classify,
+    # categorize, sentiment, etc.) that the generate LLM stripped when
+    # rephrasing into excel_request.  Pass it through so the planner and
+    # the NLP-validation safety net can detect the intent.
+    original_query = state.original_query or state.query or ""
+
     print(f"[excel_skill_node] Generating Excel: {request_text}")
 
     try:
@@ -1509,6 +1515,7 @@ async def excel_skill_node(state: AgentState) -> AgentState:
             user_id=state.user_id,
             thread_id=state.thread_id,
             prior_sql_query=state.sql_last_executed_query or None,
+            original_user_query=original_query,
         )
 
         state.excel_result = result.download_url

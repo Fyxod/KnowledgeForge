@@ -208,6 +208,7 @@ async def generate_excel(
     thread_id: str,
     source_doc_ids: Optional[List[str]] = None,
     prior_sql_query: Optional[str] = None,
+    original_user_query: Optional[str] = None,
 ) -> ExcelSkillResult:
     """
     Main entry point: generate an Excel file from a user request.
@@ -224,6 +225,9 @@ async def generate_excel(
         prior_sql_query: A SQL query already executed in this conversation
             whose filtered result set the Excel should reflect. Forwarded
             to the planner as an advisory hint.
+        original_user_query: The verbatim user query before the generate LLM
+            rephrased it into ``user_request``.  Used for NLP-intent detection
+            so that keywords like "classify" / "categorize" are not lost.
     """
     # ── 1. Gather data sources ──
     _ensure_sqlite_loaded(user_id, thread_id)
@@ -231,8 +235,14 @@ async def generate_excel(
     doc_info = get_document_info(user_id, thread_id, source_doc_ids)
 
     # ── 2. LLM: generate plan ──
+    # If the original user query differs from the (possibly rephrased)
+    # user_request, prepend it so the planner sees NLP-intent keywords.
+    planner_request = user_request
+    if original_user_query and original_user_query.strip().lower() != user_request.strip().lower():
+        planner_request = f"{original_user_query}\n\n(Detail: {user_request})"
+
     plan = await generate_excel_plan(
-        user_request=user_request,
+        user_request=planner_request,
         available_schema=schema,
         available_documents=doc_info if doc_info else None,
         prior_sql_query=prior_sql_query,
@@ -257,7 +267,10 @@ async def generate_excel(
             print(f"[ExcelSkill] NLP column: [{sheet_name}] {col_name} → {source}")
 
     # ── 2b. Validate: detect NLP intent in request but missing NLP columns ──
-    _validate_nlp_plan(user_request, plan, nlp_columns)
+    # Use the original user query (before the generate LLM rephrased it)
+    # so NLP-intent keywords like "classify" / "categorize" are preserved.
+    nlp_check_text = original_user_query or user_request
+    _validate_nlp_plan(nlp_check_text, plan, nlp_columns)
 
     # ── 3. Extract data ──
     sheet_data: Dict[str, pd.DataFrame] = {}
