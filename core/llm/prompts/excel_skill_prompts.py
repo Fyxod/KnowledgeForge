@@ -147,15 +147,33 @@ def excel_nlp_column_prompt(
     column_instruction: str,
     input_data: List[str],
     column_name: str,
+    prior_nlp_columns: Optional[List[str]] = None,
 ) -> str:
     """
     Build the prompt for NLP-based column interpretation.
 
     The LLM receives a batch of full row data and must return
     one interpreted value per input row.
+
+    Args:
+        prior_nlp_columns: Names of NLP columns already assigned to the data.
+            When present, the prompt instructs the LLM to treat these as
+            hierarchical context (e.g., Sub-Category should subdivide Category).
     """
     # Limit to prevent context overflow — process in batches externally
     data_str = "\n".join(f"{i+1}. {val}" for i, val in enumerate(input_data))
+
+    # Build dependency-aware rule when prior NLP columns exist
+    dependency_rule = ""
+    if prior_nlp_columns:
+        col_list = ", ".join(prior_nlp_columns)
+        dependency_rule = (
+            f"6. **DEPENDENCY**: The row data includes previously assigned NLP columns: [{col_list}]. "
+            f"Your output for \"{column_name}\" MUST be consistent with and more specific than these prior assignments. "
+            f"Treat them as a hierarchy — e.g., if a row has \"Category: Technical Issue\", "
+            f"your Sub-Category should be a subdivision within \"Technical Issue\" "
+            f"(like \"Battery Replacement\"), NOT an independent classification that duplicates the category.\n"
+        )
 
     return (
         f"You are a data analyst. For each row below, analyze ALL the fields provided "
@@ -170,7 +188,8 @@ def excel_nlp_column_prompt(
         "2. Each value should be a short string (1-3 words for classifications, a number for ratings, or a brief phrase).\n"
         "3. Be consistent — use the same label/rating for similar inputs.\n"
         "4. If a row is empty or has insufficient data, return 'N/A'.\n"
-        "5. Base your judgment on the actual data in each row, not assumptions.\n\n"
+        "5. Base your judgment on the actual data in each row, not assumptions.\n"
+        f"{dependency_rule}\n"
         "Return ONLY a valid JSON object matching the required schema. "
         "No markdown fencing, no commentary.\n"
     )

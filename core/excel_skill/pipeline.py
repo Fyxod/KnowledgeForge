@@ -47,7 +47,7 @@ class ExcelSkillResult:
 
 # NLP batch limits — dynamic sizing fills up to the context window budget,
 # but never exceeds NLP_BATCH_MAX or goes below NLP_BATCH_MIN.
-NLP_BATCH_MAX = 500
+NLP_BATCH_MAX = 300
 NLP_BATCH_MIN = 20
 
 # Token budget for NLP data (context window minus output reserve minus prompt overhead)
@@ -227,6 +227,7 @@ async def generate_excel(
         )
 
         # ── 4. Process NLP columns ──
+        nlp_columns_filled: List[str] = []  # track prior NLP assignments for dependency
         for col_spec in sheet_spec.columns:
             if col_spec.source.startswith("nlp:"):
                 instruction = col_spec.source[len("nlp:"):]
@@ -234,7 +235,9 @@ async def generate_excel(
                     df=df,
                     column_name=col_spec.name,
                     instruction=instruction,
+                    prior_nlp_columns=list(nlp_columns_filled),
                 )
+                nlp_columns_filled.append(col_spec.name)
 
         # Add static columns
         for col_spec in sheet_spec.columns:
@@ -354,6 +357,7 @@ async def _process_nlp_column(
     df: pd.DataFrame,
     column_name: str,
     instruction: str,
+    prior_nlp_columns: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """Process an NLP column by batching all rows through the LLM."""
     if df.empty:
@@ -364,13 +368,14 @@ async def _process_nlp_column(
         df[column_name] = "N/A"
         return df
 
-    return await _process_nlp_column_brute(df, column_name, instruction)
+    return await _process_nlp_column_brute(df, column_name, instruction, prior_nlp_columns)
 
 
 async def _process_nlp_column_brute(
     df: pd.DataFrame,
     column_name: str,
     instruction: str,
+    prior_nlp_columns: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """Original brute-force NLP pipeline: batch all rows through the LLM."""
     input_data = _rows_to_strings(df)
@@ -392,6 +397,7 @@ async def _process_nlp_column_brute(
                 column_instruction=instruction,
                 input_data=batch,
                 column_name=column_name,
+                prior_nlp_columns=prior_nlp_columns,
             )
 
             result = await invoke_llm(
