@@ -12,6 +12,7 @@ SWITCHES = {
     # This can be turned off if all the queries are independent and do not need context from previous chats.
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
     "USE_INTERNAL": settings.USE_INTERNAL,  # Use INTERNAL API instead of GPU/Ollama (defaults to False)
+    "USE_VLLM": settings.USE_VLLM,  # Use vLLM instead of Ollama for GPU inference
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
     "CORRECTIVE_RETRIEVAL": True,  # Phase 2.1: CRAG-style re-retrieval on low-confidence results
     "HYDE": False,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)

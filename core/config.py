@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     # YouTube Data API v3 (for tech sensing video enrichment)
     YOUTUBE_API_KEY: str = ""
 
+    # vLLM Configuration (alternative to Ollama for GPU inference)
+    USE_VLLM: bool = False  # Set True to use vLLM instead of Ollama
+    VLLM_BASE_URL: str = "http://localhost:8010/v1"  # vLLM OpenAI-compat endpoint
+    VLLM_MODEL: str = ""  # Model name as loaded in vLLM (e.g., "google/gemma-4-26B-A4B-it")
+    VLLM_API_KEY: str = "none"  # vLLM API key (default: no auth)
+
     # INTERNAL API Configuration (defaults to disabled for backward compatibility)
     INTERNAL_BASE_URL: str = ""
     INTERNAL_CLIENT_KEY: str = ""

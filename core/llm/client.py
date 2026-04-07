@@ -50,6 +50,8 @@ def _log_parse_failure(
 
 if SWITCHES["REMOTE_GPU"]:
     import core.llm.configurations.remote_llm as llm_module
+elif SWITCHES.get("USE_VLLM", False):
+    import core.llm.configurations.vllm_llm as llm_module
 else:
     import core.llm.configurations.local_llm as llm_module
 
