@@ -47,7 +47,7 @@ class ExcelSkillResult:
 
 # NLP batch limits — dynamic sizing fills up to the context window budget,
 # but never exceeds NLP_BATCH_MAX or goes below NLP_BATCH_MIN.
-NLP_BATCH_MAX = 2000
+NLP_BATCH_MAX = 500
 NLP_BATCH_MIN = 20
 
 # Token budget for NLP data (context window minus output reserve minus prompt overhead)
