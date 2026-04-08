@@ -3,9 +3,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Send, Loader2, MessageCircle } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Send, Loader2, MessageCircle, History, ChevronDown, ChevronRight } from 'lucide-react';
 import SafeMarkdownRenderer from '@/components/SafeMarkdownRenderer';
-import type { DeepDiveReport } from '@/lib/api';
+import type { DeepDiveReport, DeepDiveHistoryItem } from '@/lib/api';
 
 interface SensingDeepDiveProps {
   report: DeepDiveReport;
@@ -15,6 +16,8 @@ interface SensingDeepDiveProps {
   followUpMessages?: { role: string; content: string }[];
   followUpLoading?: boolean;
   suggestedQuestions?: string[];
+  deepDiveHistory?: DeepDiveHistoryItem[];
+  onLoadDeepDive?: (trackingId: string) => void;
 }
 
 const SensingDeepDive: React.FC<SensingDeepDiveProps> = ({
@@ -25,8 +28,11 @@ const SensingDeepDive: React.FC<SensingDeepDiveProps> = ({
   followUpMessages = [],
   followUpLoading = false,
   suggestedQuestions = [],
+  deepDiveHistory = [],
+  onLoadDeepDive,
 }) => {
   const [inputValue, setInputValue] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,6 +48,48 @@ const SensingDeepDive: React.FC<SensingDeepDiveProps> = ({
 
   return (
     <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+      {/* Previous Deep Dives History */}
+      {deepDiveHistory.length > 0 && onLoadDeepDive && (
+        <div className="border rounded-lg">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showHistory ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            <History className="w-3 h-3" />
+            Previous Deep Dives ({deepDiveHistory.length})
+          </button>
+          {showHistory && (
+            <ScrollArea className="max-h-36 px-3 pb-2">
+              <div className="space-y-1">
+                {deepDiveHistory.map((item) => (
+                  <button
+                    key={item.tracking_id}
+                    onClick={() => onLoadDeepDive(item.tracking_id)}
+                    className={`flex items-center justify-between w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted/50 transition-colors ${
+                      trackingId === item.tracking_id ? 'bg-muted font-medium' : ''
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <span className="block truncate">{item.technology_name}</span>
+                      <span className="text-muted-foreground">
+                        {item.generated_at ? new Date(item.generated_at).toLocaleDateString() : ''}
+                        {item.domain ? ` · ${item.domain}` : ''}
+                      </span>
+                    </div>
+                    {item.message_count > 0 && (
+                      <Badge variant="secondary" className="text-[10px] ml-2 shrink-0">
+                        {item.message_count} msgs
+                      </Badge>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </div>
+      )}
+
       {/* Title */}
       <h2 className="text-xl font-bold">{report.technology_name} — Deep Dive</h2>
 

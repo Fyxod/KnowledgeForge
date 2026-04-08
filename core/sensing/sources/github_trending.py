@@ -48,14 +48,24 @@ async def fetch_github_trending(
             resp.raise_for_status()
             data = resp.json()
 
-            for repo in data.get("items", [])[:max_results]:
+            items = data.get("items") or []
+            for repo in items[:max_results]:
+                if not isinstance(repo, dict):
+                    continue
+                full_name = repo.get("full_name") or ""
+                html_url = repo.get("html_url") or ""
+                if not full_name or not html_url:
+                    continue
+                description = repo.get("description") or ""
+                language = repo.get("language") or "Unknown"
+                stars = repo.get("stargazers_count") or 0
                 articles.append(RawArticle(
-                    title=f"{repo.get('full_name', '')}",
-                    url=repo.get("html_url", ""),
+                    title=full_name,
+                    url=html_url,
                     source="GitHub",
-                    published_date=repo.get("created_at", ""),
-                    snippet=f"{repo.get('stargazers_count', 0)} stars | {repo.get('language', 'Unknown')} | {repo.get('description', '')[:200]}",
-                    content=repo.get("description", "") or "",
+                    published_date=repo.get("created_at") or "",
+                    snippet=f"{stars} stars | {language} | {description[:200]}",
+                    content=description,
                 ))
 
         logger.info(f"GitHub: fetched {len(articles)} repos for '{domain}'")

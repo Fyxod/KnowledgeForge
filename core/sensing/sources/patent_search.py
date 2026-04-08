@@ -2,9 +2,12 @@
 USPTO Patent Search — fetches recent patents matching a domain query.
 
 Uses the USPTO PatentsView API (v1) with httpx.
+Requires an API key (set PATENTSVIEW_API_KEY in .env).
+See: https://patentsview.org/apis/api-endpoints/patents
 """
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -16,6 +19,11 @@ logger = logging.getLogger("sensing.sources.patents")
 
 PATENTSVIEW_API_URL = "https://search.patentsview.org/api/v1/patent/"
 PATENT_MAX_RESULTS = 15
+
+
+def _get_api_key() -> str | None:
+    """Get PatentsView API key from environment."""
+    return os.environ.get("PATENTSVIEW_API_KEY", "").strip() or None
 
 
 def _build_patent_query(
@@ -63,6 +71,11 @@ async def search_patents(
     Returns:
         List of RawArticle objects representing patent filings.
     """
+    api_key = _get_api_key()
+    if not api_key:
+        logger.info("USPTO patent search skipped: PATENTSVIEW_API_KEY not set in .env")
+        return []
+
     # Build keyword list from domain + must_include
     keywords = [domain]
     if must_include:
@@ -93,25 +106,33 @@ async def search_patents(
             resp = await client.post(
                 PATENTSVIEW_API_URL,
                 json=body,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Api-Key": api_key,
+                },
             )
             resp.raise_for_status()
 
         data = resp.json()
-        patents = data.get("patents", [])
+        patents = data.get("patents") or []
 
         for patent in patents:
+            if not isinstance(patent, dict):
+                continue
             patent_id = patent.get("patent_id", "")
             title = patent.get("patent_title", "").strip()
             abstract = patent.get("patent_abstract", "").strip()
             date = patent.get("patent_date", "")
 
+            if not title:
+                continue
+
             # Extract assignee organizations
-            assignees = patent.get("assignees", []) or []
+            assignees = patent.get("assignees") or []
             orgs = [
                 a.get("assignee_organization", "")
                 for a in assignees
-                if a.get("assignee_organization")
+                if isinstance(a, dict) and a.get("assignee_organization")
             ]
             assignee_str = ", ".join(orgs[:3]) if orgs else "Unknown assignee"
 

@@ -27,6 +27,7 @@ from core.sensing.signal_score import compute_signal_strengths
 from core.sensing.sources.arxiv_search import fetch_arxiv_papers
 from core.sensing.sources.github_trending import fetch_github_trending
 from core.sensing.sources.hackernews import fetch_hackernews
+from core.sensing.sources.epo_patent_search import search_epo_patents
 from core.sensing.sources.patent_search import search_patents
 from core.sensing.sources.youtube_videos import fetch_youtube_videos
 from core.sensing.verifier import verify_report
@@ -152,15 +153,27 @@ async def run_sensing_pipeline(
     patent_articles = await search_patents(
         domain, lookback_days=max(lookback_days, 365), must_include=must_include,
     )
-    logger.info(f"[Stage 1/7] Patents done: {len(patent_articles)} patents [{_elapsed()}]")
+    logger.info(f"[Stage 1/7] USPTO done: {len(patent_articles)} patents [{_elapsed()}]")
 
-    all_raw = rss_articles + ddg_articles + github_articles + arxiv_articles + hn_articles + patent_articles
-    await _emit("ingest", 24, f"Found {len(all_raw)} raw articles from 6 sources")
+    # EPO Patents (global coverage — complements USPTO)
+    await _emit("ingest", 23, "Searching EPO patents...")
+    logger.info(f"[Stage 1/7] INGEST — starting EPO patent search... [{_elapsed()}]")
+    epo_articles = await search_epo_patents(
+        domain, lookback_days=max(lookback_days, 365), must_include=must_include,
+    )
+    logger.info(f"[Stage 1/7] EPO done: {len(epo_articles)} patents [{_elapsed()}]")
+
+    all_raw = (
+        rss_articles + ddg_articles + github_articles + arxiv_articles
+        + hn_articles + patent_articles + epo_articles
+    )
+    await _emit("ingest", 24, f"Found {len(all_raw)} raw articles from 7 sources")
     logger.info(
         f"[Stage 1/7] INGEST COMPLETE: {len(all_raw)} total raw articles "
         f"(RSS={len(rss_articles)}, DDG={len(ddg_articles)}, "
         f"GitHub={len(github_articles)}, arXiv={len(arxiv_articles)}, "
-        f"HN={len(hn_articles)}, Patents={len(patent_articles)}) [{_elapsed()}]"
+        f"HN={len(hn_articles)}, USPTO={len(patent_articles)}, "
+        f"EPO={len(epo_articles)}) [{_elapsed()}]"
     )
 
     # --- Stage 2: Dedup ---

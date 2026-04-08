@@ -17,7 +17,7 @@ class ChunksUsed(BaseModel):
 
 
 class MainLLMOutputInternal(LLMOutputBase):
-    answer: str = Field(description="The answer to the user's question.")
+    answer: str = Field(default="", description="The answer to the user's question.")
     action: Literal[
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
@@ -65,7 +65,7 @@ class MainLLMOutputInternal(LLMOutputBase):
 
 
 class MainLLMOutputInternalWithFailure(LLMOutputBase):
-    answer: str = Field(description="The answer to the user's question.")
+    answer: str = Field(default="", description="The answer to the user's question.")
     action: Literal[
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
@@ -113,7 +113,7 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
 
 
 class MainLLMOutputExternal(LLMOutputBase):
-    answer: str = Field(description="The answer to the user's question.")
+    answer: str = Field(default="", description="The answer to the user's question.")
     action: Literal[
         "answer",
         "web_search",

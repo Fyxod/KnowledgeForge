@@ -51,7 +51,7 @@ import SensingTimeline from '@/components/SensingTimeline';
 import SensingDeepDive from '@/components/SensingDeepDive';
 import SensingCollaboration from '@/components/SensingCollaboration';
 import { toast } from '@/components/ui/use-toast';
-import type { DeepDiveReport, SharedReport } from '@/lib/api';
+import type { DeepDiveReport, DeepDiveHistoryItem, SharedReport } from '@/lib/api';
 import { downloadSensingReportPdf } from '@/lib/sensing-report-pdf';
 import { downloadSensingReportPptx } from '@/lib/sensing-report-pptx';
 
@@ -136,6 +136,7 @@ const TechSensing: React.FC = () => {
   const [followUpMessages, setFollowUpMessages] = useState<{ role: string; content: string }[]>([]);
   const [followUpLoading, setFollowUpLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [deepDiveHistory, setDeepDiveHistory] = useState<DeepDiveHistoryItem[]>([]);
 
   // Collaboration state
   const [shareId, setShareId] = useState<string | null>(null);
@@ -520,6 +521,7 @@ const TechSensing: React.FC = () => {
     setDeepDiveTechName(technologyName);
     setFollowUpMessages([]);
     setSuggestedQuestions([]);
+    loadDeepDiveHistory();
     try {
       const { tracking_id } = await api.sensingDeepDive(technologyName, domain);
       setDeepDiveTrackingId(tracking_id);
@@ -531,6 +533,7 @@ const TechSensing: React.FC = () => {
           if (res.status === 'completed' && res.data) {
             setDeepDiveResult(res.data);
             setDeepDiveLoading(false);
+            loadDeepDiveHistory();
             return;
           }
           if (res.status === 'failed') {
@@ -570,6 +573,33 @@ const TechSensing: React.FC = () => {
       setFollowUpMessages(prev => prev.slice(0, -1));
     } finally {
       setFollowUpLoading(false);
+    }
+  };
+
+  const loadDeepDiveHistory = async () => {
+    try {
+      const res = await api.sensingDeepDiveHistory();
+      setDeepDiveHistory(res.deep_dives || []);
+    } catch {
+      // Silently handle — history is non-critical
+    }
+  };
+
+  const handleLoadDeepDive = async (loadTrackingId: string) => {
+    setDeepDiveLoading(true);
+    setDeepDiveResult(null);
+    setFollowUpMessages([]);
+    setSuggestedQuestions([]);
+    try {
+      const loaded = await api.sensingDeepDiveLoad(loadTrackingId);
+      setDeepDiveResult(loaded.report);
+      setDeepDiveTrackingId(loadTrackingId);
+      setDeepDiveTechName(loaded.meta.technology_name || loaded.report.technology_name);
+      setFollowUpMessages(loaded.conversation_history || []);
+    } catch (err: unknown) {
+      toast({ title: 'Failed to load deep dive', description: err instanceof Error ? err.message : '', variant: 'destructive' });
+    } finally {
+      setDeepDiveLoading(false);
     }
   };
 
@@ -1567,7 +1597,10 @@ const TechSensing: React.FC = () => {
       </Dialog>
 
       {/* Deep Dive dialog */}
-      <Dialog open={showDeepDiveDialog} onOpenChange={setShowDeepDiveDialog}>
+      <Dialog open={showDeepDiveDialog} onOpenChange={(open) => {
+        setShowDeepDiveDialog(open);
+        if (open) loadDeepDiveHistory();
+      }}>
         <DialogContent className="max-w-3xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Technology Deep Dive</DialogTitle>
@@ -1588,6 +1621,8 @@ const TechSensing: React.FC = () => {
               followUpMessages={followUpMessages}
               followUpLoading={followUpLoading}
               suggestedQuestions={suggestedQuestions}
+              deepDiveHistory={deepDiveHistory}
+              onLoadDeepDive={handleLoadDeepDive}
             />
           ) : null}
         </DialogContent>

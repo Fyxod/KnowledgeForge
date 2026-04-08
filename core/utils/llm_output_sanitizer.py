@@ -38,6 +38,11 @@ _CODE_FENCE_RE = re.compile(r"```(?:json|JSON)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 _THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _REASONING_TAG_RE = re.compile(r"<reasoning>.*?</reasoning>", re.DOTALL)
 
+# Unclosed thinking tags: <think> with content but no </think>
+# Qwen3 sometimes outputs <think>...reasoning text without closing the tag.
+# Strip from <think> up to (but not including) the first { or [ character.
+_UNCLOSED_THINK_RE = re.compile(r"<think>(?:(?!</think>).)*?(?=[{\[])", re.DOTALL)
+
 
 def _repair_merged_array_objects(text: str) -> str:
     """
@@ -99,6 +104,9 @@ def sanitize_llm_json(raw: str) -> str:
     # 0. Strip thinking / reasoning tags (models may emit these before JSON)
     text = _THINK_TAG_RE.sub("", text)
     text = _REASONING_TAG_RE.sub("", text)
+
+    # 0b. Strip unclosed <think> tags (Qwen3 sometimes opens <think> without closing)
+    text = _UNCLOSED_THINK_RE.sub("", text)
 
     # 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
     fence_match = _CODE_FENCE_RE.search(text)
@@ -341,6 +349,144 @@ def _strip_schema_metadata(parsed: dict, schema: type) -> dict:
     return parsed
 
 
+import logging as _logging
+
+_sanitizer_logger = _logging.getLogger("llm.sanitizer")
+
+
+def _repair_truncated_json(text: str) -> str | None:
+    """
+    Attempt to repair JSON that was truncated mid-output (e.g., by num_predict limit).
+
+    Strategy:
+    1. Detect truncation: walk the text and check if brackets are unbalanced.
+    2. Find the last complete array element (last '},') before truncation.
+    3. Truncate to that point and close all remaining open brackets.
+
+    Returns repaired JSON string, or None if repair is not possible.
+    """
+    if not text or not text.strip():
+        return None
+
+    text = text.strip()
+
+    # Quick check: if the text ends with a proper closing bracket, it's not truncated
+    if text.endswith("}") or text.endswith("]"):
+        # Verify balance by counting
+        depth_obj = 0
+        depth_arr = 0
+        in_string = False
+        escape_next = False
+        for ch in text:
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == "\\" and in_string:
+                escape_next = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth_obj += 1
+            elif ch == "}":
+                depth_obj -= 1
+            elif ch == "[":
+                depth_arr += 1
+            elif ch == "]":
+                depth_arr -= 1
+        if depth_obj == 0 and depth_arr == 0:
+            return None  # Already balanced, not truncated
+
+    # Find the last complete array/object element.
+    # Walk backwards to find a position where we can cleanly close the JSON.
+    # Look for patterns like '},', '}]', or a standalone '}' that ends an element.
+
+    # First, find the last '}' that could end a complete object in an array.
+    last_complete = -1
+    depth_obj = 0
+    depth_arr = 0
+    in_string = False
+    escape_next = False
+    bracket_stack = []  # Track what brackets are open at each position
+
+    for i, ch in enumerate(text):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            bracket_stack.append("{")
+        elif ch == "[":
+            bracket_stack.append("[")
+        elif ch == "}":
+            if bracket_stack and bracket_stack[-1] == "{":
+                bracket_stack.pop()
+                # If we're now inside an array (top of stack is '['),
+                # this '}' closes a complete object element
+                if bracket_stack and bracket_stack[-1] == "[":
+                    last_complete = i
+        elif ch == "]":
+            if bracket_stack and bracket_stack[-1] == "[":
+                bracket_stack.pop()
+
+    if last_complete == -1:
+        return None  # No complete array element found
+
+    # Truncate to just after the last complete element
+    truncated = text[: last_complete + 1]
+
+    # Remove any trailing comma
+    truncated = truncated.rstrip()
+    if truncated.endswith(","):
+        truncated = truncated[:-1]
+
+    # Count remaining open brackets that need closing
+    open_brackets = []
+    in_string = False
+    escape_next = False
+    for ch in truncated:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            open_brackets.append("}")
+        elif ch == "[":
+            open_brackets.append("]")
+        elif ch == "}" and open_brackets and open_brackets[-1] == "}":
+            open_brackets.pop()
+        elif ch == "]" and open_brackets and open_brackets[-1] == "]":
+            open_brackets.pop()
+
+    # Close remaining brackets in reverse order
+    closing = "".join(reversed(open_brackets))
+    repaired = truncated + closing
+
+    _sanitizer_logger.warning(
+        f"Truncated JSON repaired: kept {last_complete + 1} of {len(text)} chars, "
+        f"closed {len(open_brackets)} bracket(s)"
+    )
+
+    return repaired
+
+
 def parse_llm_json(raw: str, schema: Type[T]) -> T:
     """
     Parse and validate LLM output against a Pydantic schema with
@@ -394,7 +540,30 @@ def parse_llm_json(raw: str, schema: Type[T]) -> T:
         except Exception:
             pass
 
-    # Strategy 3: Emergency fallback for answer-only schemas.
+    # Strategy 3: Truncated JSON repair — recover partial data from
+    # outputs that were cut off by num_predict/max_tokens limits.
+    repaired_text = _repair_truncated_json(cleaned)
+    if repaired_text:
+        try:
+            parsed = json.loads(repaired_text)
+            if isinstance(parsed, dict):
+                parsed = _strip_schema_metadata(parsed, schema)
+            return schema.model_validate(parsed)
+        except Exception:
+            pass
+
+        # Also try json_repair on the repaired text
+        if json_repair is not None:
+            try:
+                repaired_parsed = json_repair.loads(repaired_text)
+                if isinstance(repaired_parsed, dict):
+                    repaired_parsed = _strip_schema_metadata(repaired_parsed, schema)
+                if isinstance(repaired_parsed, (dict, list)):
+                    return schema.model_validate(repaired_parsed)
+            except Exception:
+                pass
+
+    # Strategy 4: Emergency fallback for answer-only schemas.
     # Do not fabricate tool-routing fields such as `action`, `sql_query`, etc.
     model_fields = getattr(schema, "model_fields", {})
     if "answer" in model_fields and "action" not in model_fields:

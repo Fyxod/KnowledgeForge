@@ -11,6 +11,7 @@ Endpoints:
 
 import asyncio
 import json
+import logging
 import os
 import traceback
 import uuid
@@ -33,6 +34,8 @@ from core.utils.generation_status import (
 # Sensing pipeline can take 10-15 min (RSS + DDG + LLM classify + LLM report).
 # Override the global 8-min stale timeout for sensing status reads.
 SENSING_STALE_TIMEOUT_MINUTES = 60
+
+logger = logging.getLogger("sensing.routes")
 
 router = APIRouter(prefix="/sensing", tags=["Tech Sensing"])
 
@@ -791,13 +794,22 @@ async def start_deep_dive(
             report_data = result.model_dump()
             await write_result(status_path, report_data)
 
-            # Save persistent copy
+            # Save persistent copy with metadata for history listing
+            persistent_data = {
+                "report": report_data,
+                "meta": {
+                    "tracking_id": tracking_id,
+                    "technology_name": body.technology_name,
+                    "domain": body.domain,
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                },
+            }
             report_path = os.path.join(
                 sensing_dir, f"deepdive_{tracking_id}.json"
             )
             async with aiofiles.open(report_path, "w", encoding="utf-8") as f:
                 await f.write(
-                    json.dumps(report_data, ensure_ascii=False, indent=2)
+                    json.dumps(persistent_data, ensure_ascii=False, indent=2)
                 )
 
             await sio.emit(
@@ -896,8 +908,11 @@ async def deep_dive_followup(
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to read deep dive")
 
+    # Handle both new format (wrapped with meta) and old format (flat report)
+    report_data = deepdive_data.get("report", deepdive_data) if isinstance(deepdive_data, dict) else deepdive_data
+
     # Build context from original report
-    original_context = json.dumps(deepdive_data, ensure_ascii=False)[:4000]
+    original_context = json.dumps(report_data, ensure_ascii=False)[:4000]
 
     # Load existing conversation history
     chat_path = os.path.join(sensing_dir, f"deepdive_chat_{body.tracking_id}.json")
@@ -933,6 +948,134 @@ async def deep_dive_followup(
         logger.warning(f"Failed to persist conversation: {e}")
 
     return JSONResponse(content=result)
+
+
+# --- Deep Dive History & Load ---
+
+
+@router.get("/deep-dive/history")
+async def deep_dive_history(request: Request):
+    """List past deep dive analyses for the current user."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+    sensing_dir = _get_sensing_dir(user_id)
+
+    if not os.path.exists(sensing_dir):
+        return JSONResponse(content={"deep_dives": []})
+
+    deep_dives = []
+    for fname in os.listdir(sensing_dir):
+        # Match deepdive_{uuid}.json but NOT deepdive_status_* or deepdive_chat_*
+        if not fname.startswith("deepdive_") or not fname.endswith(".json"):
+            continue
+        if fname.startswith("deepdive_status_") or fname.startswith("deepdive_chat_"):
+            continue
+
+        try:
+            fpath = os.path.join(sensing_dir, fname)
+            async with aiofiles.open(fpath, "r", encoding="utf-8") as f:
+                data = json.loads(await f.read())
+
+            # Handle both new format (with meta) and old format (flat report)
+            if "meta" in data and isinstance(data.get("meta"), dict):
+                meta = data["meta"]
+                tracking_id = meta.get("tracking_id", "")
+                technology_name = meta.get("technology_name", "")
+                domain_val = meta.get("domain", "")
+                generated_at = meta.get("generated_at", "")
+            else:
+                # Old format: flat DeepDiveReport — extract from filename and data
+                tracking_id = fname.replace("deepdive_", "").replace(".json", "")
+                technology_name = data.get("technology_name", "Unknown")
+                domain_val = ""
+                # Use file modification time as generated_at
+                mtime = os.path.getmtime(fpath)
+                generated_at = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+
+            if not tracking_id:
+                continue
+
+            # Count conversation messages if chat file exists
+            chat_path = os.path.join(sensing_dir, f"deepdive_chat_{tracking_id}.json")
+            message_count = 0
+            if os.path.exists(chat_path):
+                try:
+                    async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
+                        chat_data = json.loads(await f.read())
+                    if isinstance(chat_data, list):
+                        message_count = len(chat_data)
+                except Exception:
+                    pass
+
+            deep_dives.append({
+                "tracking_id": tracking_id,
+                "technology_name": technology_name,
+                "domain": domain_val,
+                "generated_at": generated_at,
+                "message_count": message_count,
+            })
+        except Exception:
+            continue
+
+    deep_dives.sort(key=lambda d: d.get("generated_at", ""), reverse=True)
+    return JSONResponse(content={"deep_dives": deep_dives})
+
+
+@router.get("/deep-dive/{tracking_id}/full")
+async def load_deep_dive(request: Request, tracking_id: str):
+    """Load a specific deep dive report with its conversation history."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+    sensing_dir = _get_sensing_dir(user_id)
+    deepdive_path = os.path.join(sensing_dir, f"deepdive_{tracking_id}.json")
+
+    if not os.path.exists(deepdive_path):
+        raise HTTPException(status_code=404, detail="Deep dive not found")
+
+    try:
+        async with aiofiles.open(deepdive_path, "r", encoding="utf-8") as f:
+            data = json.loads(await f.read())
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to read deep dive")
+
+    # Handle both new format (with meta) and old format (flat report)
+    if "meta" in data and isinstance(data.get("meta"), dict):
+        report = data["report"]
+        meta = data["meta"]
+    else:
+        # Old format: flat DeepDiveReport
+        report = data
+        mtime = os.path.getmtime(deepdive_path)
+        meta = {
+            "tracking_id": tracking_id,
+            "technology_name": data.get("technology_name", "Unknown"),
+            "domain": "",
+            "generated_at": datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat(),
+        }
+
+    # Load conversation history if exists
+    chat_path = os.path.join(sensing_dir, f"deepdive_chat_{tracking_id}.json")
+    conversation_history = []
+    if os.path.exists(chat_path):
+        try:
+            async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
+                conversation_history = json.loads(await f.read())
+            if not isinstance(conversation_history, list):
+                conversation_history = []
+        except Exception:
+            conversation_history = []
+
+    return JSONResponse(content={
+        "report": report,
+        "conversation_history": conversation_history,
+        "meta": meta,
+    })
 
 
 # --- Collaboration ---

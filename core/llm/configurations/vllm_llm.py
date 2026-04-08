@@ -49,7 +49,7 @@ class MyServerLLM(LLM):
             base_url=settings.VLLM_BASE_URL,
             api_key=settings.VLLM_API_KEY,
             timeout=1000,
-            max_tokens=8192,
+            max_tokens=16384,
         )
 
     @property

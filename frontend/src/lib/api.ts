@@ -827,6 +827,22 @@ export interface DeepDiveFollowUpResponse {
   suggested_questions: string[];
 }
 
+// ── Sensing Deep Dive History types ──
+
+export interface DeepDiveHistoryItem {
+  tracking_id: string;
+  technology_name: string;
+  domain: string;
+  generated_at: string;
+  message_count: number;
+}
+
+export interface DeepDiveFullLoad {
+  report: DeepDiveReport;
+  conversation_history: { role: string; content: string }[];
+  meta: { tracking_id: string; technology_name: string; domain: string; generated_at: string };
+}
+
 // ── Sensing Collaboration types ──
 
 export interface RadarVote {
@@ -2378,6 +2394,28 @@ export const api = {
     );
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'Failed to get follow-up');
+    return data;
+  },
+
+  async sensingDeepDiveHistory(): Promise<{ deep_dives: DeepDiveHistoryItem[] }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/deep-dive/history`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load deep dive history');
+    return data;
+  },
+
+  async sensingDeepDiveLoad(trackingId: string): Promise<DeepDiveFullLoad> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/deep-dive/${trackingId}/full`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load deep dive');
     return data;
   },
 
