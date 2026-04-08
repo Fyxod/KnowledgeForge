@@ -71,8 +71,16 @@ const App = () => {
                 <Route path="new" element={<NewThread />} />
                 <Route path="threads/:threadId" element={<ThreadView />} />
                 <Route path="profile" element={<Profile />} />
-                <Route path="sensing" element={<TechSensing />} />
-              </Route>
+                </Route>
+              <Route
+                path="/sensing"
+                element={
+                  <RequireAuth>
+                    <TechSensing />
+                  </RequireAuth>
+                }
+              />
+              <Route path="/dashboard/sensing" element={<Navigate to="/sensing" replace />} />
               {SIM_PAGE_ENABLED && (
                 <Route
                   path="/sim"

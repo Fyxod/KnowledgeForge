@@ -54,6 +54,7 @@ import { toast } from '@/components/ui/use-toast';
 import type { DeepDiveReport, DeepDiveHistoryItem, SharedReport } from '@/lib/api';
 import { downloadSensingReportPdf } from '@/lib/sensing-report-pdf';
 import { downloadSensingReportPptx } from '@/lib/sensing-report-pptx';
+import AppNavbar from '@/components/AppNavbar';
 
 const POLL_INTERVAL_MS = 10_000;
 const MAX_POLL_COUNT = 360; // 1 hour max
@@ -760,7 +761,9 @@ const TechSensing: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col p-6 gap-4 overflow-hidden">
+    <div className="h-screen flex flex-col">
+      <AppNavbar />
+      <div className="flex-1 flex flex-col p-6 gap-4 overflow-hidden min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -844,251 +847,259 @@ const TechSensing: React.FC = () => {
       </div>
 
       {/* Configuration + History row */}
-      <div className="flex gap-4 shrink-0">
+      <div className="flex gap-4 shrink-0 max-h-[380px]">
         {/* Config card */}
         <Card className="flex-1">
           <CardContent className="p-4 space-y-3">
-            {/* Row 1: Domain + Date Range */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Domain / Topic
-                </label>
-                <Input
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  placeholder="e.g., Generative AI, Robotics, Quantum Computing, Cybersecurity"
-                  disabled={isGenerating}
-                />
-              </div>
-              <div className="w-40">
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Date Range
-                </label>
-                <Select
-                  value={dateRange}
-                  onValueChange={(v) => setDateRange(v as DateRangePreset)}
-                  disabled={isGenerating}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="last_week">Last Week</SelectItem>
-                    <SelectItem value="last_month">Last Month</SelectItem>
-                    <SelectItem value="custom">Custom</SelectItem>
-                    <SelectItem value="no_range">No Range</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {dateRange === 'custom' && (
-                <div className="w-28">
+            {/* Two-column grid: Left = Domain/Date/Requirements, Right = Keywords */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-3">
+              {/* Left column */}
+              <div className="space-y-3">
+                {/* Domain + Date Range */}
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Domain / Topic
+                    </label>
+                    <Input
+                      value={domain}
+                      onChange={(e) => setDomain(e.target.value)}
+                      placeholder="e.g., Generative AI, Robotics, Quantum Computing"
+                      disabled={isGenerating}
+                    />
+                  </div>
+                  <div className="w-40">
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Date Range
+                    </label>
+                    <Select
+                      value={dateRange}
+                      onValueChange={(v) => setDateRange(v as DateRangePreset)}
+                      disabled={isGenerating}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="last_week">Last Week</SelectItem>
+                        <SelectItem value="last_month">Last Month</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
+                        <SelectItem value="no_range">No Range</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {dateRange === 'custom' && (
+                    <div className="w-28">
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Days
+                      </label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={customDays}
+                        onChange={(e) => setCustomDays(Math.max(1, Math.min(365, parseInt(e.target.value) || 7)))}
+                        disabled={isGenerating}
+                      />
+                    </div>
+                  )}
+                </div>
+                {/* Custom Requirements */}
+                <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Days
+                    Custom Requirements (optional)
                   </label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={365}
-                    value={customDays}
-                    onChange={(e) => setCustomDays(Math.max(1, Math.min(365, parseInt(e.target.value) || 7)))}
+                  <Textarea
+                    value={customReqs}
+                    onChange={(e) => setCustomReqs(e.target.value)}
+                    placeholder="e.g., Focus on enterprise adoption, compare with previous trends..."
+                    rows={2}
                     disabled={isGenerating}
                   />
                 </div>
-              )}
-            </div>
-
-            {/* Row 2: Must Include / Don't Include */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Must Include Keywords
-                </label>
-                <div className="flex gap-1.5">
-                  <Input
-                    value={mustIncludeInput}
-                    onChange={(e) => setMustIncludeInput(e.target.value)}
-                    onKeyDown={(e) => handleKeywordKeyDown(e, mustInclude, setMustInclude, mustIncludeInput, setMustIncludeInput)}
-                    placeholder="Type keyword and press Enter"
-                    disabled={isGenerating}
-                    className="text-sm"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0 h-9 w-9"
-                    onClick={() => addKeyword(mustInclude, setMustInclude, mustIncludeInput, setMustIncludeInput)}
-                    disabled={isGenerating || !mustIncludeInput.trim()}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-                {mustInclude.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {mustInclude.map((kw) => (
-                      <Badge key={kw} variant="secondary" className="text-xs gap-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-                        {kw}
-                        <button onClick={() => removeKeyword(mustInclude, setMustInclude, kw)} disabled={isGenerating}>
-                          <XCircle className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
               </div>
-              <div className="flex-1">
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Don't Include Keywords
-                </label>
-                <div className="flex gap-1.5">
-                  <Input
-                    value={dontIncludeInput}
-                    onChange={(e) => setDontIncludeInput(e.target.value)}
-                    onKeyDown={(e) => handleKeywordKeyDown(e, dontInclude, setDontInclude, dontIncludeInput, setDontIncludeInput)}
-                    placeholder="Type keyword and press Enter"
-                    disabled={isGenerating}
-                    className="text-sm"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0 h-9 w-9"
-                    onClick={() => addKeyword(dontInclude, setDontInclude, dontIncludeInput, setDontIncludeInput)}
-                    disabled={isGenerating || !dontIncludeInput.trim()}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-                {dontInclude.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {dontInclude.map((kw) => (
-                      <Badge key={kw} variant="secondary" className="text-xs gap-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
-                        {kw}
-                        <button onClick={() => removeKeyword(dontInclude, setDontInclude, kw)} disabled={isGenerating}>
-                          <XCircle className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ))}
+
+              {/* Right column: Keywords */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Must Include Keywords
+                  </label>
+                  <div className="flex gap-1.5">
+                    <Input
+                      value={mustIncludeInput}
+                      onChange={(e) => setMustIncludeInput(e.target.value)}
+                      onKeyDown={(e) => handleKeywordKeyDown(e, mustInclude, setMustInclude, mustIncludeInput, setMustIncludeInput)}
+                      placeholder="Type keyword and press Enter"
+                      disabled={isGenerating}
+                      className="text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0 h-9 w-9"
+                      onClick={() => addKeyword(mustInclude, setMustInclude, mustIncludeInput, setMustIncludeInput)}
+                      disabled={isGenerating || !mustIncludeInput.trim()}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Row 3: Custom Requirements */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                Custom Requirements (optional)
-              </label>
-              <Textarea
-                value={customReqs}
-                onChange={(e) => setCustomReqs(e.target.value)}
-                placeholder="e.g., Focus on enterprise adoption, compare with previous trends..."
-                rows={2}
-                disabled={isGenerating}
-              />
-            </div>
-
-            {/* Advanced: Custom Sources */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-              >
-                {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                Advanced: Custom Sources
-              </button>
-              {showAdvanced && (
-                <div className="mt-2 space-y-3 p-3 border rounded-md">
-                  <div>
-                    <label className="text-xs font-medium">Custom RSS Feeds</label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        value={feedInput}
-                        onChange={(e) => setFeedInput(e.target.value)}
-                        placeholder="https://example.com/feed.xml"
-                        className="text-sm"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && feedInput.trim()) {
-                            setFeedUrls([...feedUrls, feedInput.trim()]);
-                            setFeedInput('');
-                          }
-                        }}
-                      />
-                      <Button size="sm" variant="outline" onClick={() => { if (feedInput.trim()) { setFeedUrls([...feedUrls, feedInput.trim()]); setFeedInput(''); } }}>
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {feedUrls.map((url, i) => (
-                        <Badge key={i} variant="secondary" className="text-xs gap-1">
-                          {url.length > 40 ? url.slice(0, 40) + '...' : url}
-                          <XCircle className="w-3 h-3 cursor-pointer" onClick={() => setFeedUrls(feedUrls.filter((_, j) => j !== i))} />
+                  {mustInclude.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {mustInclude.map((kw) => (
+                        <Badge key={kw} variant="secondary" className="text-xs gap-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                          {kw}
+                          <button onClick={() => removeKeyword(mustInclude, setMustInclude, kw)} disabled={isGenerating}>
+                            <XCircle className="w-3 h-3" />
+                          </button>
                         </Badge>
                       ))}
                     </div>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Don't Include Keywords
+                  </label>
+                  <div className="flex gap-1.5">
+                    <Input
+                      value={dontIncludeInput}
+                      onChange={(e) => setDontIncludeInput(e.target.value)}
+                      onKeyDown={(e) => handleKeywordKeyDown(e, dontInclude, setDontInclude, dontIncludeInput, setDontIncludeInput)}
+                      placeholder="Type keyword and press Enter"
+                      disabled={isGenerating}
+                      className="text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0 h-9 w-9"
+                      onClick={() => addKeyword(dontInclude, setDontInclude, dontIncludeInput, setDontIncludeInput)}
+                      disabled={isGenerating || !dontIncludeInput.trim()}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium">Custom Search Queries</label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        value={queryInput}
-                        onChange={(e) => setQueryInput(e.target.value)}
-                        placeholder="e.g., LLM agents framework"
-                        className="text-sm"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && queryInput.trim()) {
-                            setSearchQueries([...searchQueries, queryInput.trim()]);
-                            setQueryInput('');
-                          }
-                        }}
-                      />
-                      <Button size="sm" variant="outline" onClick={() => { if (queryInput.trim()) { setSearchQueries([...searchQueries, queryInput.trim()]); setQueryInput(''); } }}>
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {searchQueries.map((q, i) => (
-                        <Badge key={i} variant="secondary" className="text-xs gap-1">
-                          {q}
-                          <XCircle className="w-3 h-3 cursor-pointer" onClick={() => setSearchQueries(searchQueries.filter((_, j) => j !== i))} />
+                  {dontInclude.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {dontInclude.map((kw) => (
+                        <Badge key={kw} variant="secondary" className="text-xs gap-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                          {kw}
+                          <button onClick={() => removeKeyword(dontInclude, setDontInclude, kw)} disabled={isGenerating}>
+                            <XCircle className="w-3 h-3" />
+                          </button>
                         </Badge>
                       ))}
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Document Upload */}
-            <div className="border rounded-md p-3 bg-muted/20">
-              <div className="flex items-center gap-2 mb-1">
-                <FileUp className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">
-                  Source Document (optional)
-                </span>
+            {/* Full-width: Advanced Sources + Document Upload side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-3">
+              {/* Advanced: Custom Sources */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  Advanced: Custom Sources
+                </button>
+                {showAdvanced && (
+                  <div className="mt-2 space-y-3 p-3 border rounded-md">
+                    <div>
+                      <label className="text-xs font-medium">Custom RSS Feeds</label>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          value={feedInput}
+                          onChange={(e) => setFeedInput(e.target.value)}
+                          placeholder="https://example.com/feed.xml"
+                          className="text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && feedInput.trim()) {
+                              setFeedUrls([...feedUrls, feedInput.trim()]);
+                              setFeedInput('');
+                            }
+                          }}
+                        />
+                        <Button size="sm" variant="outline" onClick={() => { if (feedInput.trim()) { setFeedUrls([...feedUrls, feedInput.trim()]); setFeedInput(''); } }}>
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {feedUrls.map((url, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs gap-1">
+                            {url.length > 40 ? url.slice(0, 40) + '...' : url}
+                            <XCircle className="w-3 h-3 cursor-pointer" onClick={() => setFeedUrls(feedUrls.filter((_, j) => j !== i))} />
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Custom Search Queries</label>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          value={queryInput}
+                          onChange={(e) => setQueryInput(e.target.value)}
+                          placeholder="e.g., LLM agents framework"
+                          className="text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && queryInput.trim()) {
+                              setSearchQueries([...searchQueries, queryInput.trim()]);
+                              setQueryInput('');
+                            }
+                          }}
+                        />
+                        <Button size="sm" variant="outline" onClick={() => { if (queryInput.trim()) { setSearchQueries([...searchQueries, queryInput.trim()]); setQueryInput(''); } }}>
+                          <Plus className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {searchQueries.map((q, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs gap-1">
+                            {q}
+                            <XCircle className="w-3 h-3 cursor-pointer" onClick={() => setSearchQueries(searchQueries.filter((_, j) => j !== i))} />
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground mb-2">
-                Upload a document to analyze instead of fetching from web sources.
-              </p>
-              <input
-                type="file"
-                accept=".pdf,.docx,.doc,.pptx,.xlsx,.csv,.md,.txt"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                disabled={isGenerating}
-                className="text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 file:cursor-pointer"
-              />
-              {uploadFile && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <Badge variant="secondary" className="text-xs gap-1">
-                    {uploadFile.name}
-                    <XCircle className="w-3 h-3 cursor-pointer" onClick={() => setUploadFile(null)} />
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    Web sources will be skipped
+
+              {/* Document Upload */}
+              <div className="border rounded-md p-3 bg-muted/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <FileUp className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Source Document (optional)
                   </span>
                 </div>
-              )}
+                <p className="text-xs text-muted-foreground mb-2">
+                  Upload a document to analyze instead of fetching from web sources.
+                </p>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.doc,.pptx,.xlsx,.csv,.md,.txt"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  disabled={isGenerating}
+                  className="text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 file:cursor-pointer"
+                />
+                {uploadFile && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <Badge variant="secondary" className="text-xs gap-1">
+                      {uploadFile.name}
+                      <XCircle className="w-3 h-3 cursor-pointer" onClick={() => setUploadFile(null)} />
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      Web sources will be skipped
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Generate button + progress */}
@@ -1117,9 +1128,9 @@ const TechSensing: React.FC = () => {
         </Card>
 
         {/* History card */}
-        <Card className="w-72 shrink-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
+        <Card className="w-80 shrink-0 flex flex-col">
+          <CardContent className="p-4 flex flex-col flex-1 min-h-0">
+            <div className="flex items-center justify-between mb-2 shrink-0">
               <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                 <History className="w-3 h-3" />
                 Report History
@@ -1128,7 +1139,7 @@ const TechSensing: React.FC = () => {
                 <RefreshCw className={`w-3 h-3 ${historyLoading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
-            <ScrollArea className="h-48">
+            <ScrollArea className="flex-1 min-h-0">
               {history.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-4">No reports yet</p>
               ) : (
@@ -1645,6 +1656,7 @@ const TechSensing: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 };
