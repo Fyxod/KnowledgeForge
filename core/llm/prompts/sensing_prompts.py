@@ -1,3 +1,34 @@
+_DEFAULT_QUADRANT_DEFS = (
+    "QUADRANT DEFINITIONS:\n"
+    "- Techniques: Processes, methodologies, architectural patterns\n"
+    "- Platforms: Infrastructure, cloud services, compute platforms\n"
+    "- Tools: Software tools, libraries, frameworks for development\n"
+    "- Languages & Frameworks: Programming languages, major frameworks\n\n"
+)
+
+
+_DEFAULT_QUADRANT_NAMES = ["Techniques", "Platforms", "Tools", "Languages & Frameworks"]
+
+
+def _quadrant_names_inline(custom_quadrant_names: list[str] | None = None) -> str:
+    """Return quadrant names as a slash-separated inline string."""
+    names = custom_quadrant_names if custom_quadrant_names and len(custom_quadrant_names) == 4 else _DEFAULT_QUADRANT_NAMES
+    return "/".join(names)
+
+
+def _quadrant_definitions_block(custom_quadrant_names: list[str] | None = None) -> str:
+    """Return the QUADRANT DEFINITIONS block, using custom names if provided."""
+    if not custom_quadrant_names or len(custom_quadrant_names) != 4:
+        return _DEFAULT_QUADRANT_DEFS
+    return (
+        "QUADRANT DEFINITIONS (CUSTOM):\n"
+        f"- {custom_quadrant_names[0]}: First quadrant category\n"
+        f"- {custom_quadrant_names[1]}: Second quadrant category\n"
+        f"- {custom_quadrant_names[2]}: Third quadrant category\n"
+        f"- {custom_quadrant_names[3]}: Fourth quadrant category\n\n"
+    )
+
+
 def sensing_classify_prompt(
     articles_text: str,
     domain: str = "Generative AI",
@@ -5,6 +36,7 @@ def sensing_classify_prompt(
     key_people: list[str] | None = None,
     topic_categories_text: str = "",
     industry_segments_text: str = "",
+    custom_quadrant_names: list[str] | None = None,
 ) -> list[dict]:
     """
     Build a chat prompt to classify and summarize a batch of articles.
@@ -42,12 +74,8 @@ def sensing_classify_prompt(
                 "5. A short technology name for the radar blip\n"
                 "6. Topic category\n"
                 "7. Industry segment\n\n"
-                "QUADRANT DEFINITIONS:\n"
-                "- Techniques: Processes, methodologies, architectural patterns\n"
-                "- Platforms: Infrastructure, cloud services, compute platforms\n"
-                "- Tools: Software tools, libraries, frameworks for development\n"
-                "- Languages & Frameworks: Programming languages, major frameworks\n\n"
-                "RING DEFINITIONS:\n"
+                + _quadrant_definitions_block(custom_quadrant_names)
+                + "RING DEFINITIONS:\n"
                 "- Adopt: Proven technology, recommend for wide use\n"
                 "- Trial: Worth pursuing in projects that can handle some risk\n"
                 "- Assess: Worth exploring to understand its impact\n"
@@ -168,6 +196,7 @@ def sensing_report_radar_prompt(
     core_context_json: str,
     domain: str = "Generative AI",
     date_range: str = "",
+    custom_quadrant_names: list[str] | None = None,
 ) -> list[dict]:
     """
     Phase 2 prompt: technology radar items only.
@@ -186,10 +215,21 @@ def sensing_report_radar_prompt(
                 "identified trends and headline moves.\n\n"
                 "RADAR GUIDELINES:\n"
                 "- 15-30 distinct technologies/techniques — consolidate duplicates.\n"
-                "- Each entry: name, quadrant (Tools/Techniques/Platforms/Languages & Frameworks), "
+                "- Each entry: name, quadrant ("
+                + _quadrant_names_inline(custom_quadrant_names)
+                + "), "
                 "ring (Adopt/Trial/Assess/Hold), brief description (1-2 sentences), "
-                "is_new flag, signal_strength (0.0-1.0), source_count.\n"
+                "is_new flag, signal_strength (0.0-1.0), source_count, trl (1-9).\n"
                 "- Keep descriptions concise to stay within output limits.\n\n"
+                "TECHNOLOGY READINESS LEVEL (TRL):\n"
+                "For each radar item, assign a TRL score (1-9) based on the article evidence:\n"
+                "  TRL 1-2: Basic research, concept formulation — early academic papers only\n"
+                "  TRL 3-4: Proof of concept, lab validation — benchmarks and experimental demos\n"
+                "  TRL 5-6: Validated/demonstrated in relevant environment — pilot deployments, limited real use\n"
+                "  TRL 7: Prototype in operational environment — beta/preview products\n"
+                "  TRL 8-9: Production-ready, proven at scale — GA products, wide enterprise adoption\n"
+                "Use the ring as a baseline (Adopt=8-9, Trial=6-7, Assess=3-5, Hold=1-4), "
+                "then adjust based on specific article evidence about maturity and adoption.\n\n"
                 "GROUNDING AND CITATION RULES:\n"
                 "- Every radar item MUST be grounded in the provided articles.\n"
                 "- Do NOT fabricate technologies not mentioned in the articles.\n"
@@ -350,6 +390,128 @@ def sensing_details_prompt(
                 f"CLASSIFIED ARTICLES:\n{classified_articles_json}\n\n"
                 "Generate detailed write-ups for EVERY radar item listed above. "
                 "Return ONLY valid JSON."
+            ),
+        },
+    ]
+    return contents
+
+
+def sensing_relationship_prompt(
+    radar_items_json: str,
+    classified_articles_json: str,
+    domain: str = "Generative AI",
+) -> list[dict]:
+    """
+    Build a prompt to extract technology relationships and clusters
+    from the radar items and supporting articles.
+    """
+    contents = [
+        {
+            "role": "system",
+            "parts": (
+                "You are a senior technology strategist analyzing the relationships "
+                f"between technologies in the {domain} domain.\n\n"
+                "Given a list of RADAR ITEMS and CLASSIFIED ARTICLES, identify:\n\n"
+                "1. RELATIONSHIPS between technologies (10-30):\n"
+                "   For each relationship, provide:\n"
+                "   - source_tech: Name of the source technology (must match a radar item)\n"
+                "   - target_tech: Name of the target technology (must match a radar item)\n"
+                "   - relationship_type: One of:\n"
+                "     * 'builds_on' — source extends or is built upon target\n"
+                "     * 'competes_with' — source and target serve similar purpose\n"
+                "     * 'enables' — source enables or powers target\n"
+                "     * 'integrates_with' — source and target commonly used together\n"
+                "     * 'alternative_to' — source is an alternative to target\n"
+                "   - strength: 0.0-1.0 (how strong the relationship is)\n"
+                "   - evidence: 1-2 sentence justification from the articles\n\n"
+                "2. CLUSTERS of related technologies (3-6):\n"
+                "   - cluster_name: Descriptive cluster name\n"
+                "   - technologies: List of technology names in the cluster\n"
+                "   - theme: Brief theme description\n\n"
+                "RULES:\n"
+                "- Technology names MUST exactly match radar item names.\n"
+                "- Every relationship must be grounded in article evidence.\n"
+                "- Do NOT create self-referencing relationships.\n"
+                "- Avoid duplicate pairs (if A→B exists, don't add B→A with same type).\n"
+                "- Do NOT fabricate relationships not supported by the articles.\n"
+            ),
+        },
+        {
+            "role": "user",
+            "parts": (
+                f"DOMAIN: {domain}\n\n"
+                f"RADAR ITEMS:\n{radar_items_json}\n\n"
+                f"CLASSIFIED ARTICLES:\n{classified_articles_json}\n\n"
+                "Extract technology relationships and clusters. "
+                "Return ONLY valid JSON with 'relationships' and 'clusters' arrays."
+            ),
+        },
+    ]
+    return contents
+
+
+def sensing_deep_dive_followup_prompt(
+    technology_name: str,
+    domain: str,
+    question: str,
+    conversation_history: list[dict],
+    original_report_context: str,
+    fresh_search_results: str = "",
+) -> list[dict]:
+    """
+    Build a prompt for conversational follow-up on a deep dive report.
+
+    Includes the original deep dive context and conversation history.
+    """
+    # Format conversation history (last 10 exchanges)
+    history_block = ""
+    recent_history = conversation_history[-10:]
+    if recent_history:
+        turns = []
+        for msg in recent_history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            turns.append(f"{role.upper()}: {content}")
+        history_block = (
+            "\nCONVERSATION HISTORY:\n"
+            + "\n".join(turns)
+            + "\n"
+        )
+
+    search_block = ""
+    if fresh_search_results:
+        search_block = (
+            "\nFRESH SEARCH RESULTS (use these for current information):\n"
+            f"{fresh_search_results}\n"
+        )
+
+    contents = [
+        {
+            "role": "system",
+            "parts": (
+                "You are a senior technology analyst having a deep-dive conversation "
+                f"about {technology_name} in the {domain} domain.\n\n"
+                "You have already produced a detailed deep dive report on this technology. "
+                "The user is asking follow-up questions to learn more.\n\n"
+                "ORIGINAL DEEP DIVE CONTEXT:\n"
+                f"{original_report_context}\n"
+                + history_block
+                + search_block
+                + "\nRULES:\n"
+                "- Answer the question thoroughly in markdown format.\n"
+                "- Reference the original report context where relevant.\n"
+                "- If fresh search results are provided, incorporate new information.\n"
+                "- Suggest 3 natural follow-up questions the user might want to ask next.\n"
+                "- Be concise but substantive (200-500 words for the answer).\n"
+                "- If you don't have enough context, say so honestly.\n"
+            ),
+        },
+        {
+            "role": "user",
+            "parts": (
+                f"Question about {technology_name}:\n\n{question}\n\n"
+                "Provide a detailed answer, list any sources used, and suggest "
+                "3 follow-up questions. Return ONLY valid JSON."
             ),
         },
     ]

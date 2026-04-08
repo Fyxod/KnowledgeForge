@@ -15,10 +15,29 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger("sensing.org_context")
 
 
+class RadarQuadrantConfig(BaseModel):
+    name: str = Field(description="Custom quadrant name")
+    color: str = Field(default="", description="Hex color code (e.g., '#1ebccd')")
+
+
+class RadarCustomization(BaseModel):
+    quadrants: List[RadarQuadrantConfig] = Field(
+        default_factory=lambda: [
+            RadarQuadrantConfig(name="Techniques", color="#1ebccd"),
+            RadarQuadrantConfig(name="Platforms", color="#f38a3e"),
+            RadarQuadrantConfig(name="Tools", color="#86b82a"),
+            RadarQuadrantConfig(name="Languages & Frameworks", color="#b32059"),
+        ],
+    )
+
+
 class OrgTechContext(BaseModel):
     tech_stack: List[str] = Field(default_factory=list, description="Technologies in use")
     industry: str = Field(default="", description="Organization's industry")
     priorities: List[str] = Field(default_factory=list, description="Strategic tech priorities")
+    radar_customization: Optional[RadarCustomization] = Field(
+        default=None, description="Custom radar quadrant names and colors"
+    )
 
 
 async def load_org_context(user_id: str) -> Optional[OrgTechContext]:

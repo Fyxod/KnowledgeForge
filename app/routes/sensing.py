@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 import aiofiles
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -123,6 +123,13 @@ async def generate_sensing_report(
                 user_id=user_id,
             )
 
+            # Serialize alerts
+            alerts_data = (
+                [a.model_dump() for a in result.alerts]
+                if result.alerts
+                else []
+            )
+
             report_data = {
                 "report": result.report.model_dump(),
                 "meta": {
@@ -138,6 +145,7 @@ async def generate_sensing_report(
                     "must_include": body.must_include,
                     "dont_include": body.dont_include,
                     "lookback_days": body.lookback_days,
+                    "alerts": alerts_data,
                 },
             }
 
@@ -162,6 +170,16 @@ async def generate_sensing_report(
                 },
             )
 
+            # Emit alerts via separate channel if any
+            if alerts_data:
+                await sio.emit(
+                    f"{user_id}/sensing_alerts",
+                    {
+                        "tracking_id": tracking_id,
+                        "alerts": alerts_data,
+                    },
+                )
+
         except Exception:
             error_details = traceback.format_exc()
             await write_failed_status(status_path, error_details)
@@ -183,6 +201,169 @@ async def generate_sensing_report(
             "status": "pending",
             "tracking_id": tracking_id,
             "message": f"Generating Tech Sensing Report for '{body.domain}'",
+        }
+    )
+
+
+# --- Generate from Document ---
+
+
+@router.post("/generate-from-document")
+async def generate_sensing_from_document(
+    request: Request,
+    file: UploadFile = File(...),
+    domain: str = Form("Generative AI"),
+    custom_requirements: str = Form(""),
+    must_include: Optional[str] = Form(None),
+    dont_include: Optional[str] = Form(None),
+):
+    """Start async tech sensing from an uploaded document instead of web
+    sources."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+    tracking_id = str(uuid.uuid4())
+    sensing_dir = _get_sensing_dir(user_id)
+    os.makedirs(sensing_dir, exist_ok=True)
+    status_path = os.path.join(sensing_dir, f"status_{tracking_id}.json")
+    await write_pending_status(status_path)
+
+    # Parse comma-separated keyword lists from form fields
+    must_list = (
+        [k.strip() for k in must_include.split(",") if k.strip()]
+        if must_include
+        else None
+    )
+    dont_list = (
+        [k.strip() for k in dont_include.split(",") if k.strip()]
+        if dont_include
+        else None
+    )
+
+    # Save uploaded file temporarily
+    upload_dir = os.path.join(sensing_dir, "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    safe_filename = file.filename or "document"
+    file_path = os.path.join(upload_dir, f"{tracking_id}_{safe_filename}")
+    async with aiofiles.open(file_path, "wb") as f:
+        content = await file.read()
+        await f.write(content)
+
+    async def _run():
+        try:
+            from core.sensing.pipeline import run_sensing_pipeline_from_document
+
+            async def _progress_cb(stage, pct, msg):
+                await sio.emit(
+                    f"{user_id}/sensing_progress",
+                    {
+                        "tracking_id": tracking_id,
+                        "stage": stage,
+                        "progress": pct,
+                        "message": msg,
+                    },
+                )
+
+            result = await run_sensing_pipeline_from_document(
+                file_path=file_path,
+                file_name=safe_filename,
+                domain=domain,
+                custom_requirements=custom_requirements,
+                must_include=must_list,
+                dont_include=dont_list,
+                progress_callback=_progress_cb,
+                user_id=user_id,
+            )
+
+            # Serialize alerts
+            alerts_data = (
+                [a.model_dump() for a in result.alerts]
+                if result.alerts
+                else []
+            )
+
+            report_data = {
+                "report": result.report.model_dump(),
+                "meta": {
+                    "tracking_id": tracking_id,
+                    "domain": domain,
+                    "raw_article_count": result.raw_article_count,
+                    "deduped_article_count": result.deduped_article_count,
+                    "classified_article_count": result.classified_article_count,
+                    "execution_time_seconds": result.execution_time_seconds,
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "source_document": safe_filename,
+                    "custom_requirements": custom_requirements,
+                    "must_include": must_list,
+                    "dont_include": dont_list,
+                    "lookback_days": 0,
+                    "alerts": alerts_data,
+                },
+            }
+
+            await write_result(status_path, report_data)
+
+            # Save persistent copy
+            report_path = os.path.join(
+                sensing_dir, f"report_{tracking_id}.json"
+            )
+            async with aiofiles.open(report_path, "w", encoding="utf-8") as f:
+                await f.write(
+                    json.dumps(report_data, ensure_ascii=False, indent=2)
+                )
+
+            await sio.emit(
+                f"{user_id}/sensing_progress",
+                {
+                    "tracking_id": tracking_id,
+                    "stage": "complete",
+                    "progress": 100,
+                    "message": "Report ready",
+                },
+            )
+
+            # Emit alerts via separate channel if any
+            if alerts_data:
+                await sio.emit(
+                    f"{user_id}/sensing_alerts",
+                    {
+                        "tracking_id": tracking_id,
+                        "alerts": alerts_data,
+                    },
+                )
+
+        except Exception:
+            error_details = traceback.format_exc()
+            await write_failed_status(status_path, error_details)
+            print(f"[Sensing:route] Document generation failed: {error_details}")
+            await sio.emit(
+                f"{user_id}/sensing_progress",
+                {
+                    "tracking_id": tracking_id,
+                    "stage": "error",
+                    "progress": 0,
+                    "message": "Report generation failed",
+                },
+            )
+        finally:
+            # Clean up uploaded file
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+    asyncio.create_task(_run())
+
+    return JSONResponse(
+        content={
+            "status": "pending",
+            "tracking_id": tracking_id,
+            "message": (
+                f"Generating Tech Sensing Report from "
+                f"'{safe_filename}' for '{domain}'"
+            ),
         }
     )
 
@@ -387,6 +568,36 @@ async def delete_sensing_report(request: Request, report_id: str):
             os.remove(fpath)
 
     return JSONResponse(content={"status": "deleted"})
+
+
+# --- Alert Preferences ---
+
+
+@router.get("/alert-prefs")
+async def get_alert_prefs(request: Request):
+    """Get user's alert preferences."""
+    from core.sensing.alerts import load_alert_preferences
+
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    prefs = await load_alert_preferences(payload.userId)
+    return JSONResponse(content=prefs.model_dump())
+
+
+@router.put("/alert-prefs")
+async def update_alert_prefs(request: Request, body: dict = Body(...)):
+    """Update user's alert preferences."""
+    from core.sensing.alerts import AlertPreferences, save_alert_preferences
+
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    prefs = AlertPreferences(**body)
+    await save_alert_preferences(payload.userId, prefs)
+    return JSONResponse(content=prefs.model_dump())
 
 
 # --- Schedules ---
@@ -649,6 +860,79 @@ async def deep_dive_status(request: Request, tracking_id: str):
         return JSONResponse(
             content={"status": "completed", "data": gen_status["data"]}
         )
+
+
+# --- Deep Dive Follow-Up ---
+
+
+class DeepDiveFollowUpRequest(BaseModel):
+    technology_name: str
+    domain: str = Field(default="Generative AI")
+    question: str
+    tracking_id: str
+
+
+@router.post("/deep-dive-followup")
+async def deep_dive_followup(
+    request: Request,
+    body: DeepDiveFollowUpRequest = Body(...),
+):
+    """Conversational follow-up on an existing deep dive."""
+    payload = request.state.user
+    if not payload:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    user_id = payload.userId
+    sensing_dir = _get_sensing_dir(user_id)
+
+    # Load original deep dive report for context
+    deepdive_path = os.path.join(sensing_dir, f"deepdive_{body.tracking_id}.json")
+    if not os.path.exists(deepdive_path):
+        raise HTTPException(status_code=404, detail="Deep dive not found")
+
+    try:
+        async with aiofiles.open(deepdive_path, "r", encoding="utf-8") as f:
+            deepdive_data = json.loads(await f.read())
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to read deep dive")
+
+    # Build context from original report
+    original_context = json.dumps(deepdive_data, ensure_ascii=False)[:4000]
+
+    # Load existing conversation history
+    chat_path = os.path.join(sensing_dir, f"deepdive_chat_{body.tracking_id}.json")
+    conversation_history = []
+    if os.path.exists(chat_path):
+        try:
+            async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
+                conversation_history = json.loads(await f.read())
+        except Exception:
+            conversation_history = []
+
+    # Run follow-up
+    from core.sensing.deep_dive import run_deep_dive_followup
+
+    result = await run_deep_dive_followup(
+        technology_name=body.technology_name,
+        domain=body.domain,
+        question=body.question,
+        conversation_history=conversation_history,
+        original_report_context=original_context,
+        user_id=user_id,
+    )
+
+    # Persist conversation (trim to last 20 messages)
+    conversation_history.append({"role": "user", "content": body.question})
+    conversation_history.append({"role": "assistant", "content": result["answer"]})
+    conversation_history = conversation_history[-20:]
+
+    try:
+        async with aiofiles.open(chat_path, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(conversation_history, ensure_ascii=False, indent=2))
+    except Exception as e:
+        logger.warning(f"Failed to persist conversation: {e}")
+
+    return JSONResponse(content=result)
 
 
 # --- Collaboration ---

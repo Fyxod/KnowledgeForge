@@ -89,6 +89,13 @@ async def _run_scheduled(schedule: dict) -> None:
             sensing_dir = f"data/{user_id}/sensing"
             os.makedirs(sensing_dir, exist_ok=True)
 
+            # Serialize alerts
+            alerts_data = (
+                [a.model_dump() for a in result.alerts]
+                if result.alerts
+                else []
+            )
+
             report_data = {
                 "report": result.report.model_dump(),
                 "meta": {
@@ -101,6 +108,7 @@ async def _run_scheduled(schedule: dict) -> None:
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                     "scheduled": True,
                     "schedule_id": schedule["id"],
+                    "alerts": alerts_data,
                 },
             }
 
@@ -117,6 +125,11 @@ async def _run_scheduled(schedule: dict) -> None:
             try:
                 from core.sensing.email_digest import is_smtp_configured, send_report_email
                 if is_smtp_configured() and schedule.get("email"):
+                    # Include alert summary in email for critical/high alerts
+                    critical_alerts = [
+                        a for a in alerts_data
+                        if a.get("severity") in ("critical", "high")
+                    ]
                     await send_report_email(
                         to_email=schedule["email"],
                         report_title=result.report.report_title,
@@ -125,6 +138,11 @@ async def _run_scheduled(schedule: dict) -> None:
                         trends_count=len(result.report.key_trends),
                         radar_count=len(result.report.radar_items),
                     )
+                    if critical_alerts:
+                        logger.info(
+                            f"Scheduled run produced {len(critical_alerts)} "
+                            f"critical/high alerts for {schedule.get('domain')}"
+                        )
             except Exception as e:
                 logger.warning(f"Email digest failed: {e}")
 
@@ -140,6 +158,15 @@ async def _run_scheduled(schedule: dict) -> None:
                         "message": f"Scheduled report ready for {schedule.get('domain', '')}",
                     },
                 )
+                # Emit alerts via separate channel
+                if alerts_data:
+                    await sio.emit(
+                        f"{user_id}/sensing_alerts",
+                        {
+                            "tracking_id": tracking_id,
+                            "alerts": alerts_data,
+                        },
+                    )
             except Exception:
                 pass
 

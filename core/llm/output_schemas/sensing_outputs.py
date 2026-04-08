@@ -93,6 +93,20 @@ class RadarItem(BaseModel):
         default=0,
         description="Number of distinct sources mentioning this technology.",
     )
+    trl: int = Field(
+        default=5,
+        description=(
+            "Technology Readiness Level (1-9). "
+            "1=Basic principles observed, 2=Concept formulated, 3=Proof of concept, "
+            "4=Lab validated, 5=Validated in relevant environment, "
+            "6=Demonstrated in relevant environment, 7=Prototype in operational environment, "
+            "8=System complete and qualified, 9=Proven in operational environment."
+        ),
+    )
+    patent_count: int = Field(
+        default=0,
+        description="Number of related patents found for this technology.",
+    )
 
 
 class RadarItemDetail(BaseModel):
@@ -238,6 +252,22 @@ class DeepDiveReport(LLMOutputBase):
     )
 
 
+class DeepDiveFollowUpOutput(LLMOutputBase):
+    """Output for a conversational follow-up on a deep dive."""
+
+    follow_up_answer: str = Field(
+        description="Markdown answer to the follow-up question."
+    )
+    sources_used: List[str] = Field(
+        default_factory=list,
+        description="URLs of sources referenced in the answer.",
+    )
+    suggested_questions: List[str] = Field(
+        default_factory=list,
+        description="3 suggested follow-up questions the user might ask next.",
+    )
+
+
 class ReportCore(LLMOutputBase):
     """Phase 1 output: executive overview, headline moves, and key trends."""
 
@@ -335,3 +365,90 @@ class TechSensingReport(LLMOutputBase):
         default_factory=list,
         description="Trending YouTube videos for radar technologies.",
     )
+    weak_signals: List["WeakSignal"] = Field(
+        default_factory=list,
+        description="Emerging technologies with low visibility but high growth rate.",
+    )
+    relationships: Optional["TechRelationshipMap"] = Field(
+        default=None,
+        description="Technology relationship graph with edges and clusters.",
+    )
+
+
+# --- Weak Signal Models (used by weak_signals.py, rendered in report) ---
+
+
+class WeakSignalTrajectoryPoint(BaseModel):
+    """Historical data point for a weak signal."""
+
+    run_date: str = Field(description="ISO date of the sensing run.")
+    article_count: int = Field(description="Number of articles in that run.")
+    source_count: int = Field(description="Number of distinct sources.")
+    avg_relevance: float = Field(description="Average relevance score.")
+    signal_strength: float = Field(description="Signal strength at that time.")
+
+
+class WeakSignal(BaseModel):
+    """An emerging technology with low visibility but high growth rate."""
+
+    technology_name: str = Field(description="Name of the emerging technology.")
+    current_strength: float = Field(description="Current signal strength (0.0-1.0).")
+    acceleration_rate: float = Field(
+        description="Growth rate vs historical average. >2.0 = breakout."
+    )
+    first_seen: str = Field(description="ISO date when first detected.")
+    run_count: int = Field(description="Number of runs this technology appeared in.")
+    trajectory: List[WeakSignalTrajectoryPoint] = Field(
+        default_factory=list,
+        description="Historical data points for sparkline rendering.",
+    )
+    dvi_score: float = Field(
+        default=0.0, description="Composite DVI score (0.0-1.0)."
+    )
+
+
+# --- Technology Relationship Models (used by relationships.py) ---
+
+
+class TechRelationship(BaseModel):
+    """A relationship between two radar technologies."""
+
+    source_tech: str = Field(description="Source technology name.")
+    target_tech: str = Field(description="Target technology name.")
+    relationship_type: str = Field(
+        description=(
+            "Type of relationship: 'builds_on', 'competes_with', "
+            "'enables', 'integrates_with', or 'alternative_to'."
+        )
+    )
+    strength: float = Field(
+        default=0.5, description="Relationship strength 0.0-1.0."
+    )
+    evidence: str = Field(
+        default="", description="1-2 sentence evidence from articles."
+    )
+
+
+class TechCluster(BaseModel):
+    """A cluster of related technologies."""
+
+    cluster_name: str = Field(description="Name of the technology cluster.")
+    technologies: List[str] = Field(description="Technology names in this cluster.")
+    theme: str = Field(description="Brief theme description for the cluster.")
+
+
+class TechRelationshipMap(LLMOutputBase):
+    """Complete technology relationship graph."""
+
+    relationships: List[TechRelationship] = Field(
+        default_factory=list,
+        description="10-30 relationships between radar technologies.",
+    )
+    clusters: List[TechCluster] = Field(
+        default_factory=list,
+        description="3-6 technology clusters.",
+    )
+
+
+# Resolve forward references
+TechSensingReport.model_rebuild()

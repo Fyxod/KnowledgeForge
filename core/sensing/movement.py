@@ -29,7 +29,7 @@ async def detect_radar_movements(
     Sets `moved_in` on items whose ring changed since last report.
     Returns the (possibly modified) report.
     """
-    previous = await _load_previous_report(user_id, domain)
+    previous = await load_previous_report(user_id, domain)
     if previous is None:
         logger.info("No previous report found for movement detection")
         return new_report
@@ -86,7 +86,7 @@ def _find_previous_ring(
     return None
 
 
-async def _load_previous_report(
+async def load_previous_report(
     user_id: str, domain: str
 ) -> Optional[dict]:
     """Load the most recent report file for user+domain."""

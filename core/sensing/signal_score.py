@@ -25,6 +25,7 @@ SOURCE_AUTHORITY: dict[str, float] = {
     "IEEE Spectrum": 0.85,
     "Nature": 0.95,
     "Science": 0.95,
+    "USPTO Patent": 0.9,
 }
 DEFAULT_AUTHORITY = 0.5
 
@@ -56,6 +57,10 @@ def compute_signal_strengths(
         # Distinct sources
         sources = set(a.source for a in supporting)
         source_count = len(sources)
+
+        # Count patent articles
+        patent_articles = [a for a in supporting if a.source == "USPTO Patent"]
+        item.patent_count = len(patent_articles)
 
         # Weighted authority
         authority_scores = [

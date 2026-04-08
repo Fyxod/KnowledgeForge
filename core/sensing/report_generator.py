@@ -45,6 +45,7 @@ async def generate_report(
     org_context: str = "",
     article_content_map: dict[str, str] | None = None,
     key_people: list[str] | None = None,
+    custom_quadrant_names: list[str] | None = None,
 ) -> TechSensingReport:
     """
     Generate the complete Tech Sensing Report from classified articles.
@@ -129,6 +130,7 @@ async def generate_report(
         core_context_json=core_context_json,
         domain=domain,
         date_range=date_range,
+        custom_quadrant_names=custom_quadrant_names,
     )
 
     phase2_start = time.time()

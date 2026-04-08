@@ -25,6 +25,7 @@ async def classify_articles(
     domain: str = "Generative AI",
     custom_requirements: str = "",
     key_people: list[str] | None = None,
+    custom_quadrant_names: list[str] | None = None,
 ) -> List[ClassifiedArticle]:
     """
     Classify articles into Technology Radar quadrants/rings via LLM.
@@ -64,6 +65,7 @@ async def classify_articles(
             key_people=key_people,
             topic_categories_text=preset.topic_categories,
             industry_segments_text=preset.industry_segments,
+            custom_quadrant_names=custom_quadrant_names,
         )
 
         try:

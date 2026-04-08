@@ -119,6 +119,64 @@ def get_search_queries_for_domain(
     return queries
 
 
+def get_patent_queries_for_domain(
+    domain: str,
+    must_include: List[str] | None = None,
+) -> List[str]:
+    """
+    Generate patent-specific keyword lists for the USPTO PatentsView API.
+    Returns keywords (not full queries) suitable for text matching.
+    """
+    domain_lower = domain.lower()
+
+    # Domain-specific patent keyword mappings
+    patent_keywords: dict[str, List[str]] = {
+        "ai": [
+            "machine learning", "neural network", "deep learning",
+            "natural language processing", "large language model",
+            "generative artificial intelligence", "transformer model",
+        ],
+        "robotics": [
+            "autonomous robot", "robotic manipulation", "robot control",
+            "humanoid robot", "robotic arm", "mobile robot",
+        ],
+        "quantum": [
+            "quantum computing", "quantum circuit", "qubit",
+            "quantum error correction", "quantum processor",
+        ],
+        "cybersecurity": [
+            "intrusion detection", "encryption method", "authentication system",
+            "malware detection", "network security",
+        ],
+        "blockchain": [
+            "distributed ledger", "smart contract", "consensus mechanism",
+            "blockchain protocol", "decentralized application",
+        ],
+        "cloud": [
+            "cloud computing", "serverless computing", "container orchestration",
+            "distributed computing system", "edge computing",
+        ],
+    }
+
+    keywords = [domain]  # Always include the domain itself
+    for key, kws in patent_keywords.items():
+        if key in domain_lower:
+            keywords.extend(kws)
+            break
+
+    # If no domain-specific match, add generic tech keywords
+    if len(keywords) == 1:
+        keywords.extend([
+            f"{domain} system", f"{domain} method", f"{domain} apparatus",
+        ])
+
+    # Append must_include keywords
+    if must_include:
+        keywords.extend(must_include[:3])
+
+    return keywords
+
+
 # ── Domain-specific presets for prompts ──
 # Each preset provides topic categories, industry segments, and an optional
 # key-people watchlist so that prompts are tailored to the target domain

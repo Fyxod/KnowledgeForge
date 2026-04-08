@@ -9,19 +9,45 @@ interface RadarItem {
   moved_in?: string | null;
   signal_strength?: number;
   source_count?: number;
+  trl?: number;
+  patent_count?: number;
 }
 
 interface TechRadarProps {
   items: RadarItem[];
   onBlipClick?: (name: string) => void;
+  customQuadrants?: { name: string; color: string }[];
 }
 
-const QUADRANTS: Record<string, { start: number; end: number; color: string; label: string }> = {
-  'Techniques': { start: 90, end: 180, color: '#1ebccd', label: 'Techniques' },
-  'Platforms': { start: 0, end: 90, color: '#f38a3e', label: 'Platforms' },
-  'Tools': { start: 270, end: 360, color: '#86b82a', label: 'Tools' },
-  'Languages & Frameworks': { start: 180, end: 270, color: '#b32059', label: 'Languages & Frameworks' },
-};
+const DEFAULT_QUADRANTS: { name: string; color: string; start: number; end: number }[] = [
+  { name: 'Techniques', color: '#1ebccd', start: 90, end: 180 },
+  { name: 'Platforms', color: '#f38a3e', start: 0, end: 90 },
+  { name: 'Tools', color: '#86b82a', start: 270, end: 360 },
+  { name: 'Languages & Frameworks', color: '#b32059', start: 180, end: 270 },
+];
+
+function buildQuadrants(
+  custom?: { name: string; color: string }[]
+): Record<string, { start: number; end: number; color: string; label: string }> {
+  const base = DEFAULT_QUADRANTS;
+  if (custom && custom.length === 4) {
+    const result: Record<string, { start: number; end: number; color: string; label: string }> = {};
+    for (let i = 0; i < 4; i++) {
+      result[custom[i].name] = {
+        start: base[i].start,
+        end: base[i].end,
+        color: custom[i].color || base[i].color,
+        label: custom[i].name,
+      };
+    }
+    return result;
+  }
+  const result: Record<string, { start: number; end: number; color: string; label: string }> = {};
+  for (const q of base) {
+    result[q.name] = { start: q.start, end: q.end, color: q.color, label: q.name };
+  }
+  return result;
+}
 
 const RINGS: Record<string, { inner: number; outer: number; label: string }> = {
   'Adopt': { inner: 0, outer: 0.25, label: 'Adopt' },
@@ -47,9 +73,11 @@ function hashString(s: string): number {
   return Math.abs(hash);
 }
 
-const TechRadar: React.FC<TechRadarProps> = ({ items, onBlipClick }) => {
+const TechRadar: React.FC<TechRadarProps> = ({ items, onBlipClick, customQuadrants }) => {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; item: RadarItem } | null>(null);
   const [selectedQuadrant, setSelectedQuadrant] = useState<string | null>(null);
+
+  const QUADRANTS = useMemo(() => buildQuadrants(customQuadrants), [customQuadrants]);
 
   const size = 600;
   const center = size / 2;
@@ -78,7 +106,7 @@ const TechRadar: React.FC<TechRadarProps> = ({ items, onBlipClick }) => {
       const blipSize = 4 + 4 * (item.signal_strength || 0.2);
       return { ...item, x, y, color: q.color, blipSize };
     }).filter(Boolean) as (RadarItem & { x: number; y: number; color: string; blipSize: number })[];
-  }, [items, center, maxRadius]);
+  }, [items, center, maxRadius, QUADRANTS]);
 
   const filteredBlips = selectedQuadrant
     ? blips.filter(b => b.quadrant === selectedQuadrant)
@@ -321,7 +349,7 @@ const TechRadar: React.FC<TechRadarProps> = ({ items, onBlipClick }) => {
                   fontSize={9}
                   fill="hsl(var(--muted-foreground))"
                 >
-                  Signal: {Math.round((tooltip.item.signal_strength || 0) * 100)}% | {tooltip.item.source_count || 0} sources
+                  Signal: {Math.round((tooltip.item.signal_strength || 0) * 100)}%{tooltip.item.trl ? ` | TRL ${tooltip.item.trl}` : ''} | {tooltip.item.source_count || 0} sources{tooltip.item.patent_count ? ` | ${tooltip.item.patent_count} patents` : ''}
                 </text>
               )}
             </g>

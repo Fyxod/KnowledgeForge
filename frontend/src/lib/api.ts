@@ -522,6 +522,8 @@ export interface SensingRadarItem {
   moved_in?: string | null;
   signal_strength?: number;
   source_count?: number;
+  trl?: number;
+  patent_count?: number;
 }
 
 export interface SensingTrendItem {
@@ -600,6 +602,24 @@ export interface SensingTrendingVideo {
   thumbnail_url: string;
 }
 
+export interface WeakSignalTrajectoryPoint {
+  run_date: string;
+  article_count: number;
+  source_count: number;
+  avg_relevance: number;
+  signal_strength: number;
+}
+
+export interface WeakSignal {
+  technology_name: string;
+  current_strength: number;
+  acceleration_rate: number;
+  first_seen: string;
+  run_count: number;
+  trajectory: WeakSignalTrajectoryPoint[];
+  dvi_score: number;
+}
+
 export interface SensingReport {
   report_title: string;
   executive_summary: string;
@@ -615,6 +635,47 @@ export interface SensingReport {
   recommendations: SensingRecommendation[];
   notable_articles: SensingClassifiedArticle[];
   trending_videos?: SensingTrendingVideo[];
+  weak_signals?: WeakSignal[];
+  relationships?: TechRelationshipMap | null;
+}
+
+export interface TechRelationship {
+  source_tech: string;
+  target_tech: string;
+  relationship_type: string;
+  strength: number;
+  evidence: string;
+}
+
+export interface TechCluster {
+  cluster_name: string;
+  technologies: string[];
+  theme: string;
+}
+
+export interface TechRelationshipMap {
+  relationships: TechRelationship[];
+  clusters: TechCluster[];
+}
+
+export interface SensingAlert {
+  alert_type: string;
+  severity: string;
+  title: string;
+  description: string;
+  technology_name: string;
+  metadata: Record<string, unknown>;
+  timestamp: string;
+}
+
+export interface AlertPreferences {
+  enabled: boolean;
+  email_alerts: boolean;
+  ring_jump_threshold: number;
+  weak_signal_acceleration_threshold: number;
+  alert_on_direct_adopt: boolean;
+  alert_on_stack_match: boolean;
+  alert_on_trend_surge: boolean;
 }
 
 export interface SensingReportData {
@@ -631,6 +692,7 @@ export interface SensingReportData {
     must_include?: string[] | null;
     dont_include?: string[] | null;
     lookback_days?: number;
+    alerts?: SensingAlert[];
   };
 }
 
@@ -715,10 +777,20 @@ export interface TimelineData {
 
 // ── Sensing Org Context types ──
 
+export interface RadarQuadrantConfig {
+  name: string;
+  color: string;
+}
+
+export interface RadarCustomization {
+  quadrants: RadarQuadrantConfig[];
+}
+
 export interface OrgTechContext {
   tech_stack: string[];
   industry: string;
   priorities: string[];
+  radar_customization?: RadarCustomization | null;
 }
 
 // ── Sensing Deep Dive types ──
@@ -745,6 +817,14 @@ export interface DeepDiveReport {
   risk_assessment: string;
   key_resources: KeyResource[];
   recommendations: string[];
+}
+
+// ── Sensing Deep Dive Follow-Up types ──
+
+export interface DeepDiveFollowUpResponse {
+  answer: string;
+  sources_used: string[];
+  suggested_questions: string[];
 }
 
 // ── Sensing Collaboration types ──
@@ -2079,6 +2159,33 @@ export const api = {
     return data;
   },
 
+  async sensingGenerateFromDocument(
+    file: File,
+    domain: string = 'Generative AI',
+    customRequirements: string = '',
+    mustInclude?: string[],
+    dontInclude?: string[],
+  ): Promise<{ status: string; tracking_id: string; message: string }> {
+    const token = getAuthToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('domain', domain);
+    formData.append('custom_requirements', customRequirements);
+    if (mustInclude?.length) formData.append('must_include', mustInclude.join(','));
+    if (dontInclude?.length) formData.append('dont_include', dontInclude.join(','));
+
+    const response = await fetch(`${API_URL}/sensing/generate-from-document`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to start document sensing');
+    }
+    return data;
+  },
+
   async sensingStatus(
     trackingId: string,
   ): Promise<{ status: string; data?: SensingReportData; error?: string }> {
@@ -2254,6 +2361,26 @@ export const api = {
     return data;
   },
 
+  async sensingDeepDiveFollowUp(
+    technologyName: string,
+    domain: string,
+    question: string,
+    trackingId: string,
+  ): Promise<DeepDiveFollowUpResponse> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/deep-dive-followup`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ technology_name: technologyName, domain, question, tracking_id: trackingId }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to get follow-up');
+    return data;
+  },
+
   async sensingShare(reportId: string): Promise<SharedReport> {
     const token = getAuthToken();
     const response = await fetch(
@@ -2303,6 +2430,32 @@ export const api = {
     );
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'Failed to add comment');
+    return data;
+  },
+
+  async sensingGetAlertPrefs(): Promise<AlertPreferences> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/alert-prefs`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to load alert preferences');
+    return data;
+  },
+
+  async sensingUpdateAlertPrefs(prefs: AlertPreferences): Promise<AlertPreferences> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/sensing/alert-prefs`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(prefs),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Failed to update alert preferences');
     return data;
   },
 

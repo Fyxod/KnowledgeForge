@@ -36,14 +36,15 @@ import { Switch } from '@/components/ui/switch';
 import {
   Radar, Loader2, History, Trash2, RefreshCw, Download,
   Maximize2, Minimize2, X, Plus, XCircle, RotateCcw, Calendar,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, FileUp, Bell, BellOff, AlertTriangle,
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { api, getAuthToken } from '@/lib/api';
-import type { SensingReportData, SensingHistoryItem, ReportComparison, SensingSchedule, TimelineData, OrgTechContext } from '@/lib/api';
+import type { SensingReportData, SensingHistoryItem, ReportComparison, SensingSchedule, TimelineData, OrgTechContext, SensingAlert, AlertPreferences } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { API_URL } from '../../config';
 import TechRadar from '@/components/TechRadar';
+import SensingRelationshipGraph from '@/components/SensingRelationshipGraph';
 import SensingReportRenderer from '@/components/SensingReportRenderer';
 import SensingComparisonView from '@/components/SensingComparisonView';
 import SensingTimeline from '@/components/SensingTimeline';
@@ -102,6 +103,9 @@ const TechSensing: React.FC = () => {
   const [queryInput, setQueryInput] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Document upload state
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+
   // Comparison state
   const [compareA, setCompareA] = useState<string>('');
   const [compareB, setCompareB] = useState<string>('');
@@ -127,10 +131,21 @@ const TechSensing: React.FC = () => {
   const [deepDiveResult, setDeepDiveResult] = useState<DeepDiveReport | null>(null);
   const [deepDiveLoading, setDeepDiveLoading] = useState(false);
   const [showDeepDiveDialog, setShowDeepDiveDialog] = useState(false);
+  const [deepDiveTrackingId, setDeepDiveTrackingId] = useState<string | null>(null);
+  const [deepDiveTechName, setDeepDiveTechName] = useState('');
+  const [followUpMessages, setFollowUpMessages] = useState<{ role: string; content: string }[]>([]);
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
 
   // Collaboration state
   const [shareId, setShareId] = useState<string | null>(null);
   const [showCollabDialog, setShowCollabDialog] = useState(false);
+
+  // Alert state
+  const [alerts, setAlerts] = useState<SensingAlert[]>([]);
+  const [showAlerts, setShowAlerts] = useState(true);
+  const [alertPrefs, setAlertPrefs] = useState<AlertPreferences | null>(null);
+  const [showAlertPrefsDialog, setShowAlertPrefsDialog] = useState(false);
 
   // Refs
   const socketRef = useRef<Socket | null>(null);
@@ -139,11 +154,12 @@ const TechSensing: React.FC = () => {
 
   const lookbackDays = dateRange === 'no_range' ? 0 : dateRange === 'last_week' ? 7 : dateRange === 'last_month' ? 30 : customDays;
 
-  // Load history, schedules, and org context on mount
+  // Load history, schedules, org context, and alert prefs on mount
   useEffect(() => {
     loadHistory();
     loadSchedules();
     loadOrgContext();
+    loadAlertPrefs();
   }, []);
 
   // Socket.IO for progress events
@@ -159,6 +175,8 @@ const TechSensing: React.FC = () => {
     socketRef.current = socket;
 
     const eventName = `${user.userId}/sensing_progress`;
+    const alertEventName = `${user.userId}/sensing_alerts`;
+
     socket.on(eventName, (payload: { tracking_id: string; stage: string; progress: number; message: string }) => {
       if (payload.tracking_id !== trackingId) return;
 
@@ -173,12 +191,25 @@ const TechSensing: React.FC = () => {
       }
     });
 
+    socket.on(alertEventName, (payload: { tracking_id: string; alerts: SensingAlert[] }) => {
+      if (payload.tracking_id !== trackingId) return;
+      setAlerts(payload.alerts || []);
+      if (payload.alerts?.length > 0) {
+        setShowAlerts(true);
+        toast({
+          title: `${payload.alerts.length} Alert${payload.alerts.length > 1 ? 's' : ''} Detected`,
+          description: payload.alerts[0].title,
+        });
+      }
+    });
+
     socket.on('connect_error', () => {
       startPolling(trackingId);
     });
 
     return () => {
       socket.off(eventName);
+      socket.off(alertEventName);
       socket.disconnect();
       socketRef.current = null;
     };
@@ -221,6 +252,13 @@ const TechSensing: React.FC = () => {
         const res = await api.sensingStatus(tid);
         if (res.status === 'completed' && res.data) {
           setReportData(res.data);
+          const metaAlerts = (res.data.meta as any)?.alerts;
+          if (metaAlerts?.length) {
+            setAlerts(metaAlerts);
+            setShowAlerts(true);
+          } else {
+            setAlerts([]);
+          }
           setIsGenerating(false);
           setProgress(100);
           setProgressMessage('Report ready');
@@ -246,6 +284,14 @@ const TechSensing: React.FC = () => {
       const res = await api.sensingStatus(tid);
       if (res.status === 'completed' && res.data) {
         setReportData(res.data);
+        // Extract alerts from report meta
+        const metaAlerts = (res.data.meta as any)?.alerts;
+        if (metaAlerts?.length) {
+          setAlerts(metaAlerts);
+          setShowAlerts(true);
+        } else {
+          setAlerts([]);
+        }
         setIsGenerating(false);
         setProgress(100);
         loadHistory();
@@ -265,17 +311,31 @@ const TechSensing: React.FC = () => {
     setProgress(0);
     setProgressMessage('Starting...');
     setReportData(null);
+    setAlerts([]);
 
     try {
-      const res = await api.sensingGenerate(
-        domain,
-        customReqs,
-        mustInclude.length > 0 ? mustInclude : undefined,
-        dontInclude.length > 0 ? dontInclude : undefined,
-        lookbackDays,
-        feedUrls.length > 0 ? feedUrls : undefined,
-        searchQueries.length > 0 ? searchQueries : undefined,
-      );
+      let res;
+      if (uploadFile) {
+        // Document-based pipeline
+        res = await api.sensingGenerateFromDocument(
+          uploadFile,
+          domain,
+          customReqs,
+          mustInclude.length > 0 ? mustInclude : undefined,
+          dontInclude.length > 0 ? dontInclude : undefined,
+        );
+      } else {
+        // Normal web-based pipeline
+        res = await api.sensingGenerate(
+          domain,
+          customReqs,
+          mustInclude.length > 0 ? mustInclude : undefined,
+          dontInclude.length > 0 ? dontInclude : undefined,
+          lookbackDays,
+          feedUrls.length > 0 ? feedUrls : undefined,
+          searchQueries.length > 0 ? searchQueries : undefined,
+        );
+      }
       setTrackingId(res.tracking_id);
       startPolling(res.tracking_id);
     } catch (err) {
@@ -435,12 +495,34 @@ const TechSensing: React.FC = () => {
     }
   };
 
+  const loadAlertPrefs = async () => {
+    try {
+      const prefs = await api.sensingGetAlertPrefs();
+      setAlertPrefs(prefs);
+    } catch { /* ignore */ }
+  };
+
+  const handleSaveAlertPrefs = async () => {
+    if (!alertPrefs) return;
+    try {
+      await api.sensingUpdateAlertPrefs(alertPrefs);
+      toast({ title: 'Alert preferences saved' });
+      setShowAlertPrefsDialog(false);
+    } catch (err: unknown) {
+      toast({ title: 'Failed to save', description: err instanceof Error ? err.message : '', variant: 'destructive' });
+    }
+  };
+
   const handleDeepDive = async (technologyName: string) => {
     setDeepDiveLoading(true);
     setDeepDiveResult(null);
     setShowDeepDiveDialog(true);
+    setDeepDiveTechName(technologyName);
+    setFollowUpMessages([]);
+    setSuggestedQuestions([]);
     try {
       const { tracking_id } = await api.sensingDeepDive(technologyName, domain);
+      setDeepDiveTrackingId(tracking_id);
       // Poll for result
       const poll = async () => {
         for (let i = 0; i < 120; i++) {
@@ -466,6 +548,28 @@ const TechSensing: React.FC = () => {
       toast({ title: 'Deep dive failed', description: err instanceof Error ? err.message : '', variant: 'destructive' });
       setDeepDiveLoading(false);
       setShowDeepDiveDialog(false);
+    }
+  };
+
+  const handleDeepDiveFollowUp = async (question: string) => {
+    if (!deepDiveTrackingId) return;
+    setFollowUpLoading(true);
+    setFollowUpMessages(prev => [...prev, { role: 'user', content: question }]);
+    try {
+      const result = await api.sensingDeepDiveFollowUp(
+        deepDiveTechName,
+        domain,
+        question,
+        deepDiveTrackingId,
+      );
+      setFollowUpMessages(prev => [...prev, { role: 'assistant', content: result.answer }]);
+      setSuggestedQuestions(result.suggested_questions || []);
+    } catch (err: unknown) {
+      toast({ title: 'Follow-up failed', description: err instanceof Error ? err.message : '', variant: 'destructive' });
+      // Remove the user message if the request failed
+      setFollowUpMessages(prev => prev.slice(0, -1));
+    } finally {
+      setFollowUpLoading(false);
     }
   };
 
@@ -555,6 +659,7 @@ const TechSensing: React.FC = () => {
             <TabsList>
               <TabsTrigger value="report">Report</TabsTrigger>
               <TabsTrigger value="radar">Technology Radar</TabsTrigger>
+              <TabsTrigger value="relationships" disabled={!reportData?.report?.relationships}>Relationships</TabsTrigger>
               <TabsTrigger value="compare" disabled={history.length < 2}>Compare</TabsTrigger>
               <TabsTrigger value="timeline" onClick={() => { if (!timelineData) loadTimeline(); }}>Timeline</TabsTrigger>
             </TabsList>
@@ -563,7 +668,16 @@ const TechSensing: React.FC = () => {
             <SensingReportRenderer report={reportData.report} meta={reportData.meta} highlightTechnology={highlightTech} onDeepDive={handleDeepDive} />
           </TabsContent>
           <TabsContent value="radar" className="flex-1 min-h-0 px-6 pb-4 mt-2 overflow-auto">
-            <TechRadar items={reportData.report.radar_items || []} onBlipClick={(name) => { setHighlightTech(name); setActiveTab('report'); }} />
+            <TechRadar items={reportData.report.radar_items || []} onBlipClick={(name) => { setHighlightTech(name); setActiveTab('report'); }} customQuadrants={orgContext.radar_customization?.quadrants} />
+          </TabsContent>
+          <TabsContent value="relationships" className="flex-1 min-h-0 px-6 pb-4 mt-2">
+            {reportData.report.relationships && (
+              <SensingRelationshipGraph
+                relationships={reportData.report.relationships}
+                radarItems={reportData.report.radar_items || []}
+                onTechClick={(name) => { setHighlightTech(name); setActiveTab('report'); }}
+              />
+            )}
           </TabsContent>
           <TabsContent value="compare" className="flex-1 min-h-0 px-6 pb-4 mt-2 overflow-auto">
             <div className="space-y-4">
@@ -628,6 +742,10 @@ const TechSensing: React.FC = () => {
           </Button>
           <Button variant="outline" size="sm" onClick={() => setShowOrgDialog(true)}>
             Org Profile
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowAlertPrefsDialog(true)}>
+            <Bell className="w-4 h-4 mr-1" /> Alerts
+            {alerts.length > 0 && <Badge variant="destructive" className="ml-1 text-xs h-5 min-w-[20px] px-1">{alerts.length}</Badge>}
           </Button>
         </div>
         {reportData && (
@@ -912,6 +1030,37 @@ const TechSensing: React.FC = () => {
               )}
             </div>
 
+            {/* Document Upload */}
+            <div className="border rounded-md p-3 bg-muted/20">
+              <div className="flex items-center gap-2 mb-1">
+                <FileUp className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  Source Document (optional)
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                Upload a document to analyze instead of fetching from web sources.
+              </p>
+              <input
+                type="file"
+                accept=".pdf,.docx,.doc,.pptx,.xlsx,.csv,.md,.txt"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                disabled={isGenerating}
+                className="text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 file:cursor-pointer"
+              />
+              {uploadFile && (
+                <div className="flex items-center gap-2 mt-1.5">
+                  <Badge variant="secondary" className="text-xs gap-1">
+                    {uploadFile.name}
+                    <XCircle className="w-3 h-3 cursor-pointer" onClick={() => setUploadFile(null)} />
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    Web sources will be skipped
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Generate button + progress */}
             <div className="flex items-center gap-3">
               <Button onClick={handleGenerate} disabled={isGenerating || !domain.trim()}>
@@ -1007,12 +1156,47 @@ const TechSensing: React.FC = () => {
         </Card>
       </div>
 
+      {/* Alert banner */}
+      {reportData && alerts.length > 0 && showAlerts && (
+        <div className="shrink-0 rounded-lg border p-3 space-y-2 bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                {alerts.length} Alert{alerts.length !== 1 ? 's' : ''} Detected
+              </span>
+            </div>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setShowAlerts(false)}>
+              Dismiss
+            </Button>
+          </div>
+          <div className="space-y-1.5 max-h-32 overflow-y-auto">
+            {alerts.map((alert, i) => {
+              const severityClass = alert.severity === 'critical'
+                ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                : alert.severity === 'high'
+                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300'
+                : alert.severity === 'medium'
+                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
+                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+              return (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  <Badge className={`shrink-0 text-[10px] ${severityClass}`}>{alert.severity}</Badge>
+                  <span className="text-foreground/80">{alert.title}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Report display */}
       {reportData ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
           <TabsList className="shrink-0">
             <TabsTrigger value="report">Report</TabsTrigger>
             <TabsTrigger value="radar">Technology Radar</TabsTrigger>
+            <TabsTrigger value="relationships" disabled={!reportData?.report?.relationships}>Relationships</TabsTrigger>
             <TabsTrigger value="compare" disabled={history.length < 2}>Compare</TabsTrigger>
             <TabsTrigger value="timeline" onClick={() => { if (!timelineData) loadTimeline(); }}>Timeline</TabsTrigger>
           </TabsList>
@@ -1020,7 +1204,16 @@ const TechSensing: React.FC = () => {
             <SensingReportRenderer report={reportData.report} meta={reportData.meta} highlightTechnology={highlightTech} onDeepDive={handleDeepDive} />
           </TabsContent>
           <TabsContent value="radar" className="flex-1 min-h-0 mt-2 overflow-auto">
-            <TechRadar items={reportData.report.radar_items || []} onBlipClick={(name) => { setHighlightTech(name); setActiveTab('report'); }} />
+            <TechRadar items={reportData.report.radar_items || []} onBlipClick={(name) => { setHighlightTech(name); setActiveTab('report'); }} customQuadrants={orgContext.radar_customization?.quadrants} />
+          </TabsContent>
+          <TabsContent value="relationships" className="flex-1 min-h-0 mt-2">
+            {reportData.report.relationships && (
+              <SensingRelationshipGraph
+                relationships={reportData.report.relationships}
+                radarItems={reportData.report.radar_items || []}
+                onTechClick={(name) => { setHighlightTech(name); setActiveTab('report'); }}
+              />
+            )}
           </TabsContent>
           <TabsContent value="compare" className="flex-1 min-h-0 mt-2 overflow-auto">
             <div className="space-y-4">
@@ -1241,10 +1434,135 @@ const TechSensing: React.FC = () => {
                 ))}
               </div>
             </div>
+            {/* Radar Quadrant Customization */}
+            <div>
+              <label className="text-sm font-medium">Custom Radar Quadrants</label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Customize radar quadrant names and colors. Leave defaults or set your own.
+              </p>
+              <div className="space-y-2">
+                {(orgContext.radar_customization?.quadrants || [
+                  { name: 'Techniques', color: '#1ebccd' },
+                  { name: 'Platforms', color: '#f38a3e' },
+                  { name: 'Tools', color: '#86b82a' },
+                  { name: 'Languages & Frameworks', color: '#b32059' },
+                ]).map((q, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={q.color || '#888888'}
+                      onChange={(e) => {
+                        const quads = [...(orgContext.radar_customization?.quadrants || [
+                          { name: 'Techniques', color: '#1ebccd' },
+                          { name: 'Platforms', color: '#f38a3e' },
+                          { name: 'Tools', color: '#86b82a' },
+                          { name: 'Languages & Frameworks', color: '#b32059' },
+                        ])];
+                        quads[i] = { ...quads[i], color: e.target.value };
+                        setOrgContext({ ...orgContext, radar_customization: { quadrants: quads } });
+                      }}
+                      className="w-8 h-8 rounded border cursor-pointer"
+                    />
+                    <Input
+                      value={q.name}
+                      onChange={(e) => {
+                        const quads = [...(orgContext.radar_customization?.quadrants || [
+                          { name: 'Techniques', color: '#1ebccd' },
+                          { name: 'Platforms', color: '#f38a3e' },
+                          { name: 'Tools', color: '#86b82a' },
+                          { name: 'Languages & Frameworks', color: '#b32059' },
+                        ])];
+                        quads[i] = { ...quads[i], name: e.target.value };
+                        setOrgContext({ ...orgContext, radar_customization: { quadrants: quads } });
+                      }}
+                      placeholder={`Quadrant ${i + 1} name`}
+                      className="flex-1"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
             <DialogFooter>
               <Button onClick={handleSaveOrgContext}>Save Profile</Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Alert Preferences dialog */}
+      <Dialog open={showAlertPrefsDialog} onOpenChange={setShowAlertPrefsDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Alert Preferences</DialogTitle>
+            <DialogDescription>Configure which alerts you receive when reports are generated.</DialogDescription>
+          </DialogHeader>
+          {alertPrefs && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Alerts Enabled</label>
+                <Switch checked={alertPrefs.enabled} onCheckedChange={(v) => setAlertPrefs({ ...alertPrefs, enabled: v })} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium">Ring Jump Alerts</label>
+                  <p className="text-xs text-muted-foreground">Alert when technology moves {alertPrefs.ring_jump_threshold}+ rings</p>
+                </div>
+                <Select
+                  value={String(alertPrefs.ring_jump_threshold)}
+                  onValueChange={(v) => setAlertPrefs({ ...alertPrefs, ring_jump_threshold: parseInt(v) })}
+                >
+                  <SelectTrigger className="w-16"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1</SelectItem>
+                    <SelectItem value="2">2</SelectItem>
+                    <SelectItem value="3">3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium">Direct Adopt/Trial</label>
+                  <p className="text-xs text-muted-foreground">New tech enters Adopt or Trial directly</p>
+                </div>
+                <Switch checked={alertPrefs.alert_on_direct_adopt} onCheckedChange={(v) => setAlertPrefs({ ...alertPrefs, alert_on_direct_adopt: v })} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium">Weak Signal Breakout</label>
+                  <p className="text-xs text-muted-foreground">Weak signal acceleration threshold</p>
+                </div>
+                <Select
+                  value={String(alertPrefs.weak_signal_acceleration_threshold)}
+                  onValueChange={(v) => setAlertPrefs({ ...alertPrefs, weak_signal_acceleration_threshold: parseFloat(v) })}
+                >
+                  <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1.5">1.5x</SelectItem>
+                    <SelectItem value="2">2.0x</SelectItem>
+                    <SelectItem value="3">3.0x</SelectItem>
+                    <SelectItem value="5">5.0x</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium">Stack Match</label>
+                  <p className="text-xs text-muted-foreground">Technology matches your org tech stack</p>
+                </div>
+                <Switch checked={alertPrefs.alert_on_stack_match} onCheckedChange={(v) => setAlertPrefs({ ...alertPrefs, alert_on_stack_match: v })} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium">Trend Surge</label>
+                  <p className="text-xs text-muted-foreground">New high-impact trend detected</p>
+                </div>
+                <Switch checked={alertPrefs.alert_on_trend_surge} onCheckedChange={(v) => setAlertPrefs({ ...alertPrefs, alert_on_trend_surge: v })} />
+              </div>
+              <DialogFooter>
+                <Button onClick={handleSaveAlertPrefs}>Save Preferences</Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1262,7 +1580,15 @@ const TechSensing: React.FC = () => {
               <p className="text-xs text-muted-foreground">This may take a few minutes.</p>
             </div>
           ) : deepDiveResult ? (
-            <SensingDeepDive report={deepDiveResult} />
+            <SensingDeepDive
+              report={deepDiveResult}
+              trackingId={deepDiveTrackingId || undefined}
+              domain={domain}
+              onFollowUp={handleDeepDiveFollowUp}
+              followUpMessages={followUpMessages}
+              followUpLoading={followUpLoading}
+              suggestedQuestions={suggestedQuestions}
+            />
           ) : null}
         </DialogContent>
       </Dialog>
