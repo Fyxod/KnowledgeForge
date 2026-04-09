@@ -1226,8 +1226,10 @@ async def _batch_doc_answer(
 
     # ── 6. Reduce: combine partial answers ──
     combo_prompt = combination_prompt(
-        query=user_question,
+        resolved_query=user_question,
+        original_query=user_question,
         sub_answers=valid_answers,
+        generative_mode=generative_mode,
     )
     try:
         combined = await invoke_llm(
