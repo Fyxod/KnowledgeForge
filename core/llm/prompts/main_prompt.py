@@ -4,17 +4,64 @@ from core.constants import INTERNAL, EXTERNAL
 from core.llm.prompts.thread_context import build_thread_context_block
 
 
+def detect_full_document_query(question: str) -> bool:
+    """
+    Detect whether the query requires complete document coverage
+    (all slides, all pages, etc.) rather than relevance-filtered top-k retrieval.
+    """
+    question_lower = question.lower()
+    full_doc_patterns = [
+        "each slide", "every slide", "all slides", "all the slides",
+        "each page", "every page", "all pages", "all the pages",
+        "entire document", "whole document", "full document",
+        "slide by slide", "page by page",
+        "each section", "every section", "all sections",
+        "for each chapter", "every chapter",
+    ]
+    return any(p in question_lower for p in full_doc_patterns)
+
+
 def detect_answer_style(question: str) -> str:
     """
     Detect the desired answer style based on keywords in the question.
 
     Returns:
-        'brief'    - User wants a concise answer
-        'compare'  - User wants cross-document comparison
-        'analyst'  - User wants strategic analysis with recommendations
-        'detailed' - User wants a detailed answer (default)
+        'generative' - User wants content CREATED (scripts, speeches, talking points)
+        'brief'      - User wants a concise answer
+        'compare'    - User wants cross-document comparison
+        'analyst'    - User wants strategic analysis with recommendations
+        'detailed'   - User wants a detailed answer (default)
     """
     question_lower = question.lower()
+
+    # Generative / content-creation keywords — checked FIRST
+    generative_keywords = [
+        "create a script",
+        "write a script",
+        "draft a script",
+        "prepare a script",
+        "generate a script",
+        "script for each slide",
+        "script for each page",
+        "talking points for each",
+        "talking points for every",
+        "narration for each",
+        "narration for every",
+        "create a presentation",
+        "prepare a presentation",
+        "write a speech",
+        "draft a speech",
+        "create content for",
+        "write content for",
+        "generate content for",
+        "write for each slide",
+        "draft for each slide",
+        "speaking notes for",
+        "presenter notes for",
+    ]
+    for keyword in generative_keywords:
+        if keyword in question_lower:
+            return "generative"
 
     # Brief answer keywords
     brief_keywords = [
@@ -119,6 +166,7 @@ def _build_system_prompt(
     is_brief = answer_style == "brief"
     is_analyst = answer_style == "analyst"
     is_compare = answer_style == "compare"
+    is_generative = answer_style == "generative"
     is_external = mode == EXTERNAL
 
     # ── Role ──
@@ -138,6 +186,12 @@ def _build_system_prompt(
             "You are a **senior strategic analyst** that provides data-driven insights, "
             "recommendations, and risk assessments based on the provided **documents**. "
             "Your analysis must always be grounded in the data — never speculate beyond what the evidence supports.\n"
+        )
+    elif is_generative:
+        role = (
+            "You are an expert **content creator** that generates original content "
+            "(scripts, talking points, narratives, speeches) grounded in the provided **documents**. "
+            "You CREATE content — you do not just describe or summarize what documents contain.\n"
         )
     else:
         role = "You are an expert assistant that answers questions based on the provided **documents**.\n"
@@ -164,6 +218,12 @@ def _build_system_prompt(
         task = (
             "Your job is to provide **strategic analysis with actionable recommendations** using Markdown formatting. "
             "Every claim must be backed by evidence from the documents.\n\n"
+        )
+    elif is_generative:
+        task = (
+            "Your job is to **create the requested content** using the information from the documents as source material. "
+            "The output should be the actual deliverable the user asked for (e.g., a speaking script, talking points), "
+            "NOT a description or summary of the documents. Write the content the user would directly use.\n\n"
         )
     else:
         task = "Your job is to create **clear, structured, and comprehensive answers** using Markdown formatting.\n\n"
@@ -295,6 +355,21 @@ def _build_system_prompt(
             "## Synthesis\n"
             "(What can we conclude from both documents together?)\n"
             "```\n"
+        )
+    elif is_generative:
+        structure = (
+            "\n### Output Structure (Content Creation)\n"
+            "```\n"
+            "## [Content Title]\n\n"
+            "### [Section/Slide 1 Title]\n"
+            "(Generated content for this section — the actual script/text the user asked for)\n\n"
+            "### [Section/Slide 2 Title]\n"
+            "(Generated content — continues in document order)\n\n"
+            "...(continue for ALL sections/slides)...\n"
+            "```\n"
+            "\n**CRITICAL**: Write the actual content the user requested. "
+            "Do NOT describe what each slide contains — write what the presenter should SAY. "
+            "Cover ALL slides/sections in document order. Include transitions between sections.\n"
         )
     elif is_analyst:
         structure = (
@@ -461,7 +536,24 @@ def main_prompt(
         )
 
     # ── Visual Reference Context (query-time VLM analysis of referenced page/figure) ──
-    if vlm_visual_answer:
+    # For generative mode, VLM answer is deferred to AFTER chunks for recency bias.
+    _deferred_vlm_section = None
+    if vlm_visual_answer and answer_style == "generative":
+        # Defer — will be inserted after chunks with priority framing
+        _deferred_vlm_section = {
+            "role": "system",
+            "parts": (
+                "### Primary Source: Visual Analysis (VLM)\n"
+                f"{vlm_visual_answer}\n\n"
+                "**CRITICAL INSTRUCTION**: The Visual Analysis above is your PRIMARY source. "
+                "It was generated by analyzing the actual slide/page images and captures visual "
+                "content that text chunks may miss. Use it as the FOUNDATION for your answer. "
+                "The Document Chunks above provide supplementary text detail only.\n"
+                "Do NOT rewrite the visual analysis as a description — "
+                "use it to CREATE the content the user requested.\n"
+            ),
+        }
+    elif vlm_visual_answer:
         contents.append(
             {
                 "role": "system",
@@ -506,6 +598,10 @@ def main_prompt(
         contents.append(
             {"role": "system", "parts": f"**Document Chunks (Context):**\n{chunks}\n"}
         )
+
+    # ── Deferred VLM section for generative mode (placed AFTER chunks for recency bias) ──
+    if _deferred_vlm_section:
+        contents.append(_deferred_vlm_section)
 
     # ── Phase 3.2: Entity relationship triples ──
     if triple_context:

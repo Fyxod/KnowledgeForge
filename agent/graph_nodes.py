@@ -35,6 +35,7 @@ from core.llm.outputs import (
 from core.llm.prompts.evaluator_prompt import evaluator_prompt
 from core.llm.prompts.grounded_inference_prompt import GROUNDED_INFERENCE_PREFIX
 from core.llm.prompts.hyde_prompt import hyde_prompt
+from core.llm.prompts.main_prompt import detect_full_document_query, detect_answer_style
 
 os.makedirs("DEBUG", exist_ok=True)
 
@@ -65,6 +66,11 @@ async def retriever(state: AgentState) -> AgentState:
     # Use the new robust retrieval function that ensures document diversity
     # Uses adaptive scaling based on document count
     query = state.query or state.resolved_query or state.original_query
+
+    # Detect full-document mode: queries like "each slide", "every page", etc.
+    if detect_full_document_query(query):
+        state.full_document_mode = True
+        print(f"[retriever] Full-document mode enabled for query: {query[:80]}")
 
     # Phase 2.2: Multi-query retrieval — collect distinct query variants
     # for broader coverage (original phrasing + resolved/rewritten versions)
@@ -113,6 +119,7 @@ async def retriever(state: AgentState) -> AgentState:
         additional_queries=additional_queries if additional_queries else None,
         k=None,  # None enables adaptive scaling
         max_total_chunks=MAX_TOTAL_CHUNKS,
+        full_document_mode=state.full_document_mode,
     )
 
     end_time = time.time()
@@ -253,7 +260,8 @@ async def retriever(state: AgentState) -> AgentState:
     # Chunks below 0.5 are essentially noise — the reranker considers them
     # irrelevant. Passing them to the LLM dilutes good context and can mislead.
     # Always keep at least the top 2 chunks as fallback.
-    if state.chunks:
+    # SKIP in full-document mode — we need every slide/page regardless of score.
+    if state.chunks and not state.full_document_mode:
         MIN_RERANK_SCORE = 0.5
         filtered = [c for c in state.chunks if c.get("rerank_score", 0.0) >= MIN_RERANK_SCORE]
         if len(filtered) < 2:
@@ -264,12 +272,15 @@ async def retriever(state: AgentState) -> AgentState:
             print(f"[ChunkFilter] Dropped {dropped} chunks with rerank_score < {MIN_RERANK_SCORE} "
                   f"({len(filtered)} remaining)")
         state.chunks = filtered
+    elif state.full_document_mode:
+        print(f"[ChunkFilter] Skipped — full-document mode ({len(state.chunks)} chunks retained)")
 
     # ── Lost in the Middle mitigation ──
     # Reorder so highest-scored chunks are at positions 0 and -1,
     # and lowest-scored chunks sit in the middle — combats positional
     # attention bias shown by transformer models on long contexts.
-    if len(state.chunks) > 2:
+    # SKIP in full-document mode — maintain page-sequential order for coherent output.
+    if len(state.chunks) > 2 and not state.full_document_mode:
         sorted_by_score = sorted(
             state.chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True
         )
@@ -286,6 +297,10 @@ async def retriever(state: AgentState) -> AgentState:
         reordered = front + list(reversed(back))
         state.chunks = reordered
         print(f"[LostInMiddle] Reordered {len(state.chunks)} chunks (best at positions 0 and -1)")
+    elif state.full_document_mode:
+        # Sort by page number for sequential slide/page order
+        state.chunks.sort(key=lambda c: (c.get("page_no", 0), c.get("document_id", "")))
+        print(f"[FullDocMode] Kept {len(state.chunks)} chunks in page-sequential order")
 
     # ── MapReduce: batch over document chunks if context budget overflows ──
     if SWITCHES.get("DOC_BATCH_REDUCER", False) and state.chunks:
@@ -303,10 +318,12 @@ async def retriever(state: AgentState) -> AgentState:
                 f"triggering MapReduce over {len(state.chunks)} chunks"
             )
             try:
+                is_generative = detect_answer_style(query) == "generative"
                 batched = await _batch_doc_answer(
                     chunks=state.chunks,
                     user_question=query,
                     budget_tokens=budget_tokens,
+                    generative_mode=is_generative,
                 )
                 if batched:
                     state.doc_batched_answer = batched
@@ -1100,6 +1117,7 @@ async def _batch_doc_answer(
     chunks: list,
     user_question: str,
     budget_tokens: int,
+    generative_mode: bool = False,
 ) -> str | None:
     """
     MapReduce over document chunks that exceed context budget.
@@ -1177,6 +1195,7 @@ async def _batch_doc_answer(
             user_question=user_question,
             batch_number=batch_num,
             total_batches=total,
+            generative_mode=generative_mode,
         )
         try:
             result = await invoke_llm(

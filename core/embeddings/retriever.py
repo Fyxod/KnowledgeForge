@@ -525,6 +525,7 @@ async def get_thread_documents_retriever(
     additional_queries: List[str] = None,
     k: int = None,
     max_total_chunks: int = 50,
+    full_document_mode: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Get retriever for all documents in a thread with score-aware document diversity.
@@ -532,7 +533,13 @@ async def get_thread_documents_retriever(
 
     Phase 2.2: Supports multi-query retrieval via additional_queries parameter.
 
-    Strategy (replaces hard per-doc minimum allocation):
+    When ``full_document_mode`` is True, the function still runs a lightweight
+    hybrid retrieval to identify the most-relevant document, then fetches ALL
+    chunks from that document via ChromaDB ``get()`` — bypassing the quality
+    gate, adaptive budget, and k-limit.  Chunks are returned sorted by page
+    number so the LLM receives them in slide/page order.
+
+    Strategy (normal mode):
     1. Fetch a broad candidate pool via hybrid retrieval.
     2. Quality-gate: keep only documents whose best RRF score is ≥ 25% of the
        top document's score (weak/irrelevant documents are excluded).
@@ -548,6 +555,7 @@ async def get_thread_documents_retriever(
         additional_queries: Optional extra query variants for multi-query retrieval
         k: Total number of chunks to retrieve (None for adaptive)
         max_total_chunks: Hard upper bound on returned chunks
+        full_document_mode: When True, fetch ALL chunks from the top document
     """
     # Use hybrid retrieval (vector + BM25) for better recall
     retrieved_docs = await hybrid_retrieve(
@@ -591,7 +599,50 @@ async def get_thread_documents_retriever(
     if num_kept == 0:
         return []
 
-    # --- Adaptive total budget ---
+    # ── Full-document mode: fetch ALL chunks from the top-scoring document ──
+    if full_document_mode:
+        target_doc_id = max(best_score_per_doc, key=best_score_per_doc.get)
+        print(
+            f"[FullDocMode] Fetching ALL chunks for document {target_doc_id} "
+            f"(score={best_score_per_doc[target_doc_id]:.4f})"
+        )
+        try:
+            vectorstore = get_vectorstore(user_id, thread_id=thread_id)
+            raw = vectorstore._collection.get(
+                where={
+                    "$and": [
+                        {"document_id": {"$eq": target_doc_id}},
+                        {"chunk_type": {"$eq": "child"}},
+                    ]
+                },
+                include=["documents", "metadatas"],
+            )
+            all_chunks: List[Dict[str, Any]] = []
+            ids = raw.get("ids", [])
+            docs_list = raw.get("documents", [])
+            metas = raw.get("metadatas", [])
+            for i, cid in enumerate(ids):
+                meta = metas[i] if i < len(metas) else {}
+                text = docs_list[i] if i < len(docs_list) else ""
+                all_chunks.append({
+                    "id": cid,
+                    "page_content": text,
+                    "metadata": meta,
+                    "rrf_score": 1.0,  # placeholder — all chunks are equally relevant
+                })
+            # Sort by page_no then chunk_index for slide-sequential order
+            all_chunks.sort(
+                key=lambda c: (
+                    c.get("metadata", {}).get("page_no", 0),
+                    c.get("metadata", {}).get("chunk_index", 0),
+                )
+            )
+            print(f"[FullDocMode] Retrieved {len(all_chunks)} child chunks for document")
+            return all_chunks
+        except Exception as e:
+            print(f"[FullDocMode] ChromaDB get() failed: {e}, falling back to normal retrieval")
+
+    # --- Normal mode: Adaptive total budget ---
     if k is None:
         if num_kept <= 2:
             k = 40

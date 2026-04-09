@@ -87,6 +87,10 @@ class AgentState(BaseModel):
         description="User-defined instructions that apply to every message in this thread.",
     )
 
+    # Full-document retrieval mode — retrieves ALL chunks from the target document
+    # instead of relevance-filtered top-k.  Triggered by "each slide", "every page", etc.
+    full_document_mode: bool = False
+
     # Phase 2.1: CRAG Corrective Retrieval
     retrieval_attempts: int = 0  # How many times retrieval has been performed
     retrieval_verdict: Optional[str] = Field(
