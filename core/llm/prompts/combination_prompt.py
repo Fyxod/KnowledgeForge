@@ -16,7 +16,21 @@ def combination_prompt(
     ORDER the generated content (scripts, talking points) rather than synthesize
     or cross-reference it analytically.
     """
-    sub_answers_json = json.dumps(sub_answers, indent=2, ensure_ascii=False)
+    # Normalise sub_answers into a clean list of {sub_query, sub_answer} dicts.
+    # Input can be list[dict] (from query route) or list[str] (from batch reduce).
+    cleaned = []
+    for idx, item in enumerate(sub_answers):
+        if isinstance(item, dict):
+            cleaned.append({
+                "sub_query": item.get("sub_query", f"Part {idx + 1}"),
+                "sub_answer": item.get("sub_answer", ""),
+            })
+        else:
+            cleaned.append({
+                "sub_query": f"Part {idx + 1}",
+                "sub_answer": str(item),
+            })
+    sub_answers_json = json.dumps(cleaned, indent=2, ensure_ascii=False)
 
     # Build chunk context string from deduplicated chunks (top chunks only)
     chunk_context = ""
@@ -37,12 +51,13 @@ def combination_prompt(
             "You are an expert **content assembler**. The user asked for generated content "
             "(such as a script, talking points, narration, or presentation material).\n\n"
             "Multiple sub-answers below each contain **generated content** for different "
-            "slides, sections, or parts of the document. Your job is to **combine them into "
-            "one complete, ordered deliverable**.\n\n"
+            "slides, sections, or parts of the document. Each entry has a `sub_query` (indicating "
+            "which slide/section it covers) and a `sub_answer` (the generated content). "
+            "Your job is to **combine them into one complete, ordered deliverable**.\n\n"
             "### Rules\n"
-            "1. **PRESERVE the generated content verbatim.** Each sub-answer contains actual "
+            "1. **PRESERVE the generated content verbatim.** Each `sub_answer` contains actual "
             "scripts/talking points/content that the user asked for — do NOT re-describe, "
-            "summarize, or paraphrase them.\n"
+            "summarize, or paraphrase them. Use the `sub_query` to determine ordering.\n"
             "2. **Order by slide/section number.** Arrange the content in document order "
             "(Slide 1, Slide 2, ... or Section 1, Section 2, ...).\n"
             "3. **Remove duplicates.** If two sub-answers cover the same slide/section, "
@@ -75,7 +90,9 @@ def combination_prompt(
             "### Rules\n"
             "1. The **Original Question** is what the user actually asked. The **Resolved Query** is a "
             "cleaned-up version. Use both to understand the full intent.\n"
-            "2. Read all Sub_answers carefully. These are partial answers to sub-parts of the question.\n"
+            "2. Read all Sub_answers carefully. Each entry has a `sub_query` (the specific sub-question "
+            "that was asked) and a `sub_answer` (the answer to that sub-question). Use the `sub_query` "
+            "to understand which aspect of the original question each answer addresses.\n"
             "3. **Cross-reference** information across sub-answers. If sub-answer 1 identifies items "
             "(e.g., teams, worklets, products, features) and sub-answer 2 provides attributes "
             "(e.g., achievements, metrics, status), MAP them together explicitly.\n"
