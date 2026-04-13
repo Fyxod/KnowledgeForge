@@ -48,9 +48,10 @@ EASYOCR_GPU = (
 PORT1 = 11434  # Ollama instance 1 — gpt-oss:20b (query answering)
 PORT2 = 11435  # Ollama instance 2 — VLM (document processing, no queue contention with queries)
 
-# Model context window (tokens). gpt-oss:20b full = 128K.
-MODEL_CONTEXT_TOKENS = 128_000
-MODEL_OUTPUT_RESERVE = 8_000  # Reserve for output generation
+# Model token limits — configurable via .env (see core/config.py)
+MODEL_CONTEXT_TOKENS = settings.MODEL_CONTEXT_TOKENS
+MODEL_OUTPUT_TOKENS = settings.MODEL_OUTPUT_TOKENS
+MODEL_OUTPUT_RESERVE = settings.MODEL_OUTPUT_RESERVE
 
 MAIN_MODEL = (
     settings.MAIN_MODEL

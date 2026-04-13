@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     VLLM_MODEL: str = ""  # Model name as loaded in vLLM (e.g., "google/gemma-4-26B-A4B-it")
     VLLM_API_KEY: str = "none"  # vLLM API key (default: no auth)
 
+    # Model token configuration
+    MODEL_CONTEXT_TOKENS: int = 128000   # Total context window in tokens
+    MODEL_OUTPUT_TOKENS: int = 16000     # Max output tokens per LLM call (num_predict / max_tokens)
+    MODEL_OUTPUT_RESERVE: int = 8000     # Reserved output tokens for budget calculations
+
     # INTERNAL API Configuration (defaults to disabled for backward compatibility)
     INTERNAL_BASE_URL: str = ""
     INTERNAL_CLIENT_KEY: str = ""

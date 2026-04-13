@@ -44,12 +44,14 @@ class MyServerLLM(LLM):
         )
         super().__init__(model=model, port=port, **kwargs)
 
+        from core.constants import MODEL_OUTPUT_TOKENS
+
         self._client = ChatOpenAI(
             model=settings.VLLM_MODEL or model,
             base_url=settings.VLLM_BASE_URL,
             api_key=settings.VLLM_API_KEY,
             timeout=1000,
-            max_tokens=16384,
+            max_tokens=MODEL_OUTPUT_TOKENS,
         )
 
     @property

@@ -56,11 +56,13 @@ class MyServerLLM(LLM):
         print(f"Initializing MyOllamaLLM with model={model} at port={port}")
         super().__init__(model=model, port=port, **kwargs)
 
+        from core.constants import MODEL_OUTPUT_TOKENS
+
         self._client = ChatOllama(
             model=model,
             base_url=f"{LOCAL_BASE_URL}:{port}",
             timeout=1000,
-            num_predict=16384,
+            num_predict=MODEL_OUTPUT_TOKENS,
             **kwargs,
         )
 
