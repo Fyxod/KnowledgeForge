@@ -294,7 +294,7 @@ class ReportRadar(LLMOutputBase):
     """Phase 2 output: technology radar entries."""
 
     radar_items: List[RadarItem] = Field(
-        description="Technology radar entries (15-30 items)."
+        description="Technology radar entries (10-20 items)."
     )
 
 
@@ -347,7 +347,7 @@ class TechSensingReport(LLMOutputBase):
         description="3-6 detailed report sections in markdown."
     )
     radar_items: List[RadarItem] = Field(
-        description="Technology radar entries (15-30 items)."
+        description="Technology radar entries (10-20 items)."
     )
     radar_item_details: List[RadarItemDetail] = Field(
         description="Detailed write-up for each radar item — what it is, why it matters, who is using it, practical applications."

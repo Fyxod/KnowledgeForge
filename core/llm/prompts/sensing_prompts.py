@@ -214,7 +214,7 @@ def sensing_report_radar_prompt(
                 "Use the Phase 1 context to ensure your radar items align with the "
                 "identified trends and headline moves.\n\n"
                 "RADAR GUIDELINES:\n"
-                "- 15-30 distinct technologies/techniques — consolidate duplicates.\n"
+                "- 10-20 distinct technologies/techniques — consolidate duplicates.\n"
                 "- Each entry: name, quadrant ("
                 + _quadrant_names_inline(custom_quadrant_names)
                 + "), "
@@ -242,7 +242,9 @@ def sensing_report_radar_prompt(
                 f"DOMAIN: {domain}\n\n"
                 f"PHASE 1 CONTEXT (headline moves and key trends):\n{core_context_json}\n\n"
                 f"CLASSIFIED ARTICLES:\n\n{classified_articles_json}\n\n"
-                "Generate ONLY the radar_items array. Return ONLY valid JSON."
+                "Return a JSON object with a single key `radar_items` containing the array of radar entries.\n"
+                "Example structure: {\"radar_items\": [{...}, ...]}\n"
+                "Return ONLY valid JSON — no commentary or markdown fencing."
             ),
         },
     ]
