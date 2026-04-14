@@ -1,6 +1,9 @@
 from langgraph.graph import END, StateGraph
 
 from agent.graph_nodes import (
+    evaluator,
+    evaluator_router,
+    excel_skill_node,
     failure,
     generate,
     retriever,
@@ -30,12 +33,23 @@ graph_builder.add_node(DOCUMENT_SUMMARIZER, document_summarizer)
 graph_builder.add_node(GLOBAL_SUMMARIZER, global_summarizer)
 graph_builder.add_node(SELF_KNOWLEDGE, self_knowledge)
 graph_builder.add_node(SQL_QUERY, sql_query_node)
+graph_builder.add_node(EXCEL_CREATE, excel_skill_node)
+graph_builder.add_node(EVALUATOR, evaluator)
 
 # Set the entry point
 graph_builder.set_entry_point(RETRIEVER)
 
 # Define edges
-graph_builder.add_edge(RETRIEVER, GENERATE)
+# RETRIEVER → EVALUATOR → {GENERATE, RETRIEVER (re-retrieve)}
+graph_builder.add_edge(RETRIEVER, EVALUATOR)
+graph_builder.add_conditional_edges(
+    EVALUATOR,
+    evaluator_router,
+    {
+        GENERATE: GENERATE,
+        RETRIEVER: RETRIEVER,
+    },
+)
 
 # Conditional edges from GENERATE via router
 graph_builder.add_conditional_edges(
@@ -47,6 +61,7 @@ graph_builder.add_conditional_edges(
         DOCUMENT_SUMMARIZER: DOCUMENT_SUMMARIZER,
         GLOBAL_SUMMARIZER: GLOBAL_SUMMARIZER,
         SQL_QUERY: SQL_QUERY,
+        EXCEL_CREATE: EXCEL_CREATE,
         FAILURE: SELF_KNOWLEDGE,
     },
 )
@@ -76,6 +91,9 @@ graph_builder.add_edge(WEB_SEARCH, GENERATE)
 
 # SQL query loops back to GENERATE (so LLM can interpret the result)
 graph_builder.add_edge(SQL_QUERY, GENERATE)
+
+# Excel skill terminates — the generated file IS the answer
+graph_builder.add_edge(EXCEL_CREATE, END)
 
 graph_builder.add_edge(SELF_KNOWLEDGE, END)
 

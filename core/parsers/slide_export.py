@@ -28,6 +28,15 @@ from core.constants import EASYOCR_WORKERS
 from core.parsers.image import image_parser
 
 
+def _timeout_for_file(file_path: str, base: int = 120, per_mb: int = 3) -> int:
+    """Scale LibreOffice timeout with file size: base + per_mb seconds per MB (min base)."""
+    try:
+        size_mb = os.path.getsize(file_path) / (1024 * 1024)
+        return max(base, int(base + size_mb * per_mb))
+    except Exception:
+        return base
+
+
 def get_libreoffice_command() -> Optional[str]:
     """
     Detect LibreOffice executable cross-platform.
@@ -71,7 +80,8 @@ async def export_ppt_to_pdf(ppt_path: str, output_dir: str) -> Optional[str]:
         pdf_filename = Path(ppt_path).stem + ".pdf"
         pdf_path = os.path.join(output_dir, pdf_filename)
 
-        print(f"[LibreOffice] Converting {ppt_path} to PDF...")
+        timeout = _timeout_for_file(ppt_path)
+        print(f"[LibreOffice] Converting {ppt_path} to PDF (timeout={timeout}s)...")
 
         process = await asyncio.create_subprocess_exec(
             libreoffice_cmd,
@@ -90,10 +100,10 @@ async def export_ppt_to_pdf(ppt_path: str, output_dir: str) -> Optional[str]:
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             process.kill()
-            print("[LibreOffice] Conversion timed out")
+            print(f"[LibreOffice] Conversion timed out after {timeout}s")
             return None
 
         if process.returncode != 0:
@@ -174,7 +184,8 @@ async def ocr_slide_images(image_paths: List[str]) -> List[str]:
         print(f"[OCR] Processing {len(image_paths)} slide images...")
 
         results = []
-        semaphore = asyncio.Semaphore(EASYOCR_WORKERS)  # Max parallel OCR tasks
+        effective_workers = min(EASYOCR_WORKERS, 3) if len(image_paths) > 30 else EASYOCR_WORKERS
+        semaphore = asyncio.Semaphore(effective_workers)  # Cap for large decks
 
         async def process_image(image_path: str, index: int) -> str:
             async with semaphore:
@@ -245,7 +256,10 @@ async def pipeline_render_and_ocr(pdf_path: str, output_dir: str) -> List[str]:
 
         queue = asyncio.Queue(maxsize=3)  # Buffer up to 3 rendered images
         results = [""] * total_pages
-        ocr_semaphore = asyncio.Semaphore(EASYOCR_WORKERS)
+        # Cap GPU OCR concurrency for large decks to avoid VRAM exhaustion
+        effective_workers = min(EASYOCR_WORKERS, 3) if total_pages > 30 else EASYOCR_WORKERS
+        ocr_semaphore = asyncio.Semaphore(effective_workers)
+        print(f"[Pipeline] OCR concurrency: {effective_workers} (slides={total_pages})")
 
         async def producer():
             """CPU-bound: render pages one at a time and enqueue."""
@@ -365,23 +379,54 @@ async def export_and_ocr_ppt(
             print(f"[Export] Failed to clean up temporary directory: {e}")
 
 
+async def ocr_from_pdf(pdf_path: str) -> List[str]:
+    """
+    Run pipelined render+OCR on an existing PDF (no LibreOffice conversion).
+
+    Use this when the caller already holds a shared PDF to avoid redundant conversions.
+    """
+    temp_dir = tempfile.mkdtemp(prefix="ppt_ocr_")
+    try:
+        results = await pipeline_render_and_ocr(pdf_path, temp_dir)
+        if not results:
+            image_paths = await convert_pdf_to_images(pdf_path, temp_dir)
+            if image_paths:
+                results = await ocr_slide_images(image_paths)
+        return results or []
+    except Exception as e:
+        print(f"[Export] ocr_from_pdf failed: {e}")
+        traceback.print_exc()
+        return []
+    finally:
+        try:
+            shutil.rmtree(temp_dir)
+        except Exception:
+            pass
+
+
 async def export_and_ocr_ppt_with_fallback(
-    ppt_path: str, user_id: str, thread_id: str
+    ppt_path: str, user_id: str, thread_id: str, pdf_path: Optional[str] = None
 ) -> List[str]:
     """
     Export PowerPoint slides as images and perform OCR with fallback.
 
+    If pdf_path is provided, skips LibreOffice conversion and uses the given PDF.
     If LibreOffice is not available, returns empty list (graceful degradation).
 
     Args:
         ppt_path: Path to the PowerPoint file
         user_id: User ID for organizing output
         thread_id: Thread ID for organizing output
+        pdf_path: Optional pre-converted PDF path to skip redundant conversion
 
     Returns:
         List of OCR results for each slide (empty if LibreOffice not available)
     """
     try:
+        if pdf_path and os.path.exists(pdf_path):
+            print(f"[Export] Reusing pre-converted PDF: {pdf_path}")
+            return await ocr_from_pdf(pdf_path)
+
         results = await export_and_ocr_ppt(ppt_path, user_id, thread_id)
         if results is None:
             print("[Export] LibreOffice export failed, returning empty results")
@@ -409,6 +454,7 @@ async def convert_ppt_to_pptx(ppt_path: str) -> Optional[str]:
             return None
 
         output_dir = os.path.dirname(ppt_path)
+        timeout = _timeout_for_file(ppt_path)
 
         process = await asyncio.create_subprocess_exec(
             libreoffice_cmd,
@@ -423,10 +469,10 @@ async def convert_ppt_to_pptx(ppt_path: str) -> Optional[str]:
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             process.kill()
-            print("[LibreOffice] PPT→PPTX conversion timed out.")
+            print(f"[LibreOffice] PPT→PPTX conversion timed out after {timeout}s.")
             return None
 
         if process.returncode != 0:

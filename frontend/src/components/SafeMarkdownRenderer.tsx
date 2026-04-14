@@ -5,6 +5,8 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import "highlight.js/styles/github-dark.css";
+import { API_URL } from "../../config";
+import { getAuthToken } from "@/lib/api";
 
 // Extend GitHub's default sanitization schema to allow class attributes
 // on table elements for styling. Scripts, event handlers, etc. remain blocked.
@@ -100,6 +102,27 @@ export default function SafeMarkdownRenderer({ content, enableMarkdown = true }:
           tbody: ({ node, ...props }) => (
             <tbody {...props} />
           ),
+          a: ({ node, href, children, ...props }) => {
+            // Render excel-skill download links as styled download buttons
+            if (href && href.includes('/excel-skill/download/')) {
+              const handleClick = (e: React.MouseEvent) => {
+                e.preventDefault();
+                const token = getAuthToken();
+                const url = `${API_URL}${href}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+                window.open(url, '_blank');
+              };
+              return (
+                <button
+                  onClick={handleClick}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 my-1 rounded-md text-sm font-medium bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  {children}
+                </button>
+              );
+            }
+            return <a href={href} {...props}>{children}</a>;
+          },
         }}
       >
         {content}

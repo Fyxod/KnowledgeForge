@@ -5,10 +5,14 @@ from core.llm.prompts.combination_prompt import combination_prompt
 
 
 async def combination_node(
-    sub_answers: list, resolved_query: str, original_query: str
+    sub_answers: list, resolved_query: str, original_query: str,
+    chunks: list | None = None,
 ) -> str:
     combined_prompt = combination_prompt(
-        query=resolved_query or original_query, sub_answers=sub_answers
+        resolved_query=resolved_query or original_query,
+        original_query=original_query,
+        sub_answers=sub_answers,
+        chunks=chunks,
     )
 
     result: CombinationLLMOutput = await invoke_llm(

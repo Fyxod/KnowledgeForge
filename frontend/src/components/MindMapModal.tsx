@@ -159,6 +159,8 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
   const { user } = useAuth();
   const { theme } = useTheme();
   const [initialFetch, setInitialFetch] = useState<MindMapResponse | null>(null);
+  const [isCreating, setIsCreating] = useState<boolean>(false);
+  const [refreshNonce, setRefreshNonce] = useState<number>(0);
   const [mapData, setMapData] = useState<GlobalMindMap | undefined>(undefined);
   const [status, setStatus] = useState<boolean | undefined>(undefined);
   const [message, setMessage] = useState<string>('');
@@ -419,6 +421,34 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
     if (import.meta.env.DEV) console.debug('mind map cleanup: polling and socket stopped');
   }, []);
 
+  const handleGenerate = useCallback(async () => {
+    if (!threadId) return;
+
+    closeEverything();
+    setIsCreating(true);
+    setShowMessage(true);
+    setMessage('Starting mind map generation...');
+
+    try {
+      const res = await api.createMindMap(threadId);
+      setInitialFetch(res);
+      setMessage(res.message || 'Mind map creation started...');
+      setStatus(res.status);
+      if (res.status && res.data) {
+        setMapData(res.data);
+      }
+
+      // Re-run the existing open effect to reconnect socket + polling for live updates.
+      setRefreshNonce((v) => v + 1);
+    } catch (e) {
+      setInitialFetch({ mind_map: false, message: 'Failed to start mind map generation.' });
+      setStatus(undefined);
+      setMapData(undefined);
+    } finally {
+      setIsCreating(false);
+    }
+  }, [closeEverything, threadId]);
+
   // Kick off initial fetch when modal opens
   useEffect(() => {
     if (!open) {
@@ -441,6 +471,9 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
       if (import.meta.env.DEV) console.debug('mind map modal closed: stopped all requests');
       return;
     }
+    setInitialFetch(null);
+    setStatus(undefined);
+    setMapData(undefined);
     let cancelled = false;
     (async () => {
   const res = await api.getMindMap(threadId);
@@ -568,7 +601,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
         socketRef.current = null;
       }
     };
-  }, [open, threadId]); // Removed closeEverything from dependencies to prevent re-runs
+  }, [open, threadId, refreshNonce]); // refreshNonce restarts fetch+live updates after create
 
   // Keep showing messages until WebSocket sends completed: true
   // No auto-hide logic needed - messages will be hidden only when completed is received
@@ -588,8 +621,18 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
 
     if (!mm.mind_map) {
       return (
-        <div className="p-4">
+        <div className="p-4 flex flex-col items-start gap-3">
           <p className="text-sm whitespace-pre-wrap">{mm.message}</p>
+          <Button onClick={handleGenerate} disabled={isCreating || !threadId}>
+            {isCreating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              'Generate Mind Map'
+            )}
+          </Button>
         </div>
       );
     }
@@ -664,7 +707,7 @@ export const MindMapModal: React.FC<Props> = ({ open, onOpenChange, threadId }) 
         </div>
       </div>
     );
-  }, [initialFetch, status, nodes, edges, message, showMessage]);
+  }, [initialFetch, status, nodes, edges, message, showMessage, handleGenerate, isCreating, threadId, theme]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => {

@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y \
     pandoc \
     poppler-utils \
     nginx \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m nltk.downloader stopwords -d /usr/local/nltk_data

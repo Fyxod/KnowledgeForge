@@ -35,7 +35,6 @@ import uuid
 from fastapi import APIRouter, File, Form, Request, UploadFile
 
 from app.socket_handler import sio
-from core.constants import SWITCHES
 from core.database import db
 from core.embeddings.vectorstore import save_documents_to_store
 from core.models.document import Documents
@@ -43,7 +42,6 @@ from core.parsers.process_files import process_files
 from core.services.upload_files import upload_files
 from core.studio_features.summarizer import summarize_documents
 from core.studio_features.word_cloud import create_stop_words
-from core.utils.extra_done_check import mark_extra_done
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -107,8 +105,6 @@ async def upload_file(
                         "chats": [],
                         "createdAt": now,
                         "updatedAt": now,
-                        "extra_done": False,
-                        "mindmap_enabled": SWITCHES["MIND_MAP"],
                     }
                 }
                 db.users.update_one({"userId": user_id}, {"$set": new_thread})
@@ -136,13 +132,10 @@ async def upload_file(
                 "chats": [],
                 "createdAt": now,
                 "updatedAt": now,
-                "extra_done": False,
-                "mindmap_enabled": SWITCHES["MIND_MAP"],
             }
         }
         db.users.update_one({"userId": user_id}, {"$set": new_thread})
     else:
-        mark_extra_done(user_id, thread_id, False)
         print(f"Updating existing thread with ID: {thread_id}")
         # Check if thread exists for this user
         user_threads = user.get("threads", {})
@@ -155,7 +148,6 @@ async def upload_file(
             {
                 "$set": {
                     f"threads.{thread_id}.updatedAt": now,
-                    f"threads.{thread_id}.mindmap_enabled": SWITCHES["MIND_MAP"],
                 }
             },
         )

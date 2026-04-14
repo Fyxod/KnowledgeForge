@@ -35,7 +35,7 @@ export interface Chat {
   type: 'user' | 'agent';
   content: string;
   timestamp: string;
-  // Enhanced metadata fields from Phase 1/2 backend
+  // Enhanced metadata fields from backend updates
   confidence_score?: string | number; // Backend sends "high"/"medium"/"low"
   thought_process?: string; // For Deep Reasoning output
   sources?: {
@@ -151,6 +151,7 @@ export interface MindMapResponse {
   status?: boolean; // only present when mind_map is true
   message: string;
   data?: GlobalMindMap; // present when mind_map && status
+  failed?: boolean;
 }
 
 export interface SummaryResponse {
@@ -511,6 +512,172 @@ export interface TechnicalAnalysisResponse {
   failed?: boolean;
 }
 
+// ── Excel Skill types ──
+
+export interface ExcelSkillGenerateResponse {
+  status: boolean;
+  message?: string;
+  tracking_id?: string;
+}
+
+export interface ExcelSkillStatusResponse {
+  status: boolean;
+  message?: string;
+  failed?: boolean;
+  error?: string;
+  result?: {
+    file_name: string;
+    download_url: string;
+    description: string;
+    sheet_count: number;
+    total_rows: number;
+  };
+}
+
+export interface ExcelSkillListItem {
+  tracking_id: string;
+  file_name: string;
+  download_url: string;
+  description: string;
+  sheet_count: number;
+  total_rows: number;
+  created_at: string;
+  request_text: string;
+}
+
+// ── Document Creator types ──
+
+export type DocumentType =
+  | 'presentation'
+  | 'executive_summary'
+  | 'technical_report'
+  | 'research_brief'
+  | 'project_proposal'
+  | 'comparison_report';
+
+export type AudienceType = 'executive' | 'technical' | 'general';
+export type ToneType = 'formal' | 'professional' | 'conversational' | 'academic';
+export type ContentFormat = 'prose' | 'bullets' | 'table' | 'mixed';
+export type SectionStatus =
+  | 'pending'
+  | 'generating'
+  | 'generated'
+  | 'approved'
+  | 'needs_revision'
+  | 'failed';
+export type ExportFormat = 'pptx' | 'docx' | 'pdf';
+
+export interface DocumentCreatorConfig {
+  document_type: DocumentType;
+  audience: AudienceType;
+  tone: ToneType;
+  source_document_ids?: string[] | null;
+  custom_instructions?: string | null;
+  length_preference?: string;
+}
+
+export interface OutlineSectionSpec {
+  section_id: string;
+  title: string;
+  description: string;
+  content_format: ContentFormat;
+  heading_level: number;
+  guidance?: string | null;
+  source_document_ids: string[];
+  order: number;
+}
+
+export interface SectionVersion {
+  version_id: string;
+  content: string;
+  bullet_points?: string[] | null;
+  table_data?: { headers: string[]; rows: string[][] } | null;
+  speaker_notes?: string | null;
+  key_takeaway?: string | null;
+  sources_used: Array<{ document_id: string; title: string; page_no: number }>;
+  feedback_used?: string | null;
+  generated_at: string;
+}
+
+export interface SectionState {
+  spec: OutlineSectionSpec;
+  status: SectionStatus;
+  versions: SectionVersion[];
+  selected_version_index: number;
+}
+
+export interface DocumentCreatorOutlineResponse {
+  status: boolean;
+  tracking_id?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface OutlineStatusResponse {
+  status: boolean;
+  message?: string;
+  failed?: boolean;
+  error?: string;
+  outline?: {
+    doc_gen_id: string;
+    document_title: string;
+    document_subtitle?: string;
+    sections: Array<{
+      section_id: string;
+      title: string;
+      description: string;
+      content_format: string;
+      order: number;
+    }>;
+  };
+}
+
+export interface GenerationStatusResponse {
+  doc_gen_id: string;
+  phase: string;
+  sections: Array<{
+    section_id: string;
+    title: string;
+    status: string;
+  }>;
+  completed_count: number;
+  total_count: number;
+}
+
+export interface DocumentCreatorPreviewResponse {
+  status: string;
+  doc_gen_id: string;
+  document_title: string;
+  document_subtitle?: string;
+  config: DocumentCreatorConfig;
+  sections: SectionState[];
+  review_result?: {
+    overall_score: number;
+    coherence_score: number;
+    completeness_score: number;
+    consistency_score: number;
+    issues: string[];
+    approved: boolean;
+  } | null;
+}
+
+export interface DocumentCreatorExportResponse {
+  status: string;
+  filename?: string;
+  download_url?: string;
+  error?: string;
+}
+
+export interface DocumentCreatorListItem {
+  doc_gen_id: string;
+  document_title: string;
+  phase: string;
+  document_type: string;
+  section_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Auth helpers
 export const getAuthToken = () => localStorage.getItem('auth_token');
 export const setAuthToken = (token: string) => localStorage.setItem('auth_token', token);
@@ -855,6 +1022,22 @@ export const api = {
     return response.json();
   },
 
+  async createMindMap(threadId: string, regenerate: boolean = false): Promise<MindMapResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/mindmap/${threadId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ regenerate }),
+    });
+    if (!response.ok) {
+      return { mind_map: false, message: `Failed to start mind map generation (${response.status})` };
+    }
+    return response.json();
+  },
+
   async summary(threadId: string, documentId: string, regenerate: boolean = false): Promise<SummaryResponse> {
     const token = getAuthToken();
     const response = await fetch(`${API_URL}/summary`, {
@@ -1193,6 +1376,413 @@ export const api = {
     const data = await response.json();
     if (!response.ok || data.error) {
       throw new Error(data.error || 'Failed to delete instruction');
+    }
+  },
+
+  // ── Document Creator ──
+
+  async documentCreatorOutline(
+    threadId: string,
+    config: DocumentCreatorConfig,
+  ): Promise<DocumentCreatorOutlineResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/document-creator/outline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        thread_id: threadId,
+        document_type: config.document_type,
+        audience: config.audience,
+        tone: config.tone,
+        source_document_ids: config.source_document_ids,
+        custom_instructions: config.custom_instructions,
+        length_preference: config.length_preference || 'medium',
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to generate outline');
+    }
+    return data;
+  },
+
+  async documentCreatorOutlineStatus(
+    trackingId: string,
+  ): Promise<OutlineStatusResponse> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/outline-status/${trackingId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to check outline status');
+    }
+    return data;
+  },
+
+  async documentCreatorUpdateOutline(
+    docGenId: string,
+    sections: OutlineSectionSpec[],
+    documentTitle?: string,
+    documentSubtitle?: string,
+  ): Promise<{ status: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/outline/${docGenId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          sections,
+          document_title: documentTitle,
+          document_subtitle: documentSubtitle,
+        }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to update outline');
+    }
+    return data;
+  },
+
+  async documentCreatorGenerate(
+    docGenId: string,
+  ): Promise<{ status: string; message: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/generate/${docGenId}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to start generation');
+    }
+    return data;
+  },
+
+  async documentCreatorStatus(
+    docGenId: string,
+  ): Promise<GenerationStatusResponse> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/status/${docGenId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to check generation status');
+    }
+    return data;
+  },
+
+  async documentCreatorPreview(
+    docGenId: string,
+  ): Promise<DocumentCreatorPreviewResponse> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/preview/${docGenId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to load preview');
+    }
+    return data;
+  },
+
+  async documentCreatorIterate(
+    docGenId: string,
+    sectionId: string,
+    feedback?: string,
+  ): Promise<{ status: string; message: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/iterate/${docGenId}/${sectionId}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ feedback: feedback || null }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to iterate section');
+    }
+    return data;
+  },
+
+  async documentCreatorSelectVersion(
+    docGenId: string,
+    sectionId: string,
+    versionIndex: number,
+  ): Promise<{ status: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/select-version/${docGenId}/${sectionId}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ version_index: versionIndex }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to select version');
+    }
+    return data;
+  },
+
+  async documentCreatorApprove(
+    docGenId: string,
+    sectionId: string,
+  ): Promise<{ status: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/approve/${docGenId}/${sectionId}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to approve section');
+    }
+    return data;
+  },
+
+  async documentCreatorEditSection(
+    docGenId: string,
+    sectionId: string,
+    edits: {
+      content?: string;
+      bullet_points?: string[];
+      key_takeaway?: string;
+      speaker_notes?: string;
+    },
+  ): Promise<{ section_id: string; status: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/edit-section/${docGenId}/${sectionId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(edits),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to edit section');
+    }
+    return data;
+  },
+
+  async documentCreatorExport(
+    docGenId: string,
+    format: ExportFormat,
+  ): Promise<DocumentCreatorExportResponse> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/export/${docGenId}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ format }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to export document');
+    }
+    return data;
+  },
+
+  async documentCreatorDownload(
+    docGenId: string,
+    filename: string,
+  ): Promise<Blob> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/download/${docGenId}/${filename}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      throw new Error('Failed to download file');
+    }
+    return response.blob();
+  },
+
+  async documentCreatorList(
+    threadId: string,
+  ): Promise<{ documents: DocumentCreatorListItem[] }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/list/${threadId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to list documents');
+    }
+    return data;
+  },
+
+  async documentCreatorDelete(
+    docGenId: string,
+  ): Promise<{ status: string }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/document-creator/${docGenId}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to delete document');
+    }
+    return data;
+  },
+
+  // ── Settings ──
+
+  async getSwitches(): Promise<{ switches: Record<string, boolean> }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/settings/switches`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to fetch switches');
+    }
+    return data;
+  },
+
+  async updateSwitch(key: string, value: boolean): Promise<{ key: string; value: boolean }> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/settings/switches/${key}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ value }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to update switch');
+    }
+    return data;
+  },
+
+  // ── Excel Skill ──
+
+  async excelSkillGenerate(
+    threadId: string,
+    requestText: string,
+    sourceDocumentIds?: string[],
+  ): Promise<ExcelSkillGenerateResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/excel-skill/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        thread_id: threadId,
+        request_text: requestText,
+        source_document_ids: sourceDocumentIds || null,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to start Excel generation');
+    }
+    return data;
+  },
+
+  async excelSkillStatus(
+    trackingId: string,
+  ): Promise<ExcelSkillStatusResponse> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/excel-skill/status/${trackingId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || data.error || 'Failed to check Excel status');
+    }
+    return data;
+  },
+
+  async excelSkillDownload(
+    threadId: string,
+    filename: string,
+  ): Promise<Blob> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/excel-skill/download/${threadId}/${filename}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      throw new Error('Failed to download Excel file');
+    }
+    return response.blob();
+  },
+
+  async excelSkillList(
+    threadId: string,
+  ): Promise<{ files: ExcelSkillListItem[] }> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/excel-skill/list/${threadId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Failed to list Excel files');
+    }
+    return data;
+  },
+
+  async excelSkillDelete(
+    threadId: string,
+    trackingId: string,
+  ): Promise<void> {
+    const token = getAuthToken();
+    const response = await fetch(
+      `${API_URL}/excel-skill/${threadId}/${trackingId}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || 'Failed to delete Excel file');
     }
   },
 };

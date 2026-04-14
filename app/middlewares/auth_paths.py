@@ -13,4 +13,7 @@ auth_paths = [
     "/strategic_analysis",
     "/technical_analysis",
     "/export",
+    "/document-creator",
+    "/excel-skill",
+    "/settings",
 ]

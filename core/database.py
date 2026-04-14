@@ -27,8 +27,6 @@ user_schema = {
                         "chats",
                         "createdAt",
                         "updatedAt",
-                        "extra_done",
-                        "mindmap_enabled",
                     ],
                     "properties": {
                         "thread_name": {"bsonType": "string"},
@@ -115,14 +113,6 @@ user_schema = {
                         },
                         "createdAt": {"bsonType": "date"},
                         "updatedAt": {"bsonType": "date"},
-                        "extra_done": {
-                            "bsonType": "bool",
-                            "description": "Indicates if extra task is done",
-                        },
-                        "mindmap_enabled": {
-                            "bsonType": "bool",
-                            "description": "Mindmap feature enabled for this thread",
-                        },
                         "instructions": {
                             "bsonType": "array",
                             "description": "User-defined instructions for this thread",

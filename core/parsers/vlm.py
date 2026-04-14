@@ -5,7 +5,7 @@ Uses Ollama's vision-capable models (e.g., qwen3-vl:8b) to extract
 structured text from presentation slides, complex PDF pages, and
 other visually-rich documents that standard OCR misses.
 
-Follows the project's async httpx pattern (see core/llm/unload_ollama_model.py).
+Follows the project's async httpx usage patterns for non-blocking API calls.
 """
 
 import asyncio
@@ -18,7 +18,7 @@ import httpx
 from PIL import Image
 
 from core.config import settings
-from core.constants import PORT1, VLM_MODEL
+from core.constants import PORT2, VLM_MODEL
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
 
@@ -44,6 +44,28 @@ VLM_RETRY_PROMPT = (
     "Extract all text content from this image. "
     "Include titles, bullet points, table data, and any text visible in charts or diagrams. "
     "Output as Markdown. No filler text."
+)
+
+# Specialized prompt for table extraction
+VLM_TABLE_PROMPT = (
+    "You are a precise table transcription AI. "
+    "This image contains a table. Transcribe it as a proper Markdown table.\n"
+    "Rules:\n"
+    "- Preserve ALL rows and columns exactly as shown.\n"
+    "- Keep the original header text. Use | for column separators.\n"
+    "- Keep blank cells as empty (do not fill in or guess).\n"
+    "- If cells are merged, repeat the value in each spanned cell.\n"
+    "- Do NOT describe the table — just output the Markdown table.\n"
+    "- If there is text above or below the table, include it as context."
+)
+
+# Specialized prompt for extracting flowcharts and ERDs into code
+VLM_MERMAID_PROMPT = (
+    "You are an expert graph transcription AI. Analyze this image. "
+    "If it contains a flowchart, architectural diagram, or Entity-Relationship Diagram (ERD), "
+    "extract the exact nodes, edges, decisions, and relationships. "
+    "Output the result STRICTLY as valid `Mermaid.js` syntax representing the graph. "
+    "Do not describe the graph in English; write ONLY the Mermaid code block that generates it."
 )
 
 
@@ -78,13 +100,21 @@ def _encode_image_base64(image_input, max_dim: int = VLM_MAX_IMAGE_DIM) -> str:
     return base64.b64encode(resized).decode("utf-8")
 
 
-async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
+async def vlm_parse_slide(
+    image_input,
+    port: int = PORT2,
+    prompt_type: str = "default",
+    custom_prompt: str | None = None,
+) -> str:
     """
     Send a single image to Ollama VLM for structured text extraction.
 
     Args:
         image_input: File path (str) or raw PNG bytes.
-        port: Ollama API port (default: PORT1 from constants).
+        port: Ollama API port (default: PORT2 — separate instance from query LLM).
+        prompt_type: "default", "mermaid", or "retry". Ignored when custom_prompt is set.
+        custom_prompt: If provided, overrides prompt_type and sends this exact prompt.
+            Use for query-time VLM where the user's question is the prompt.
 
     Returns:
         Extracted Markdown string, or "" on failure.
@@ -93,18 +123,35 @@ async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
         start_time = time.time()
         image_b64 = _encode_image_base64(image_input)
 
-        url = f"{LOCAL_BASE_URL}:{port}/api/generate"
+        url = f"{LOCAL_BASE_URL}:{port}/api/chat"
+
+        if custom_prompt:
+            selected_prompt = custom_prompt
+        elif prompt_type == "mermaid":
+            selected_prompt = VLM_MERMAID_PROMPT
+        elif prompt_type == "table":
+            selected_prompt = VLM_TABLE_PROMPT
+        elif prompt_type == "retry":
+            selected_prompt = VLM_RETRY_PROMPT
+        else:
+            selected_prompt = VLM_EXTRACTION_PROMPT
 
         payload = {
             "model": VLM_MODEL,
-            "prompt": VLM_EXTRACTION_PROMPT,
-            "images": [image_b64],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": selected_prompt,
+                    "images": [image_b64],
+                }
+            ],
             "stream": False,
+            "think": False,  # Disable qwen3.5 thinking — prevents empty responses
             "keep_alive": 300,  # Keep model loaded for 5 min between calls
             "options": {
                 "temperature": 0.1,  # Low temp for factual extraction
                 "num_ctx": 8192,  # More context for complex pages
-                "num_predict": 2048,  # Reduced from 4096: most slide content fits in 1000-1500 tokens
+                "num_predict": 3072,  # Enough for complex tables/charts without truncation
             },
         }
 
@@ -117,7 +164,8 @@ async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
             response.raise_for_status()
 
         result = response.json()
-        content = result.get("response", "").strip()
+        # /api/chat returns {"message": {"role": "assistant", "content": "..."}}
+        content = result.get("message", {}).get("content", "").strip()
 
         elapsed = time.time() - start_time
         print(f"[VLM] Completed in {elapsed:.2f}s  |  {len(content)} chars extracted.")
@@ -145,8 +193,10 @@ async def vlm_parse_slide(image_input, port: int = PORT1) -> str:
 async def vlm_parse_concurrent(
     images: list[bytes],
     page_labels: list[str] | None = None,
-    port: int = PORT1,
+    port: int = PORT2,
     max_concurrent: int = 3,
+    prompt_type: str = "default",
+    custom_prompt: str | None = None,
 ) -> list[str]:
     """
     Process multiple pages concurrently using async single-page VLM calls.
@@ -158,8 +208,10 @@ async def vlm_parse_concurrent(
     Args:
         images: List of raw PNG bytes, one per page.
         page_labels: Optional labels for logging (e.g. ["Page 1", "Slide 3"]).
-        port: Ollama API port (default: PORT1 from constants).
+        port: Ollama API port (default: PORT2 — separate instance from query LLM).
         max_concurrent: Max simultaneous VLM calls (default: 3, balance speed vs VRAM).
+        prompt_type: "default", "mermaid", or "retry". Ignored when custom_prompt is set.
+        custom_prompt: If provided, overrides prompt_type for all pages.
 
     Returns:
         List of extracted Markdown strings, one per input image.
@@ -172,13 +224,30 @@ async def vlm_parse_concurrent(
     labels = page_labels or [f"Page {i+1}" for i in range(total)]
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    print(f"[VLM] Concurrent processing: {total} pages, max {max_concurrent} at a time")
+    prompt_label = "custom" if custom_prompt else prompt_type
+    print(
+        f"[VLM] Concurrent processing: {total} pages, max {max_concurrent} at a time, prompt: {prompt_label}"
+    )
     overall_start = time.time()
 
     async def _process_one(idx: int, img_bytes: bytes) -> str:
         async with semaphore:
-            print(f"[VLM] Starting {labels[idx]}...")
-            result = await vlm_parse_slide(img_bytes, port=port)
+            print(f"[VLM] Starting {labels[idx]} (prompt: {prompt_label})...")
+            try:
+                # Timeout inside semaphore so a hanging VLM call releases the
+                # slot promptly instead of blocking other pages for 4+ minutes.
+                result = await asyncio.wait_for(
+                    vlm_parse_slide(
+                        img_bytes,
+                        port=port,
+                        prompt_type=prompt_type,
+                        custom_prompt=custom_prompt,
+                    ),
+                    timeout=270,  # slightly above httpx 240s timeout as safety net
+                )
+            except asyncio.TimeoutError:
+                print(f"[VLM] {labels[idx]} timed out (semaphore released)")
+                return ""
             if result:
                 print(f"[VLM] {labels[idx]} done ({len(result)} chars)")
             else:

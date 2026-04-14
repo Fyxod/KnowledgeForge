@@ -144,10 +144,12 @@ def _build_system_prompt(
 
     if has_spreadsheet:
         role += (
-            "\n**IMPORTANT: SQL ENGINE AVAILABLE**\n"
+            "\n**IMPORTANT: SQL ENGINE AVAILABLE — MANDATORY FIRST STEP**\n"
             "You have access to a **SQL engine** that can query the uploaded spreadsheet data directly. "
-            "For ANY question regarding data in the spreadsheets (counting, filtering, aggregating, finding values), "
-            "you **MUST** use the `sql_query` tool. Do NOT attempt to answer these from text chunks.\n"
+            "For ANY question regarding data in the spreadsheets (counting, filtering, aggregating, listing, "
+            "finding values, or retrieving records), you **MUST** use the `sql_query` action FIRST before "
+            "attempting to answer. Do NOT answer spreadsheet questions from memory, text chunks, or prior context. "
+            "Always query the actual data to ensure accuracy and completeness.\n"
         )
 
     # ── Task ──
@@ -365,8 +367,14 @@ def main_prompt(
     use_self_knowledge: bool = False,
     spreadsheet_schema: Optional[str] = None,
     sql_result: Optional[str] = None,
+    sql_query: Optional[str] = None,
     original_query: Optional[str] = None,
     thread_instructions: Optional[List[str]] = None,
+    triple_context: Optional[str] = None,
+    sql_nlp_summary: Optional[str] = None,
+    sql_batched_answer: Optional[str] = None,
+    doc_batched_answer: Optional[str] = None,
+    vlm_visual_answer: Optional[str] = None,
 ):
     contents = []
 
@@ -411,6 +419,10 @@ def main_prompt(
                     "Only use LIKE for searching specific names, places, IDs, or concrete keywords.\n"
                     "- Column names and table names are case-sensitive and use underscores instead of spaces.\n"
                     "- Only SELECT queries are allowed (no INSERT, UPDATE, DELETE).\n"
+                    "- **DO NOT add LIMIT unless the user explicitly asks for a specific number** "
+                    "(e.g., 'top 10', 'first 5', 'show me 20'). When the user asks for analysis, "
+                    "categorization, listing, or 'all' data, you MUST fetch ALL rows — do NOT "
+                    "add LIMIT on your own. Incomplete data leads to wrong analysis.\n"
                     "\n"
                     "**CRITICAL — NLP / SEMANTIC ANALYSIS QUESTIONS:**\n"
                     "When the user asks a question that requires **understanding meaning, sentiment, tone, opinion, "
@@ -426,7 +438,8 @@ def main_prompt(
                     "analyze each entry's sentiment/tone/meaning and present a properly classified answer.\n"
                     "4. This applies to ANY question involving: sentiment, tone, opinion, satisfaction, positivity, "
                     "negativity, complaints, praise, criticism, quality assessment, mood, attitude, or subjective classification.\n"
-                    "5. For large datasets, you may limit rows (e.g., `LIMIT 200`) but NEVER filter by keywords "
+                    "5. Fetch ALL rows for NLP analysis — do NOT add LIMIT. You need the complete dataset "
+                    "to provide accurate sentiment/classification results. NEVER filter by keywords "
                     "when the question is about meaning or sentiment.\n"
                     "- **CRITICAL — SQL-FIRST RULE**: For ANY question whose answer could exist in the spreadsheet tables above, "
                     "you MUST use the `sql_query` action. This includes but is NOT limited to:\n"
@@ -447,10 +460,64 @@ def main_prompt(
             }
         )
 
+    # ── Visual Reference Context (query-time VLM analysis of referenced page/figure) ──
+    if vlm_visual_answer:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "### Visual Context (VLM analysis of the referenced page/figure)\n"
+                    f"{vlm_visual_answer}\n\n"
+                    "The above was extracted by a Vision Language Model that analyzed the image of "
+                    "the referenced page/slide/figure. Treat it as additional context alongside "
+                    "the Document Chunks below. Use it to inform your answer — especially for "
+                    "data points, table contents, chart values, or diagram structures that may "
+                    "not appear in the text chunks. Synthesize all available sources into a "
+                    "single coherent answer.\n"
+                ),
+            }
+        )
+
+    # ── Pre-analyzed document batch answer (MapReduce result) ──
+    if doc_batched_answer:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    "### Pre-Analyzed Document Context (complete multi-document analysis)\n"
+                    f"{doc_batched_answer}\n\n"
+                    "**INSTRUCTIONS:**\n"
+                    "The **Pre-Analyzed Document Context** above was generated from the COMPLETE retrieved "
+                    "document set (all chunks processed in batches). A raw sample follows for reference.\n\n"
+                    "You MUST:\n"
+                    '1. Set `action` to `"answer"`.\n'
+                    "2. Write your answer based primarily on the **Pre-Analyzed Document Context**.\n"
+                    "3. Enhance and format it using Markdown (tables, headings, bullet points).\n"
+                    "4. Use the raw document chunks below only to quote specific excerpts if helpful.\n\n"
+                    "You MUST NOT:\n"
+                    "- Ignore the pre-analyzed context in favour of only the raw chunks.\n"
+                    "- Return a blank or empty answer.\n"
+                ),
+            }
+        )
+
     # ── Retrieved context ──
     if chunks:
         contents.append(
             {"role": "system", "parts": f"**Document Chunks (Context):**\n{chunks}\n"}
+        )
+
+    # ── Entity relationship triples ──
+    if triple_context:
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    f"**{triple_context}**\n"
+                    "Use these relationships to understand connections between entities "
+                    "mentioned in the documents."
+                ),
+            }
         )
 
     # ── External-only sources ──
@@ -520,36 +587,101 @@ def main_prompt(
     # ── SQL query result from a previous iteration ──
     if sql_result:
         display_question = original_query or question
-        contents.append(
-            {
-                "role": "system",
-                "parts": (
-                    "### SQL Query Result\n"
-                    "A SQL query was already executed on the spreadsheet data. Here is the result:\n\n"
-                    f"{sql_result}\n\n"
-                    f"**Original User Question:** {display_question}\n\n"
-                    "**CRITICAL — STOP AND EVALUATE BEFORE CHOOSING AN ACTION:**\n"
-                    "You have ALREADY received a SQL query result above. Follow these rules strictly:\n"
-                    "1. Compare the SQL result against the **Original User Question**.\n"
-                    "2. If the SQL result contains the data needed to answer the question (even partially), "
-                    'you **MUST** set `action` to `"answer"` and use the result to write your final answer. '
-                    "Do NOT request another SQL query.\n"
-                    '3. You should ONLY set `action` to `"sql_query"` again if ALL of these conditions are true:\n'
-                    "   - The SQL result above is an ERROR message (e.g., 'SQL execution error: ...'), OR\n"
-                    "   - The SQL query was clearly WRONG (e.g., queried the wrong column/table), OR\n"
-                    "   - The original question explicitly requires MULTIPLE SEPARATE pieces of data that cannot "
-                    "be retrieved in a single query and the current result only covers part of it.\n"
-                    "4. If the result is a valid number, table, or dataset — even if small or unexpected — "
-                    "that IS your answer. Present it clearly. Do NOT re-query to 'verify' or 'get more details'.\n"
-                    "5. An empty result set (0 rows) is still a valid answer (it means 'none found'). "
-                    "Do NOT re-query for empty results unless the query itself was incorrect.\n"
-                    "6. **SEMANTIC ANALYSIS**: If the original question is about sentiment, tone, opinion, "
-                    "or subjective classification and the SQL result contains the raw text data, you MUST now "
-                    "analyze EACH entry using your language understanding. Read each text entry carefully, "
-                    "understand its full meaning in context, and classify it appropriately. "
-                    "Do NOT rely on the presence of individual words like 'not', 'bad', 'poor' — "
-                    "understand the COMPLETE sentence meaning (e.g., 'not bad' = positive, "
-                    "'could not be better' = positive, 'not what I expected' = negative).\n"
+
+        # When batched analysis or NLP theme summary exists, use simplified instructions —
+        # the pre-analyzed content is the primary answer source, raw data is just a sample.
+        if sql_batched_answer:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": (
+                        "### Pre-Analyzed SQL Result (complete dataset analysis)\n"
+                        f"{sql_batched_answer}\n\n"
+                        "### Raw Data Sample (for reference only)\n"
+                        + (f"**SQL Query:** `{sql_query}`\n\n" if sql_query else "")
+                        + f"{sql_result}\n\n"
+                        f"**Original User Question:** {display_question}\n\n"
+                        "**INSTRUCTIONS:**\n"
+                        "The **Pre-Analyzed SQL Result** above was generated from the COMPLETE dataset "
+                        "(all rows were processed in batches). The raw data sample is a small subset for reference.\n\n"
+                        "You MUST:\n"
+                        '1. Set `action` to `"answer"`.\n'
+                        "2. Write your answer based on the **Pre-Analyzed SQL Result**.\n"
+                        "3. Enhance and format it using Markdown (tables, headings, bullet points).\n"
+                        "4. Use the raw data sample to quote specific examples if helpful.\n\n"
+                        "You MUST NOT:\n"
+                        "- Request another SQL query. The data has already been fully analyzed.\n"
+                        "- Return a blank or empty answer.\n"
+                    ),
+                }
+            )
+        elif sql_nlp_summary:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": (
+                        "### Pre-Analyzed Themes (complete dataset analysis)\n"
+                        f"{sql_nlp_summary}\n\n"
+                        "### Raw Data Sample (for reference only)\n"
+                        + (f"**SQL Query:** `{sql_query}`\n\n" if sql_query else "")
+                        + f"{sql_result}\n\n"
+                        f"**Original User Question:** {display_question}\n\n"
+                        "**INSTRUCTIONS — READ CAREFULLY:**\n"
+                        "The **Pre-Analyzed Themes** above were extracted from the COMPLETE dataset "
+                        "(every single row). The raw data sample is a small subset for reference only.\n\n"
+                        "You MUST:\n"
+                        '1. Set `action` to `"answer"`.\n'
+                        "2. Write a comprehensive answer based on the **Pre-Analyzed Themes**.\n"
+                        "3. Present the themes with their counts, percentages, and examples.\n"
+                        "4. Use the raw data sample only to quote specific examples if helpful.\n\n"
+                        "You MUST NOT:\n"
+                        "- Request another SQL query. The data has already been fully analyzed.\n"
+                        "- Re-derive themes from the small sample. The themes above cover ALL rows.\n"
+                        "- Return a blank or empty answer.\n"
+                    ),
+                }
+            )
+        else:
+            contents.append(
+                {
+                    "role": "system",
+                    "parts": (
+                        "### SQL Query Result\n"
+                        "A SQL query was already executed on the spreadsheet data.\n\n"
+                        + (f"**SQL Query Executed:** `{sql_query}`\n\n" if sql_query else "")
+                        + f"**Result:**\n{sql_result}\n\n"
+                        f"**Original User Question:** {display_question}\n\n"
+                        "**CRITICAL — STOP AND EVALUATE BEFORE CHOOSING AN ACTION:**\n"
+                        "You have ALREADY received a SQL query result above. Follow these rules strictly:\n"
+                        "1. Compare the SQL result against the **Original User Question**.\n"
+                        "2. If the SQL result contains the data needed to answer the question (even partially), "
+                        'you **MUST** set `action` to `"answer"` and use the result to write your final answer. '
+                        "Do NOT request another SQL query.\n"
+                        '3. You should ONLY set `action` to `"sql_query"` again if ALL of these conditions are true:\n'
+                        "   - The SQL result above is an ERROR message (e.g., 'SQL execution error: ...'), OR\n"
+                        "   - The SQL query was clearly WRONG (e.g., queried the wrong column/table), OR\n"
+                        "   - The original question explicitly requires MULTIPLE SEPARATE pieces of data that cannot "
+                        "be retrieved in a single query and the current result only covers part of it.\n"
+                        "4. If the result is a valid number, table, or dataset — even if small or unexpected — "
+                        "that IS your answer. Present it clearly. Do NOT re-query to 'verify' or 'get more details'.\n"
+                        "5. An empty result set (0 rows) is still a valid answer (it means 'none found'). "
+                        "Do NOT re-query for empty results unless the query itself was incorrect.\n"
+                        "6. **SEMANTIC ANALYSIS**: If the original question is about sentiment, tone, opinion, "
+                        "or subjective classification and the SQL result contains the raw text data, you MUST now "
+                        "analyze EACH entry using your language understanding. Read each text entry carefully, "
+                        "understand its full meaning in context, and classify it appropriately. "
+                        "Do NOT rely on the presence of individual words like 'not', 'bad', 'poor' — "
+                        "understand the COMPLETE sentence meaning (e.g., 'not bad' = positive, "
+                        "'could not be better' = positive, 'not what I expected' = negative).\n"
+                        "7. **LARGE DATASET OUTPUT RULE**: If the SQL result has many rows (more than ~20) "
+                        "and the question requires listing, categorizing, or detailing each row:\n"
+                        "   - Use `excel_create` action to generate a downloadable Excel file with the full analysis.\n"
+                        "   - Set `excel_request` to describe what to create (e.g., 'categorize all worklet titles "
+                        "into groups with counts and details').\n"
+                        "   - Also set `answer` to a brief summary: total counts, key categories/patterns, "
+                        "top/bottom items. Do NOT try to list every row in the answer.\n"
+                        "   - If the question only needs aggregates (counts, averages, totals), use `answer` directly "
+                        "with the summarized data — no Excel needed.\n"
                 ),
             }
         )
@@ -570,29 +702,91 @@ def main_prompt(
                 "- **sql_query**: Execute a SQL SELECT query against the spreadsheet data. Use this for ANY question "
                 "that can be answered from the uploaded spreadsheet/CSV files — including lookups, searches, filters, "
                 "aggregations, listings, and data retrieval. Requires the `sql_query` field with a valid SQLite SELECT statement. "
-                "**This should be your DEFAULT choice whenever the question relates to spreadsheet data.**\n"
+                "**You have NOT queried the data yet. You MUST use `sql_query` as your action — do NOT choose `answer` "
+                "for spreadsheet questions without first running a SQL query. Even if you think you know the answer, "
+                "always verify by querying the actual data.**\n"
             )
 
-    contents.append(
-        {
-            "role": "system",
-            "parts": (
-                "You can perform the following actions:\n"
-                "- **answer**: Directly answer the question using available information.\n"
-                + (
-                    "- **web_search**: Search for recent or external information not in the documents.\n"
-                    if mode == EXTERNAL
-                    else ""
-                )
-                + sql_action_text
-                + "- **document_summarizer**: Request a summary of a specific document (requires `document_id`).\n"
-                "- **global_summarizer**: Request a collective summary of all documents.\n"
-                "- **failure**: Indicate inability to answer with available information.\n"
-                "Do not choose an action lightly; only use 'failure' when absolutely necessary.\n"
-                "Do not choose any other action other than the ones mentioned above.\n"
-            ),
-        }
+    excel_action_text = (
+        "- **excel_create**: Create a downloadable Excel (.xlsx) file from the data. "
+        "Use in TWO scenarios:\n"
+        "  1. **User explicitly requests an export**: 'create an Excel', 'export to spreadsheet', "
+        "'download as Excel', 'create a pivot table', 'generate a report in Excel', etc.\n"
+        "  2. **Your analysis output would be too long**: If answering the question requires listing, "
+        "categorizing, or detailing MORE than ~20 rows of data (e.g., categorizing hundreds of items, "
+        "listing all records with details, building a full breakdown), you MUST use `excel_create` "
+        "instead of `answer`. Put the detailed data in the Excel file and provide a brief summary "
+        "in the `answer` field (counts, key patterns, top items).\n"
+        "Requires the `excel_request` field with a natural-language description of what to create "
+        "(e.g., 'categorize all 2500 worklet titles into groups with counts' or "
+        "'export filtered employee data with department breakdown'). "
+        "When using this for large output, also set `answer` to a short summary of the analysis.\n"
     )
+
+    # When spreadsheet data is available but no SQL has been run yet,
+    # reorder actions to put sql_query first and restrict "answer"
+    sql_not_yet_run = spreadsheet_schema and not sql_result
+    if sql_not_yet_run:
+        answer_action_text = (
+            "- **answer**: Directly answer the question. "
+            "**ONLY use this for greetings, clarification requests, or questions clearly unrelated to the spreadsheet data. "
+            "For ANY data question, you MUST use `sql_query` first.**\n"
+        )
+    else:
+        answer_action_text = "- **answer**: Directly answer the question using available information.\n"
+
+    # Build action list — sql_query comes first when it should be the default
+    if sql_not_yet_run:
+        action_list = (
+            "You can perform the following actions:\n"
+            + sql_action_text
+            + excel_action_text
+            + answer_action_text
+        )
+    else:
+        action_list = (
+            "You can perform the following actions:\n"
+            + answer_action_text
+            + (
+                "- **web_search**: Search for recent or external information not in the documents.\n"
+                if mode == EXTERNAL
+                else ""
+            )
+            + sql_action_text
+            + excel_action_text
+        )
+
+    action_list += (
+        "- **document_summarizer**: Request a summary of a specific document (requires `document_id`).\n"
+        "- **global_summarizer**: Request a collective summary of all documents.\n"
+        "- **failure**: Indicate inability to answer with available information.\n"
+        "Do not choose an action lightly; only use 'failure' when absolutely necessary.\n"
+        "Do not choose any other action other than the ones mentioned above.\n"
+    )
+
+    contents.append({"role": "system", "parts": action_list})
+
+    # Final reminder for SQL-first enforcement (recency bias — last instruction is strongest)
+    if sql_not_yet_run:
+        import time as _time
+
+        contents.append(
+            {
+                "role": "system",
+                "parts": (
+                    f"[Request ID: {int(_time.time() * 1000)}] "
+                    "⚠️ CRITICAL INSTRUCTION — READ CAREFULLY:\n"
+                    "No SQL query has been executed yet for this request. "
+                    "You MUST choose `sql_query` as your action and write a SQL SELECT query. "
+                    "Choosing `answer` without first running a SQL query is WRONG and will produce "
+                    "inaccurate results. The spreadsheet data can ONLY be accessed through SQL.\n\n"
+                    "Your response MUST have:\n"
+                    '  "action": "sql_query"\n'
+                    '  "sql_query": "SELECT ... FROM ..."\n\n'
+                    "Any other action for a data question is incorrect."
+                ),
+            }
+        )
 
     contents.append(
         {
@@ -602,7 +796,19 @@ def main_prompt(
     )
 
     # Final user question
-    contents.append({"role": "user", "parts": f"**Question:** {question}\n"})
+    if sql_not_yet_run:
+        contents.append(
+            {
+                "role": "user",
+                "parts": (
+                    f"**Question:** {question}\n\n"
+                    "Remember: You MUST use `sql_query` action to query the spreadsheet data first. "
+                    "Write a SQL SELECT statement to retrieve the data needed to answer this question."
+                ),
+            }
+        )
+    else:
+        contents.append({"role": "user", "parts": f"**Question:** {question}\n"})
 
     # JSON formatting requirement
     contents.append(

@@ -40,7 +40,10 @@ def _clean_dataframe_unicode(df: pd.DataFrame) -> pd.DataFrame:
 class SQLiteManager:
     """
     Manages SQLite databases for spreadsheet data.
-    Each (user_id, thread_id) pair gets its own in-memory SQLite connection.
+    Each (user_id, thread_id) pair gets its own persistent file-based SQLite
+    database stored at data/{user_id}/threads/{thread_id}/sqlite/thread.db.
+    The doc_id → table_name mapping is persisted in a __doc_table_registry table
+    so it survives process restarts without re-parsing the original files.
     """
 
     # Class-level storage: { (user_id, thread_id): sqlite3.Connection }
@@ -51,15 +54,69 @@ class SQLiteManager:
     _table_registry: Dict[Tuple[str, str], Dict[str, List[str]]] = {}
 
     @classmethod
+    def _get_db_path(cls, user_id: str, thread_id: str) -> str:
+        """Return the file path for a thread's persistent SQLite database."""
+        db_dir = os.path.join("data", user_id, "threads", thread_id, "sqlite")
+        os.makedirs(db_dir, exist_ok=True)
+        return os.path.join(db_dir, "thread.db")
+
+    @classmethod
+    def _ensure_registry_table(cls, conn: sqlite3.Connection) -> None:
+        """Create the internal registry table if it does not exist."""
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS __doc_table_registry (
+                doc_id TEXT NOT NULL,
+                table_name TEXT NOT NULL,
+                PRIMARY KEY (doc_id, table_name)
+            )
+            """
+        )
+        conn.commit()
+
+    @classmethod
+    def _reload_registry(cls, user_id: str, thread_id: str) -> None:
+        """Populate the in-memory registry dict from the persisted DB table.
+
+        Also migrates any legacy table names that contain hyphens
+        (from UUIDs) to use underscores so SQL queries work without quoting.
+        """
+        key = (user_id, thread_id)
+        conn = cls._connections[key]
+        cls._ensure_registry_table(conn)
+        cursor = conn.execute("SELECT doc_id, table_name FROM __doc_table_registry")
+        registry: Dict[str, List[str]] = {}
+        for doc_id, table_name in cursor.fetchall():
+            # Migrate legacy hyphenated table names -> underscores
+            if "-" in table_name:
+                new_name = table_name.replace("-", "_")
+                try:
+                    conn.execute(f'ALTER TABLE "{table_name}" RENAME TO "{new_name}";')
+                    conn.execute(
+                        "UPDATE __doc_table_registry "
+                        "SET table_name = ? WHERE doc_id = ? AND table_name = ?",
+                        (new_name, doc_id, table_name),
+                    )
+                    conn.commit()
+                    print(f"[SQLiteManager] Migrated table: {table_name} -> {new_name}")
+                    table_name = new_name
+                except Exception as e:
+                    print(f"[SQLiteManager] Table rename failed ({table_name}): {e}")
+            registry.setdefault(doc_id, []).append(table_name)
+        cls._table_registry[key] = registry
+
+    @classmethod
     def get_connection(cls, user_id: str, thread_id: str) -> sqlite3.Connection:
-        """Get or create an in-memory SQLite connection for a user/thread pair."""
+        """Get or create a persistent file-based SQLite connection for a user/thread pair."""
         key = (user_id, thread_id)
         if key not in cls._connections:
-            conn = sqlite3.connect(":memory:", check_same_thread=False)
-            # Enable WAL mode for better concurrent reads
+            db_path = cls._get_db_path(user_id, thread_id)
+            conn = sqlite3.connect(db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL;")
             cls._connections[key] = conn
             cls._table_registry[key] = {}
+            # Rebuild in-memory registry from the persisted DB on first open
+            cls._reload_registry(user_id, thread_id)
         return cls._connections[key]
 
     @classmethod
@@ -132,8 +189,10 @@ class SQLiteManager:
                 df = df.convert_dtypes()
 
                 table_name = cls._sanitize_table_name(base_name)
-                # Make table name unique by prefixing with doc_id
-                table_name = f"{table_name}_{doc_id}"
+                # Make table name unique by suffixing with sanitized doc_id
+                # (raw UUIDs contain hyphens which break unquoted SQL)
+                safe_doc_id = cls._sanitize_table_name(doc_id)
+                table_name = f"{table_name}_{safe_doc_id}"
 
                 df.to_sql(table_name, conn, index=False, if_exists="replace")
                 tables_created[table_name] = cls._get_column_info(conn, table_name)
@@ -184,16 +243,27 @@ class SQLiteManager:
                         table_name = cls._sanitize_table_name(
                             f"{base_name}_{sheet_name}"
                         )
-                    table_name = f"{table_name}_{doc_id}"
+                    safe_doc_id = cls._sanitize_table_name(doc_id)
+                    table_name = f"{table_name}_{safe_doc_id}"
 
                     df.to_sql(table_name, conn, index=False, if_exists="replace")
                     tables_created[table_name] = cls._get_column_info(conn, table_name)
                     table_names.append(table_name)
 
-            # Register tables for this document
+            # Register tables for this document (in-memory + persisted)
             if key not in cls._table_registry:
                 cls._table_registry[key] = {}
             cls._table_registry[key][doc_id] = table_names
+
+            # Persist doc_id → table_name mapping so it survives restarts
+            cls._ensure_registry_table(conn)
+            for tname in table_names:
+                conn.execute(
+                    "INSERT OR IGNORE INTO __doc_table_registry (doc_id, table_name) "
+                    "VALUES (?, ?)",
+                    (doc_id, tname),
+                )
+            conn.commit()
 
         except Exception as e:
             print(f"[SQLiteManager] Error loading {file_name}: {e}")
@@ -228,7 +298,12 @@ class SQLiteManager:
 
         conn = cls._connections[key]
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        # Exclude __doc_table_registry — it is an internal bookkeeping table
+        # and must not be exposed as user data in schema descriptions.
+        cursor.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name != '__doc_table_registry';"
+        )
         tables = cursor.fetchall()
 
         if not tables:
@@ -267,8 +342,10 @@ class SQLiteManager:
             except Exception:
                 sample_text = ""
 
+            # Always show the quoted form so LLM-generated SQL is safe
+            # even when the table name contains hyphens (legacy data).
             schema_parts.append(
-                f"Table: {table_name}\n"
+                f'Table: "{table_name}"\n'
                 f"  Rows: {row_count}\n"
                 f"  Columns:\n" + "\n".join(col_lines) + sample_text
             )
@@ -276,7 +353,9 @@ class SQLiteManager:
         return "\n\n".join(schema_parts)
 
     @classmethod
-    def execute_query(cls, user_id: str, thread_id: str, query: str) -> Dict:
+    def execute_query(
+        cls, user_id: str, thread_id: str, query: str, max_rows: int = 500
+    ) -> Dict:
         """
         Execute a SQL query against the user/thread's SQLite database.
         Only SELECT queries are allowed for safety.
@@ -320,8 +399,7 @@ class SQLiteManager:
         try:
             df = pd.read_sql_query(query, conn)
             # Limit output to avoid overwhelming the LLM
-            max_rows = 500
-            truncated = len(df) > max_rows
+            truncated = max_rows is not None and len(df) > max_rows
             if truncated:
                 result_df = df.head(max_rows)
             else:
@@ -346,14 +424,21 @@ class SQLiteManager:
 
     @classmethod
     def has_spreadsheet_data(cls, user_id: str, thread_id: str) -> bool:
-        """Check if there's any spreadsheet data loaded for this user/thread."""
+        """Check if there's any spreadsheet data loaded for this user/thread.
+
+        Excludes __doc_table_registry, which is always created by get_connection()
+        and is an internal bookkeeping table, not user spreadsheet data.
+        """
         key = (user_id, thread_id)
         if key not in cls._connections:
             return False
         conn = cls._connections[key]
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            cursor.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name != '__doc_table_registry';"
+            )
             tables = cursor.fetchall()
             return len(tables) > 0
         except Exception:
@@ -370,18 +455,52 @@ class SQLiteManager:
         return cls._table_registry[key].get(doc_id, [])
 
     @classmethod
+    def drop_tables_for_document(
+        cls, user_id: str, thread_id: str, doc_id: str
+    ) -> None:
+        """Drop all SQLite tables associated with a specific document."""
+        key = (user_id, thread_id)
+        table_names = cls.get_tables_for_document(user_id, thread_id, doc_id)
+        if not table_names:
+            return
+        if key not in cls._connections:
+            return
+        conn = cls._connections[key]
+        for table_name in table_names:
+            try:
+                conn.execute(f'DROP TABLE IF EXISTS "{table_name}";')
+                print(f"[SQLiteManager] Dropped table {table_name} for doc {doc_id}")
+            except Exception as e:
+                print(f"[SQLiteManager] Error dropping table {table_name}: {e}")
+        # Remove from persisted registry table
+        try:
+            conn.execute("DELETE FROM __doc_table_registry WHERE doc_id = ?", (doc_id,))
+        except Exception:
+            pass
+        conn.commit()
+        # Remove from in-memory registry
+        if key in cls._table_registry and doc_id in cls._table_registry[key]:
+            del cls._table_registry[key][doc_id]
+
+    @classmethod
     def reload_from_files(
         cls, user_id: str, thread_id: str, files_info: List[dict]
     ) -> None:
         """
-        Reload spreadsheet data from files if not already in memory.
+        Ensure spreadsheet data is available in SQLite for the given documents.
+
+        With persistent SQLite, data survives process restarts so this method
+        only re-parses files whose doc_id is NOT already in the persisted
+        __doc_table_registry (i.e., genuinely missing, not just evicted from
+        the in-memory connection dict).
 
         Args:
             user_id: The user ID.
             thread_id: The thread ID.
             files_info: List of dicts with {'path': str, 'file_name': str, 'doc_id': str}
         """
-        # Ensure connection exists
+        # Opening the connection also calls _reload_registry(), populating the
+        # in-memory registry from the persisted DB.
         cls.get_connection(user_id, thread_id)
         key = (user_id, thread_id)
 
@@ -389,7 +508,7 @@ class SQLiteManager:
         for file_info in files_info:
             doc_id = file_info.get("doc_id")
 
-            # If tables for this doc are already registered, skip it
+            # If tables for this doc are already registered (from DB or prior load), skip it
             if key in cls._table_registry and doc_id in cls._table_registry[key]:
                 continue
 

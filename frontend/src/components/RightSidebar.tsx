@@ -1,7 +1,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus } from 'lucide-react';
+import { Map as MapIcon, Cloud, FileText, MapPin, Sparkles, Lightbulb, Cpu, Download, Trash2, BookOpen, ScanSearch, Plus, FilePlus2, FileSpreadsheet, Settings } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import MindMapModal from './MindMapModal';
 import WordCloudModal from './WordCloudModal';
 import SummaryModal from './SummaryModal';
@@ -10,6 +11,8 @@ import TechnicalRoadmapModal from './TechnicalRoadmapModal';
 import InsightsModal from './InsightsModal';
 import StrategicAnalysisModal from './StrategicAnalysisModal';
 import TechnicalAnalysisModal from './TechnicalAnalysisModal';
+import DocumentCreatorModal from './DocumentCreatorModal';
+import ExcelSkillModal from './ExcelSkillModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -56,11 +59,35 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
   const [insightsOpen, setInsightsOpen] = React.useState(false);
   const [stratAnalysisOpen, setStratAnalysisOpen] = React.useState(false);
   const [techAnalysisOpen, setTechAnalysisOpen] = React.useState(false);
+  const [docCreatorOpen, setDocCreatorOpen] = React.useState(false);
+  const [excelSkillOpen, setExcelSkillOpen] = React.useState(false);
   const [deleteConfirmDocId, setDeleteConfirmDocId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState(false);
   const [importOpen, setImportOpen] = React.useState(false);
   const [selectedSourceThread, setSelectedSourceThread] = React.useState<string>('');
   const [addingDocId, setAddingDocId] = React.useState<string | null>(null);
+  const [switches, setSwitches] = React.useState<Record<string, boolean>>({});
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+  // Fetch switches when settings panel opens
+  React.useEffect(() => {
+    if (!settingsOpen) return;
+    api.getSwitches()
+      .then((data) => setSwitches(data.switches))
+      .catch((err) => console.error('Failed to load switches:', err));
+  }, [settingsOpen]);
+
+  const handleSwitchToggle = async (key: string, value: boolean) => {
+    // Optimistic update
+    setSwitches((prev) => ({ ...prev, [key]: value }));
+    try {
+      await api.updateSwitch(key, value);
+    } catch (err) {
+      // Revert on failure
+      setSwitches((prev) => ({ ...prev, [key]: !value }));
+      toast.error(err instanceof Error ? err.message : 'Failed to update setting');
+    }
+  };
 
   const handleDeleteDocument = async (docId: string) => {
     if (!threadId || deleting) return;
@@ -154,7 +181,7 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
         </Button>
       </div>
 
-      <div className="flex-1 w-full flex flex-col items-start pt-4 px-3 border-l bg-background">
+      <div className="right-sidebar-scroll flex-1 min-h-0 w-full flex flex-col items-start pt-4 px-3 border-l bg-background overflow-y-auto overflow-x-hidden">
         {/* Studio buttons moved up here. When collapsed, show icon-only column; when expanded show labeled buttons */}
         {collapsed ? (
           <div className="flex flex-col items-center w-full space-y-3">
@@ -231,6 +258,22 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               </TooltipTrigger>
               <TooltipContent>Strategic Roadmap</TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setDocCreatorOpen)} disabled={!threadId} aria-label="Create Document">
+                  <FilePlus2 className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Create Document</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => openAfterRefresh(setExcelSkillOpen)} disabled={!threadId} aria-label="Excel Builder">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Excel Builder</TooltipContent>
+            </Tooltip>
             {/* Export Button (Collapsed) */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -248,6 +291,15 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Export Chat</TooltipContent>
+            </Tooltip>
+            <div className="border-t w-full my-1" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(!settingsOpen)} aria-label="Settings">
+                  <Settings className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Settings</TooltipContent>
             </Tooltip>
           </div>
         ) : (
@@ -282,6 +334,12 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
                 <MapPin className="w-4 h-4 mr-2" /> Strategic Roadmap
               </Button>
               <div className="border-t my-2" />
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setDocCreatorOpen)} disabled={!threadId}>
+                <FilePlus2 className="w-4 h-4 mr-2" /> Create Document
+              </Button>
+              <Button className="w-full justify-start" variant="ghost" onClick={() => openAfterRefresh(setExcelSkillOpen)} disabled={!threadId}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" /> Excel Builder
+              </Button>
               <Button
                 className="w-full justify-start text-muted-foreground hover:text-primary"
                 variant="ghost"
@@ -293,6 +351,50 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
               >
                 <Download className="w-4 h-4 mr-2" /> Export Chat
               </Button>
+              <div className="border-t my-2" />
+              <Button
+                className="w-full justify-start"
+                variant="ghost"
+                onClick={() => setSettingsOpen(!settingsOpen)}
+              >
+                <Settings className="w-4 h-4 mr-2" /> Settings
+              </Button>
+              {settingsOpen && (
+                <div className="space-y-3 px-2 py-2 rounded-md bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="sw-disable-thinking">Disable Thinking</label>
+                    <Switch
+                      id="sw-disable-thinking"
+                      checked={switches['DISABLE_THINKING'] ?? true}
+                      onCheckedChange={(v) => handleSwitchToggle('DISABLE_THINKING', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="sw-hyde">HyDE Retrieval</label>
+                    <Switch
+                      id="sw-hyde"
+                      checked={switches['HYDE'] ?? false}
+                      onCheckedChange={(v) => handleSwitchToggle('HYDE', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="sw-corrective">Corrective Retrieval</label>
+                    <Switch
+                      id="sw-corrective"
+                      checked={switches['CORRECTIVE_RETRIEVAL'] ?? true}
+                      onCheckedChange={(v) => handleSwitchToggle('CORRECTIVE_RETRIEVAL', v)}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm" htmlFor="sw-decomposition">Query Decomposition</label>
+                    <Switch
+                      id="sw-decomposition"
+                      checked={switches['DECOMPOSITION'] ?? true}
+                      onCheckedChange={(v) => handleSwitchToggle('DECOMPOSITION', v)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -468,6 +570,8 @@ const RightSidebar: React.FC<Props> = ({ threadId, threads = {}, collapsed = fal
       <TechnicalRoadmapModal open={techRoadmapOpen} onOpenChange={setTechRoadmapOpen} threadId={threadId ?? ''} documents={documents} />
       <StrategicAnalysisModal open={stratAnalysisOpen} onOpenChange={setStratAnalysisOpen} threadId={threadId ?? ''} documents={documents} />
       <TechnicalAnalysisModal open={techAnalysisOpen} onOpenChange={setTechAnalysisOpen} threadId={threadId ?? ''} documents={documents} />
+      <DocumentCreatorModal open={docCreatorOpen} onOpenChange={setDocCreatorOpen} threadId={threadId ?? ''} documents={documents} />
+      <ExcelSkillModal open={excelSkillOpen} onOpenChange={setExcelSkillOpen} threadId={threadId ?? ''} documents={documents} />
     </div>
   );
 };

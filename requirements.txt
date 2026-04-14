@@ -15,7 +15,10 @@ pytesseract
 python-dotenv
 python-multipart
 python-socketio
-torch
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch>=2.4,<2.11
+torchvision
+torchaudio
 uvicorn[standard]
 aiofiles
 google-genai
@@ -44,3 +47,6 @@ python-docx
 rank-bm25
 einops
 json-repair
+spacy
+docling
+fpdf2

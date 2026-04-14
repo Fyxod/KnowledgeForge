@@ -6,12 +6,15 @@ import socketio
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.auth_paths import auth_paths
 from app.routes import (
+    document_creator,
     documents,
+    excel_skill,
     export,
     extra,
     health,
     insights,
     query,
+    settings,
     strategic_analysis,
     strategic_roadmap,
     technical_analysis,
@@ -20,9 +23,14 @@ from app.routes import (
     upload,
     user,
 )
-from app.socket_handler import sio
+from app.socket_handler import cancel_all_heartbeats, sio
 
 fastapi_app = FastAPI()
+
+
+@fastapi_app.on_event("shutdown")
+async def shutdown_event():
+    await cancel_all_heartbeats()
 
 excluded_routes = [("POST", "/user"), ("POST", "/user/login")]
 fastapi_app.add_middleware(
@@ -53,5 +61,8 @@ fastapi_app.include_router(strategic_analysis.router)
 fastapi_app.include_router(technical_analysis.router)
 fastapi_app.include_router(documents.router)
 fastapi_app.include_router(export.router)
+fastapi_app.include_router(document_creator.router)
+fastapi_app.include_router(excel_skill.router)
+fastapi_app.include_router(settings.router)
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

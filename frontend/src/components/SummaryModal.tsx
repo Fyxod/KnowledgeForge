@@ -65,6 +65,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
           timeoutRef.current = null;
         }
         setView('display');
+        setLoading(false);
       } else if (res?.failed) {
         const err = res.error || 'Generation failed';
         setMessage(err);
@@ -72,6 +73,7 @@ const SummaryModal: React.FC<Props> = ({ open, onOpenChange, threadId, documents
         pollingActiveRef.current = false;
         if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
         setView('error');
+        setLoading(false);
       } else if (res?.status === false && res.error) {
         const msg = res.error;
         if (/disable|not enabled/i.test(msg)) {

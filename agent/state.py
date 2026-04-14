@@ -39,10 +39,20 @@ class AgentState(BaseModel):
     # SQL query fields for spreadsheet analysis
     sql_query: Optional[str] = None
     sql_result: Optional[str] = None
+    sql_last_executed_query: Optional[str] = None  # tracks last executed query for loop detection
+    sql_nlp_summary: Optional[str] = None  # pre-extracted NLP theme summary from chunked analysis
+    sql_batched_answer: Optional[str] = None  # combined answer from batched SQL processing
+    doc_batched_answer: Optional[str] = None  # combined answer from batched multi-doc MapReduce
+    vlm_visual_answer: Optional[str] = None  # query-time VLM answer for page/slide/figure references
+    requires_full_data: Optional[bool] = None  # LLM-classified: query needs full-data NLP analysis
     sql_attempts: int = 0
     has_spreadsheet_data: bool = False
     spreadsheet_only: bool = False  # True when ALL thread documents are spreadsheets
     spreadsheet_schema: Optional[str] = None
+
+    # Excel Skill fields
+    excel_request: Optional[str] = None  # User's Excel creation request extracted by LLM
+    excel_result: Optional[str] = None  # Download URL after Excel generation
 
     action: Optional[
         Literal[
@@ -52,10 +62,11 @@ class AgentState(BaseModel):
             f"{GLOBAL_SUMMARIZER}",
             f"{FAILURE}",
             f"{SQL_QUERY}",
+            f"{EXCEL_CREATE}",
         ]
     ] = Field(
         default=None,
-        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', 'sql_query', or 'failure'.",
+        description="The action to be taken by the agent. Can be 'answer', 'web_search', 'document_summarizer', 'global_summarizer', 'sql_query', 'excel_create', or 'failure'.",
     )
 
     # Used to determine the next step in the state graph
@@ -74,4 +85,29 @@ class AgentState(BaseModel):
     thread_instructions: List[str] = Field(
         default_factory=list,
         description="User-defined instructions that apply to every message in this thread.",
+    )
+
+    # CRAG Corrective Retrieval
+    retrieval_attempts: int = 0  # How many times retrieval has been performed
+    retrieval_verdict: Optional[str] = Field(
+        default=None,
+        description="Evaluator verdict: 'sufficient', 'ambiguous', or 'insufficient'.",
+    )
+
+    # Enhanced decomposition — sub-queries for parallel retrieval
+    sub_queries: List[str] = Field(
+        default_factory=list,
+        description="Sub-queries from decomposition for parallel retrieval within the agent.",
+    )
+
+    # Semantic retrieval expansion — alternative phrasings for broader vector search
+    retrieval_queries: List[str] = Field(
+        default_factory=list,
+        description="LLM-generated alternative query phrasings with synonyms and related terminology for wider retrieval coverage.",
+    )
+
+    # Triple context — entity relationships injected at retrieval time
+    triple_context: Optional[str] = Field(
+        default=None,
+        description="Formatted entity relationship triples relevant to the query.",
     )

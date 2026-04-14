@@ -1,9 +1,16 @@
+import asyncio
 import math
+from collections import Counter
 from typing import Any, Dict, List
 
 import numpy as np
 from sentence_transformers import CrossEncoder
 
+from core.embeddings.context_enrichment import (
+    expand_keywords_with_synonyms,
+    extract_query_entities,
+    extract_query_keywords,
+)
 from core.embeddings.vectorstore import get_vectorstore, search_bm25
 
 # Initialize cross-encoder for re-ranking (lazy loading)
@@ -20,6 +27,7 @@ def get_cross_encoder():
         device = "cuda" if torch.cuda.is_available() else "cpu"
         _cross_encoder = CrossEncoder(
             "cross-encoder/ms-marco-MiniLM-L-6-v2",
+            max_length=512,  # Truncate inputs to model's max position embeddings
             device=device,
         )
         if device == "cuda":
@@ -113,11 +121,21 @@ def rerank_chunks(
         pairs = [(query, chunk.get("page_content", "")) for chunk in chunks]
 
         # Get relevance scores (raw logits, typically -10 to +10)
+        # CrossEncoder is initialized with max_length=512 to truncate long inputs.
+        # GLM-OCR Markdown (tables, formulas) tokenizes into far more tokens per char
+        # than plain text and can exceed the model's 512-token position embedding limit.
         scores = cross_encoder.predict(pairs)
 
-        # Normalize to 0-1 range using sigmoid
+        # Release cached GPU memory after cross-encoder inference
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        # Normalize to 0-1 range using sigmoid (clamped to prevent overflow)
         def _sigmoid(x):
-            return 1.0 / (1.0 + math.exp(-float(x)))
+            x = max(-500.0, min(500.0, float(x)))
+            return 1.0 / (1.0 + math.exp(-x))
 
         for i, chunk in enumerate(chunks):
             chunk["relevance_score"] = _sigmoid(scores[i])
@@ -195,8 +213,6 @@ def rerank_chunks(
 
 def _compute_tfidf_vectors(chunks: List[Dict[str, Any]]) -> List[Dict[str, float]]:
     """Compute simple TF-IDF-like word frequency vectors for cosine similarity."""
-    from collections import Counter
-
     # Build vocabulary from all chunks
     all_words = set()
     chunk_word_counts = []
@@ -280,6 +296,7 @@ async def hybrid_retrieve(
     user_id: str,
     thread_id: str,
     query: str,
+    additional_queries: List[str] = None,
     vector_k: int = 30,
     bm25_k: int = 20,
 ) -> List[Dict[str, Any]]:
@@ -289,44 +306,125 @@ async def hybrid_retrieve(
     Uses Reciprocal Rank Fusion (RRF) to merge results from both retrievers,
     providing both semantic understanding and keyword matching.
 
+    Supports multi-query retrieval — when additional_queries are provided,
+    retrieves for each query variant in parallel and merges all result lists via RRF.
+    This gives broader coverage for rewritten/decomposed queries.
+
     Args:
         user_id: User identifier
         thread_id: Thread identifier
-        query: The user's search query
-        vector_k: Number of results from vector search
-        bm25_k: Number of results from BM25 search
+        query: The primary search query
+        additional_queries: Optional extra query variants for multi-query retrieval
+        vector_k: Number of results from vector search (per query)
+        bm25_k: Number of results from BM25 search (per query)
 
     Returns:
         Merged and deduplicated results sorted by RRF score
     """
-    import asyncio
+    all_queries = [query]
+    if additional_queries:
+        all_queries.extend(additional_queries)
 
-    # Run vector search and BM25 search in parallel
-    vector_retriever = get_user_retriever(user_id, thread_id, k=vector_k)
+    # Scale k per query to keep total retrieval volume manageable
+    num_queries = len(all_queries)
+    if num_queries > 1:
+        per_query_vector_k = max(15, vector_k // num_queries)
+        per_query_bm25_k = max(10, bm25_k // num_queries)
+        print(
+            f"[Multi-query retrieval] {num_queries} queries, "
+            f"vector_k={per_query_vector_k}/query, bm25_k={per_query_bm25_k}/query"
+        )
+    else:
+        per_query_vector_k = vector_k
+        per_query_bm25_k = bm25_k
 
-    async def get_vector_results():
-        docs = await vector_retriever.ainvoke(query)
-        return [doc.model_dump() for doc in docs]
+    vector_retriever = get_user_retriever(user_id, thread_id, k=per_query_vector_k)
 
-    async def get_bm25_results():
-        return await asyncio.to_thread(search_bm25, user_id, thread_id, query, bm25_k)
+    async def get_vector_results(q: str):
+        try:
+            docs = await vector_retriever.ainvoke(q)
+            return [doc.model_dump() for doc in docs]
+        except Exception as e:
+            print(f"[Retrieval] Vector search failed for query '{q[:80]}': {e}")
+            return []
 
-    vector_results, bm25_results = await asyncio.gather(
-        get_vector_results(),
-        get_bm25_results(),
-    )
+    async def get_bm25_results(q: str):
+        try:
+            return await asyncio.to_thread(
+                search_bm25, user_id, thread_id, q, per_query_bm25_k
+            )
+        except Exception as e:
+            print(f"[Retrieval] BM25 search failed for query '{q[:80]}': {e}")
+            return []
 
+    # Run vector + BM25 for every query variant in parallel
+    tasks = []
+    for q in all_queries:
+        tasks.append(get_vector_results(q))
+        tasks.append(get_bm25_results(q))
+
+    all_results = await asyncio.gather(*tasks)
+
+    # Collect all non-empty result lists for RRF fusion
+    result_lists = [res for res in all_results if res]
+
+    total_retrieved = sum(len(r) for r in result_lists)
     print(
-        f"Hybrid search: {len(vector_results)} vector + {len(bm25_results)} BM25 results"
+        f"Hybrid search: {total_retrieved} total results from {num_queries} "
+        f"query variant(s), {len(result_lists)} result lists"
     )
 
-    # If BM25 returns no results, just use vector search
-    if not bm25_results:
-        return vector_results
+    if not result_lists:
+        fused = []
+    elif len(result_lists) == 1:
+        fused = result_lists[0]
+    else:
+        # Merge all result lists using Reciprocal Rank Fusion
+        fused = reciprocal_rank_fusion(result_lists)
+        print(f"RRF fusion produced {len(fused)} unique results")
 
-    # Merge using Reciprocal Rank Fusion
-    fused = reciprocal_rank_fusion([vector_results, bm25_results])
-    print(f"RRF fusion produced {len(fused)} unique results")
+    # Entity + keyword boosting with synonym expansion
+    # 1) Named entity boost — only from PRIMARY query (not HyDE/variants) to avoid noise
+    query_entities = extract_query_entities(query)
+
+    # 2) Keyword boost with synonyms — extract nouns and expand with synonyms
+    query_keywords = extract_query_keywords(query)
+    expanded_keywords = expand_keywords_with_synonyms(query_keywords)
+
+    has_boost_terms = bool(query_entities) or bool(expanded_keywords)
+
+    if has_boost_terms:
+        entity_lower = {e.lower() for e in query_entities}
+        for doc in fused:
+            doc_entities_str = doc.get("metadata", {}).get("entities", "")
+            doc_content = doc.get("page_content", "").lower()
+            boost = 1.0
+
+            # Entity boost: match on pipe-delimited boundaries for precision
+            if doc_entities_str and entity_lower:
+                doc_entity_list = [
+                    e.strip().lower() for e in doc_entities_str.split("|")
+                ]
+                entity_matches = sum(1 for e in entity_lower if e in doc_entity_list)
+                if entity_matches > 0:
+                    boost += 0.25 * entity_matches  # 25% per entity match
+
+            # Keyword + synonym boost: check document content for expanded terms
+            if expanded_keywords:
+                kw_matches = sum(1 for kw in expanded_keywords if kw in doc_content)
+                if kw_matches > 0:
+                    # Smaller boost per keyword, capped to avoid runaway boosting
+                    boost += min(0.3, 0.1 * kw_matches)
+
+            if boost > 1.0:
+                doc["rrf_score"] = doc.get("rrf_score", 0.0) * boost
+
+        # Re-sort after boosting
+        fused.sort(key=lambda d: d.get("rrf_score", 0.0), reverse=True)
+        print(
+            f"Boost applied — entities: {query_entities}, "
+            f"keywords: {query_keywords}, expanded: {expanded_keywords}"
+        )
 
     return fused
 
@@ -424,96 +522,214 @@ async def get_thread_documents_retriever(
     user_id: str,
     thread_id: str,
     query: str = "",
+    additional_queries: List[str] = None,
     k: int = None,
-    min_chunks_per_doc: int = 3,
     max_total_chunks: int = 50,
 ) -> List[Dict[str, Any]]:
     """
-    Get retriever for all documents in a thread with adaptive document diversity.
+    Get retriever for all documents in a thread with score-aware document diversity.
     Uses hybrid search (vector + BM25) for improved recall.
 
-    This function uses an adaptive strategy that:
-    1. Ensures minimum chunks per document (min_chunks_per_doc)
-    2. Scales total chunks based on document count
-    3. Respects maximum total chunks limit (max_total_chunks)
-    4. Provides balanced representation across all documents
+    Supports multi-query retrieval via additional_queries parameter.
+
+    Strategy (replaces hard per-doc minimum allocation):
+    1. Fetch a broad candidate pool via hybrid retrieval.
+    2. Quality-gate: keep only documents whose best RRF score is ≥ 25% of the
+       top document's score (weak/irrelevant documents are excluded).
+    3. Guarantee top-1 child chunk per kept document so every qualifying doc
+       has at least one representative chunk.
+    4. Fill remaining budget by descending RRF score with a per-doc cap.
+    5. Deduplicate by content_hash when available.
 
     Args:
         user_id: User identifier
         thread_id: Thread identifier
         query: The user query for semantic similarity search
+        additional_queries: Optional extra query variants for multi-query retrieval
         k: Total number of chunks to retrieve (None for adaptive)
-        min_chunks_per_doc: Minimum chunks to retrieve per document
-        max_total_chunks: Maximum total chunks to return
-
-    Returns:
-        List of retrieved document chunks with metadata
+        max_total_chunks: Hard upper bound on returned chunks
     """
     # Use hybrid retrieval (vector + BM25) for better recall
     retrieved_docs = await hybrid_retrieve(
         user_id,
         thread_id,
         query,
+        additional_queries=additional_queries,
         vector_k=max_total_chunks * 2,
         bm25_k=max_total_chunks,
     )
+
+    if not retrieved_docs:
+        return []
 
     # Group by document_id
     docs_by_document: Dict[str, List[Dict[str, Any]]] = {}
     for doc in retrieved_docs:
         doc_id = doc.get("metadata", {}).get("document_id", "unknown")
-        if doc_id not in docs_by_document:
-            docs_by_document[doc_id] = []
-        docs_by_document[doc_id].append(doc)
+        docs_by_document.setdefault(doc_id, []).append(doc)
 
     num_documents = len(docs_by_document)
     if num_documents == 0:
         return []
 
-    # Adaptive k calculation based on document count
+    # --- Quality gate ---
+    # Keep only documents whose best fused score is at least 25% of the top doc.
+    best_score_per_doc = {
+        doc_id: max(d.get("rrf_score", 0.0) for d in docs)
+        for doc_id, docs in docs_by_document.items()
+    }
+    top_score = max(best_score_per_doc.values(), default=0.0)
+    threshold = top_score * 0.25
+
+    kept_docs = {
+        doc_id: docs
+        for doc_id, docs in docs_by_document.items()
+        if best_score_per_doc[doc_id] >= threshold
+    }
+
+    num_kept = len(kept_docs)
+    if num_kept == 0:
+        return []
+
+    # --- Adaptive total budget ---
     if k is None:
-        if num_documents <= 2:
-            k = 20
-        elif num_documents <= 5:
-            k = 50
-        elif num_documents <= 10:
-            k = 100
+        if num_kept <= 2:
+            k = 40
+        elif num_kept <= 5:
+            k = 80
+        elif num_kept <= 10:
+            k = 150
         else:
-            k = min(max_total_chunks, num_documents * 10)
+            k = min(max_total_chunks, num_kept * 15)
 
-    print(f"Adaptive k={k} for {num_documents} documents")
-
-    # Calculate chunks per document
-    chunks_per_doc = math.ceil(k / num_documents)
-
-    # Ensure minimum chunks per document
-    chunks_per_doc = max(chunks_per_doc, min_chunks_per_doc)
-
-    # Recalculate total k based on chunks per doc
-    adaptive_k = min(chunks_per_doc * num_documents, max_total_chunks)
+    k = min(k, max_total_chunks)
 
     print(
-        f"Retrieving {chunks_per_doc} chunks per document from {num_documents} documents (total: {adaptive_k})"
+        f"[MultiDoc] {num_kept}/{num_documents} docs passed quality gate "
+        f"(threshold={threshold:.4f}), budget k={k}"
     )
 
-    # Select chunks from each document
-    balanced_docs = []
-    for doc_id, docs in docs_by_document.items():
-        # Take top chunks_per_doc from this document
-        balanced_docs.extend(docs[:chunks_per_doc])
+    # --- Guarantee top-1 per doc, then fill remaining budget by score (no per-doc cap) ---
+    guaranteed: List[Dict[str, Any]] = []
+    remainder_pool: List[Dict[str, Any]] = []
 
-    # Ensure we don't exceed adaptive_k
-    balanced_docs = balanced_docs[:adaptive_k]
+    for doc_id in sorted(kept_docs, key=lambda d: best_score_per_doc[d], reverse=True):
+        docs_sorted = sorted(
+            kept_docs[doc_id],
+            key=lambda d: d.get("rrf_score", 0.0),
+            reverse=True,
+        )
+        guaranteed.append(docs_sorted[0])
+        remainder_pool.extend(docs_sorted[1:])
 
-    print(
-        f"Final retrieved: {len(balanced_docs)} chunks from {num_documents} documents"
-    )
-    for doc_id, docs in docs_by_document.items():
+    remainder_pool.sort(key=lambda d: d.get("rrf_score", 0.0), reverse=True)
+    result = guaranteed + remainder_pool
+    result = result[:k]
+
+    # --- Deduplicate by content_hash if available ---
+    seen_hashes: set = set()
+    deduped: List[Dict[str, Any]] = []
+    for doc in result:
+        ch = doc.get("metadata", {}).get("content_hash")
+        if ch:
+            if ch in seen_hashes:
+                continue
+            seen_hashes.add(ch)
+        deduped.append(doc)
+
+    print(f"[MultiDoc] Final: {len(deduped)} chunks from {num_kept} documents")
+    for doc_id in kept_docs:
         count = sum(
-            1
-            for doc in balanced_docs
-            if doc.get("metadata", {}).get("document_id") == doc_id
+            1 for d in deduped if d.get("metadata", {}).get("document_id") == doc_id
         )
         print(f"  Document {doc_id}: {count} chunks")
 
-    return balanced_docs
+    return deduped
+
+
+def expand_to_parent_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Expand retrieved child chunks to their parent-level context for LLM prompting.
+
+    After retrieval and reranking on small child chunks, this helper replaces
+    each chunk's page_content with the larger parent text stored in metadata.
+
+    Deduplication is **page-level**: when multiple parent chunks belong to the
+    same (document_id, page_no) they are merged into a single chunk whose
+    page_content is the concatenation of all distinct parent texts for that
+    page, ordered by parent_idx.  This preserves complete slide/page context
+    and prevents the same page from appearing as separate fragments.
+
+    Chunks without a parent_chunk_id (summaries, entity profiles) are passed
+    through unchanged.
+
+    Args:
+        chunks: Reranked list of child chunk dicts (with page_content + metadata)
+
+    Returns:
+        Deduplicated list of page-level chunks ready for LLM context assembly
+    """
+    # Pass 1 — group parent texts by (document_id, page_no), dedup by parent_chunk_id
+    # page_key → {best_chunk, parent_parts: {parent_idx: parent_text}, best_score}
+    page_groups: Dict[tuple, dict] = {}
+    seen_parent_ids: set = set()
+    non_parent_chunks: List[Dict[str, Any]] = []
+
+    for chunk in chunks:
+        meta = chunk.get("metadata", {})
+        parent_id = meta.get("parent_chunk_id")
+        parent_text = meta.get("parent_text")
+
+        if not (parent_id and parent_text):
+            # Summary / entity-profile / legacy chunk — use as-is
+            non_parent_chunks.append(chunk)
+            continue
+
+        if parent_id in seen_parent_ids:
+            continue
+        seen_parent_ids.add(parent_id)
+
+        doc_id = meta.get("document_id", "")
+        page_no = meta.get("page_no", 0)
+        page_key = (doc_id, page_no)
+        score = chunk.get("rerank_score", 0.0)
+        parent_idx = meta.get("parent_chunk_id", "").rsplit("_p", 1)[-1]
+        try:
+            parent_idx = int(parent_idx)
+        except (ValueError, TypeError):
+            parent_idx = 0
+
+        if page_key not in page_groups:
+            page_groups[page_key] = {
+                "best_chunk": chunk,
+                "best_score": score,
+                "parent_parts": {parent_idx: parent_text},
+            }
+        else:
+            grp = page_groups[page_key]
+            grp["parent_parts"][parent_idx] = parent_text
+            if score > grp["best_score"]:
+                grp["best_chunk"] = chunk
+                grp["best_score"] = score
+
+    # Pass 2 — build merged page-level chunks
+    expanded: List[Dict[str, Any]] = []
+    for page_key, grp in page_groups.items():
+        merged_chunk = grp["best_chunk"].copy()
+        # Concatenate parent texts in document order
+        ordered_parts = [text for _, text in sorted(grp["parent_parts"].items())]
+        merged_chunk["page_content"] = "\n\n".join(ordered_parts)
+        merged_chunk["rerank_score"] = grp["best_score"]
+        expanded.append(merged_chunk)
+
+    if any(len(g["parent_parts"]) > 1 for g in page_groups.values()):
+        merged_count = sum(
+            1 for g in page_groups.values() if len(g["parent_parts"]) > 1
+        )
+        print(
+            f"[Parent Expand] Merged parent chunks on {merged_count} page(s) into page-level context"
+        )
+
+    # Non-parent chunks go after parent-expanded ones
+    expanded.extend(non_parent_chunks)
+    return expanded

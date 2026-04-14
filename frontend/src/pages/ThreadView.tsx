@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -45,6 +46,7 @@ const ThreadView = () => {
   const [lastSources, setLastSources] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [fileNames, setFileNames] = useState<Record<number, string>>({});
@@ -322,6 +324,7 @@ const ThreadView = () => {
       return updated;
     });
     setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setLoading(true);
 
     const agentMessage: Chat = {
@@ -384,12 +387,6 @@ const ThreadView = () => {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   const handleModeToggle = (checked: boolean) => {
     setWebEnhanced(checked);
@@ -629,13 +626,25 @@ const ThreadView = () => {
               ))}
             </div>
           )}
-          <Input
+          <Textarea
+            ref={textareaRef}
             placeholder="Ask a question..."
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // Auto-resize: reset to single row then expand to content
+              e.target.style.height = 'auto';
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
             disabled={loading}
-            className="flex-1"
+            rows={1}
+            className="flex-1 min-h-[40px] max-h-[160px] resize-none py-2"
           />
           <div className="flex items-center gap-2">
             {pendingFiles.length > 0 && (
