@@ -58,7 +58,9 @@ def excel_plan_prompt(
 
     # Determine which data sources are actually available
     has_sql = bool(available_schema)
-    has_docs = bool(available_documents and any(d.get("tables") for d in available_documents))
+    has_docs = bool(
+        available_documents and any(d.get("tables") for d in available_documents)
+    )
 
     source_guidance = ""
     if has_sql and not has_docs:
@@ -107,20 +109,25 @@ def excel_plan_prompt(
         "   - Use standard SQLite syntax. Only SELECT queries are allowed.\n"
         "   - **CRITICAL**: Copy table names and column names EXACTLY from the schema — "
         "including any `_suffix` at the end. Do NOT shorten or modify them.\n"
-        "   - **ALWAYS double-quote table names** in SQL (e.g., `SELECT * FROM \"my_table_abc123\"`).\n"
+        '   - **ALWAYS double-quote table names** in SQL (e.g., `SELECT * FROM "my_table_abc123"`).\n'
         "   - Mark each column's `source` as `sql` when it comes from the query result.\n"
         "3. For computed columns, use `formula:<excel_formula>` with row-relative references "
         "(e.g., `formula:=C2*D2` will be applied to each row).\n"
-        "4. For columns requiring language understanding (sentiment, categorization, summarization, "
-        "assessment, RAG status, risk analysis), use `nlp:<instruction>`.\n"
-        "   - The instruction MUST be detailed enough for another analyst to execute independently.\n"
-        "   - Include the EXACT output labels/categories (e.g., 'Green', 'Amber', 'Red').\n"
-        "   - Include the criteria/heuristics to apply (e.g., 'Green if on-track and no blockers, "
-        "Amber if minor delays, Red if behind schedule or critical issues').\n"
-        "   - Reference which columns to analyze (e.g., 'based on status, budget_variance, and timeline columns').\n"
-        "   - Example: `nlp:Classify project health as Green/Amber/Red based on schedule_status, "
-        "budget_variance, and risk_level columns. Green=on-track and within budget, "
-        "Amber=minor delays or slight overrun, Red=behind schedule or over budget by >10%`\n"
+        "4. **NLP COLUMNS (CRITICAL)**: When the user asks to classify, categorize, tag, "
+        "extract intent, analyze sentiment, summarize, label, group by meaning, or add ANY "
+        "column that does NOT already exist in the data schema - you MUST use `nlp:<instruction>`.\n"
+        "   - `nlp:` columns are processed by a language model that reads each row and produces a value.\n"
+        "   - The SQL `source_query` should fetch ONLY the raw data columns that exist in the table. "
+        "NLP columns are added AFTER SQL extraction - do NOT include them in the SQL SELECT.\n"
+        "   - **IMPORTANT**: The `nlp:` instruction MUST include the user's specific requirements "
+        "verbatim - granularity expectations, examples, format, and constraints. "
+        "Do NOT simplify or generalize the user's instructions.\n"
+        "   - Examples:\n"
+        "     - User asks 'categorize issues' -> `nlp:classify into relevant categories`\n"
+        "     - User asks 'extract sentiment' -> `nlp:classify sentiment as positive/negative/neutral`\n"
+        "     - User asks 'add granular subcategory, e.g. battery replacement request not just battery' "
+        '-> `nlp:assign a specific, granular subcategory - e.g. "battery replacement request" not just "battery"`\n'
+        "   - NEVER use `sql` as source for columns that require interpretation or don't exist in the schema.\n"
         "5. For constant values, use `static:<value>`.\n"
         "6. Use `group_by` and `aggregations` for pivot-table-style summaries "
         "(e.g., group_by=['region'], aggregations={'revenue': 'sum', 'orders': 'count'}).\n"
@@ -143,6 +150,7 @@ def excel_nlp_column_prompt(
     column_instruction: str,
     input_data: List[str],
     column_name: str,
+    prior_nlp_columns: Optional[List[str]] = None,
 ) -> str:
     """
     Build the prompt for NLP-based column interpretation.
@@ -150,8 +158,20 @@ def excel_nlp_column_prompt(
     The LLM receives a batch of full row data and must return
     one interpreted value per input row.
     """
-    # Limit to prevent context overflow — process in batches externally
+    # Limit to prevent context overflow - process in batches externally
     data_str = "\n".join(f"{i+1}. {val}" for i, val in enumerate(input_data))
+
+    # Build dependency-aware rule when prior NLP columns exist
+    dependency_rule = ""
+    if prior_nlp_columns:
+        col_list = ", ".join(prior_nlp_columns)
+        dependency_rule = (
+            f"6. **DEPENDENCY**: The row data includes previously assigned NLP columns: [{col_list}]. "
+            f'Your output for "{column_name}" MUST be consistent with and more specific than these prior assignments. '
+            f'Treat them as a hierarchy - e.g., if a row has "Category: Technical Issue", '
+            f'your Sub-Category should be a subdivision within "Technical Issue" '
+            f'(like "Battery Replacement"), NOT an independent classification that duplicates the category.\n'
+        )
 
     return (
         f"You are a data analyst. For each row below, analyze ALL the fields provided "
@@ -165,16 +185,9 @@ def excel_nlp_column_prompt(
         f"1. Return exactly {len(input_data)} values in the `values` list, one per input row, in the same order.\n"
         "2. Each value should be a short string (1-3 words for classifications, a number for ratings, or a brief phrase).\n"
         "3. Be consistent — use the same label/rating for similar inputs.\n"
-        "4. **ALWAYS produce a meaningful value for every row.** Use your best analytical judgment "
-        "even when data is ambiguous or incomplete — pick the most likely answer rather than "
-        "leaving it blank. Only return 'N/A' if the row is completely empty (all fields missing).\n"
+        "4. If a row is empty or has insufficient data, return 'N/A'.\n"
         "5. Base your judgment on the actual data in each row, not assumptions.\n"
-        "6. For analytical/assessment tasks (e.g., status, health, risk, RAG rating): "
-        "look at ALL numeric indicators, dates, percentages, and categorical fields together. "
-        "Use common business heuristics — for example, on-time + on-budget + no blockers = Green; "
-        "minor delays or risks = Amber; major issues = Red. Adapt to the specific domain.\n"
-        "7. **Never return empty strings or blank values.** Every entry in the values list must "
-        "be a non-empty string.\n\n"
+        f"{dependency_rule}\n"
         "Return ONLY a valid JSON object matching the required schema. "
         "No markdown fencing, no commentary.\n"
     )

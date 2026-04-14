@@ -76,15 +76,32 @@ class SQLiteManager:
 
     @classmethod
     def _reload_registry(cls, user_id: str, thread_id: str) -> None:
-        """Populate the in-memory registry dict from the persisted DB table."""
+        """Populate the in-memory registry dict from the persisted DB table.
+
+        Also migrates any legacy table names that contain hyphens
+        (from UUIDs) to use underscores so SQL queries work without quoting.
+        """
         key = (user_id, thread_id)
         conn = cls._connections[key]
         cls._ensure_registry_table(conn)
-        cursor = conn.execute(
-            "SELECT doc_id, table_name FROM __doc_table_registry"
-        )
+        cursor = conn.execute("SELECT doc_id, table_name FROM __doc_table_registry")
         registry: Dict[str, List[str]] = {}
         for doc_id, table_name in cursor.fetchall():
+            # Migrate legacy hyphenated table names -> underscores
+            if "-" in table_name:
+                new_name = table_name.replace("-", "_")
+                try:
+                    conn.execute(f'ALTER TABLE "{table_name}" RENAME TO "{new_name}";')
+                    conn.execute(
+                        "UPDATE __doc_table_registry "
+                        "SET table_name = ? WHERE doc_id = ? AND table_name = ?",
+                        (new_name, doc_id, table_name),
+                    )
+                    conn.commit()
+                    print(f"[SQLiteManager] Migrated table: {table_name} -> {new_name}")
+                    table_name = new_name
+                except Exception as e:
+                    print(f"[SQLiteManager] Table rename failed ({table_name}): {e}")
             registry.setdefault(doc_id, []).append(table_name)
         cls._table_registry[key] = registry
 
@@ -336,7 +353,9 @@ class SQLiteManager:
         return "\n\n".join(schema_parts)
 
     @classmethod
-    def execute_query(cls, user_id: str, thread_id: str, query: str, max_rows: int = 500) -> Dict:
+    def execute_query(
+        cls, user_id: str, thread_id: str, query: str, max_rows: int = 500
+    ) -> Dict:
         """
         Execute a SQL query against the user/thread's SQLite database.
         Only SELECT queries are allowed for safety.
@@ -455,9 +474,7 @@ class SQLiteManager:
                 print(f"[SQLiteManager] Error dropping table {table_name}: {e}")
         # Remove from persisted registry table
         try:
-            conn.execute(
-                "DELETE FROM __doc_table_registry WHERE doc_id = ?", (doc_id,)
-            )
+            conn.execute("DELETE FROM __doc_table_registry WHERE doc_id = ?", (doc_id,))
         except Exception:
             pass
         conn.commit()

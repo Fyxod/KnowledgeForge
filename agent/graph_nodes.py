@@ -396,7 +396,13 @@ async def generate(state: AgentState) -> AgentState:
             state.messages.append(AIMessage(content=result.answer))
             state.messages.append(AIMessage("Action taken: " + result.action))
 
-            state.answer = result.answer
+            # For actions that delegate to a dedicated node (excel_create),
+            # don't store the LLM's fabricated answer — the downstream node
+            # will set the real answer after actual processing.
+            if result.action == EXCEL_CREATE:
+                state.answer = ""
+            else:
+                state.answer = result.answer
             state.action = result.action
             state.chunks_used = result.chunks_used or []
             state.web_search_queries = getattr(result, "web_search_queries", []) or []
@@ -653,6 +659,29 @@ def _is_nlp_query(question: str) -> bool:
     """Check if the user's question requires NLP/subjective analysis."""
     q_lower = question.lower()
     return any(kw in q_lower for kw in _NLP_KEYWORDS)
+
+
+# Excel-intent keywords — when present, skip NLP theme extraction so the
+# Excel skill handles per-row classification directly (avoids premature
+# fabricated answers from the generate LLM).
+_EXCEL_REQUEST_KEYWORDS = [
+    "excel",
+    "spreadsheet",
+    "xlsx",
+    "export to file",
+    "download file",
+    "create a file",
+    "pivot table",
+    "create an excel",
+    "make an excel",
+    "give me an excel",
+]
+
+
+def _is_excel_request(question: str) -> bool:
+    """Check if the user explicitly wants an Excel/spreadsheet file."""
+    q_lower = question.lower()
+    return any(kw in q_lower for kw in _EXCEL_REQUEST_KEYWORDS)
 
 
 def _parse_markdown_table_rows(result_text: str) -> tuple:
@@ -1416,6 +1445,16 @@ async def sql_query_node(state: AgentState) -> AgentState:
         # LLM flag (requires_full_data) takes priority; keyword matching is fallback.
         user_q = state.original_query or state.query or ""
         is_nlp = state.requires_full_data or _is_nlp_query(user_q)
+        # When the user explicitly wants Excel output, skip theme extraction —
+        # the Excel skill will handle per-row NLP classification directly.
+        # Theme extraction here would only cause the generate LLM to fabricate
+        # a premature answer before the Excel file is created.
+        if is_nlp and _is_excel_request(user_q):
+            print(
+                "[sql_query_node] NLP query but Excel output requested "
+                "— skipping theme extraction (Excel skill will handle NLP)"
+            )
+            is_nlp = False
         if is_nlp:
             # Re-fetch with no row limit so NLP extraction sees the COMPLETE dataset
             full_result = await execute_sql_query(
@@ -1548,6 +1587,16 @@ async def excel_skill_node(state: AgentState) -> AgentState:
         # Fallback: use the original query as the request
         request_text = state.query or state.original_query or "Export all data"
 
+    # Enrich with user's original query so detailed instructions
+    # (e.g., granular subcategory constraints) reach the planner and NLP prompts.
+    original = state.original_query or state.query or ""
+    if (
+        original
+        and request_text
+        and original.strip().lower() != request_text.strip().lower()
+    ):
+        request_text = f"{original}\n\n(Excel specifics: {request_text})"
+
     print(f"[excel_skill_node] Generating Excel: {request_text}")
 
     try:
@@ -1561,19 +1610,23 @@ async def excel_skill_node(state: AgentState) -> AgentState:
         state.excel_result = result.download_url
 
         # Build a user-friendly answer with download link
-        # Preserve any LLM-generated summary (e.g., when auto-routing large output to Excel)
-        llm_summary = state.answer.strip() if state.answer else ""
-        download_info = (
-            f"I've created your Excel file: **{result.file_name}**\n\n"
-            f"{result.description}\n\n"
-            f"- **Sheets:** {result.sheet_count}\n"
-            f"- **Total rows:** {result.total_rows}\n\n"
-            f"[Download {result.file_name}]({result.download_url})"
-        )
-        if llm_summary:
-            state.answer = f"{llm_summary}\n\n---\n\n{download_info}"
+        if result.total_rows == 0:
+            state.answer = (
+                f"I created the Excel file **{result.file_name}**, but it contains "
+                f"**0 rows of data**. This usually means the SQL query didn't match "
+                f"any rows in your spreadsheet, or the data source couldn't be read.\n\n"
+                f"Please check that the correct file is uploaded and try rephrasing "
+                f"your request.\n\n"
+                f"[Download {result.file_name}]({result.download_url})"
+            )
         else:
-            state.answer = download_info
+            state.answer = (
+                f"I've created your Excel file: **{result.file_name}**\n\n"
+                f"{result.description}\n\n"
+                f"- **Sheets:** {result.sheet_count}\n"
+                f"- **Total rows:** {result.total_rows}\n\n"
+                f"[Download {result.file_name}]({result.download_url})"
+            )
 
         state.messages.append(
             AIMessage(content=f"Excel file created: {result.file_name}")

@@ -17,7 +17,7 @@ class ChunksUsed(BaseModel):
 
 
 class MainLLMOutputInternal(LLMOutputBase):
-    answer: str = Field(description="The answer to the user's question.")
+    answer: str = Field(default="", description="The answer to the user's question.")
     action: Literal[
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
@@ -44,6 +44,7 @@ class MainLLMOutputInternal(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'. E.g., 'Create a pivot table of sales by region with a bar chart'.",
     )
+
     @field_validator("action", mode="before")
     @classmethod
     def normalize_action(cls, v):
@@ -58,14 +59,20 @@ class MainLLMOutputInternal(LLMOutputBase):
                 return "sql_query"
             if val in ["summarize", "summary"]:
                 return "document_summarizer"
-            if val in ["excel", "spreadsheet", "export", "download_excel", "create_excel"]:
+            if val in [
+                "excel",
+                "spreadsheet",
+                "export",
+                "download_excel",
+                "create_excel",
+            ]:
                 return "excel_create"
             return val
         return v
 
 
 class MainLLMOutputInternalWithFailure(LLMOutputBase):
-    answer: str = Field(description="The answer to the user's question.")
+    answer: str = Field(default="", description="The answer to the user's question.")
     action: Literal[
         "answer",
         "document_summarizer",  # requires document id of the document to summarize
@@ -92,6 +99,7 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
     )
+
     @field_validator("action", mode="before")
     @classmethod
     def normalize_action(cls, v):
@@ -106,14 +114,20 @@ class MainLLMOutputInternalWithFailure(LLMOutputBase):
                 return "sql_query"
             if val in ["summarize", "summary"]:
                 return "document_summarizer"
-            if val in ["excel", "spreadsheet", "export", "download_excel", "create_excel"]:
+            if val in [
+                "excel",
+                "spreadsheet",
+                "export",
+                "download_excel",
+                "create_excel",
+            ]:
                 return "excel_create"
             return val
         return v
 
 
 class MainLLMOutputExternal(LLMOutputBase):
-    answer: str = Field(description="The answer to the user's question.")
+    answer: str = Field(default="", description="The answer to the user's question.")
     action: Literal[
         "answer",
         "web_search",
@@ -145,6 +159,7 @@ class MainLLMOutputExternal(LLMOutputBase):
         default=None,
         description="Natural-language description of the Excel file to create. Required when action is 'excel_create'.",
     )
+
     @field_validator("action", mode="before")
     @classmethod
     def normalize_action(cls, v):
@@ -156,7 +171,13 @@ class MainLLMOutputExternal(LLMOutputBase):
                 return "sql_query"
             if val in ["summarize", "summary"]:
                 return "document_summarizer"
-            if val in ["excel", "spreadsheet", "export", "download_excel", "create_excel"]:
+            if val in [
+                "excel",
+                "spreadsheet",
+                "export",
+                "download_excel",
+                "create_excel",
+            ]:
                 return "excel_create"
             return val
         return v

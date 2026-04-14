@@ -27,10 +27,12 @@ async def extract_from_spreadsheet(
     Returns:
         pandas DataFrame with the query results. Empty DataFrame on error.
     """
-    result = SQLiteManager.execute_query(user_id, thread_id, sql_query)
+    # Validate via execute_query (SELECT-only and security checks),
+    # then read directly with pandas for a clean full DataFrame.
+    validation = SQLiteManager.execute_query(user_id, thread_id, sql_query, max_rows=1)
 
-    if not result.get("success"):
-        error = result.get("error", "Unknown error")
+    if not validation.get("success"):
+        error = validation.get("error", "Unknown error")
         print(f"[ExcelSkill:data_extractor] SQL error: {error}")
         return pd.DataFrame()
 
@@ -94,7 +96,9 @@ def extract_from_documents(
 
     if tables:
         total = sum(len(df) for df in tables.values())
-        print(f"[ExcelSkill:data_extractor] Extracted {len(tables)} table(s), {total} total rows from documents")
+        print(
+            f"[ExcelSkill:data_extractor] Extracted {len(tables)} table(s), {total} total rows from documents"
+        )
     else:
         print("[ExcelSkill:data_extractor] No tables found in any documents")
 
@@ -155,7 +159,9 @@ def _extract_markdown_tables(text: str) -> List[pd.DataFrame]:
                 else:
                     break
 
-            if len(table_lines) >= 2:  # header + at least 1 data row (separator optional)
+            if (
+                len(table_lines) >= 2
+            ):  # header + at least 1 data row (separator optional)
                 df = _parse_pipe_table(table_lines)
                 if df is not None and not df.empty:
                     tables.append(df)
@@ -253,9 +259,7 @@ def _parse_pipe_table(lines: List[str]) -> Optional[pd.DataFrame]:
     try:
         # Parse header
         header_line = lines[0]
-        headers = [
-            cell.strip() for cell in header_line.strip("|").split("|")
-        ]
+        headers = [cell.strip() for cell in header_line.strip("|").split("|")]
         headers = [h for h in headers if h]
 
         if not headers:
@@ -272,7 +276,7 @@ def _parse_pipe_table(lines: List[str]) -> Optional[pd.DataFrame]:
             if re.match(r"^\|[\s\-:|]+\|$", line.strip()):
                 continue  # skip separator lines
             cells = [cell.strip() for cell in line.strip("|").split("|")]
-            cells = cells[:len(headers)]  # trim to header count
+            cells = cells[: len(headers)]  # trim to header count
             # Pad if needed
             while len(cells) < len(headers):
                 cells.append("")
@@ -306,7 +310,9 @@ def _parse_space_pipe_table(lines: List[str]) -> Optional[pd.DataFrame]:
 
         # Skip separator if present
         data_start = 1
-        if len(lines) > 1 and re.match(r"^[\s\-:|]+$", lines[1].replace("|", "").strip()):
+        if len(lines) > 1 and re.match(
+            r"^[\s\-:|]+$", lines[1].replace("|", "").strip()
+        ):
             data_start = 2
 
         rows = []
@@ -315,7 +321,7 @@ def _parse_space_pipe_table(lines: List[str]) -> Optional[pd.DataFrame]:
             if re.match(r"^[\s\-:|]+$", line.replace("|", "").strip()):
                 continue
             cells = [cell.strip() for cell in line.split("|")]
-            cells = cells[:len(headers)]
+            cells = cells[: len(headers)]
             while len(cells) < len(headers):
                 cells.append("")
             rows.append(cells)
@@ -379,14 +385,16 @@ def get_document_info(
                 sample_rows = preview_df.head(3).to_dict(orient="records")
                 data_preview += f"\n      Sample: {sample_rows}"
 
-        docs.append({
-            "doc_id": doc_id,
-            "title": data.get("title", filename.replace(".json", "")),
-            "type": doc_type,
-            "table_count": table_count,
-            "tables": table_count > 0,
-            "has_sql_data": data.get("has_sql_data", False),
-            "data_preview": data_preview,
-        })
+        docs.append(
+            {
+                "doc_id": doc_id,
+                "title": data.get("title", filename.replace(".json", "")),
+                "type": doc_type,
+                "table_count": table_count,
+                "tables": table_count > 0,
+                "has_sql_data": data.get("has_sql_data", False),
+                "data_preview": data_preview,
+            }
+        )
 
     return docs

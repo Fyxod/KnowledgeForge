@@ -36,7 +36,9 @@ class SheetSpec(BaseModel):
     """Specification for a single sheet in the Excel workbook."""
 
     sheet_name: str = Field(description="Name of the sheet tab")
-    description: str = Field(description="Brief description of what this sheet contains")
+    description: str = Field(
+        description="Brief description of what this sheet contains"
+    )
     columns: List[SheetColumnSpec] = Field(
         description="Column definitions for this sheet"
     )
