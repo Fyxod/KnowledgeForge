@@ -5,7 +5,7 @@ Uses Ollama's vision-capable models (e.g., qwen3-vl:8b) to extract
 structured text from presentation slides, complex PDF pages, and
 other visually-rich documents that standard OCR misses.
 
-Follows the project's async httpx pattern (see core/llm/unload_ollama_model.py).
+Follows the project's async httpx usage patterns for non-blocking API calls.
 """
 
 import asyncio
@@ -225,7 +225,9 @@ async def vlm_parse_concurrent(
     semaphore = asyncio.Semaphore(max_concurrent)
 
     prompt_label = "custom" if custom_prompt else prompt_type
-    print(f"[VLM] Concurrent processing: {total} pages, max {max_concurrent} at a time, prompt: {prompt_label}")
+    print(
+        f"[VLM] Concurrent processing: {total} pages, max {max_concurrent} at a time, prompt: {prompt_label}"
+    )
     overall_start = time.time()
 
     async def _process_one(idx: int, img_bytes: bytes) -> str:
@@ -235,7 +237,12 @@ async def vlm_parse_concurrent(
                 # Timeout inside semaphore so a hanging VLM call releases the
                 # slot promptly instead of blocking other pages for 4+ minutes.
                 result = await asyncio.wait_for(
-                    vlm_parse_slide(img_bytes, port=port, prompt_type=prompt_type, custom_prompt=custom_prompt),
+                    vlm_parse_slide(
+                        img_bytes,
+                        port=port,
+                        prompt_type=prompt_type,
+                        custom_prompt=custom_prompt,
+                    ),
                     timeout=270,  # slightly above httpx 240s timeout as safety net
                 )
             except asyncio.TimeoutError:

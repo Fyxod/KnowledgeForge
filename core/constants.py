@@ -56,7 +56,6 @@ MAIN_MODEL = (
 
 # GPU LLM configurations — all on PORT1 (single Ollama instance for KV cache consistency)
 GPU_QUERY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
-GPU_QUERY_LLM2 = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_DECOMPOSITION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_COMBINATION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_DOC_SUMMARIZER_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)

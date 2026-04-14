@@ -13,11 +13,10 @@ from agent.combination import combination_node
 from agent.decomposition import decomposition_node
 from agent.tools.search import search_tavily as search_tool
 from agent.tools.sql_query import get_sql_schema
-from core.constants import EXTERNAL, GPU_QUERY_LLM, GPU_QUERY_LLM2, INTERNAL, SWITCHES
+from core.constants import EXTERNAL, GPU_QUERY_LLM, INTERNAL, SWITCHES
 from core.database import db
 from core.llm.outputs import DecompositionLLMOutput
 from core.services.sqlite_manager import SQLiteManager
-from core.utils.extra_done_check import is_extra_done
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -147,68 +146,62 @@ async def query(request: Request, body: QueryRequest):
     all_favicons = []
     start_time = time.time()
     if decomposed:
-        can_use_second_model = is_extra_done(user_id, thread_id)
         print("Query to be decomposed")
         print("No of sub-queries:", len(decomposition_result.sub_queries))
 
-        async def run_worker(model, task_queue, results):
-            while True:
-                try:
-                    idx, query_data = task_queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-
-                qs = time.time()
-                state = await Agent.ainvoke(
-                    AgentState(
-                        user_id=user_id,
-                        thread_id=thread_id,
-                        query=query_data["query"],
-                        resolved_query=decomposition_result.resolved_query,
-                        original_query=question,
-                        messages=[],
-                        web_search=False,
-                        llm=model,
-                        initial_search_answer=query_data["answer"] or "",
-                        initial_search_results=query_data["results"] or [],
-                        mode=mode,
-                        use_self_knowledge=use_self_knowledge,
-                        has_spreadsheet_data=has_spreadsheet,
-                        spreadsheet_only=spreadsheet_only,
-                        spreadsheet_schema=spreadsheet_schema,
-                        thread_instructions=thread_instructions,
-                        requires_full_data=getattr(
-                            decomposition_result, "requires_full_data", False
-                        ),
-                        retrieval_queries=getattr(
-                            decomposition_result, "retrieval_queries", []
-                        ),
-                    )
+        async def run_sub_query(idx, query_data):
+            qs = time.time()
+            state = await Agent.ainvoke(
+                AgentState(
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    query=query_data["query"],
+                    resolved_query=decomposition_result.resolved_query,
+                    original_query=question,
+                    messages=[],
+                    web_search=False,
+                    llm=GPU_QUERY_LLM,
+                    initial_search_answer=query_data["answer"] or "",
+                    initial_search_results=query_data["results"] or [],
+                    mode=mode,
+                    use_self_knowledge=use_self_knowledge,
+                    has_spreadsheet_data=has_spreadsheet,
+                    spreadsheet_only=spreadsheet_only,
+                    spreadsheet_schema=spreadsheet_schema,
+                    thread_instructions=thread_instructions,
+                    requires_full_data=getattr(
+                        decomposition_result, "requires_full_data", False
+                    ),
+                    retrieval_queries=getattr(
+                        decomposition_result, "retrieval_queries", []
+                    ),
                 )
+            )
 
-                state = AgentState(**state)
+            state = AgentState(**state)
 
-                if getattr(state, "web_search_results", None):
-                    for res in state.web_search_results:
-                        favicons = [
-                            r.get("favicon") for r in res["results"] if r.get("favicon")
-                        ]
-                        all_favicons.extend(favicons)
+            sub_query_favicons = []
+            if getattr(state, "web_search_results", None):
+                for res in state.web_search_results:
+                    favicons = [
+                        r.get("favicon") for r in res["results"] if r.get("favicon")
+                    ]
+                    sub_query_favicons.extend(favicons)
 
-                qe = time.time() - qs
-                chunks.extend(state.chunks)
-                chunks_used.extend(state.chunks_used)
-                if state.confidence_score:
-                    confidence_scores.append(state.confidence_score)
-                print(
-                    f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds using {model}"
-                )
+            qe = time.time() - qs
+            print(
+                f"Sub-query '{idx}. {query_data['query']}' processed in {qe:.2f} seconds"
+            )
 
-                results[idx] = {
-                    "sub_query": query_data["query"],
-                    "sub_answer": state.answer,
-                    "excel_result": getattr(state, "excel_result", None),
-                }
+            return idx, {
+                "sub_query": query_data["query"],
+                "sub_answer": state.answer,
+                "excel_result": getattr(state, "excel_result", None),
+                "chunks": state.chunks,
+                "chunks_used": state.chunks_used,
+                "web_favicons": sub_query_favicons,
+                "confidence_score": state.confidence_score,
+            }
 
         # Prepare a queue of sub-queries
         if mode == EXTERNAL:
@@ -268,32 +261,21 @@ async def query(request: Request, body: QueryRequest):
                 for sub_query in decomposition_result.sub_queries
             ]
 
-        task_queue = asyncio.Queue()
-        for idx, query_data in enumerate(cleaned_results):
-            task_queue.put_nowait((idx, query_data))
-
         # Results stored in index order
         results = [None] * len(cleaned_results)
-
-        # Start with the first model
-        workers = [asyncio.create_task(run_worker(GPU_QUERY_LLM, task_queue, results))]
-
-        # Add the second model only if allowed
-        if len(thread.get("documents", [])) == 0 or can_use_second_model:
-            print("Using second model for parallel execution")
-            workers.append(
-                asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results))
-            )
-        else:
-            print("Second model disabled, running only on first model")
-
-        # if can_use_second_model:
-        #     print("Using second model for parallel execution")
-        #     workers.append(asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results)))
-        # else:
-        #     print("Second model disabled, running only on first model")
-
-        await asyncio.gather(*workers)
+        print(f"Running {len(cleaned_results)} sub-queries in parallel")
+        sub_query_tasks = [
+            asyncio.create_task(run_sub_query(idx, query_data))
+            for idx, query_data in enumerate(cleaned_results)
+        ]
+        sub_query_outputs = await asyncio.gather(*sub_query_tasks)
+        for idx, result in sub_query_outputs:
+            results[idx] = result
+            chunks.extend(result.get("chunks", []))
+            chunks_used.extend(result.get("chunks_used", []))
+            all_favicons.extend(result.get("web_favicons", []))
+            if result.get("confidence_score"):
+                confidence_scores.append(result["confidence_score"])
 
         # Deduplicate chunks across sub-queries (same content from different
         # sub-queries wastes LLM context). Keep highest rerank_score per chunk.

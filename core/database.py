@@ -27,7 +27,6 @@ user_schema = {
                         "chats",
                         "createdAt",
                         "updatedAt",
-                        "extra_done",
                     ],
                     "properties": {
                         "thread_name": {"bsonType": "string"},
@@ -114,10 +113,6 @@ user_schema = {
                         },
                         "createdAt": {"bsonType": "date"},
                         "updatedAt": {"bsonType": "date"},
-                        "extra_done": {
-                            "bsonType": "bool",
-                            "description": "Indicates if extra task is done",
-                        },
                         "instructions": {
                             "bsonType": "array",
                             "description": "User-defined instructions for this thread",

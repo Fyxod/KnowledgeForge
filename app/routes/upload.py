@@ -42,7 +42,6 @@ from core.parsers.process_files import process_files
 from core.services.upload_files import upload_files
 from core.studio_features.summarizer import summarize_documents
 from core.studio_features.word_cloud import create_stop_words
-from core.utils.extra_done_check import mark_extra_done
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -106,7 +105,6 @@ async def upload_file(
                         "chats": [],
                         "createdAt": now,
                         "updatedAt": now,
-                        "extra_done": False,
                     }
                 }
                 db.users.update_one({"userId": user_id}, {"$set": new_thread})
@@ -134,12 +132,10 @@ async def upload_file(
                 "chats": [],
                 "createdAt": now,
                 "updatedAt": now,
-                "extra_done": False,
             }
         }
         db.users.update_one({"userId": user_id}, {"$set": new_thread})
     else:
-        mark_extra_done(user_id, thread_id, False)
         print(f"Updating existing thread with ID: {thread_id}")
         # Check if thread exists for this user
         user_threads = user.get("threads", {})

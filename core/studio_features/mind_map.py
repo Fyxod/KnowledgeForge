@@ -19,9 +19,7 @@ from core.llm.outputs import (
     MindMapOutput,
     Node,
 )
-from core.llm.unload_ollama_model import unload_ollama_model
 from core.models.document import Documents
-from core.utils.extra_done_check import mark_extra_done
 
 
 # Constants
@@ -380,29 +378,6 @@ async def add_node_descriptions_global(
     )
 
     await update_mind_map(data)
-    asyncio.create_task(delayed_mark(parsed_data))
-
-
-async def delayed_mark(parsed_data: Documents):
-    """
-    Delayed cleanup task after mind map generation.
-
-    Waits 60 seconds, unloads the Ollama model, then marks the thread as complete.
-
-    Args:
-        parsed_data: Documents object with user and thread information
-    """
-    await asyncio.sleep(60)
-    await unload_ollama_model(
-        GPU_NODE_DESCRIPTION_LLM.model, GPU_NODE_DESCRIPTION_LLM.port
-    )
-    await asyncio.sleep(20)
-
-    modified = mark_extra_done(parsed_data.user_id, parsed_data.thread_id, True)
-    if modified:
-        print("Marked thread as extra_done")
-    else:
-        print("Failed to mark thread as extra_done")
 
 
 def build_mind_maps_node_prompt_global(parsed_data: Documents) -> str:
