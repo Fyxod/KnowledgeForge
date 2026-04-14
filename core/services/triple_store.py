@@ -1,5 +1,5 @@
 """
-Phase 3.2: Triple Store for Entity Relationships.
+Triple store for entity relationships.
 
 File-based SQLite store for (subject, predicate, object) triples
 extracted from document chunks. Persists across server restarts.

@@ -35,7 +35,7 @@ export interface Chat {
   type: 'user' | 'agent';
   content: string;
   timestamp: string;
-  // Enhanced metadata fields from Phase 1/2 backend
+  // Enhanced metadata fields from backend updates
   confidence_score?: string | number; // Backend sends "high"/"medium"/"low"
   thought_process?: string; // For Deep Reasoning output
   sources?: {

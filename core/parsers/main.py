@@ -501,7 +501,7 @@ async def extract_document(
                 print(f"[SQLite] Failed to load {safe_file_name} into SQLite: {e}")
                 traceback.print_exc()
 
-            # --- Generate Global Workbook Context (Phase 3) ---
+            # --- Generate Global Workbook Context ---
             # Create a summary of all sheets to give the LLM a "Table of Contents"
             workbook_summary_lines = ["# Workbook Structure Summary"]
             for s_name, (s_df, _) in sheets_data.items():
@@ -1199,7 +1199,7 @@ async def extract_document(
             if table_blocks:
                 page_text += "\n\n" + "\n\n".join(table_blocks)
 
-            # --- VLM candidate detection (Phase 1: collect, don't process yet) ---
+            # --- VLM candidate detection (collect, don't process yet) ---
             # VLM runs on every page when USE_VISION_MODEL=True (the default).
             # Set USE_VISION_MODEL=False in .env to disable (e.g. CPU-only environments).
             if settings.USE_VISION_MODEL:
@@ -1428,7 +1428,7 @@ async def extract_document(
                 Page(number=page_number + 1, text=page_text, images=image_names)
             )
 
-        # --- Phase 2: Concurrent VLM processing for candidate pages ---
+        # --- Concurrent VLM processing for candidate pages ---
         if vlm_candidates:
             print(
                 f"[PDF] {len(vlm_candidates)} pages queued for concurrent VLM processing"
@@ -1484,7 +1484,7 @@ async def extract_document(
                     f"[PDF] VLM ({prompt_used}) appended to page {candidate['page_number']} ({len(vlm_text)} chars)"
                 )
 
-        # --- Phase 3: Concurrent GLM-OCR processing for candidate pages ---
+        # --- Concurrent GLM-OCR processing for candidate pages ---
         if glm_ocr_candidates:
             print(
                 f"[PDF] {len(glm_ocr_candidates)} pages queued for GLM-OCR processing"

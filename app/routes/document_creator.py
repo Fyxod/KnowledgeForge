@@ -215,7 +215,7 @@ async def delete_document(request: Request, doc_gen_id: str):
     return JSONResponse(content={"status": "deleted", "doc_gen_id": doc_gen_id})
 
 
-# ─── Phase 1: Generate Outline ───────────────────────────────────────────
+# ─── Generate Outline ────────────────────────────────────────────────────
 
 
 @router.post("/document-creator/outline")
@@ -336,7 +336,7 @@ async def get_outline_status(request: Request, tracking_id: str):
         return JSONResponse(content={"status": True, "outline": gen_status["data"]})
 
 
-# ─── Phase 1b: Update Outline (User Edits) ───────────────────────────────
+# ─── Update Outline (User Edits) ─────────────────────────────────────────
 
 
 @router.put("/document-creator/outline/{doc_gen_id}")
@@ -402,7 +402,7 @@ async def update_outline(
     )
 
 
-# ─── Phase 2: Generate Sections ──────────────────────────────────────────
+# ─── Generate Sections ───────────────────────────────────────────────────
 
 
 @router.post("/document-creator/generate/{doc_gen_id}")
@@ -462,7 +462,7 @@ async def start_generation(request: Request, doc_gen_id: str):
     )
 
 
-# ─── Phase 2b: Get Generation Status ─────────────────────────────────────
+# ─── Get Generation Status ────────────────────────────────────────────────
 
 
 @router.get("/document-creator/status/{doc_gen_id}")
@@ -508,7 +508,7 @@ async def get_status(request: Request, doc_gen_id: str):
     )
 
 
-# ─── Phase 3: Get Full Document Preview ──────────────────────────────────
+# ─── Get Full Document Preview ───────────────────────────────────────────
 
 
 @router.get("/document-creator/preview/{doc_gen_id}")

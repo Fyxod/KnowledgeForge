@@ -12,8 +12,8 @@ SWITCHES = {
     # This can be turned off if all the queries are independent and do not need context from previous chats.
     "REMOTE_GPU": settings.REMOTE_GPU,  # Use remote GPU LLMs
     # please refer to core/Setup_Local_ollama.md for setting up local LLM server
-    "CORRECTIVE_RETRIEVAL": True,  # Phase 2.1: CRAG-style re-retrieval on low-confidence results
-    "HYDE": False,  # Phase 2.3: Hypothetical Document Embeddings (adds ~2-5s query latency)
+    "CORRECTIVE_RETRIEVAL": True,  # CRAG-style re-retrieval on low-confidence results
+    "HYDE": False,  # Hypothetical Document Embeddings (adds ~2-5s query latency)
     "DOCUMENT_CREATOR": True,  # Interactive document generation (PPTX/DOCX/PDF)
     "GLM_OCR": True,  # GLM-OCR for structured document OCR (tables, formulas, figures). Runs alongside existing OCR.
     "EXCEL_SKILL": True,  # Excel creation/download skill — generates .xlsx from chat or sidebar
@@ -107,9 +107,9 @@ DOCUMENT_SUMMARIZER = "document_summarizer"
 SELF_KNOWLEDGE = "self_knowledge"
 SQL_QUERY = "sql_query"
 EXCEL_CREATE = "excel_create"  # Excel skill: create downloadable .xlsx files
-EVALUATOR = "evaluator"  # Phase 2.1: CRAG corrective retrieval evaluator node
+EVALUATOR = "evaluator"  # CRAG corrective retrieval evaluator node
 MAX_WEB_SEARCH = 2
 MAX_SQL_RETRIES = 6
-MAX_RETRIEVAL_ATTEMPTS = 2  # Phase 2.1: Max re-retrieval attempts on low confidence
+MAX_RETRIEVAL_ATTEMPTS = 2  # Max re-retrieval attempts on low confidence
 INTERNAL = "Internal"
 EXTERNAL = "External"

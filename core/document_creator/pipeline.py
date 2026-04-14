@@ -42,7 +42,7 @@ async def generate_outline(
     document_contents: str,
 ) -> DocumentCreatorState:
     """
-    Phase 1: Generate a document outline from source materials.
+    Generate a document outline from source materials.
 
     Uses broad RAG retrieval across all source docs to build context,
     then calls LLM to generate a structured outline.
@@ -130,7 +130,7 @@ async def generate_sections(
     progress_callback=None,
 ) -> DocumentCreatorState:
     """
-    Phase 2: Generate content section-by-section.
+    Generate content section-by-section.
 
     Each section uses per-section RAG retrieval and sliding context
     (compact outline + previous section summary + terminology).
@@ -376,7 +376,7 @@ async def regenerate_section(
 
 async def review_document(state: DocumentCreatorState) -> DocumentCreatorState:
     """
-    Phase 3: Quality self-review of the generated document.
+    Quality self-review of the generated document.
     """
     ctx = DocumentContextManager(state)
     outline_summary = ctx.get_compact_outline()

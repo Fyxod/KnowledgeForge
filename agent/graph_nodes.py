@@ -76,7 +76,7 @@ async def retriever(state: AgentState) -> AgentState:
     # Uses adaptive scaling based on document count
     query = state.query or state.resolved_query or state.original_query
 
-    # Phase 2.2: Multi-query retrieval — collect distinct query variants
+    # Multi-query retrieval — collect distinct query variants
     # for broader coverage (original phrasing + resolved/rewritten versions)
     additional_queries = []
     if state.original_query and state.original_query != query:
@@ -95,7 +95,7 @@ async def retriever(state: AgentState) -> AgentState:
                 additional_queries.append(rq)
         print(f"[Retrieval] +{len(state.retrieval_queries)} semantic expansion queries")
 
-    # Phase 2.3: HyDE — generate a hypothetical document passage for retrieval
+    # HyDE — generate a hypothetical document passage for retrieval
     if SWITCHES.get("HYDE", False):
         try:
             hyde_start = time.time()
@@ -219,7 +219,7 @@ async def retriever(state: AgentState) -> AgentState:
     else:
         state.chunks = modified_docs
 
-    # Phase 3.2: Look up entity-relation triples for query entities
+    # Look up entity-relation triples for query entities
     try:
         query_entities = extract_query_entities(query)
         if query_entities:
@@ -1680,7 +1680,7 @@ def summary_router(state: AgentState) -> str:
 
 async def evaluator(state: AgentState) -> AgentState:
     """
-    Phase 2.1: CRAG Corrective Retrieval — evaluates retrieved chunk quality.
+    CRAG Corrective Retrieval — evaluates retrieved chunk quality.
 
     After the retriever, this node assesses whether the chunks are sufficient
     to answer the query. If not, it refines the query and triggers re-retrieval.

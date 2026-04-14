@@ -1,4 +1,4 @@
-"""Phase 2.1: CRAG Corrective Retrieval — Evaluator LLM output schema."""
+"""CRAG corrective retrieval evaluator LLM output schema."""
 
 from typing import Literal, Optional
 

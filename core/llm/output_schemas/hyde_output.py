@@ -1,4 +1,4 @@
-"""Phase 2.3: HyDE — Hypothetical Document Embeddings output schema."""
+"""HyDE hypothetical document embeddings output schema."""
 
 from pydantic import Field
 

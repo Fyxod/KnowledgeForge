@@ -306,7 +306,7 @@ async def hybrid_retrieve(
     Uses Reciprocal Rank Fusion (RRF) to merge results from both retrievers,
     providing both semantic understanding and keyword matching.
 
-    Phase 2.2: Supports multi-query retrieval — when additional_queries are provided,
+    Supports multi-query retrieval — when additional_queries are provided,
     retrieves for each query variant in parallel and merges all result lists via RRF.
     This gives broader coverage for rewritten/decomposed queries.
 
@@ -383,7 +383,7 @@ async def hybrid_retrieve(
         fused = reciprocal_rank_fusion(result_lists)
         print(f"RRF fusion produced {len(fused)} unique results")
 
-    # Phase 1.2: Entity + keyword boosting with synonym expansion
+    # Entity + keyword boosting with synonym expansion
     # 1) Named entity boost — only from PRIMARY query (not HyDE/variants) to avoid noise
     query_entities = extract_query_entities(query)
 
@@ -530,7 +530,7 @@ async def get_thread_documents_retriever(
     Get retriever for all documents in a thread with score-aware document diversity.
     Uses hybrid search (vector + BM25) for improved recall.
 
-    Phase 2.2: Supports multi-query retrieval via additional_queries parameter.
+    Supports multi-query retrieval via additional_queries parameter.
 
     Strategy (replaces hard per-doc minimum allocation):
     1. Fetch a broad candidate pool via hybrid retrieval.

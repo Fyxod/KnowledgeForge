@@ -1,4 +1,4 @@
-"""Phase 2.3: HyDE — Hypothetical Document Embeddings prompt."""
+"""HyDE hypothetical document embeddings prompt."""
 
 
 def hyde_prompt(query: str) -> list:

@@ -1,10 +1,10 @@
 """
 Index-time enrichment for RAG chunks.
 
-Phase 1.1: Programmatic Context Injection — heading detection, keyword extraction, adjacent context
-Phase 1.2: Entity NER Metadata — spaCy-based entity extraction
-Phase 3.1: Entity Profiles — aggregate entity mentions into profile chunks
-Phase 3.2: Triple Extraction — entity-relation triples from co-occurring NER entities
+Programmatic context injection — heading detection, keyword extraction, adjacent context
+Entity NER metadata — spaCy-based entity extraction
+Entity profiles — aggregate entity mentions into profile chunks
+Triple extraction — entity-relation triples from co-occurring NER entities
 """
 
 import re
@@ -31,7 +31,7 @@ _STOP_WORDS = frozenset(
 )
 
 
-# ── Phase 1.1: Programmatic Context Injection ──
+# ── Programmatic Context Injection ──
 
 
 def extract_document_keywords(full_text: str, top_n: int = 8) -> List[str]:
@@ -151,7 +151,7 @@ def build_enriched_chunk(
     return "\n".join(parts)
 
 
-# ── Phase 1.2: Entity NER ──
+# ── Entity NER ──
 
 _nlp = None
 _NER_AVAILABLE = None
@@ -352,7 +352,7 @@ def extract_query_keywords(query: str) -> List[str]:
     return [w for w in words if w not in _STOP_WORDS]
 
 
-# ── Phase 3.2: Triple Extraction ──
+# ── Triple Extraction ──
 
 
 def extract_entity_triples(text: str) -> List[Dict[str, str]]:
@@ -427,7 +427,7 @@ def extract_entity_triples(text: str) -> List[Dict[str, str]]:
     return triples
 
 
-# ── Phase 3.1: Entity Profiles ──
+# ── Entity Profiles ──
 
 
 def build_entity_profiles(
@@ -514,7 +514,7 @@ def build_entity_profiles(
     return profiles
 
 
-# ── Phase 1.3: Document Summary for Index ──
+# ── Document Summary for Index ──
 
 
 def build_extractive_summary(full_text: str, title: str, max_chars: int = 500) -> str:

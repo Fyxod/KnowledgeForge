@@ -353,7 +353,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
 
     chunk_data = []
 
-    # Chunking with contextual enrichment (Phase 1.1 + 1.2 + 1.3 + 3.1)
+    # Chunking with contextual enrichment (context injection + entity NER + summary + entity profiles)
     start_time = time.time()
     for doc in docs.documents:
         if doc.type == "spreadsheet":
@@ -361,9 +361,9 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
             continue
 
         total_pages = len(doc.content)
-        # Phase 1.1: Extract document-level keywords once per document
+        # Extract document-level keywords once per document
         doc_keywords = extract_document_keywords(doc.full_text)
-        # Phase 3.1: Collect entity mentions for entity profile building
+        # Collect entity mentions for entity profile building
         entity_mentions = []
 
         for page in doc.content:
@@ -372,7 +372,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
             hier_chunks = await asyncio.to_thread(
                 chunk_page_text_hierarchical, page.text
             )
-            # Phase 1.1: Detect section heading for this page
+            # Detect section heading for this page
             heading = detect_page_heading(page.text)
             # Extract child texts for adjacent-sentence context building
             child_texts = [item["child_text"] for item in hier_chunks]
@@ -386,7 +386,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                 child_id = f"{doc.id}_page{page.number}_p{p_idx}_c{c_idx}"
                 parent_id = f"{doc.id}_page{page.number}_p{p_idx}"
 
-                # Phase 1.1: Build enriched child chunk with programmatic context
+                # Build enriched child chunk with programmatic context
                 adjacent_ctx = get_adjacent_sentences(child_texts, flat_idx, _HAS_NLTK)
                 enriched_chunk = build_enriched_chunk(
                     chunk_text=child_text,
@@ -412,12 +412,12 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     "title": doc.title,
                 }
 
-                # Phase 1.2: Extract entities — used for both metadata and profiles
+                # Extract entities — used for both metadata and profiles
                 names, types = extract_entities(child_text)
                 if names:
                     metadata["entities"] = "|".join(names[:15])
                     metadata["entity_types"] = "|".join(types[:15])
-                    # Phase 3.1: Collect for entity profiles
+                    # Collect for entity profiles
                     for name, etype in zip(names, types):
                         entity_mentions.append(
                             {
@@ -430,7 +430,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
 
                 chunk_data.append((child_id, enriched_chunk, metadata))
 
-        # Phase 1.3: Add document summary as a special indexed chunk
+        # Add document summary as a special indexed chunk
         summary_text = doc.summary if doc.summary else None
         if not summary_text:
             summary_text = build_extractive_summary(doc.full_text, doc.title)
@@ -454,7 +454,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
             summary_metadata.update(ner_meta)
             chunk_data.append((summary_id, summary_enriched, summary_metadata))
 
-        # Phase 3.1: Build entity profile chunks for frequently mentioned entities
+        # Build entity profile chunks for frequently mentioned entities
         if entity_mentions:
             profiles = build_entity_profiles(
                 entity_mentions, doc.title, search_prefix=SEARCH_DOCUMENT_PREFIX
@@ -477,7 +477,7 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                 f"[Entity Profiles] Created {len(profiles)} profiles for doc {doc.title}"
             )
 
-        # Phase 3.2: Extract and store entity-relation triples
+        # Extract and store entity-relation triples
         try:
             doc_triples = []
             for page in doc.content:
@@ -597,7 +597,7 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
     chunk_data = []
     total_pages = len(doc.content)
     doc_keywords = extract_document_keywords(getattr(doc, "full_text", ""))
-    # Phase 3.1: Collect entity mentions for entity profile building
+    # Collect entity mentions for entity profile building
     entity_mentions = []
 
     for page in doc.content:
@@ -619,7 +619,7 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
             child_id = f"{thread_id}_{doc.id}_page{page.number}_p{p_idx}_c{c_idx}"
             parent_id = f"{thread_id}_{doc.id}_page{page.number}_p{p_idx}"
 
-            # Phase 1.1: Build enriched child chunk with programmatic context
+            # Build enriched child chunk with programmatic context
             adjacent_ctx = get_adjacent_sentences(child_texts, flat_idx, _HAS_NLTK)
             enriched_chunk = build_enriched_chunk(
                 chunk_text=child_text,
@@ -644,12 +644,12 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
                 "file_name": doc.file_name,
                 "title": doc.title,
             }
-            # Phase 1.2: Extract entities — used for both metadata and profiles
+            # Extract entities — used for both metadata and profiles
             names, types = extract_entities(child_text)
             if names:
                 metadata["entities"] = "|".join(names[:15])
                 metadata["entity_types"] = "|".join(types[:15])
-                # Phase 3.1: Collect for entity profiles
+                # Collect for entity profiles
                 for name, etype in zip(names, types):
                     entity_mentions.append(
                         {
@@ -662,7 +662,7 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
 
             chunk_data.append((child_id, enriched_chunk, metadata))
 
-    # Phase 1.3: Document summary chunk
+    # Document summary chunk
     full_text = getattr(doc, "full_text", "")
     summary_text = getattr(doc, "summary", None) or build_extractive_summary(full_text, doc.title)
     if summary_text:
@@ -685,7 +685,7 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
         summary_metadata.update(ner_meta)
         chunk_data.append((summary_id, summary_enriched, summary_metadata))
 
-    # Phase 3.1: Build entity profile chunks
+    # Build entity profile chunks
     if entity_mentions:
         profiles = build_entity_profiles(
             entity_mentions, doc.title, search_prefix=SEARCH_DOCUMENT_PREFIX
@@ -708,7 +708,7 @@ async def add_existing_document_to_store(doc, user_id: str, thread_id: str):
             f"[Entity Profiles] Created {len(profiles)} profiles for doc {doc.title}"
         )
 
-    # Phase 3.2: Extract and store entity-relation triples
+    # Extract and store entity-relation triples
     try:
         doc_triples = []
         for page in doc.content:

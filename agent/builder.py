@@ -40,7 +40,7 @@ graph_builder.add_node(EVALUATOR, evaluator)
 graph_builder.set_entry_point(RETRIEVER)
 
 # Define edges
-# Phase 2.1: RETRIEVER → EVALUATOR → {GENERATE, RETRIEVER (re-retrieve)}
+# RETRIEVER → EVALUATOR → {GENERATE, RETRIEVER (re-retrieve)}
 graph_builder.add_edge(RETRIEVER, EVALUATOR)
 graph_builder.add_conditional_edges(
     EVALUATOR,

@@ -1,4 +1,4 @@
-"""Phase 2.1: CRAG Corrective Retrieval — Evaluator prompt."""
+"""CRAG corrective retrieval evaluator prompt."""
 
 from typing import Any, Dict, List
 

@@ -507,7 +507,7 @@ def main_prompt(
             {"role": "system", "parts": f"**Document Chunks (Context):**\n{chunks}\n"}
         )
 
-    # ── Phase 3.2: Entity relationship triples ──
+    # ── Entity relationship triples ──
     if triple_context:
         contents.append(
             {
