@@ -63,26 +63,21 @@ def _get_cached_llm(model: str, port: int) -> MyServerLLM:
     return _llm_cache[key]
 
 
-API_KEYS = [
-    settings.API_KEY_1,
-    settings.API_KEY_2,
-    settings.API_KEY_3,
-    settings.API_KEY_4,
-    settings.API_KEY_5,
-    settings.API_KEY_6,
-]
+GEMINI_API_KEYS = settings.GEMINI_API_KEYS
 
-openai_client = AsyncOpenAI(api_key=settings.OPENAI_API)
+openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 MAX_RETRIES = 4  # Reduced from 8: JSON sanitizer + json_repair handles most parse errors on first attempt
 
 # Thread-safe API key cycling
-_api_key_cycle = itertools.cycle(API_KEYS)
+_api_key_cycle = itertools.cycle(GEMINI_API_KEYS) if GEMINI_API_KEYS else None
 _api_key_lock = asyncio.Lock()
 
 
 async def _next_api_key():
     """Get the next API key in round-robin fashion, safely under concurrency."""
     async with _api_key_lock:
+        if _api_key_cycle is None:
+            raise RuntimeError("No API keys configured for GEMINI provider.")
         return next(_api_key_cycle)
 
 
@@ -247,61 +242,66 @@ CRITICAL OUTPUT RULES:
 
         # === 2. GEMINI FALLBACK ===
         if SWITCHES["FALLBACK_TO_GEMINI"]:
-            print("Falling back to Gemini...")
+            if not GEMINI_API_KEYS:
+                print(
+                    "FALLBACK_TO_GEMINI is enabled, but GEMINI_API_KEYS is empty. Skipping Gemini fallback."
+                )
+            else:
+                print("Falling back to Gemini...")
 
-            for _ in range(len(API_KEYS)):
-                api_key = await _next_api_key()
-                client = genai.Client(api_key=api_key)
-                s = time.time()
-                raw_output = None
-                try:
-                    config = genai.types.GenerateContentConfig(
-                        temperature=0.2,
-                        max_output_tokens=200000,
-                        response_mime_type="text/plain",
-                        safety_settings=[],
-                    )
-
-                    if remove_thinking:
-                        config.thinking_config = genai.types.ThinkingConfig(
-                            thinking_budget=0
-                        )
-
-                    response = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            client.models.generate_content,
-                            model=FALLBACK_GEMINI_MODEL,
-                            contents=effective_prompt,
-                            config=config,
-                        ),
-                        timeout=120,
-                    )
-
-                    # Try to extract the raw text content
+                for _ in range(len(GEMINI_API_KEYS)):
+                    api_key = await _next_api_key()
+                    client = genai.Client(api_key=api_key)
+                    s = time.time()
                     raw_output = None
                     try:
-                        raw_output = response.text or str(response)
-                    except Exception:
-                        raw_output = str(response)
-
-                    structured = _try_parse(raw_output, parser, response_schema)
-                    e = time.time()
-                    print(f"Success via Gemini, LLM call took {e - s:.2f}s")
-                    return structured
-
-                except asyncio.TimeoutError:
-                    print("Gemini timeout — switching key...")
-                except Exception as e:
-                    print(f"Gemini error: {e}")
-                    if raw_output:
-                        _log_parse_failure(
-                            source="gemini",
-                            attempt=attempt,
-                            raw_output=raw_output,
-                            error=str(e),
-                            schema_name=response_schema.__name__,
+                        config = genai.types.GenerateContentConfig(
+                            temperature=0.2,
+                            max_output_tokens=200000,
+                            response_mime_type="text/plain",
+                            safety_settings=[],
                         )
-                    await asyncio.sleep(0.2)
+
+                        if remove_thinking:
+                            config.thinking_config = genai.types.ThinkingConfig(
+                                thinking_budget=0
+                            )
+
+                        response = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                client.models.generate_content,
+                                model=FALLBACK_GEMINI_MODEL,
+                                contents=effective_prompt,
+                                config=config,
+                            ),
+                            timeout=120,
+                        )
+
+                        # Try to extract the raw text content
+                        raw_output = None
+                        try:
+                            raw_output = response.text or str(response)
+                        except Exception:
+                            raw_output = str(response)
+
+                        structured = _try_parse(raw_output, parser, response_schema)
+                        e = time.time()
+                        print(f"Success via Gemini, LLM call took {e - s:.2f}s")
+                        return structured
+
+                    except asyncio.TimeoutError:
+                        print("Gemini timeout — switching key...")
+                    except Exception as e:
+                        print(f"Gemini error: {e}")
+                        if raw_output:
+                            _log_parse_failure(
+                                source="gemini",
+                                attempt=attempt,
+                                raw_output=raw_output,
+                                error=str(e),
+                                schema_name=response_schema.__name__,
+                            )
+                        await asyncio.sleep(0.2)
 
         # === 3. OPENAI FALLBACK ===
         if SWITCHES["FALLBACK_TO_OPENAI"]:

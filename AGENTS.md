@@ -133,7 +133,7 @@ Coverage threshold: 75% (configured in `pyproject.toml`). Coverage source: `app/
 - Structured outputs: LLM output schemas live in `core/llm/output_schemas/`. Prompts in `core/llm/prompts/`.
 - API route pattern: routes get the authenticated user from `request.state.user` (set by JWT middleware). Protected routes are listed in `app/middlewares/auth_paths.py`.
 - Parse failure logging: LLM parse failures are logged to `DEBUG/parse_errors/failures.jsonl` for debugging structured output issues.
-- Gemini key round-robin: `API_KEY_1` to `API_KEY_6` are cycled via `itertools.cycle` in the fallback path to avoid rate limits.
+- Gemini key round-robin: `GEMINI_API_KEYS` are cycled via `itertools.cycle` in the fallback path to avoid rate limits.
 
 ## Docker Deployment
 
@@ -146,7 +146,7 @@ Multi-stage Dockerfile: stage 1 builds the frontend (Node), stage 2 runs the Pyt
 
 ## Environment Setup
 
-Copy `.env.example` to `.env` and fill in API keys. Required variables: `DATABASE_URL`, `SECRET_KEY`, `API_KEY_1` to `API_KEY_6` (Gemini keys for round-robin), `OPENAI_API`, `QUERY_URL`, `VISION_URL`, `MAIN_MODEL`. Python >= 3.11.8.
+Copy `.env.example` to `.env` and fill in API keys. Required variables: `DATABASE_URL`, `SECRET_KEY`, `GEMINI_API_KEYS` (Gemini keys for round-robin), `OPENAI_API_KEY`, `QUERY_URL`, `VISION_URL`, `MAIN_MODEL`. Python >= 3.11.8.
 
 Key env vars:
 - `REMOTE_GPU`: `True` to use HTTP-based remote LLM, `False` for local Ollama (ChatOllama)
