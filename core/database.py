@@ -28,7 +28,6 @@ user_schema = {
                         "createdAt",
                         "updatedAt",
                         "extra_done",
-                        "mindmap_enabled",
                     ],
                     "properties": {
                         "thread_name": {"bsonType": "string"},
@@ -118,10 +117,6 @@ user_schema = {
                         "extra_done": {
                             "bsonType": "bool",
                             "description": "Indicates if extra task is done",
-                        },
-                        "mindmap_enabled": {
-                            "bsonType": "bool",
-                            "description": "Mindmap feature enabled for this thread",
                         },
                         "instructions": {
                             "bsonType": "array",

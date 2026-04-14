@@ -151,6 +151,7 @@ export interface MindMapResponse {
   status?: boolean; // only present when mind_map is true
   message: string;
   data?: GlobalMindMap; // present when mind_map && status
+  failed?: boolean;
 }
 
 export interface SummaryResponse {
@@ -1017,6 +1018,22 @@ export const api = {
     if (!response.ok) {
       // Fallback shape with mind_map=false so UI can display error message
       return { mind_map: false, message: `Failed to fetch mind map (${response.status})` };
+    }
+    return response.json();
+  },
+
+  async createMindMap(threadId: string, regenerate: boolean = false): Promise<MindMapResponse> {
+    const token = getAuthToken();
+    const response = await fetch(`${API_URL}/mindmap/${threadId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ regenerate }),
+    });
+    if (!response.ok) {
+      return { mind_map: false, message: `Failed to start mind map generation (${response.status})` };
     }
     return response.json();
   },

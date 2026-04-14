@@ -41,7 +41,11 @@ def _get_authenticated_user(request: Request):
 
     payload = request.state.user
     if not payload:
-        return None, None, JSONResponse({"error": "User not authenticated"}, status_code=401)
+        return (
+            None,
+            None,
+            JSONResponse({"error": "User not authenticated"}, status_code=401),
+        )
 
     user_id = payload.userId
 
@@ -82,7 +86,6 @@ async def create_thread(request: Request, thread_data: ThreadCreateRequest):
             "createdAt": now,
             "updatedAt": now,
             "extra_done": False,
-            "mindmap_enabled": False,
             "instructions": [],
         }
     }
@@ -379,7 +382,9 @@ async def add_existing_document(
         if os.path.exists(legacy_path):
             source_parsed_path = legacy_path
         else:
-            return _error("Parsed document data not found. Please re-upload the document.", 404)
+            return _error(
+                "Parsed document data not found. Please re-upload the document.", 404
+            )
 
     try:
         with open(source_parsed_path, "r", encoding="utf-8") as f:

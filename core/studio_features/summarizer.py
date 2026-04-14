@@ -27,7 +27,6 @@ from core.llm.prompts.summarizer_prompt import (
     summarize_documents_prompt,
 )
 from core.models.document import Document, Documents
-from core.studio_features.mind_map import create_mind_map_global
 
 
 def limit_words(text, max_words=15000):
@@ -187,9 +186,6 @@ async def summarize_documents(parsed_data: Documents):
                     await f.write(document_json)
         except Exception as e:
             print(f"Error during summarization: {e}")
-
-    if SWITCHES["MIND_MAP"]:
-        asyncio.create_task(create_mind_map_global(parsed_data))
 
     if SWITCHES["SUMMARIZATION"]:
         await global_summarizer(parsed_data.user_id, parsed_data.thread_id)

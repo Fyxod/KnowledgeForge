@@ -43,6 +43,7 @@ def _log_parse_failure(
     except Exception:
         pass  # Don't let logging failures break the main flow
 
+
 if SWITCHES["REMOTE_GPU"]:
     import core.llm.configurations.remote_llm as llm_module
 else:
@@ -141,7 +142,12 @@ async def invoke_llm(
 
     # Serialize contents properly — multi-turn role/parts dicts become readable
     # prompt sections instead of a raw Python list repr.
-    if isinstance(contents, list) and contents and isinstance(contents[0], dict) and "role" in contents[0]:
+    if (
+        isinstance(contents, list)
+        and contents
+        and isinstance(contents[0], dict)
+        and "role" in contents[0]
+    ):
         serialized = _serialize_prompt_messages(contents)
     else:
         serialized = str(contents)
@@ -149,7 +155,10 @@ async def invoke_llm(
     # Use different framing for answer-generating schemas vs pure extraction schemas.
     # Answer schemas need the LLM to generate rich content in the "answer" field;
     # "Extract structured data" framing causes short, terse outputs.
-    is_answer_schema = hasattr(response_schema, "model_fields") and "answer" in response_schema.model_fields
+    is_answer_schema = (
+        hasattr(response_schema, "model_fields")
+        and "answer" in response_schema.model_fields
+    )
 
     if is_answer_schema:
         prompt = f"""{serialized}
@@ -225,9 +234,15 @@ CRITICAL OUTPUT RULES:
                         raw_output=llm_output,
                         error=error_str,
                         schema_name=response_schema.__name__,
-                        prompt_snippet=effective_prompt if isinstance(effective_prompt, str) else str(effective_prompt),
+                        prompt_snippet=(
+                            effective_prompt
+                            if isinstance(effective_prompt, str)
+                            else str(effective_prompt)
+                        ),
                     )
-                    print(f"[Self-correction] Captured failed output ({len(llm_output)} chars) for next attempt")
+                    print(
+                        f"[Self-correction] Captured failed output ({len(llm_output)} chars) for next attempt"
+                    )
                     continue  # Skip fallbacks, retry on same port with correction
 
         # === 2. GEMINI FALLBACK ===
@@ -238,6 +253,7 @@ CRITICAL OUTPUT RULES:
                 api_key = await _next_api_key()
                 client = genai.Client(api_key=api_key)
                 s = time.time()
+                raw_output = None
                 try:
                     config = genai.types.GenerateContentConfig(
                         temperature=0.2,
@@ -258,7 +274,7 @@ CRITICAL OUTPUT RULES:
                             contents=effective_prompt,
                             config=config,
                         ),
-                        timeout=80,
+                        timeout=120,
                     )
 
                     # Try to extract the raw text content

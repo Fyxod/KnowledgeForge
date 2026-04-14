@@ -116,9 +116,16 @@ async def query(request: Request, body: QueryRequest):
     # When True, the retriever will skip RAG to avoid wasted latency and LLM confusion
     thread_docs = thread.get("documents", [])
     spreadsheet_extensions = {".xlsx", ".xls", ".csv"}
-    spreadsheet_only = has_spreadsheet and len(thread_docs) > 0 and all(
-        any(doc.get("file_name", "").lower().endswith(ext) for ext in spreadsheet_extensions)
-        for doc in thread_docs
+    spreadsheet_only = (
+        has_spreadsheet
+        and len(thread_docs) > 0
+        and all(
+            any(
+                doc.get("file_name", "").lower().endswith(ext)
+                for ext in spreadsheet_extensions
+            )
+            for doc in thread_docs
+        )
     )
 
     ds = time.time()
@@ -170,8 +177,12 @@ async def query(request: Request, body: QueryRequest):
                         spreadsheet_only=spreadsheet_only,
                         spreadsheet_schema=spreadsheet_schema,
                         thread_instructions=thread_instructions,
-                        requires_full_data=getattr(decomposition_result, "requires_full_data", False),
-                        retrieval_queries=getattr(decomposition_result, "retrieval_queries", []),
+                        requires_full_data=getattr(
+                            decomposition_result, "requires_full_data", False
+                        ),
+                        retrieval_queries=getattr(
+                            decomposition_result, "retrieval_queries", []
+                        ),
                     )
                 )
 
@@ -268,11 +279,7 @@ async def query(request: Request, body: QueryRequest):
         workers = [asyncio.create_task(run_worker(GPU_QUERY_LLM, task_queue, results))]
 
         # Add the second model only if allowed
-        if (
-            len(thread.get("documents", [])) == 0
-            or not SWITCHES["MIND_MAP"]
-            or can_use_second_model
-        ):
+        if len(thread.get("documents", [])) == 0 or can_use_second_model:
             print("Using second model for parallel execution")
             workers.append(
                 asyncio.create_task(run_worker(GPU_QUERY_LLM2, task_queue, results))
@@ -292,7 +299,11 @@ async def query(request: Request, body: QueryRequest):
         # sub-queries wastes LLM context). Keep highest rerank_score per chunk.
         seen_chunk_keys = {}
         for c in chunks:
-            key = (c.get("document_id", ""), c.get("page_no", 0), c.get("content", "")[:100])
+            key = (
+                c.get("document_id", ""),
+                c.get("page_no", 0),
+                c.get("content", "")[:100],
+            )
             existing_score = seen_chunk_keys.get(key, {}).get("rerank_score", -1)
             if c.get("rerank_score", 0.0) > existing_score:
                 seen_chunk_keys[key] = c
@@ -302,12 +313,16 @@ async def query(request: Request, body: QueryRequest):
             reverse=True,
         )
         if len(deduped_chunks) < len(chunks):
-            print(f"[Combination] Deduplicated chunks: {len(chunks)} → {len(deduped_chunks)}")
+            print(
+                f"[Combination] Deduplicated chunks: {len(chunks)} → {len(deduped_chunks)}"
+            )
         chunks = deduped_chunks
 
         cs = time.time()
         answer = await combination_node(
-            results, decomposition_result.resolved_query, question,
+            results,
+            decomposition_result.resolved_query,
+            question,
             chunks=chunks,
         )
         ce = time.time() - cs
@@ -371,8 +386,12 @@ async def query(request: Request, body: QueryRequest):
                 spreadsheet_only=spreadsheet_only,
                 spreadsheet_schema=spreadsheet_schema,
                 thread_instructions=thread_instructions,
-                requires_full_data=getattr(decomposition_result, "requires_full_data", False),
-                retrieval_queries=getattr(decomposition_result, "retrieval_queries", []),
+                requires_full_data=getattr(
+                    decomposition_result, "requires_full_data", False
+                ),
+                retrieval_queries=getattr(
+                    decomposition_result, "retrieval_queries", []
+                ),
             )
         )
 

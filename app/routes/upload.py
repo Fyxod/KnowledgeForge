@@ -35,7 +35,6 @@ import uuid
 from fastapi import APIRouter, File, Form, Request, UploadFile
 
 from app.socket_handler import sio
-from core.constants import SWITCHES
 from core.database import db
 from core.embeddings.vectorstore import save_documents_to_store
 from core.models.document import Documents
@@ -108,7 +107,6 @@ async def upload_file(
                         "createdAt": now,
                         "updatedAt": now,
                         "extra_done": False,
-                        "mindmap_enabled": SWITCHES["MIND_MAP"],
                     }
                 }
                 db.users.update_one({"userId": user_id}, {"$set": new_thread})
@@ -137,7 +135,6 @@ async def upload_file(
                 "createdAt": now,
                 "updatedAt": now,
                 "extra_done": False,
-                "mindmap_enabled": SWITCHES["MIND_MAP"],
             }
         }
         db.users.update_one({"userId": user_id}, {"$set": new_thread})
@@ -155,7 +152,6 @@ async def upload_file(
             {
                 "$set": {
                     f"threads.{thread_id}.updatedAt": now,
-                    f"threads.{thread_id}.mindmap_enabled": SWITCHES["MIND_MAP"],
                 }
             },
         )

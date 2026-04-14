@@ -3,9 +3,8 @@ from core.models.gpu_config import GPULLMConfig
 
 # SETTINGS
 SWITCHES = {
-    "MIND_MAP": False,  # For long documents, mind map will be better if SUMMARIZATION = True
     # For Cpu based testing we suggest to keep both False to avoid much load on CPU
-    "SUMMARIZATION": True,  # Summary is used by model to get a general idea of the document and for generation of nodes in mind map
+    "SUMMARIZATION": True,  # Summary is used by model to get a general idea of each document
     "FALLBACK_TO_GEMINI": False,  # Fallback to Gemini if Ollama fails
     "FALLBACK_TO_OPENAI": False,  # Fallback to OpenAI if BOTH Ollama and Gemini fails
     "DECOMPOSITION": True,  # Decomposition of query into sub-queries. This also serves as rewriting the query according to the context of the previous chat history.
@@ -72,25 +71,35 @@ GPU_STRATEGIC_ANALYSIS_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_TECHNICAL_ANALYSIS_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_EVALUATOR_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # CRAG evaluator
 GPU_HYDE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # HyDE hypothesis generation
-GPU_ENTITY_PROFILE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Entity profile generation
-GPU_TRIPLE_EXTRACTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Triple extraction
+GPU_ENTITY_PROFILE_LLM = GPULLMConfig(
+    model=MAIN_MODEL, port=PORT1
+)  # Entity profile generation
+GPU_TRIPLE_EXTRACTION_LLM = GPULLMConfig(
+    model=MAIN_MODEL, port=PORT1
+)  # Triple extraction
 
 # Document Creator LLM configurations
 GPU_DOC_OUTLINE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Outline generation
-GPU_DOC_SECTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Section content generation
+GPU_DOC_SECTION_LLM = GPULLMConfig(
+    model=MAIN_MODEL, port=PORT1
+)  # Section content generation
 GPU_DOC_REVIEW_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Quality self-review
 GPU_DOC_ITERATE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Section iteration
 
 # Excel Skill LLM configurations
 GPU_EXCEL_PLAN_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Excel plan generation
-GPU_EXCEL_NLP_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # NLP column interpretation
-GPU_NLP_THEME_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Chunked NLP theme extraction
+GPU_EXCEL_NLP_LLM = GPULLMConfig(
+    model=MAIN_MODEL, port=PORT1
+)  # NLP column interpretation
+GPU_NLP_THEME_LLM = GPULLMConfig(
+    model=MAIN_MODEL, port=PORT1
+)  # Chunked NLP theme extraction
 
 IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = "qwen3.5:9b"  # Vision Language Model for slide/complex PDF extraction
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
-FALLBACK_GEMINI_MODEL = "gemini-2.5-flash"
+FALLBACK_GEMINI_MODEL = "gemini-3-flash-preview"
 
 # Used if SWITCHES["FALLBACK_TO_OPENAI"] = True
 FALLBACK_OPENAI_MODEL = "gpt-4o-mini"
