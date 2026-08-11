@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">KnowledgeForge</title>
+  <desc id="desc">Turn documents into decisions with multimodal, agentic knowledge intelligence.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="0.52" stop-color="#15173a"/>
+      <stop offset="1" stop-color="#24124f"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#5e17eb"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M28 0H0V28" fill="none" stroke="#ffffff" stroke-opacity="0.045"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#020617" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="360" rx="28" fill="url(#bg)"/>
+  <rect width="1200" height="360" rx="28" fill="url(#grid)"/>
+  <circle cx="995" cy="174" r="250" fill="url(#glow)"/>
+  <circle cx="155" cy="48" r="170" fill="url(#glow)" opacity="0.45"/>
+
+  <g transform="translate(78 81)">
+    <rect x="0" y="0" width="198" height="198" rx="48" fill="#ffffff" fill-opacity="0.055" stroke="#ffffff" stroke-opacity="0.13"/>
+    <path d="M55 66c0-10 8-18 18-18h60c10 0 18 8 18 18v81c0 10-8 18-18 18H73c-10 0-18-8-18-18V66Z" fill="url(#violet)" filter="url(#shadow)"/>
+    <path d="M79 48v117M127 48v117" stroke="#d8ccff" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+    <path d="M79 77c14-9 31-9 48 0v57c-17-9-34-9-48 0V77Z" fill="#0f1531" stroke="#bba6ff" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="51" cy="47" r="10" fill="url(#cyan)"/>
+    <circle cx="153" cy="47" r="10" fill="url(#cyan)"/>
+    <circle cx="51" cy="168" r="10" fill="url(#cyan)"/>
+    <circle cx="153" cy="168" r="10" fill="url(#cyan)"/>
+    <path d="M60 52 78 69M144 52l-17 17M60 163l18-17M144 163l-17-17" stroke="#67e8f9" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+  </g>
+
+  <g transform="translate(330 102)">
+    <text x="0" y="64" fill="#ffffff" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="74" font-weight="760" letter-spacing="-2">KnowledgeForge</text>
+    <text x="3" y="112" fill="#c4b5fd" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="25" font-weight="600" letter-spacing="3">MULTIMODAL KNOWLEDGE INTELLIGENCE</text>
+    <text x="3" y="164" fill="#cbd5e1" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24">Turn documents into grounded answers, analysis, and action.</text>
+  </g>
+
+  <g transform="translate(1002 183)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M-48-69 0-95l48 26v54L0 11l-48-26v-54Z" stroke="#a78bfa" stroke-width="3" opacity="0.7"/>
+    <path d="M0-95v55m48-29L0-40m-48-29 48 29v51" stroke="#67e8f9" stroke-width="3" opacity="0.55"/>
+    <circle cx="0" cy="-95" r="7" fill="#67e8f9" stroke="none"/>
+    <circle cx="48" cy="-69" r="7" fill="#a78bfa" stroke="none"/>
+    <circle cx="-48" cy="-69" r="7" fill="#a78bfa" stroke="none"/>
+    <circle cx="0" cy="11" r="7" fill="#67e8f9" stroke="none"/>
+  </g>
+
+  <rect x="1" y="1" width="1198" height="358" rx="27" fill="none" stroke="#ffffff" stroke-opacity="0.1" stroke-width="2"/>
+</svg>
