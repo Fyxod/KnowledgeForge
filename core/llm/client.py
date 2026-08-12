@@ -65,7 +65,11 @@ def _get_cached_llm(model: str, port: int) -> MyServerLLM:
 
 GEMINI_API_KEYS = settings.GEMINI_API_KEYS
 
-openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+openai_client = (
+    AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    if settings.OPENAI_API_KEY.strip()
+    else None
+)
 MAX_RETRIES = 4  # Reduced from 8: JSON sanitizer + json_repair handles most parse errors on first attempt
 
 # Thread-safe API key cycling
@@ -305,32 +309,38 @@ CRITICAL OUTPUT RULES:
 
         # === 3. OPENAI FALLBACK ===
         if SWITCHES["FALLBACK_TO_OPENAI"]:
-            openai_raw = None
-            try:
-                print("Falling back to OpenAI...")
-                s = time.time()
-                response = await openai_client.chat.completions.create(
-                    model=FALLBACK_OPENAI_MODEL,
-                    messages=[{"role": "user", "content": effective_prompt}],
-                    temperature=0.2,
+            if openai_client is None:
+                print(
+                    "FALLBACK_TO_OPENAI is enabled, but OPENAI_API_KEY is empty. "
+                    "Skipping OpenAI fallback."
                 )
-
-                openai_raw = response.choices[0].message.content
-                structured = _try_parse(openai_raw, parser, response_schema)
-                e = time.time()
-                print(f"Success via OpenAI, LLM call took {e - s:.2f}s")
-                return structured
-
-            except Exception as e:
-                print(f"OpenAI fallback error: {e}")
-                if openai_raw:
-                    _log_parse_failure(
-                        source="openai",
-                        attempt=attempt,
-                        raw_output=openai_raw,
-                        error=str(e),
-                        schema_name=response_schema.__name__,
+            else:
+                openai_raw = None
+                try:
+                    print("Falling back to OpenAI...")
+                    s = time.time()
+                    response = await openai_client.chat.completions.create(
+                        model=FALLBACK_OPENAI_MODEL,
+                        messages=[{"role": "user", "content": effective_prompt}],
+                        temperature=0.2,
                     )
+
+                    openai_raw = response.choices[0].message.content
+                    structured = _try_parse(openai_raw, parser, response_schema)
+                    e = time.time()
+                    print(f"Success via OpenAI, LLM call took {e - s:.2f}s")
+                    return structured
+
+                except Exception as e:
+                    print(f"OpenAI fallback error: {e}")
+                    if openai_raw:
+                        _log_parse_failure(
+                            source="openai",
+                            attempt=attempt,
+                            raw_output=openai_raw,
+                            error=str(e),
+                            schema_name=response_schema.__name__,
+                        )
 
         await asyncio.sleep(2)
 
