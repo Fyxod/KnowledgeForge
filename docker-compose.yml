@@ -1,25 +1,51 @@
-version: "3.9"
+name: knowledgeforge
 
 services:
-  notebook:
-    image: samsung:latest
-    container_name: samsung
-    network_mode: host
+  app:
+    image: knowledgeforge:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}
     env_file:
       - .env
+    environment:
+      DATABASE_URL: mongodb://mongo:27017
+      LOCAL_BASE_URL: http://host.docker.internal
+      EMBEDDINGS_DEVICE: ${EMBEDDINGS_DEVICE:-auto}
+      EASYOCR_GPU: ${EASYOCR_GPU:-False}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "8080:8080"
+      - "8000:8000"
     volumes:
       - ./data:/backend/data
     depends_on:
       mongo:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8000/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+    init: true
     restart: unless-stopped
 
   mongo:
-    image: mongo:latest
-    container_name: mongodb
-    network_mode: host
+    image: mongo:8.0.28-noble@sha256:346f9f37eb0f1b75600929979a8f62372e6c717e58a291736db09188acaad0fe
+    ports:
+      - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
 volumes:

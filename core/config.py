@@ -24,6 +24,17 @@ class Settings(BaseSettings):
         True  # VLM runs on every page/slide (PDF, DOCX, PPTX). Set False in .env to disable.
     )
     LOCAL_BASE_URL: str = "http://localhost"
+    EMBEDDINGS_DEVICE: str = "auto"
+    EMBEDDING_BATCH_SIZE: int = 128
+    EASYOCR_GPU: bool = True
+
+    @field_validator("EMBEDDINGS_DEVICE")
+    @classmethod
+    def validate_embeddings_device(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"auto", "cpu", "cuda"}:
+            raise ValueError("EMBEDDINGS_DEVICE must be one of: auto, cpu, cuda")
+        return normalized
 
     @field_validator("GEMINI_API_KEYS", mode="before")
     @classmethod

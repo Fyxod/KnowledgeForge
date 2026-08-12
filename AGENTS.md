@@ -22,7 +22,7 @@ Backend (Python/FastAPI on port 8000):
   - `core/utils/` - Helpers: bcrypt, token counting, LLM output sanitization, generation status tracking
   - `core/database.py` - MongoDB connection + schema validation (pymongo/mongomock)
 
-Frontend (React/TypeScript/Vite on port 8080):
+Frontend (React/TypeScript/Vite on port 5173 in development, port 8080 in Docker):
 - Located in `frontend/`. Uses shadcn/ui (Radix), TailwindCSS, React Router, Socket.IO client, ReactFlow, Recharts.
 - `frontend/src/lib/api.ts` - All REST + Socket.IO client types and functions.
 - `frontend/config.ts` - `API_URL`, `PROJECT_NAME`, `SIM_PAGE_ENABLED`.
@@ -79,7 +79,7 @@ python backend.py                  # Starts uvicorn on port 8000
 python frontend.py                 # Runs npm install + npm run dev in frontend/
 
 # Docker
-make build                         # Build image + pull mongo + install ollama + set models
+make build                         # Build the application image and pull the pinned MongoDB image
 make run                           # docker compose up (attached)
 make run-silent                    # docker compose up -d (detached)
 make ollama                        # Start two Ollama instances on ports 11434/11435
@@ -137,16 +137,17 @@ Coverage threshold: 75% (configured in `pyproject.toml`). Coverage source: `app/
 
 ## Docker Deployment
 
-Multi-stage Dockerfile: stage 1 builds the frontend (Node), stage 2 runs the Python backend with system dependencies (Tesseract, Pandoc, Poppler, Nginx, fonts, NLTK).
+Multi-stage Dockerfile: stage 1 builds the frontend with pinned Node 22, and stage 2 runs the Python 3.11 backend with Tesseract, Pandoc, Poppler, Nginx, fonts, NLTK, CPU-compatible PyTorch, and pre-cached retrieval models.
 
-- Entrypoint (`docker-entrypoint.sh`): starts gunicorn (port 8000) + nginx (port 8080)
-- Nginx (`nginx/default.conf`): serves React SPA on 8080, proxies `/api/*` to backend on 8000
-- Ports: 8080 (frontend), 8000 (backend API), 11434/11435 (Ollama), 27017 (MongoDB)
+- Entrypoint (`docker-entrypoint.sh`): supervises Uvicorn (port 8000) and Nginx (port 8080)
+- Nginx (`nginx/default.conf`): serves the React SPA on 8080 and proxies REST/Socket.IO routes to the backend
+- Compose: builds `knowledgeforge:latest`, runs pinned MongoDB 8.0, uses portable bridge networking, and health-checks both services
+- Ports: 8080 (frontend), 8000 (backend API), and 27017 (MongoDB); host Ollama remains on 11434/11435
 - Volumes: `./data:/backend/data` persists uploaded files and indexes
 
 ## Environment Setup
 
-Copy `.env.example` to `.env` and fill in API keys. Required variables: `DATABASE_URL`, `SECRET_KEY`, `GEMINI_API_KEYS` (Gemini keys for round-robin), `OPENAI_API_KEY`, `QUERY_URL`, `VISION_URL`, `MAIN_MODEL`. Python >= 3.11.8.
+For local development, copy `.env.example` to `.env`. For Compose, copy `.env.docker` to `.env`. Required variables are `DATABASE_URL`, `SECRET_KEY`, `QUERY_URL`, `VISION_URL`, and `MAIN_MODEL`; cloud API keys can remain empty while their fallbacks are disabled. Python >= 3.11.8.
 
 Key env vars:
 - `REMOTE_GPU`: `True` to use HTTP-based remote LLM, `False` for local Ollama (ChatOllama)

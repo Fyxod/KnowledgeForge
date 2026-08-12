@@ -1,6 +1,9 @@
 bcrypt
 chromadb
+docling
+fpdf2
 fastapi
+json-repair
 langchain
 langchain-chroma
 langchain-community
@@ -16,6 +19,7 @@ pytesseract
 python-dotenv
 python-multipart
 python-socketio
+pydantic-settings
 uvicorn[standard]
 aiofiles
 google-genai
@@ -42,3 +46,4 @@ easyocr
 python-docx
 rank-bm25
 einops
+spacy

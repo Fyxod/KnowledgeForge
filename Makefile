@@ -1,12 +1,12 @@
-.PHONY: build run run-silent pull-mongo install-ollama set-models \
+.PHONY: build run run-silent pull-mongo docker-build docker-smoke \
         ollama ollama-stop ollama-1 ollama-2
 
-IMAGE_NAME := samsung
-MONGO_IMAGE := mongo:latest
+IMAGE_NAME := knowledgeforge
+MONGO_IMAGE := mongo:8.0.28-noble@sha256:346f9f37eb0f1b75600929979a8f62372e6c717e58a291736db09188acaad0fe
 
 # High-level targets
 
-build: docker-build pull-mongo install-ollama set-models
+build: docker-build pull-mongo
 	@echo " Build pipeline completed successfully"
 
 run:   docker-up
@@ -19,7 +19,7 @@ run-silent: ollama docker-up-detached
 
 docker-build:
 	@echo " Building Docker image: $(IMAGE_NAME)"
-	docker build -t $(IMAGE_NAME) .
+	docker build --pull -t $(IMAGE_NAME):latest .
 
 pull-mongo:
 	@echo "Pulling MongoDB image"
@@ -29,7 +29,10 @@ docker-up:
 	docker compose up
 
 docker-up-detached:
-	docker compose up -d
+	docker compose up -d --wait
+
+docker-smoke:
+	./scripts/docker-smoke.sh
 
 # Ollama
 
@@ -48,11 +51,13 @@ ollama:  ollama-1 ollama-2
 
 ollama-1:
 	@echo " Starting Ollama on :11434"
+	mkdir -p logs
 	OLLAMA_HOST=0.0.0.0:11434 OLLAMA_KEEP_ALIVE=-1 \
 	nohup ollama serve > logs/ollama-11434.log 2>&1 &
 
 ollama-2:
 	@echo " Starting Ollama on :11435"
+	mkdir -p logs
 	OLLAMA_HOST=0.0.0.0:11435 OLLAMA_KEEP_ALIVE=-1 \
 	nohup ollama serve > logs/ollama-11435.log 2>&1 &
 

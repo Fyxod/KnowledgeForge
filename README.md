@@ -227,6 +227,19 @@ npm run dev
 
 Open **[http://localhost:5173](http://localhost:5173)**. The API runs at **[http://localhost:8000](http://localhost:8000)**, its OpenAPI UI is at **[http://localhost:8000/docs](http://localhost:8000/docs)**, and the health endpoint is **[http://localhost:8000/health/](http://localhost:8000/health/)**.
 
+### Docker deployment
+
+The container image bundles the production frontend, FastAPI backend, Nginx, OCR system packages, and retrieval models. MongoDB runs as a health-checked Compose service.
+
+```bash
+cp .env.docker .env
+docker compose build --pull
+docker compose up -d --wait
+./scripts/docker-smoke.sh
+```
+
+Open **[http://localhost:8080](http://localhost:8080)**. Local Ollama endpoints remain on the host and are reached from the application through `host.docker.internal`. See the [Docker guide](Docker.MD) for Windows setup, GPU builds, validation, and lifecycle commands.
+
 ## Configuration
 
 The environment templates are [`.env.example`](.env.example) and [`.env.docker`](.env.docker). Never commit a populated `.env` file.
