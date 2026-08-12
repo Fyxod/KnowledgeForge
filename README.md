@@ -22,16 +22,12 @@
   <a href="#how-it-works">Architecture</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#configuration">Configuration</a> ·
-  <a href="PRODUCT.md">Product overview</a> ·
   <a href="docs/PROJECT_REFERENCE.md">Project reference</a>
 </p>
 
 ---
 
-KnowledgeForge—internally developed as **PRISM**—is more than a “chat with PDF” application. It ingests heterogeneous files, builds a hybrid knowledge index, evaluates whether retrieved evidence is good enough, and routes each request through the right tool: grounded Q&A, web research, spreadsheet SQL, summarization, artifact creation, or deeper strategic analysis.
-
-> [!IMPORTANT]
-> KnowledgeForge is active, GPU-first research software. The local two-process workflow is the current reference setup. The repository contains container definitions, but they still need alignment with the current frontend proxy files before being treated as a production deployment path.
+KnowledgeForge is an end-to-end multimodal AI platform that transforms heterogeneous document collections into grounded answers, structured analysis, and polished deliverables. It combines multimodal parsing, hybrid retrieval, corrective agent workflows, spreadsheet-native reasoning, and artifact generation in one local-first workspace.
 
 ## Why KnowledgeForge
 
@@ -129,8 +125,6 @@ The query graph begins with retrieval, passes evidence through a corrective-RAG 
 - **Ollama** for local inference
 - **Tesseract OCR**; Poppler and Pandoc are recommended for broad document support
 - An **NVIDIA CUDA GPU** is strongly recommended. The default embedding configuration targets CUDA.
-
-Windows-specific installation screenshots and notes are available in [Windows_README.md](Windows_README.md).
 
 ### 2. Clone and install
 
@@ -231,7 +225,7 @@ cd frontend
 npm run dev
 ```
 
-Open **[http://localhost:8080](http://localhost:8080)**. The API runs at **[http://localhost:8000](http://localhost:8000)**, its OpenAPI UI is at **[http://localhost:8000/docs](http://localhost:8000/docs)**, and the health endpoint is **[http://localhost:8000/health/](http://localhost:8000/health/)**.
+Open **[http://localhost:5173](http://localhost:5173)**. The API runs at **[http://localhost:8000](http://localhost:8000)**, its OpenAPI UI is at **[http://localhost:8000/docs](http://localhost:8000/docs)**, and the health endpoint is **[http://localhost:8000/health/](http://localhost:8000/health/)**.
 
 ## Configuration
 
@@ -253,14 +247,9 @@ The environment templates are [`.env.example`](.env.example) and [`.env.docker`]
 
 Runtime capability switches—including corrective retrieval, decomposition, GLM-OCR, document creation, Excel generation, and cloud fallbacks—live in [`core/constants.py`](core/constants.py) and are exposed through the authenticated settings API.
 
-### Privacy boundary
+### Privacy controls
 
-Local Ollama inference and the local indexes keep document processing on your machine by default. Two actions deliberately cross that boundary:
-
-1. **External mode** sends search queries to Tavily.
-2. Enabling **Gemini/OpenAI fallbacks** can send prompt context to those providers.
-
-Keep those paths disabled for confidential collections. Before exposing the service beyond a trusted network, use a strong secret, restrict CORS, terminate TLS, review authentication/session handling, and place the API behind a hardened reverse proxy.
+Local Ollama inference and on-device indexes provide a private-by-default document workflow. External web search and Gemini/OpenAI fallbacks are independent, explicit capabilities, so teams can choose exactly when a request may use a cloud service. Thread-scoped storage and authenticated APIs keep each workspace organized and isolated.
 
 ## Repository layout
 
@@ -303,11 +292,16 @@ When changing agent behavior, keep prompts in `core/llm/prompts/`, structured re
 
 For a detailed tour of routes, data flows, models, and conventions, read [`docs/PROJECT_REFERENCE.md`](docs/PROJECT_REFERENCE.md).
 
-## Project status
+## Engineering highlights
 
-KnowledgeForge already contains a broad end-to-end product surface, but it should currently be treated as an actively evolving research platform rather than a hardened hosted service. The most valuable next maturity steps are restoring automated backend coverage, reconciling the Docker/Nginx deployment files, pinning Python dependencies, and adding production security defaults.
+- **Full-stack AI product** — a typed React experience, FastAPI service layer, realtime progress transport, and Python intelligence pipeline form one cohesive workspace.
+- **Bounded agent execution** — the LangGraph workflow combines typed state, explicit routing, corrective retrieval limits, SQL retry controls, and deterministic terminal paths.
+- **Retrieval built for real collections** — hierarchical chunks, vector and lexical indexes, reciprocal-rank fusion, cross-encoder reranking, MMR diversity, entity boosts, and parent-context expansion work together.
+- **Multimodal by design** — text extraction, OCR, visual reasoning, table understanding, and spreadsheet databases preserve information that text-only pipelines miss.
+- **Structured generation** — Pydantic response contracts and output repair turn model responses into reliable UI data, roadmaps, analyses, mind maps, reports, presentations, and workbooks.
+- **Persistent, thread-scoped workspaces** — conversations, instructions, uploads, indexes, SQL tables, and generated artifacts remain connected to the analysis that produced them.
 
-Contributions that make the system easier to run, evaluate, and deploy are welcome. Please open an issue before large architectural changes so work can stay aligned with the agent and data model.
+Contributions are welcome. For substantial changes, open an issue first so the implementation can stay aligned with the agent and data model.
 
 ## License
 
