@@ -11,7 +11,7 @@ COPY frontend/ ./
 RUN npm run build
 
 
-FROM python:3.11.15-slim-bookworm@sha256:d29f48a31a8b408ed19272ca1e7b10ebae13b240a27e862d3d4217c528e2e0c3 AS runtime
+FROM python:3.14.8-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS runtime
 
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
 
